@@ -67,6 +67,9 @@ test("monster abilities: riders, Constrict, Frightful Presence, a breath weapon,
     assert.equal(grab.resolution.check.against.statistic, "fortitude");
     const improved = compileMonsterAbility(ability("Tor Linnorm", "Improved Grab"), { basicActions });
     assert.equal(improved.trigger.cost, "free");
+    // "Push 15 feet": 15 on a success, and no less on a critical success (Shove's own is 10).
+    const push = compileMonsterAbility(ability("Megalodon", "Push"), { basicActions });
+    assert.deepEqual([push.resolution.outcomes.success.forcedMovement.distance, push.resolution.outcomes.criticalSuccess.forcedMovement.distance], [15, 15]);
 
     const greater = compileMonsterAbility(ability("Giant Anaconda", "Greater Constrict"));
     assert.equal(greater.targeting.grabbed, true, "only creatures it holds");

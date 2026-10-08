@@ -265,8 +265,13 @@ async function applyChange(change, state) {
                 await actor.applyDamage({ damage: roll, token: token ?? undefined });
                 return null;
             }
+            // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
+            if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {
+                await timedCondition(actor, change.slug, change.value, change.duration, state);
+                return `${target.name}'s ${change.slug} lasts ${durationText(change.duration, state.source.name)}`;
+            }
             await setCondition(actor, change.slug, change.value);
-            return change.duration?.mode === "fixed" ? `${target.name}'s ${change.slug} lasts ${durationText(change.duration, state.source.name)} (end it then)` : null;
+            return null;
         }
         case "effect":
             if (change.effect?.kind === "swallow") {
@@ -277,10 +282,52 @@ async function applyChange(change, state) {
         case "affliction":
             return handOffAffliction(state, target, actor, change.data);
         case "move":
+            return forcedMove(state, target, token, change);
         case "note":
         default:
             return null;
     }
+}
+
+// A condition that lasts "until the end of the monster's next turn" and the
+// like: an effect granting it, its duration counted on the monster's turns (as
+// the spell module does): 0 rounds when the monster still acts this round, else 1.
+async function timedCondition(actor, slug, value, duration, state) {
+    const template = game.pf2e.ConditionManager.getCondition(slug);
+    if (!template) return setCondition(actor, slug, value);
+    const combat = game.combat;
+    let rounds = Number(duration.value ?? 1);
+    if (duration.anchor === "source-turn" && combat?.started && duration.unit === "rounds" && rounds <= 1) {
+        const position = combat.turns.findIndex((turn) => turn.actor?.uuid === state.source.actorUuid);
+        if (position >= 0) rounds = (rounds === 0 && duration.expiry === "turn-end" ? position >= combat.turn : position > combat.turn) ? 0 : 1;
+    }
+    const label = `${template.name}${Number.isFinite(value) ? ` ${value}` : ""}`;
+    await actor.createEmbeddedDocuments("Item", [{
+        name: `${state.ability.name}: ${label}`,
+        type: "effect",
+        img: template.img,
+        flags: { [MODULE_ID]: { timedCondition: { slug, sourceActorUuid: state.source.actorUuid } } },
+        system: {
+            description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
+            duration: { value: rounds, unit: duration.unit, expiry: duration.expiry ?? "turn-start", sustained: false },
+            start: { value: game.time.worldTime, initiative: combat?.started ? combat.combatant?.initiative ?? null : null },
+            context: { origin: { actor: state.source.actorUuid, item: state.ability.uuid }, target: { actor: actor.uuid }, roll: null },
+            rules: [{ key: "GrantItem", uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
+        }
+    }]);
+}
+
+// A push or pull: the token moves square by square away from (or toward) the
+// monster, stopped by walls and the scene's edge (the core's forced movement).
+async function forcedMove(state, target, token, change) {
+    const mover = game.modules.get(CORE_ID)?.api?.forcedMovement;
+    const source = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
+    if (!mover || !token || !source) return `${target.name}: move the token ${change.distance} feet by hand.`;
+    const size = source.parent?.grid?.size ?? canvas.grid.size;
+    const point = { x: source.x + Number(source.width ?? 1) * size / 2, y: source.y + Number(source.height ?? 1) * size / 2 };
+    const result = await mover.forcedMove(token, { point, direction: change.kind === "pull" ? "toward" : "away", feet: change.distance, stopAt: change.kind === "pull" ? source : null, reason: state.ability.name });
+    if (!result.moved) return `${target.name} couldn't be moved (${result.stoppedBy ?? result.reason}).`;
+    return result.stoppedBy && result.stoppedBy !== "occupied" ? `${target.name} was stopped by ${result.stoppedBy === "wall" ? "a wall" : result.stoppedBy === "edge" ? "the scene's edge" : "a creature"}.` : null;
 }
 
 // A condition at least at this value (PF2e's conditions take the higher value, not the sum).

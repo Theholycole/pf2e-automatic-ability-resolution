@@ -94,7 +94,7 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 lines.push(`${who} is ${conditionLabel(change.slug)}${Number.isFinite(change.value) ? ` ${change.value}` : ""}`);
                 break;
             case "move":
-                lines.push(`${who} is ${change.kind === "pull" ? "pulled" : "pushed"} ${change.distance} feet (move the token)`);
+                lines.push(`${who} is ${change.kind === "pull" ? "pulled" : "pushed"} ${change.distance} feet`);
                 break;
             case "affliction":
                 lines.push(`${who} is afflicted with ${change.data?.name ?? "the affliction"} (stage ${change.data?.stage ?? 1})`);

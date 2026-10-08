@@ -66,9 +66,14 @@ function rider(item, slug, basicActions) {
     rider.source = { name: item?.name ?? slug, slug, uuid: item?.uuid ?? null, type: "action" };
     rider.activation = { time: improved ? "free" : "1", traits: plan.traits };
     rider.trigger = { event: "strike", on: ["success", "criticalSuccess"], attackEffect, cost: improved ? "free" : "action", map: false };
-    // "If Push lists a distance": the distance on a success.
-    const distance = /\b(\d+) (?:feet|foot)\b/.exec(htmlToPlainText(item?.system?.description?.value ?? ""))?.[1];
-    if (attackEffect === "push" && distance && rider.resolution.outcomes.success.forcedMovement) rider.resolution.outcomes.success.forcedMovement.distance = Number(distance);
+    // "If Push lists a distance": the distance on a success (and a critical success pushes no less).
+    // (In the name, "Push 15 feet", or the text.)
+    const distance = /\b(\d+) (?:feet|foot)\b/.exec(`${item?.name ?? ""} ${htmlToPlainText(item?.system?.description?.value ?? "")}`)?.[1];
+    if (attackEffect === "push" && distance && rider.resolution.outcomes.success.forcedMovement) {
+        rider.resolution.outcomes.success.forcedMovement.distance = Number(distance);
+        const critical = rider.resolution.outcomes.criticalSuccess.forcedMovement;
+        if (critical && critical.distance < Number(distance)) critical.distance = Number(distance);
+    }
     return rider;
 }
 

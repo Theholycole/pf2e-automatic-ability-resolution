@@ -43,7 +43,7 @@ test("what Apply did, in plain lines", () => {
         { op: "affliction", target: "t1", data: { name: "Giant Scorpion Venom", stage: 1 } },
         { op: "effect", target: "t1", effect: { kind: "swallow", damage: "(2d8+5)[bludgeoning]", rupture: 20 } }
     ], { t0: "Valeros", t1: "Seelah" });
-    assert.deepEqual(lines, ["Valeros takes 24 bludgeoning", "Valeros is grabbed", "Seelah is pushed 10 feet (move the token)", "Seelah is afflicted with Giant Scorpion Venom (stage 1)", "Seelah is swallowed (grabbed and slowed 1; takes (2d8+5)[bludgeoning] at the end of each of its turns; Rupture 20)"]);
+    assert.deepEqual(lines, ["Valeros takes 24 bludgeoning", "Valeros is grabbed", "Seelah is pushed 10 feet", "Seelah is afflicted with Giant Scorpion Venom (stage 1)", "Seelah is swallowed (grabbed and slowed 1; takes (2d8+5)[bludgeoning] at the end of each of its turns; Rupture 20)"]);
 });
 
 test("a check card's row shows the user's roll against the target's DC", () => {

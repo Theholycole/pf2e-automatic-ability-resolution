@@ -23,9 +23,13 @@ The user's decisions (2026-10-08):
 - **Grab** (a rider check): the anaconda's Athletics against the target's Fortitude DC. A success applied grabbed; a critical success, restrained, with a reminder of when it ends.
 
 **Not yet:**
-- Conditions with a duration are applied, with a reminder line of when they end; they don't end on their own.
-- Pushes are reminders (move the token).
-- Swallow Whole's damage at the end of each turn is a reminder too.
+- Swallow Whole's damage at the end of each turn is a reminder line.
 - Auras (Frightful Presence, Stench) have no card: they need "entering the aura" triggers.
 - Recharge isn't tracked live; PF2e's own text has the roll.
 - PCs' skill actions are the next slice.
+
+## Timed conditions and pushes (2026-10-08, the user's choice)
+
+- **A condition with a duration** ("grabbed until the end of your next turn") is a PF2e effect on the target that grants the condition. Its origin is the monster, and its rounds are counted from where the monster sits in the turn order, as the spell module does: 0 when the monster still acts this round, otherwise 1. PF2e removes the effect and the condition when it runs out. Checked live: an anaconda's Grab in round 1 restrained a PC until the end of the anaconda's turn in round 2, then both were gone.
+- **A push or pull** moves the token with the core's forced movement (`api.forcedMovement.forcedMove`, the user's grid rule of 2026-10-05). It goes square by square in the nearest of the 8 directions away from the monster, with diagonals 5 then 10 feet, stops at walls and the scene's edge, and never ends in another creature's space. Checked live: a Megalodon's Push moved a PC 2 squares, beside the anaconda rather than into it.
+- **Push's distance:** a critical success pushes no less than the listed success distance (Shove's own critical push is 10 feet).
