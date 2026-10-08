@@ -36,10 +36,10 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
     core.registry.registerCompiler({
         module: MODULE_ID,
         name: "abilities",
-        // Monster abilities, and a PC's feat actions that are a check or a save against a
+        // Monster and hazard abilities, and a PC's feat actions that are a check or a save against a
         // creature (Bon Mot, Dirty Trick: the simulator's C15). Not impulses: the Kineticist module's.
         handles: (item) => {
-            if (item?.actor?.type === "npc") return item.type === "action";
+            if (["npc", "hazard"].includes(item?.actor?.type)) return item.type === "action";
             return item?.actor?.type === "character" && ["action", "feat"].includes(item.type) && item.system?.actionType?.value === "action"
                 && !(item.system?.traits?.value ?? []).includes("impulse") && /@Check\[|check against/i.test(item.system?.description?.value ?? "");
         },
