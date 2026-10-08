@@ -85,13 +85,13 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
     });
 }
 
-// A monster's ability, used from its sheet (PF2e's own message for the action).
+// A monster's or a hazard's ability, used from its sheet (PF2e's own message for the action).
 async function cardForAbility(message) {
     if (message.flags?.pf2e?.context?.type || stateOf(message)) return;
     const origin = message.flags?.pf2e?.origin;
     if (origin?.type !== "action" || !origin.uuid) return;
     const item = await fromUuid(origin.uuid);
-    if (!item?.actor || item.actor.type !== "npc") return;
+    if (!item?.actor || !["npc", "hazard"].includes(item.actor.type)) return;
     await ready;
     const plan = compile(item);
     const sourceToken = message.token ?? item.actor.getActiveTokens(true, true)[0] ?? null;
@@ -106,14 +106,14 @@ async function cardForAbility(message) {
     if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
 }
 
-// A Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each.
+// A monster's or a hazard's Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each.
 async function cardsForRiders(message) {
     const context = message.flags?.pf2e?.context;
     if (context?.type !== "attack-roll" || !["success", "criticalSuccess"].includes(context.outcome)) return;
     const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
     const actor = strike?.actor;
     const effects = strike?.system?.attackEffects?.value ?? [];
-    if (!actor || actor.type !== "npc" || !effects.length) return;
+    if (!actor || !["npc", "hazard"].includes(actor.type) || !effects.length) return;
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const target = targetToken?.object ?? targetToken;
     if (!target?.actor) return;

@@ -9,6 +9,7 @@ import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
+import { setUpHazards } from "./hazards.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -60,6 +61,7 @@ Hooks.once("ready", () => {
     setUpSwallow();
     setUpRecharge({ compileItem });
     setUpReactions({ compileItem });
+    setUpHazards({ compileItem });
 });
 
 Hooks.once("ready", async () => {

@@ -16,7 +16,12 @@ The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation
   - Swallow Whole, Trample, Stench, and creature afflictions with their stages (`afflictions.js`)
   - Ferocity, Rend, Sneak Attack, Pack Attack, Regeneration, Fast Healing, Draconic Frenzy, Pounce, Draconic Momentum and save bonuses against magic are flagged as builtins for the simulator to play (`builtins.js`)
 - Compiling Monster Core 1–2 and NPC Core gives 922 plans from 5,796 abilities, with 200 more built in and no errors. Live-play confirmation cards come later.
-- **Hazard actions** compile too (2026-10-08, for the simulator's escalations): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes. Live-play cards stay for monsters.
+- **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
+- **Hazards in live play** (2026-10-08):
+  - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
+  - A complex hazard's turn brings a routine card.
+  - Disable checks count toward its successes.
+  - See [docs/live-play.md](docs/live-play.md#hazards-2026-10-08-the-users-choices).
 
 | Path | Holds |
 |---|---|

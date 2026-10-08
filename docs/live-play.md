@@ -199,3 +199,48 @@ How it works (`scripts/reactions.js`, `src/live/reactions.js`), for monsters in 
 - The boar at 0 HP: Ferocity left it at 1 HP and wounded 1.
 - At their turns both "Reaction used" effects ended, and the next move brought offers again.
 - Not checked live: Challenge Fate and Death Frenzy (no such monster in the test). Their code paths are the reroll and the Strike button checked above.
+
+## Hazards (2026-10-08, the user's choices)
+
+The user's decisions:
+- **Cards for every hazard moment:**
+  - its actions used from its sheet, and its Strike riders (a poison), exactly as a monster's;
+  - a GM card at a complex hazard's turn, with its routine and a button per Strike;
+  - Disable checks counted toward the successes it needs.
+- **Springing:** you tick Regions on the hazard's sheet ("Trigger Regions"). A party creature (a PC or a friendly token) moving into one brings the GM a whispered card: "Valeros stepped into its area", with Fire and Not now. This works in and out of encounters.
+- **Fire:**
+  - posts its reaction cards (public, so players roll their own saves), or rolls its Strikes at that creature;
+  - a complex hazard then joins the running encounter, or a new one on the scene, rolling its Stealth for initiative.
+- **Spent until reset:** a simple hazard that fired stops prompting until "Reset" on its sheet. A complex one that fired is in the encounter and stops prompting too.
+- **A Disable check's critical failure** brings the GM the Fire card, aimed at whoever tried.
+- **Out of the fight:** disabled, or smashed to 0 HP, the hazard is defeated in the encounter, and its Regions stop prompting.
+- **Who sees what:** the prompt and the turn card are whispered to the GM; the cards once it fires are public.
+
+How it works (`scripts/hazards.js`, `src/live/hazards.js`):
+- **State on the hazard's token** (`flags.pf2e-automatic-ability-resolution.hazard`): its Regions, its status (armed, active, spent, disabled, destroyed) and its Disable progress.
+- **Entering** is Foundry's movement path, square by square, tested against the Region (`RegionDocument#testPoint`), as auras do. Only a move from outside to inside counts.
+- **Fire, step by step:**
+  - Each of the hazard's reactions (and free actions) that compiles into a card is posted at the creature.
+  - An area one, by its plan or its text ("burst", "centered on", "each creature"…), also takes the party creatures in its Regions. The card's "Use my targets" adds anyone else.
+  - A reaction whose text says the hazard Strikes rolls its Strikes at the creature.
+  - Anything else posts its text for the GM.
+  - Initiative is rolled without PF2e's dialog, which would otherwise hold the card until the GM answered it.
+- **The turn card's Strike button** attacks the party creatures in its Regions, or the GM's targets, one PF2e Strike roll each.
+- **A Disable check** is a PC's skill check with a DC. It counts when its skill and DC match one of the hazard's Disable options (read from its `@Check` links, with "twice" or "three times").
+  - Which hazard: the check's target; or a hazard the roller has targeted (PF2e leaves a hazard out of the check's target, but Foundry shares each user's targets); or else the one hazard on the scene that fits.
+  - A critical success counts twice.
+  - The GM gets a note of the progress.
+- **Shared text readers:** the hazard text readers (`parseDisable`, `routineActions`, `noMultipleAttackPenalty`, `mentionsStrike`) are the core's (`src/text/hazard-text.js`), shared with the simulator.
+
+**Checked live in pftest** (a PFTEST SIM scene with a trap hall Region; Valeros and Merisiel; PFTEST SIM Scythe Blades, Poisoned Dart Gallery and Fireball Rune):
+- "Trigger Regions" on the Scythe Blades' sheet listed the scene's Region, and ticking it linked it.
+- Valeros walking in brought the whispered prompt, outside any encounter. Fire rolled the Scythe Strike at Valeros (a hit), and the blades were spent: Merisiel walking in brought nothing. Reset armed them again.
+- Merisiel walking in then brought two prompts. "Not now" closed the blades' prompt.
+  - Fire on the Dart Gallery rolled its Strike at Merisiel. The hit brought the Flesset Poison rider card.
+  - The gallery joined a new encounter on the scene with its Stealth initiative: first with PF2e's dialog, then 29 without it once fixed.
+- At the gallery's turn, the whispered turn card showed its routine. Its Poisoned Dart button attacked Valeros and Merisiel (both in the hall), each hit bringing the poison card.
+- Merisiel's Thievery check against DC 21, with the gallery targeted, disabled it (it needs one success on the control panel). The GM got a note, and it was defeated in the encounter.
+- A Disable check that critically failed brought the "critically failed to disable it" Fire card.
+- The blades at 0 HP: destroyed, with a note.
+- Fireball Rune's reaction used from its sheet brought its DC 22 basic Reflex card.
+  - Fired from its Region, it took Merisiel and Valeros, both in the hall. At first it took Merisiel only, because the compiler gives "a Fireball centered on the triggering creature" no area; the area words fixed that.
