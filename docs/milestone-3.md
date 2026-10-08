@@ -39,7 +39,7 @@ Pieces 1–3 are built:
 - **Core:** the `check` family.
 - **Compiler:** 922 plans from the 5,796 abilities in Monster Core 1–2 and NPC Core, plus 200 rules the engine already plays, with no errors.
 - **Simulator:** 1,106 real creatures in 3,318 fights, with no errors.
-- **Tests:** 54 core, 88 simulator, 5 here.
+- **Tests:** 55 core, 104 simulator, 9 here.
 
 The simulator's defaults are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions.md`. The user confirmed B1–B6 and B7–B11 (below) on 2026-10-08.
 
@@ -56,4 +56,25 @@ The simulator's defaults are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions
 - **Administer First Aid:** Medicine against `stabilize` (5 + 15 + dying), only on a dying creature (`targeting.dying`). A success ends dying with `stabilize`; a critical failure is dying +1. Stopping bleeding comes later.
 - **Reposition:** compiles with no effects. A move within reach changes nothing in the simulator's bands.
 
-**Next:** Swallow Whole and Trample, healing outside spells (Battle Medicine, potions), Stop Bleeding, and live-play confirmation cards.
+## More monster abilities (2026-10-08, the user: "keep working on monster abilities")
+
+Chosen from a survey of what still compiled to nothing in Monster Core 1–2 and NPC Core, by how often it appears and how much it changes a fight.
+
+- **Plans:**
+  - Swallow Whole: Athletics against Reflex on a creature it holds; a success deals the listed damage and gives `{ kind: "swallow", damage, rupture, size }`, which the core passes on as an `effect` change.
+  - Trample: a basic Reflex save against the listed Strike's damage. The Strike's damage rolls come from the creature (`actor` option, or `item.actor` in Foundry).
+  - Stench: an aura like Frightful Presence.
+  - Afflictions (`afflictions.js`): the stages read into damage, conditions and durations, as `resolution.afflictionHandoff`. A failure afflicts at stage 1, a critical failure at stage 2, and the core's `affliction` change carries it. A Strike that lists the affliction delivers it, for free.
+- **Builtins** (`builtins.js`, the simulator plays them as its own rules):
+  - `strike-extra`: Sneak Attack, Pack Attack and dice against the living, the undead or the frightened, from DamageDice rules
+  - `save-bonus`: from FlatModifier rules with a predicate
+  - `regeneration` and `fast-healing`: from the FastHealing rule
+  - `multi-strike`: Draconic Frenzy
+  - `charge`: Pounce
+  - `momentum`: Draconic Momentum
+- **Prose saves** ("must succeed at a save or become …", "A creature that fails its save is …"): read in `inlineSave` when there are no outcome sections, about 130 more abilities.
+- **Simulator defaults:** B12–B21 in the decisions doc, which the user confirmed on 2026-10-08.
+- **Checked live (pftest):** the snapshot reads all of these from PFTEST SIM copies of the Giant Scorpion, Megalodon, Elephant, Forest Troll, Horned Dragon (Young), Smilodon and Wererat. Trample finds its Strike through `item.actor`. Sizes, the builtins and the venom come through, and 200 fights per monster run in the worker in 0.7–1.7 seconds.
+- **A fix:** riders listed as "improved-grab" on real Strikes now fire. Before, the rider looked only for "grab".
+
+**Next:** reactions (Nimble Dodge and the like), charges with extra effects, Engulf, the Retch action, healing outside spells (Battle Medicine, potions), Stop Bleeding, and live-play confirmation cards.

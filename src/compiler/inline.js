@@ -126,9 +126,12 @@ function recipientOf(sentence) {
 // ("those conditions on the target end", "it breaks free"; not "until the end of your next turn".)
 const LIFTS = /\b(?:conditions?\b[^.]*\bend\b|(?:it|that|this|the effect|the condition) ends\b|break(?:s)? free|released|fail to|no longer|already had)/i;
 
+// Conditions named in words in an affliction's stages ("2d4 poison damage and enfeebled 1").
+export const STAGE_CONDITIONS = [...PLAIN_CONDITIONS, "enfeebled", "clumsy", "drained", "stupefied", "sickened", "slowed", "stunned", "fatigued", "dazzled", "blinded", "deafened", "confused", "paralyzed", "unconscious", "doomed", "fleeing", "fascinated", "controlled", "wounded", "petrified"];
+
 // Conditions a passage imposes: [{ kind: "condition", slug, value, duration, recipient? }],
-// linked or named in words, sentence by sentence.
-export function readConditions(html) {
+// linked or named in words, sentence by sentence. plain: the condition words to look for unlinked.
+export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS } = {}) {
     const effects = [];
     const sentences = String(html ?? "").split(/(?<=[.!?])\s+(?=[A-Z@<])/);
     for (const sentence of sentences) {
@@ -144,7 +147,7 @@ export function readConditions(html) {
             found.set(slug, match[2] ? Number(match[2]) : null);
         }
         const unlinked = htmlToPlainText(sentence.replace(CONDITION_LINK, ""));
-        for (const slug of PLAIN_CONDITIONS) {
+        for (const slug of plainConditions) {
             if (found.has(slug)) continue;
             const named = new RegExp(`\\b${slug}(?: (\\d+))?\\b`, "i").exec(unlinked);
             if (named) found.set(slug, named[1] ? Number(named[1]) : null);

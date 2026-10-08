@@ -13,12 +13,13 @@ The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation
   - Constrict and Frightful Presence
   - breath weapons and other inline-save abilities, with their recharge
   - skill-check abilities
-  - Ferocity and Rend are flagged for the simulator to play
+  - Swallow Whole, Trample, Stench, and creature afflictions with their stages (`afflictions.js`)
+  - Ferocity, Rend, Sneak Attack, Pack Attack, Regeneration, Fast Healing, Draconic Frenzy, Pounce, Draconic Momentum and save bonuses against magic are flagged as builtins for the simulator to play (`builtins.js`)
 - Compiling Monster Core 1–2 and NPC Core gives 922 plans from 5,796 abilities, with 200 more built in and no errors. Live-play confirmation cards come later.
 
 | Path | Holds |
 |---|---|
-| `src/compiler/` | pure: `inline.js` (PF2e's inline syntax), `checks.js` (skill actions), `monster.js` (monster abilities), `index.js` |
+| `src/compiler/` | pure: `inline.js` (PF2e's inline syntax), `checks.js` (skill actions), `monster.js` (monster abilities), `builtins.js` (rules the simulator plays itself), `afflictions.js` (poisons, diseases), `index.js` |
 | `scripts/main.js` | Foundry: registers the compiler with the core and offers the basic actions |
 | `tools/` | `leveldb.mjs` (reads PF2e's packs), `census.mjs`, `spell-compiler-probe.mjs` |
 | `docs/` | `census.md`, `milestone-3.md` |
