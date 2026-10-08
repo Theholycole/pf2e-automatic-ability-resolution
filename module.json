@@ -1,0 +1,37 @@
+{
+  "id": "pf2e-automatic-ability-resolution",
+  "title": "PF2e Automatic Ability Resolution",
+  "description": "Compiles PF2e's non-spell abilities (basic actions, monster abilities, and later class features and consumables) into plans the resolution core resolves, for live play and the Combat Simulator.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14"
+  },
+  "authors": [
+    {
+      "name": "TheHolyCole"
+    }
+  ],
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "8.5.0",
+          "verified": "8.5.0"
+        }
+      }
+    ],
+    "requires": [
+      {
+        "id": "pf2e-resolution-core",
+        "type": "module",
+        "reason": "Abilities are resolved by the core's families."
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/main.js"
+  ]
+}
