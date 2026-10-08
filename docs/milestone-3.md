@@ -89,4 +89,4 @@ Chosen from a survey of what still compiled to nothing in Monster Core 1–2 and
 
 **Then:** PC class features (C1–C12 in the simulator) and the first live-play slice: confirmation cards for monster abilities and Strike riders ([live-play.md](live-play.md)).
 
-**Next:** PCs' skill actions as cards, timed conditions that end on their own, and aura triggers.
+**Done since (docs/live-play.md):** PCs' skill actions as cards, timed conditions that end on their own, and aura triggers.

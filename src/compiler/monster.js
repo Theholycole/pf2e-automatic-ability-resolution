@@ -11,10 +11,11 @@
 //   the target's Reflex DC"): compiled as basic actions are.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
-import { STAGE_CONDITIONS, degreeSections, inlineTags, readCheck, readConditions, readDamage, readImmunity, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
+import { STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, readCheck, readConditions, readDamage, readImmunity, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
 import { compileSkillAction } from "./checks.js";
 import { compileBuiltin } from "./builtins.js";
 import { compileAffliction } from "./afflictions.js";
+import { readActiveAfter, readAuraTiming } from "./auras.js";
 
 const none = () => ({ damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] });
 const shared = (multiplier, ids) => ({ damage: { mode: "shared", multiplier, sourceComponentIds: ids }, effects: [] });
@@ -109,7 +110,8 @@ function frightfulPresence(item) {
     return {
         ...base(item, { time: "passive" }),
         targeting: { target: "creatures that enter the aura", range: null, area: { type: "emanation", value: radius } },
-        trigger: { event: "aura", when: "enter", immunity: { scope: "target", duration: "1 minute" } },
+        // PF2e's glossary text: "A creature that first enters the area …"
+        trigger: { event: "aura", when: ["enter"], immunity: immunityDetails("Regardless of the result of the saving throw, the creature is temporarily immune to this monster's Frightful Presence for 1 minute.") },
         resolution: {
             kind: "save",
             check: { roll: "save", statistic: "will", basic: false, against: { dc: "fixed", value: check.dc } },
@@ -131,7 +133,8 @@ function stench(item) {
     return {
         ...base(item, { time: "passive" }),
         targeting: { target: "creatures that enter the aura", range: null, area: { type: "emanation", value: radius } },
-        trigger: { event: "aura", when: "enter", immunity: { scope: "target", duration: "1 minute" } },
+        // PF2e's glossary text: "A creature entering the aura or starting its turn in the area …"
+        trigger: { event: "aura", when: ["enter", "start-turn"], immunity: immunityDetails("A creature that succeeds at its save or recovers from being sickened is temporarily immune to all stench auras for 1 minute.") },
         resolution: {
             kind: "save",
             check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: check.dc } },
@@ -384,6 +387,8 @@ function inlineSave(item) {
     }
     const plain = htmlToPlainText(html);
     const passive = item.system?.actionType?.value === "passive";
+    // A real aura (the trait, or PF2e's Aura rule); other passives (Death Throes, Defensive Quills) act on their own triggers.
+    const aura = passive && ((item.system?.traits?.value ?? []).includes("aura") || (item.system?.rules ?? []).some((rule) => rule?.key === "Aura"));
     // An aura with no template: "30 feet." at the start of its text.
     const template = inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? (passive && /^(\d+) feet/i.test(plain) ? { type: "emanation", value: Number(/^(\d+) feet/i.exec(plain)[1]) } : null);
     const range = readRange(plain);
@@ -393,7 +398,7 @@ function inlineSave(item) {
     return {
         ...base(item),
         targeting: { target: template ? null : "1 creature", range: range ? `${range} feet` : template ? null : "touch", area: template, ...(grabbed ? { grabbed: true } : {}) },
-        trigger: { event: passive ? "aura" : "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}), ...(readImmunity(html) ? { immunity: readImmunity(html) } : {}) },
+        trigger: { event: aura ? "aura" : passive ? "passive" : "use", ...(aura ? readAuraTiming(plain) : {}), ...(aura && readActiveAfter(plain) ? { activeAfter: readActiveAfter(plain) } : {}), ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}), ...(readImmunity(html) ? { immunity: readImmunity(html) } : {}) },
         resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: check.basic, against: { dc: "fixed", value: check.dc } }, sharedDamage: components.length ? { rollOnce: true, components } : null, outcomes }
     };
 }

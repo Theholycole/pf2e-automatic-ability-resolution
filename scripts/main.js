@@ -1,10 +1,11 @@
 // PF2e Automatic Ability Resolution: registers the ability compiler with the
 // resolution core and offers the compiled basic actions (Demoralize, Trip,
 // Grapple, Shove, Escape) to the core's users, such as the Combat Simulator.
-// Live play's confirmation cards come in a later slice.
+// Live play: confirmation cards (scripts/live.js) and aura triggers (scripts/auras.js).
 
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
 import { setUpLivePlay } from "./live.js";
+import { setUpAuras } from "./auras.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -42,8 +43,12 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
     });
 });
 
-// Live play: the confirmation cards (scripts/live.js).
-Hooks.once("ready", () => setUpLivePlay({ compileItem: (item) => compileAbility(item, { basicActions }), basicActions: () => basicActions, loaded }));
+// Live play: the confirmation cards (scripts/live.js) and the monsters' auras (scripts/auras.js).
+Hooks.once("ready", () => {
+    const compileItem = (item) => compileAbility(item, { basicActions });
+    setUpLivePlay({ compileItem, basicActions: () => basicActions, loaded });
+    setUpAuras({ compileItem, loaded });
+});
 
 Hooks.once("ready", async () => {
     await loadBasicActions();

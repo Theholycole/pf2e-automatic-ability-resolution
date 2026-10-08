@@ -22,7 +22,8 @@ export function cardCheck(plan) {
 }
 
 // A new card's state. source: { actorUuid, tokenUuid, name }; targets: [{ actorUuid, tokenUuid, name }].
-export function createCard({ plan, ability, source, targets, rider = null }) {
+// cause: why it appeared, for the header ("entered the aura"); aura: { key, when } for an aura's card.
+export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     return {
@@ -32,6 +33,8 @@ export function createCard({ plan, ability, source, targets, rider = null }) {
         plan,
         check,
         rider,
+        cause,
+        aura,
         targets: targets.map((target, index) => ({ id: `t${index}`, actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name, dc: target.dc ?? null, total: null, natural: null, degree: null })),
         status: "open",
         results: []
@@ -77,7 +80,7 @@ export function cardHTML(state) {
         : "";
     const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
     const empty = state.targets.length ? "" : `<p class="aar-hint">No targets: target the creatures, then press Use my targets.</p>`;
-    const rider = state.rider ? ` <span class="aar-rider">after ${escape(state.rider.strikeName)}</span>` : "";
+    const rider = state.rider ? ` <span class="aar-rider">after ${escape(state.rider.strikeName)}</span>` : state.cause ? ` <span class="aar-rider">${escape(state.cause)}</span>` : "";
     return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong>${rider}<span class="aar-check">${escape(checkLine(state))}</span></header>${empty}<ul class="aar-targets">${rows}</ul>${results}${controls}</section>`;
 }
 

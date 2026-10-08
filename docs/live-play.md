@@ -10,7 +10,7 @@ The user's decisions (2026-10-08):
 ## How it works
 
 - `src/live/card.js` (pure): the card's state (the ability's plan, the source, the targets and their rolls) and its HTML.
-- `scripts/live.js` (Foundry): the triggers, the rolls, the result watcher and Apply.
+- `scripts/live.js` (Foundry): the triggers, the rolls, the result watcher and Apply. `scripts/auras.js` (Foundry) and `src/live/auras.js` (pure): the aura cards.
   - **Triggers** (on the active GM's client only): a monster's ability message (`flags.pf2e.origin.type === "action"`), an attack roll that hits with a Strike listing a rider, and a PC's skill-action check with a target.
   - **Rolls** go through PF2e's own statistics (a target's save, or the monster's skill against the target's DC), tagged `identifier: "aar:<card>:<target>"`. Whoever owns the roller rolls; the active GM's client writes the result onto the card.
   - **Apply** resolves the plan with the core (`registry.resolve`, the recorded degrees as `io.roll`), then applies the changes: damage through PF2e's `applyDamage` (its resistances and weaknesses), conditions, and afflictions handed to Pseudo Afflictions as the spell module does.
@@ -24,7 +24,6 @@ The user's decisions (2026-10-08):
 
 **Not yet:**
 - Swallow Whole's damage at the end of each turn is a reminder line.
-- Auras (Frightful Presence, Stench) have no card: they need "entering the aura" triggers.
 - Recharge isn't tracked live; PF2e's own text has the roll.
 
 ## Timed conditions and pushes (2026-10-08, the user's choice)
@@ -59,3 +58,46 @@ The user's decisions (2026-10-08):
   - a critical failure made Valeros off-guard until the start of Valeros's next turn.
 - Escape: grabbed ended.
 - Reposition: the by-hand line.
+
+## Auras (2026-10-08, the user's choices)
+
+The user's decisions:
+- **Foes only:** creatures whose token disposition differs from the monster's. The GM can add others with "Use my targets". Exceptions an aura names ("a non-demon creature", "a living creature") are the GM's call.
+- **Combat start counts as entering:** when an encounter starts, every foe inside an aura that acts on entering gets its card ("in the aura as combat began").
+- **A moving aura counts:** when the monster moves, foes its aura newly covers have entered it.
+- **Combat only:** nothing triggers unless an encounter is running on the scene.
+
+How it works:
+- **When an aura acts** comes from its text (`src/compiler/auras.js`): a creature "enters" it, "starts its turn" in it, or "ends its turn" in it.
+  - Frightful Presence acts on entering. Stench acts on entering and at turn start (PF2e's glossary text).
+  - An aura that only deals damage (radius, damage, save) acts on entering and at turn start, once per round (Monster Core's rule).
+  - An aura with no timing that does more than damage (Magic-Warping Aura acts when a creature Casts a Spell) has no trigger: the GM handles it.
+  - Miasma acts only for the round after its Poison Breath.
+  - Of 111 auras with a save in Monster Core, Monster Core 2 and NPC Core, 110 have a timing.
+- **Triggers**, on the active GM's client, one at a time:
+  - **Foundry's `moveToken`:** the path is checked square by square, so walking through an aura counts. A teleport or push counts only where it lands.
+  - **Encounter start:** the encounter's first round begins.
+  - **PF2e's `pf2e.startTurn` and `pf2e.endTurn`:** a creature starts or ends its turn.
+  - **An NPC's ability message:** Miasma's Poison Breath.
+- **Inside** is PF2e's distance from the monster's space, measured by the core's grid (`distanceFeet`): diagonals 5 then 10 feet, elevation as a third axis. Walls don't block; the GM confirms every card.
+- **No card** for a creature that is immune, or already waiting on an open card from the same aura.
+- **Immunity:** Apply records "temporarily immune …" as an effect on the creature ("Immune: Frightful Presence (Horned Dragon)", 1 minute), for the results that grant it.
+  - Frightful Presence grants it whatever the result. Stench grants it on a success, to every stench aura.
+  - The same applies to any card whose ability grants immunity, Demoralize's 10 minutes included.
+  - PF2e removes the effect when it runs out.
+
+**Checked live in pftest** (PFTEST SIM iconics, the young horned dragon, and a new PFTEST SIM Ghoul Soldier, in an encounter on the Live Cards scene):
+- Starting the encounter brought one Frightful Presence card for the four PCs.
+  - Three failed (frightened 2) and Merisiel succeeded (frightened 1).
+  - All four got a 1-minute immunity effect.
+- Walking Valeros next to the ghoul brought a Stench card ("entered the aura").
+  - Walking him out and back in while it was open brought no second card.
+  - His success made him immune to every stench aura.
+- Moving the ghoul beside the others brought one card for Seelah, Ezren and Merisiel (Seelah exactly 10 feet away), not the immune Valeros.
+- Merisiel's turn start brought no card (immune). With Seelah's immunity removed, her turn start brought one ("started its turn in the aura").
+- With the encounter deleted, walking into the stench brought no card.
+
+**Not yet:**
+- An aura's effects that last only while a creature stays in it ("can't reduce its frightened below 1 while in the aura").
+- Auras that act on other triggers (casting a spell).
+- Stench's "or recovers from being sickened" immunity.

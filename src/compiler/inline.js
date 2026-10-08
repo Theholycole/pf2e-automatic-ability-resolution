@@ -164,7 +164,26 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
 export function readImmunity(html) {
     const plain = htmlToPlainText(html);
     const match = /[^.]*\btemporarily immune\b[^.]*\./i.exec(plain);
-    return match ? { scope: "target", raw: match[0].trim() } : null;
+    return match ? immunityDetails(match[0].trim()) : null;
+}
+
+const UNITS = { round: "rounds", minute: "minutes", hour: "hours", day: "days" };
+const ALL_DEGREES = ["criticalSuccess", "success", "failure", "criticalFailure"];
+
+// What a "temporarily immune" sentence grants: how long, to whom (this
+// creature's ability, or "to all" of its kind), and after which results.
+//   "Regardless of the result …, temporarily immune to this monster's Frightful Presence for 1 minute."
+//   "A creature that succeeds at its save … is temporarily immune to all stench auras for 1 minute."
+//   "Critical Success The creature is unaffected and is temporarily immune for 24 hours."
+export function immunityDetails(raw) {
+    const time = /\bfor (\d+|an?|one) (round|minute|hour|day)s?\b/i.exec(raw);
+    const value = time ? (/^\d+$/.test(time[1]) ? Number(time[1]) : 1) : 1;
+    const unit = time ? UNITS[time[2].toLowerCase()] : "minutes";
+    const degrees = /^Critical Success\b|\bcritically succeeds?\b/i.test(raw) ? ["criticalSuccess"]
+        : /\bregardless\b/i.test(raw) ? ALL_DEGREES
+        : /\bsucceeds?\b|\bsuccessful(?:ly)?\b|^Success\b/i.test(raw) ? ["criticalSuccess", "success"]
+        : ALL_DEGREES;
+    return { scope: "target", raw, duration: { value, unit }, degrees: [...degrees], against: /\bimmune to all\b/i.test(raw) ? "all" : "source" };
 }
 
 // "push your target up to 10 feet away" → { kind: "push", distance: 10 }.

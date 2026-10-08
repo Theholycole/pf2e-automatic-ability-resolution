@@ -10,14 +10,15 @@
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
+import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const CORE_ID = "pf2e-resolution-core";
 const AFFLICTIONS = "pseudo-afflictions";
 const FLAG = "card";
 
-const isActiveGM = () => game.users.activeGM?.isSelf ?? game.user.isGM;
-const stateOf = (message) => message?.getFlag?.(MODULE_ID, FLAG) ?? null;
+export const isActiveGM = () => game.users.activeGM?.isSelf ?? game.user.isGM;
+export const stateOf = (message) => message?.getFlag?.(MODULE_ID, FLAG) ?? null;
 const owns = (uuid) => {
     try {
         return !!fromUuidSync(uuid)?.testUserPermission?.(game.user, "OWNER");
@@ -61,7 +62,7 @@ function targetEntry(token, check) {
     return entry;
 }
 
-async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null }) {
+export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     const state = createCard({
@@ -69,7 +70,9 @@ async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = 
         ability: { name: item.name, uuid: item.uuid },
         source: { actorUuid: sourceActor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? sourceActor.name },
         targets: tokens.map((token) => targetEntry(token, check)),
-        rider
+        rider,
+        cause,
+        aura
     });
     return ChatMessage.create({
         content: cardHTML(state),
@@ -270,11 +273,37 @@ async function applyCard(message) {
             lines.push(`Couldn't apply ${change.op} to ${state.targets.find((target) => target.id === change.target)?.name ?? "a creature"}: ${error.message}`);
         }
     }
+    lines.push(...(await grantImmunity(state)));
     const names = { source: state.source.name, ...Object.fromEntries(state.targets.map((target) => [target.id, target.name])) };
     // What happened first, then the rolls and reminders.
     const next = { ...stateOf(message), status: "applied", results: [...changeLines(result.changes, names), ...lines] };
     if (!next.results.length) next.results = ["Nothing to apply."];
     return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+}
+
+// "Temporarily immune for 1 minute" (Frightful Presence, Stench, Demoralize):
+// an effect on each target whose result grants it, which aura cards check.
+async function grantImmunity(state) {
+    const immunity = state.plan?.trigger?.immunity;
+    const slug = state.plan?.source?.slug ?? state.ability.slug;
+    if (!immunity?.duration || !slug) return [];
+    const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+    const lines = [];
+    for (const target of state.targets) {
+        if (!immunityApplies(immunity, target.degree)) continue;
+        const { actor } = await targetOf(state, target.id);
+        if (!actor) continue;
+        const source = immunity.against === "all" ? null : state.source.actorUuid;
+        if (isImmune(actor.itemTypes.effect.map((effect) => effect.flags?.[MODULE_ID]), { slug, source })) continue;
+        const data = immunityEffect(MODULE_ID, immunity, {
+            ability: { name: state.ability.name, slug, img: item?.img },
+            source: { actorUuid: state.source.actorUuid, name: state.source.name },
+            time: { worldTime: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null }
+        });
+        await actor.createEmbeddedDocuments("Item", [data]);
+        lines.push(`${target.name} is immune to ${immunity.against === "all" ? `every ${state.ability.name}` : `${state.source.name}'s ${state.ability.name}`} for ${immunity.duration.value} ${immunity.duration.unit.replace(/s$/, immunity.duration.value === 1 ? "" : "s")}`);
+    }
+    return lines;
 }
 
 async function targetOf(state, id) {

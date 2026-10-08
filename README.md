@@ -19,9 +19,10 @@ The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation
 
 | Path | Holds |
 |---|---|
-| `src/compiler/` | pure: `inline.js` (PF2e's inline syntax), `checks.js` (skill actions), `monster.js` (monster abilities), `builtins.js` (rules the simulator plays itself), `afflictions.js` (poisons, diseases), `index.js` |
+| `src/compiler/` | pure: `inline.js` (PF2e's inline syntax), `checks.js` (skill actions), `monster.js` (monster abilities), `builtins.js` (rules the simulator plays itself), `afflictions.js` (poisons, diseases), `auras.js` (when an aura acts), `index.js` |
 | `scripts/main.js` | Foundry: registers the compiler with the core and offers the basic actions |
-| `scripts/live.js`, `src/live/card.js` | live play: confirmation cards for monster abilities and Strike riders ([docs/live-play.md](docs/live-play.md)) |
+| `scripts/live.js`, `src/live/card.js` | live play: confirmation cards for monster abilities, Strike riders and PCs' skill actions ([docs/live-play.md](docs/live-play.md)) |
+| `scripts/auras.js`, `src/live/auras.js` | live play: cards when a foe enters a monster's aura or starts or ends its turn in it |
 | `tools/` | `leveldb.mjs` (reads PF2e's packs), `census.mjs`, `spell-compiler-probe.mjs` |
 | `docs/` | `census.md`, `milestone-3.md` |
 
