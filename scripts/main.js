@@ -36,8 +36,13 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
     core.registry.registerCompiler({
         module: MODULE_ID,
         name: "abilities",
-        // Monster abilities for now; class features, feats and consumables come later.
-        handles: (item) => item?.type === "action" && item.actor?.type === "npc",
+        // Monster abilities, and a PC's feat actions that are a check or a save against a
+        // creature (Bon Mot, Dirty Trick: the simulator's C15). Not impulses: the Kineticist module's.
+        handles: (item) => {
+            if (item?.actor?.type === "npc") return item.type === "action";
+            return item?.actor?.type === "character" && ["action", "feat"].includes(item.type) && item.system?.actionType?.value === "action"
+                && !(item.system?.traits?.value ?? []).includes("impulse") && /@Check\[|check against/i.test(item.system?.description?.value ?? "");
+        },
         // Waits for the basic actions, which the riders (Grab, Knockdown, Push) are built on.
         compile: async (item) => {
             await loaded;

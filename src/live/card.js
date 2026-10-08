@@ -106,6 +106,11 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 lines.push(`${who} is afflicted with ${change.data?.name ?? "the affliction"} (stage ${change.data?.stage ?? 1})`);
                 break;
             case "effect":
+                // "Valeros takes −2 status to will (1 minutes)"
+                if (change.effect?.kind === "modifier") {
+                    const modifier = change.effect.modifier;
+                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${modifier.selector}${modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit})` : ""}`);
+                }
                 // A dropped weapon is named by the Foundry side, which knows which one fell.
                 if (change.effect?.kind === "disarm" && change.effect.what === "weaken") lines.push(`${who}'s grip is weakened (−${change.effect.penalty ?? 2} to attacks with that weapon)`);
                 if (change.effect?.kind === "swallow") lines.push(`${who} is swallowed (grabbed and slowed 1; takes ${change.effect.damage} at the end of each of its turns${change.effect.rupture ? `; Rupture ${change.effect.rupture}` : ""}${change.effect.escapeDC ? `; Escape DC ${change.effect.escapeDC}` : ""})`);

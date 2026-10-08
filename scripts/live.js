@@ -378,6 +378,7 @@ async function applyChange(change, state) {
             // Swallowed: an effect granting grabbed and slowed 1, with the damage at the end of each turn (scripts/swallow.js).
             if (change.effect?.kind === "swallow") return applySwallow(state, actor, change.effect);
             if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
+            if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state);
             return null;
         case "end": {
             // Escape: the user's grabbed or restrained ends (an effect granting it goes with it).
@@ -426,6 +427,26 @@ async function timedCondition(actor, slug, value, duration, state) {
             rules: [{ key: "GrantItem", uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
         }
     }]);
+}
+
+// A penalty or bonus from the result (Bon Mot's -2 status to Perception and
+// Will for 1 minute): a PF2e effect with that FlatModifier, for its duration.
+async function penaltyEffect(actor, modifier, state) {
+    const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
+    const sign = modifier.value > 0 ? "+" : "−";
+    await actor.createEmbeddedDocuments("Item", [{
+        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${modifier.selector}`,
+        type: "effect",
+        img: "icons/svg/downgrade.svg",
+        flags: { [MODULE_ID]: { modifier: { selector: modifier.selector, source: state.source.actorUuid } } },
+        system: {
+            description: { value: `<p>${sign}${Math.abs(modifier.value)} ${modifier.type} to ${modifier.selector}, from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
+            duration,
+            start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
+            rules: [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value }]
+        }
+    }]);
+    return null;
 }
 
 // Off-guard to one creature only (Feint, Create a Diversion): an effect on the

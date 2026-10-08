@@ -4,7 +4,7 @@
 // check against the target's Reflex DC", then outcome sections.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
-import { degreeSections, inlineTags, readConditions, readDamage, readImmunity, readPush } from "./inline.js";
+import { degreeSections, inlineTags, readConditions, readDamage, readDuration, readImmunity, readPush } from "./inline.js";
 
 const SKILLS = ["acrobatics", "arcana", "athletics", "crafting", "deception", "diplomacy", "intimidation", "medicine", "nature", "occultism", "performance", "religion", "society", "stealth", "survival", "thievery", "perception"];
 const DEFENSES = { fortitude: "fortitude", reflex: "reflex", will: "will", perception: "perception", ac: "ac" };
@@ -13,9 +13,39 @@ const DEFENSES = { fortitude: "fortitude", reflex: "reflex", will: "will", perce
 export function readSkillCheck(html) {
     const plain = htmlToPlainText(String(html ?? "").replace(/\[\[\/act [^\]]*\]\]\{([^}]+)\}/g, "$1"));
     const match = /\b(Acrobatics|Arcana|Athletics|Crafting|Deception|Diplomacy|Intimidation|Medicine|Nature|Occultism|Performance|Religion|Society|Stealth|Survival|Thievery|Perception) check against (?:that |the |your |its )?(?:target's|creature's|its) (Fortitude|Reflex|Will|Perception) DC/i.exec(plain);
-    if (!match) return null;
-    const statistic = match[1].toLowerCase();
-    return SKILLS.includes(statistic) ? { roll: statistic === "perception" ? "perception" : "skill", statistic, against: { dc: "target", statistic: DEFENSES[match[2].toLowerCase()] } } : null;
+    if (match) {
+        const statistic = match[1].toLowerCase();
+        return SKILLS.includes(statistic) ? { roll: statistic === "perception" ? "perception" : "skill", statistic, against: { dc: "target", statistic: DEFENSES[match[2].toLowerCase()] } } : null;
+    }
+    // PF2e's inline check, as the PC feats write it: "@Check[diplomacy|against:will]", "@Check[thievery|defense:reflex]".
+    for (const raw of inlineTags(html, "Check")) {
+        const statistic = raw.split("|")[0].trim().toLowerCase();
+        const defense = /\|(?:against|defense):(fortitude|reflex|will|perception)\b/i.exec(raw)?.[1]?.toLowerCase();
+        if (defense && SKILLS.includes(statistic)) return { roll: statistic === "perception" ? "perception" : "skill", statistic, against: { dc: "target", statistic: DEFENSES[defense] } };
+    }
+    return null;
+}
+
+// "takes a –3 status penalty to Perception and Will saves for 1 minute" →
+// [{ selector, value, type, duration }] (PF2e's FlatModifier terms).
+const PENALTY_TARGETS = [
+    [/^perception$/i, ["perception"]], [/^(?:ac|armor class)$/i, ["ac"]], [/^attack rolls?$/i, ["attack-roll"]],
+    [/^(?:saves|saving throws)$/i, ["saving-throw"]], [/^fortitude(?: saves?)?$/i, ["fortitude"]], [/^reflex(?: saves?)?$/i, ["reflex"]],
+    [/^will(?: saves?)?$/i, ["will"]], [/^skill checks$/i, ["skill-check"]], [/^damage rolls?$/i, ["damage"]], [/^checks$/i, ["check"]]
+];
+export function readPenalties(text) {
+    const match = /\btakes? an? [–-](\d+) (status|circumstance|item)? ?penalty to ([^.]+?)(?=(?: for \d+ \w+| until\b|\.|$))/i.exec(htmlToPlainText(String(text ?? "")));
+    if (!match) return [];
+    // "Perception and Will saves" → the saves word belongs to the last of them.
+    const names = match[3].replace(/,? and /g, ", ").split(/,\s*/).map((name) => name.trim()).filter(Boolean);
+    const selectors = [];
+    for (const name of names) {
+        const entry = PENALTY_TARGETS.find(([pattern]) => pattern.test(name));
+        if (!entry) return [];
+        selectors.push(...entry[1]);
+    }
+    const duration = readDuration(htmlToPlainText(String(text ?? "")));
+    return selectors.map((selector) => ({ selector, value: -Number(match[1]), type: match[2]?.toLowerCase() ?? "untyped", duration }));
 }
 
 function outcomeRow(html, { selfByDefault = false } = {}) {
@@ -28,7 +58,31 @@ function outcomeRow(html, { selfByDefault = false } = {}) {
     row.effects = effects;
     const push = readPush(html);
     if (push) row.forcedMovement = push;
+    const modifiers = readPenalties(html);
+    if (modifiers.length) row.modifiers = modifiers;
     return row;
+}
+
+// "As critical success, but the penalty is –2" (a row like another, with a new
+// penalty) and "You take the same penalty an enemy would take had you
+// succeeded" (the success's penalty on the actor).
+function likeRows(outcomes, sections) {
+    for (const [degree, like] of [["success", "criticalSuccess"], ["failure", "success"], ["criticalFailure", "failure"]]) {
+        const text = sections[degree] ? htmlToPlainText(sections[degree]).trim() : "";
+        const as = new RegExp(`^As (?:a )?${like === "criticalSuccess" ? "critical success" : like}\\b`, "i").test(text);
+        if (!as) continue;
+        const copy = structuredClone(outcomes[like]);
+        const value = /\bthe penalty is [–-](\d+)/i.exec(text)?.[1];
+        if (value) for (const modifier of copy.modifiers ?? []) modifier.value = -Number(value);
+        const own = outcomes[degree];
+        outcomes[degree] = { ...copy, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects] };
+    }
+    const fumble = sections.criticalFailure ? htmlToPlainText(sections.criticalFailure) : "";
+    if (/\bYou take the same penalty\b/i.test(fumble)) {
+        const penalty = outcomes.success.modifiers ?? outcomes.criticalSuccess.modifiers ?? [];
+        if (penalty.length) outcomes.criticalFailure.modifiers = penalty.map((modifier) => ({ ...modifier, recipient: "self" }));
+    }
+    return outcomes;
 }
 
 // A plan for a skill action, or null when its text isn't a check against a DC.
@@ -51,12 +105,12 @@ export function compileSkillAction(item, { rank = 1 } = {}) {
             kind: "check",
             check,
             sharedDamage: null,
-            outcomes: {
+            outcomes: likeRows({
                 criticalSuccess: outcomeRow(sections.criticalSuccess),
                 success: outcomeRow(sections.success),
                 failure: outcomeRow(sections.failure),
                 criticalFailure: outcomeRow(sections.criticalFailure)
-            }
+            }, sections)
         },
         automation: { level: "automatic" }
     };
