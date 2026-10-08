@@ -87,4 +87,6 @@ Chosen from a survey of what still compiled to nothing in Monster Core 1–2 and
 - Engulf: a Trample-style save whose failure is a `swallow` effect with `escapeDC`.
 - The user confirmed defaults B27–B28 on 2026-10-08, and chose PC class features next.
 
-**Next:** PC class features (Sneak Attack, Rage, Hunt Prey and the like); then healing outside spells (Battle Medicine, potions), Stop Bleeding, reactions with other triggers, and live-play confirmation cards.
+**Then:** PC class features (C1–C12 in the simulator) and the first live-play slice: confirmation cards for monster abilities and Strike riders ([live-play.md](live-play.md)).
+
+**Next:** PCs' skill actions as cards, timed conditions that end on their own, and aura triggers.

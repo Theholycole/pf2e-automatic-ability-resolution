@@ -21,6 +21,7 @@ The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation
 |---|---|
 | `src/compiler/` | pure: `inline.js` (PF2e's inline syntax), `checks.js` (skill actions), `monster.js` (monster abilities), `builtins.js` (rules the simulator plays itself), `afflictions.js` (poisons, diseases), `index.js` |
 | `scripts/main.js` | Foundry: registers the compiler with the core and offers the basic actions |
+| `scripts/live.js`, `src/live/card.js` | live play: confirmation cards for monster abilities and Strike riders ([docs/live-play.md](docs/live-play.md)) |
 | `tools/` | `leveldb.mjs` (reads PF2e's packs), `census.mjs`, `spell-compiler-probe.mjs` |
 | `docs/` | `census.md`, `milestone-3.md` |
 

@@ -4,6 +4,7 @@
 // Live play's confirmation cards come in a later slice.
 
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
+import { setUpLivePlay } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -40,6 +41,9 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
         }
     });
 });
+
+// Live play: the confirmation cards (scripts/live.js).
+Hooks.once("ready", () => setUpLivePlay({ compileItem: (item) => compileAbility(item, { basicActions }), loaded }));
 
 Hooks.once("ready", async () => {
     await loadBasicActions();
