@@ -39,7 +39,7 @@ Pieces 1–3 are built:
 - **Core:** the `check` family.
 - **Compiler:** 922 plans from the 5,796 abilities in Monster Core 1–2 and NPC Core, plus 200 rules the engine already plays, with no errors.
 - **Simulator:** 1,106 real creatures in 3,318 fights, with no errors.
-- **Tests:** 55 core, 104 simulator, 9 here.
+- **Tests:** 55 core, 110 simulator, 10 here.
 
 The simulator's defaults are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions.md`. The user confirmed B1–B6 and B7–B11 (below) on 2026-10-08.
 
@@ -77,4 +77,10 @@ Chosen from a survey of what still compiled to nothing in Monster Core 1–2 and
 - **Checked live (pftest):** the snapshot reads all of these from PFTEST SIM copies of the Giant Scorpion, Megalodon, Elephant, Forest Troll, Horned Dragon (Young), Smilodon and Wererat. Trample finds its Strike through `item.actor`. Sizes, the builtins and the venom come through, and 200 fights per monster run in the worker in 0.7–1.7 seconds.
 - **A fix:** riders listed as "improved-grab" on real Strikes now fire. Before, the rider looked only for "grab".
 
-**Next:** reactions (Nimble Dodge and the like), charges with extra effects, Engulf, the Retch action, healing outside spells (Battle Medicine, potions), Stop Bleeding, and live-play confirmation cards.
+**Then (2026-10-08):**
+- Reactions as builtins: `ac-reaction` (Nimble Dodge, Retract Body), `attack-misfortune` (Challenge Fate), `reaction-strike` on a move (Twisting Tail), `death-strike` (Death Frenzy).
+- Charges read their bonus for moving 20 feet (`attackBonus`, `damage`).
+- Stench's slowed has the duration `{ mode: "while", condition: "sickened" }`.
+- In the simulator: the confused condition and the Retch action. The user confirmed defaults B22–B26 on 2026-10-08.
+
+**Next:** reactions with other triggers, charges with a save or push, Engulf, healing outside spells (Battle Medicine, potions), Stop Bleeding, and live-play confirmation cards.

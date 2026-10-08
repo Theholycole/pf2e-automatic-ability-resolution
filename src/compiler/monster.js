@@ -131,7 +131,8 @@ function stench(item) {
             kind: "save",
             check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: check.dc } },
             sharedDamage: null,
-            outcomes: { criticalSuccess: none(), success: none(), failure: { ...none(), effects: [condition("sickened", 1)] }, criticalFailure: { ...none(), effects: [condition("sickened", 1), condition("slowed", 1)] } }
+            // "slowed 1 as long as it's sickened": a duration tied to the other condition.
+            outcomes: { criticalSuccess: none(), success: none(), failure: { ...none(), effects: [condition("sickened", 1)] }, criticalFailure: { ...none(), effects: [condition("sickened", 1), condition("slowed", 1, { mode: "while", condition: "sickened" })] } }
         }
     };
 }

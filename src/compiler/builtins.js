@@ -10,6 +10,8 @@
 // - multi-strike: "makes two Fangs Strikes and one Tail Strike" (Draconic Frenzy)
 // - charge: "Strides and makes a Strike at the end of that movement" (Pounce)
 // - momentum: recharges a breath weapon on a critical hit (Draconic Momentum)
+// - reactions: ac-reaction (Nimble Dodge, Retract Body), attack-misfortune
+//   (Challenge Fate), reaction-strike on a move (Twisting Tail), death-strike (Death Frenzy)
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 
@@ -67,13 +69,24 @@ export function readMultiStrike(text) {
 
 // "The smilodon Strides and makes a Strike at the end of that movement." (the
 // hidden note after it changes nothing in the simulation) → { strides, strike }.
+// A charge's bonus for moving 20 feet comes along: "it gains a +2 circumstance
+// bonus to its attack roll" → attackBonus; "the Strike's damage is increased
+// to 3d10+20" → damage. Any other sentence: null.
 export function readCharge(text) {
     const sentences = text.trim().split(/(?<=\.)\s+/);
     const match = /^The [^.]+? Strides( twice)? and (?:then )?makes an? (?:([\w' -]+?) )?Strike(?: at the end of that movement)?\.$/i.exec(sentences[0] ?? "");
     if (!match) return null;
-    const rest = sentences.slice(1).filter((sentence) => !/remains? hidden until after/i.test(sentence));
-    if (rest.length) return null;
-    return { strides: match[1] ? 2 : 1, strike: match[2] ? match[2].toLowerCase() : null };
+    const charge = { strides: match[1] ? 2 : 1, strike: match[2] ? match[2].toLowerCase() : null };
+    const moved = "^(?:If|As long as) (?:it|they|the [\\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, ";
+    for (const sentence of sentences.slice(1)) {
+        if (/remains? hidden until after/i.test(sentence)) continue;
+        const bonus = new RegExp(`${moved}(?:it gains|they gain) a \\+(\\d+) circumstance bonus to (?:its|their|this) attack roll\\.$`, "i").exec(sentence);
+        const damage = new RegExp(`${moved}the Strike's damage (?:is increased to|increases to) (.+?)(?: damage)?\\.$`, "i").exec(sentence);
+        if (bonus) charge.attackBonus = Number(bonus[1]);
+        else if (damage) charge.damage = damage[1].trim();
+        else return null;
+    }
+    return charge;
 }
 
 // "The dragon recharges their Poison Breath whenever they score a critical hit with a Strike." → ["Poison Breath"].
@@ -81,6 +94,29 @@ export function readMomentum(text) {
     if (!/critical hit/i.test(text) || !/recharges?/i.test(text)) return null;
     const named = /recharges? (?:their |its )?([A-Z][\w' -]+?)(?: whenever|\.|$)/.exec(text)?.[1];
     return { recharges: named ? [named.trim()] : [] };
+}
+
+// A reaction the simulator plays, or null.
+//   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
+//   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
+//   Trigger … uses a move action or leaves a square during a move action … Effect The dragon makes a tail Strike at the creature with a –2 penalty. If the Strike hits, the dragon disrupts the creature's action.
+//   Trigger The reefclaw is reduced to 0 Hit Points. Effect The reefclaw makes a claw Strike before dying.
+export function readReaction(item, text) {
+    const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
+    if (!trigger || !effect) return null;
+    const ac = (item?.system?.rules ?? []).find((rule) => rule?.key === "FlatModifier" && [].concat(rule.selector).includes("ac") && Number.isFinite(Number(rule.value)));
+    if (ac && /\bAC against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
+        return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted" };
+    }
+    if (/\btargeted by an attack\b/i.test(trigger) && /rolls the triggering attack twice and uses the worse result/i.test(effect)) return { builtin: "attack-misfortune" };
+    const moving = /\buses a move action\b|\bleaves a square during a move action\b/i.test(trigger);
+    const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
+    if (moving && struck) return { builtin: "reaction-strike", triggers: ["move"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect) };
+    if (/^The [^.]+? is reduced to 0 Hit Points\.?$/i.test(trigger.trim())) {
+        const last = /^The [^.]+? makes an? (?:([\w' -]+?) )?Strike before (?:dying|being destroyed)\./i.exec(effect);
+        if (last) return { builtin: "death-strike", strike: last[1] ? last[1].toLowerCase() : null };
+    }
+    return null;
 }
 
 // The builtin for an item, or null.
@@ -104,6 +140,7 @@ export function compileBuiltin(item, slug) {
         if (momentum) return { builtin: "momentum", ...momentum };
         return null;
     }
+    if (type === "reaction") return readReaction(item, text);
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
     const strikes = readMultiStrike(text);
