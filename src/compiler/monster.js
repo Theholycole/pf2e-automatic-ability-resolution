@@ -68,8 +68,9 @@ function rider(item, slug, basicActions) {
     return rider;
 }
 
-// Constrict: the listed damage to every creature it grabs, basic Fortitude save.
-function constrict(item) {
+// Constrict: the listed damage to every creature it grabs, basic Fortitude
+// save. Greater Constrict: a creature that fails also falls unconscious.
+function constrict(item, { greater = false } = {}) {
     const html = item.system?.description?.value ?? "";
     const raw = inlineTags(html, "Check")[0];
     const check = raw ? readCheck(raw) : null;
@@ -79,8 +80,14 @@ function constrict(item) {
         ...base(item),
         targeting: { target: "creatures it has grabbed or restrained", range: "touch", area: null, grabbed: true },
         trigger: { event: "use" },
-        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: true, against: { dc: "fixed", value: check.dc } }, sharedDamage: { rollOnce: true, components }, outcomes: basicRows(components.map((component) => component.id)) }
+        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: true, against: { dc: "fixed", value: check.dc } }, sharedDamage: { rollOnce: true, components }, outcomes: greaterRows(basicRows(components.map((component) => component.id)), greater) }
     };
+}
+
+function greaterRows(outcomes, greater) {
+    if (!greater) return outcomes;
+    for (const degree of ["failure", "criticalFailure"]) outcomes[degree].effects = [condition("unconscious")];
+    return outcomes;
 }
 
 // Frightful Presence: an aura; a creature saves once (Will), then is immune for a minute.
@@ -138,9 +145,11 @@ function inlineSave(item) {
     const template = inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? (passive && /^(\d+) feet/i.test(plain) ? { type: "emanation", value: Number(/^(\d+) feet/i.exec(plain)[1]) } : null);
     const range = readRange(plain);
     const recharge = readRecharge(html);
+    // Only creatures it's holding ("each creature it has grabbed").
+    const grabbed = /\b(?:creatures?|targets?) (?:it(?:'s| is| has)?|the monster(?:'s| is| has)?) (?:grabbed|grabbing|restrained|restraining)|\b(?:grabbed|restrained) by (?:it|the monster)\b/i.test(plain);
     return {
         ...base(item),
-        targeting: { target: template ? null : "1 creature", range: range ? `${range} feet` : template ? null : "touch", area: template },
+        targeting: { target: template ? null : "1 creature", range: range ? `${range} feet` : template ? null : "touch", area: template, ...(grabbed ? { grabbed: true } : {}) },
         trigger: { event: passive ? "aura" : "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}), ...(readImmunity(html) ? { immunity: readImmunity(html) } : {}) },
         resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: check.basic, against: { dc: "fixed", value: check.dc } }, sharedDamage: components.length ? { rollOnce: true, components } : null, outcomes }
     };
@@ -156,7 +165,7 @@ export function compileMonsterAbility(item, { basicActions = {} } = {}) {
         return { builtin: slug, ...(strike ? { strike } : {}) };
     }
     if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push"].includes(slug)) return rider(item, slug, basicActions);
-    if (slug === "constrict") return constrict(item);
+    if (slug === "constrict" || slug === "greater-constrict") return constrict(item, { greater: slug === "greater-constrict" });
     if (slug === "frightful-presence") return frightfulPresence(item);
     return inlineSave(item) ?? compileSkillAction(item);
 }

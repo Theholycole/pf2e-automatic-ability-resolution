@@ -85,3 +85,84 @@ export function compileEscape(item) {
         automation: { level: "automatic" }
     };
 }
+
+// --- Skill actions whose results need more than conditions --------------------
+
+const nextTurnEnd = { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
+const thisTurnEnd = { mode: "fixed", value: 0, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
+
+// Disarm: on a critical success the item falls (its Strikes can't be made
+// until it's picked up); on a success the grip weakens (-2 circumstance to
+// attacks with it until the holder changes grip). PF2e's text, from the actions pack.
+export function compileDisarm(item) {
+    const plan = compileSkillAction(item);
+    if (!plan) return null;
+    const outcomes = plan.resolution.outcomes;
+    outcomes.criticalSuccess.effects = [{ kind: "disarm", what: "drop" }];
+    outcomes.success.effects = [{ kind: "disarm", what: "weaken", penalty: 2 }];
+    return plan;
+}
+
+// Feint: off-guard against the actor's melee attacks only (scope). Critical
+// success: until the end of the actor's next turn; success: its next melee
+// attack this turn; critical failure: the actor is off-guard to the target's melee attacks.
+export function compileFeint(item) {
+    const plan = compileSkillAction(item);
+    if (!plan) return null;
+    const outcomes = plan.resolution.outcomes;
+    outcomes.criticalSuccess.effects = [{ kind: "condition", slug: "off-guard", value: null, duration: nextTurnEnd, scope: { against: "actor", attacks: "melee" } }];
+    outcomes.success.effects = [{ kind: "condition", slug: "off-guard", value: null, duration: thisTurnEnd, scope: { against: "actor", attacks: "melee", uses: 1 } }];
+    outcomes.criticalFailure.effects = [{ kind: "condition", slug: "off-guard", value: null, duration: nextTurnEnd, recipient: "self", scope: { against: "target", attacks: "melee" } }];
+    // "You are within melee reach of the target."
+    plan.targeting = { ...plan.targeting, range: "touch" };
+    return plan;
+}
+
+// Create a Diversion: one Deception check against each watcher's Perception DC.
+// On a success the actor is hidden to it, so its next Strike against that
+// creature this turn finds it off-guard. The +4 to later attempts is played as one try per creature.
+export function compileDiversion(item) {
+    const none = () => ({ damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] });
+    const diverted = () => ({ ...none(), effects: [{ kind: "condition", slug: "off-guard", value: null, duration: thisTurnEnd, scope: { against: "actor", attacks: "any", uses: 1 } }] });
+    return {
+        modelVersion: 13,
+        source: { name: item?.name ?? "Create a Diversion", slug: "create-a-diversion", uuid: item?.uuid ?? null, type: item?.type ?? "action" },
+        rank: 1,
+        traits: [...(item?.system?.traits?.value ?? ["mental"])],
+        activation: { time: "1", traits: [...(item?.system?.traits?.value ?? ["mental"])] },
+        // The watchers it tries to divert: the creature's foes around it.
+        targeting: { target: "up to 6 creatures whose attention you divert", range: "30 feet", area: null },
+        trigger: { event: "use", immunity: { scope: "target", raw: "creatures you attempt to divert gain a +4 circumstance bonus to their Perception DCs against your attempts to Create a Diversion for 1 minute" } },
+        resolution: {
+            kind: "check",
+            check: { roll: "skill", statistic: "deception", against: { dc: "target", statistic: "perception" } },
+            sharedDamage: null,
+            outcomes: { criticalSuccess: diverted(), success: diverted(), failure: none(), criticalFailure: none() }
+        },
+        automation: { level: "automatic" }
+    };
+}
+
+// Administer First Aid, to stabilize: Medicine against 5 + the dying
+// creature's recovery DC (15 + its dying value). Success: it loses dying but
+// stays unconscious; critical failure: dying +1. (Stopping bleeding comes later.)
+export function compileFirstAid(item) {
+    const none = () => ({ damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] });
+    const stable = () => ({ ...none(), effects: [{ kind: "end-condition", slugs: ["dying"], stabilize: true }] });
+    return {
+        modelVersion: 13,
+        source: { name: item?.name ?? "Administer First Aid", slug: "administer-first-aid", uuid: item?.uuid ?? null, type: item?.type ?? "action" },
+        rank: 1,
+        traits: ["manipulate"],
+        activation: { time: "2", traits: ["manipulate"] },
+        targeting: { target: "1 adjacent dying creature", range: "touch", area: null, dying: true },
+        trigger: { event: "use", requirements: "a healer's toolkit" },
+        resolution: {
+            kind: "check",
+            check: { roll: "skill", statistic: "medicine", against: { dc: "target", statistic: "stabilize" } },
+            sharedDamage: null,
+            outcomes: { criticalSuccess: stable(), success: stable(), failure: none(), criticalFailure: { ...none(), effects: [{ kind: "condition", slug: "dying", value: 1, duration: null }] } }
+        },
+        automation: { level: "automatic" }
+    };
+}

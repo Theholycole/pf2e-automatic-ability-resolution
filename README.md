@@ -7,7 +7,7 @@ The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation
 
 **Status (2026-10-08): first slice, monster abilities.** See [docs/milestone-3.md](docs/milestone-3.md).
 
-- **Basic actions** from PF2e's actions pack: Demoralize, Trip, Grapple, Shove, Escape. They're read from PF2e's own text: the check against a DC, outcome sections, conditions, durations, push distances, and effects on the actor itself.
+- **Basic actions** from PF2e's actions pack: Demoralize, Trip, Grapple, Shove, Escape, Disarm, Feint, Create a Diversion, Administer First Aid (to stabilize) and Reposition. They're read from PF2e's own text: the check against a DC, outcome sections, conditions, durations, push distances, and effects on the actor itself. Disarm, Feint, Create a Diversion and First Aid get their non-condition results (a dropped weapon, off-guard to one creature, stabilizing) from `checks.js`.
 - **Monster abilities:**
   - glossary riders: Grab, Improved Grab, Knockdown, Push
   - Constrict and Frightful Presence

@@ -14,7 +14,8 @@ const loaded = new Promise((resolve) => (resolveLoaded = resolve));
 // PF2e's own basic actions, from its actions pack, once the world is ready.
 async function loadBasicActions() {
     try {
-        const pack = game.packs.get("pf2e.actions");
+        // PF2e's actions pack: its folder is "actions", its id "pf2e.actionspf2e".
+        const pack = game.packs.get("pf2e.actionspf2e") ?? game.packs.get("pf2e.actions");
         const index = await pack.getIndex({ fields: ["system.slug"] });
         const items = [];
         for (const entry of index) if (BASIC_ACTIONS.includes(entry.system?.slug)) items.push(await pack.getDocument(entry._id));

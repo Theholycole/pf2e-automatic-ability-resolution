@@ -39,7 +39,13 @@ test("conditions: sentence by sentence, the actor's own, and not the ones a sent
 
 test("basic actions from PF2e's actions pack", { skip: !available && "PF2e's packs not found" }, async () => {
     const basics = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
-    assert.deepEqual(Object.keys(basics).sort(), ["demoralize", "escape", "grapple", "shove", "trip"]);
+    assert.deepEqual(Object.keys(basics).sort(), ["administer-first-aid", "create-a-diversion", "demoralize", "disarm", "escape", "feint", "grapple", "reposition", "shove", "trip"]);
+    assert.deepEqual(basics.disarm.resolution.outcomes.criticalSuccess.effects, [{ kind: "disarm", what: "drop" }]);
+    assert.deepEqual(basics.disarm.resolution.outcomes.criticalFailure.effects.map((e) => `${e.recipient} ${e.slug} ${e.duration.expiry}`), ["self off-guard turn-start"]);
+    assert.deepEqual(basics.feint.resolution.outcomes.success.effects[0].scope, { against: "actor", attacks: "melee", uses: 1 });
+    assert.equal(basics.feint.resolution.outcomes.criticalFailure.effects[0].recipient, "self");
+    assert.deepEqual(basics["create-a-diversion"].resolution.check.against, { dc: "target", statistic: "perception" });
+    assert.deepEqual(basics["administer-first-aid"].resolution.check, { roll: "skill", statistic: "medicine", against: { dc: "target", statistic: "stabilize" } });
     assert.deepEqual(basics.trip.resolution.check, { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "reflex" } });
     assert.deepEqual(basics.trip.resolution.outcomes.criticalFailure.effects.map((e) => `${e.recipient} ${e.slug}`), ["self prone"]);
     assert.deepEqual(basics.grapple.resolution.outcomes.success.effects.map((e) => e.slug), ["grabbed"]);
@@ -62,6 +68,9 @@ test("monster abilities: riders, Constrict, Frightful Presence, a breath weapon,
     const improved = compileMonsterAbility(ability("Tor Linnorm", "Improved Grab"), { basicActions });
     assert.equal(improved.trigger.cost, "free");
 
+    const greater = compileMonsterAbility(ability("Giant Anaconda", "Greater Constrict"));
+    assert.equal(greater.targeting.grabbed, true, "only creatures it holds");
+    assert.deepEqual(greater.resolution.outcomes.failure.effects.map((e) => e.slug), ["unconscious"]);
     const constrict = compileMonsterAbility(ability("Sargassum Heap", "Constrict"));
     assert.deepEqual(constrict.resolution.check, { roll: "save", statistic: "fortitude", basic: true, against: { dc: "fixed", value: 23 } });
     assert.equal(constrict.targeting.grabbed, true);

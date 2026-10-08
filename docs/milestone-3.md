@@ -39,10 +39,21 @@ Pieces 1–3 are built:
 - **Core:** the `check` family.
 - **Compiler:** 922 plans from the 5,796 abilities in Monster Core 1–2 and NPC Core, plus 200 rules the engine already plays, with no errors.
 - **Simulator:** 1,106 real creatures in 3,318 fights, with no errors.
-- **Tests:** 54 core, 84 simulator, 5 here.
+- **Tests:** 54 core, 88 simulator, 5 here.
 
-The simulator's defaults (B1–B6), which the user confirmed on 2026-10-08, are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions.md`.
+The simulator's defaults are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions.md`. The user confirmed B1–B6 and B7–B11 (below) on 2026-10-08.
 
-**To check live:** Foundry has to be restarted to discover this module. Then it's enabled in `pftest`, and the simulator reads a monster's abilities through the core.
+**Checked live (2026-10-08):** after a Foundry restart the user approved, the module is enabled in `pftest`.
+- The basic actions load from `pf2e.actionspf2e`; the pack is named `pf2e.actions` only on disk.
+- A monster gets only the basic actions for skills its stat block lists. Its prepared data lists every skill, so they're read from its source data.
+- A PFTEST SIM Giant Anaconda grabs, then uses Greater Constrict only on creatures it holds.
 
-**Next:** Swallow Whole and Trample, then the other skill actions (Reposition, Disarm, Feint), healing outside spells (Battle Medicine, potions), and live-play confirmation cards.
+## The other skill actions (2026-10-08, at the user's request)
+
+- **Disarm:** a critical success is `{ kind: "disarm", what: "drop" }`, a success `{ what: "weaken", penalty: 2 }`. The core passes them on as `effect` changes of kind `disarm`.
+- **Feint:** off-guard with a `scope` (`against: "actor"`, `attacks: "melee"`, `uses`). The core turns it into `scope.attacker`, so only the feinter's attacks gain. A critical failure is scoped the other way (`recipient: "self"`, `against: "target"`).
+- **Create a Diversion:** Deception against each watcher's Perception DC, up to 6 creatures within 30 feet. A success makes the watcher off-guard to the next attack (any, 1 use). It counts as an immunity, so one try per creature.
+- **Administer First Aid:** Medicine against `stabilize` (5 + 15 + dying), only on a dying creature (`targeting.dying`). A success ends dying with `stabilize`; a critical failure is dying +1. Stopping bleeding comes later.
+- **Reposition:** compiles with no effects. A move within reach changes nothing in the simulator's bands.
+
+**Next:** Swallow Whole and Trample, healing outside spells (Battle Medicine, potions), Stop Bleeding, and live-play confirmation cards.
