@@ -28,10 +28,12 @@ const owns = (uuid) => {
 
 let compile = null;
 let ready = Promise.resolve();
+let basics = () => ({});
 
 // main.js hands over the compiler (with the basic actions) and a promise for them.
-export function setUpLivePlay({ compileItem, loaded }) {
+export function setUpLivePlay({ compileItem, basicActions, loaded }) {
     compile = compileItem;
+    basics = basicActions;
     ready = loaded;
     injectStyles();
     Hooks.on("createChatMessage", (message) => {
@@ -39,8 +41,14 @@ export function setUpLivePlay({ compileItem, loaded }) {
         recordResult(message).catch((error) => console.error(`${MODULE_ID} | recording a roll`, error));
         cardForAbility(message).catch((error) => console.error(`${MODULE_ID} | ability card`, error));
         cardsForRiders(message).catch((error) => console.error(`${MODULE_ID} | rider card`, error));
+        cardForSkillAction(message).catch((error) => console.error(`${MODULE_ID} | skill action card`, error));
+        spendOffGuard(message).catch((error) => console.error(`${MODULE_ID} | spending off-guard`, error));
     });
     Hooks.on("renderChatMessageHTML", (message, html) => wireCard(message, html));
+    // The chat log draws the messages already there before "ready": wire those too.
+    for (const element of document.querySelectorAll("[data-message-id]")) {
+        if (element.querySelector(".pf2e-aar-card")) wireCard(game.messages.get(element.dataset.messageId), element);
+    }
 }
 
 // --- Cards ------------------------------------------------------------------
@@ -104,6 +112,38 @@ async function cardsForRiders(message) {
     }
 }
 
+// A skill action PF2e has already rolled (a PC's Demoralize, Trip, Grapple,
+// Shove, Disarm, Feint, Create a Diversion, Reposition or Escape): a card with
+// the roll in, for the GM to apply its result.
+const SKILL_ACTIONS = ["demoralize", "trip", "grapple", "shove", "disarm", "feint", "create-a-diversion", "reposition", "escape"];
+
+async function cardForSkillAction(message) {
+    const context = message.flags?.pf2e?.context;
+    if (!context?.outcome || parseIdentifier(context.identifier)) return;
+    const options = context.options ?? [];
+    const slug = SKILL_ACTIONS.find((action) => options.includes(`action:${action}`));
+    if (!slug) return;
+    await ready;
+    const plan = basics()[slug];
+    if (!plan) return;
+    const actor = message.actor ?? (message.speaker?.actor ? game.actors.get(message.speaker.actor) : null);
+    if (!actor) return;
+    const token = message.token ?? null;
+    const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
+    const target = targetToken?.object ?? targetToken;
+    const item = await fromUuid(plan.source?.uuid ?? "").catch(() => null);
+    const state = createCard({
+        plan,
+        ability: { name: plan.source?.name ?? slug, uuid: item?.uuid ?? null },
+        source: { actorUuid: actor.uuid, tokenUuid: token?.uuid ?? null, name: token?.name ?? actor.name },
+        targets: target?.actor ? [{ actorUuid: target.actor.uuid, tokenUuid: targetToken.uuid, name: target.name ?? target.actor.name, dc: context.dc?.value ?? null }] : []
+    });
+    if (!state) return;
+    const roll = message.rolls?.[0];
+    const rolled = state.targets.length ? recordRoll(state, state.targets[0].id, { total: roll?.total ?? null, natural: roll?.dice?.[0]?.total ?? null, degree: context.outcome }) : state;
+    await ChatMessage.create({ content: cardHTML(rolled), speaker: ChatMessage.getSpeaker({ actor, token: token ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: rolled } } });
+}
+
 // --- Rolls --------------------------------------------------------------------
 
 async function rollTarget(message, target) {
@@ -147,6 +187,8 @@ function wireCard(message, html) {
     const state = stateOf(message);
     if (!state) return;
     for (const button of html.querySelectorAll("[data-aar-action]")) {
+        if (button.dataset.aarWired) continue;
+        button.dataset.aarWired = "true";
         const target = state.targets.find((entry) => entry.id === button.dataset.targetId);
         const visible = button.dataset.gmOnly === "true" ? game.user.isGM : button.dataset.aarAction === "roll" ? target && mayRoll(state, target) : true;
         if (!visible) {
@@ -228,7 +270,7 @@ async function applyCard(message) {
             lines.push(`Couldn't apply ${change.op} to ${state.targets.find((target) => target.id === change.target)?.name ?? "a creature"}: ${error.message}`);
         }
     }
-    const names = Object.fromEntries(state.targets.map((target) => [target.id, target.name]));
+    const names = { source: state.source.name, ...Object.fromEntries(state.targets.map((target) => [target.id, target.name])) };
     // What happened first, then the rolls and reminders.
     const next = { ...stateOf(message), status: "applied", results: [...changeLines(result.changes, names), ...lines] };
     if (!next.results.length) next.results = ["Nothing to apply."];
@@ -236,6 +278,11 @@ async function applyCard(message) {
 }
 
 async function targetOf(state, id) {
+    // The user itself (Trip's critical failure, Escape's success).
+    if (id === "source") {
+        const token = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
+        return { target: { id: "source", name: state.source.name }, token, actor: token?.actor ?? (await fromUuid(state.source.actorUuid)) };
+    }
     const target = state.targets.find((entry) => entry.id === id);
     if (!target) return {};
     const token = target.tokenUuid ? await fromUuid(target.tokenUuid) : null;
@@ -265,6 +312,8 @@ async function applyChange(change, state) {
                 await actor.applyDamage({ damage: roll, token: token ?? undefined });
                 return null;
             }
+            // Off-guard to one creature's attacks (Feint, Create a Diversion): an effect on that creature.
+            if (change.slug === "off-guard" && change.scope?.attacker) return scopedOffGuard(state, change);
             // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
             if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {
                 await timedCondition(actor, change.slug, change.value, change.duration, state);
@@ -278,7 +327,19 @@ async function applyChange(change, state) {
                 await setCondition(actor, "grabbed", null);
                 await setCondition(actor, "slowed", 1);
             }
+            if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
             return null;
+        case "end": {
+            // Escape: the user's grabbed or restrained ends (an effect granting it goes with it).
+            if (change.what?.stabilize) {
+                await actor.decreaseCondition?.("dying", { forceRemove: true });
+                return `${target.name} is stabilized (still unconscious)`;
+            }
+            const slugs = change.what?.conditions ?? [];
+            const gone = actor.itemTypes.condition.filter((condition) => slugs.includes(condition.slug));
+            if (gone.length) await actor.deleteEmbeddedDocuments("Item", gone.map((condition) => condition.id));
+            return gone.length ? `${target.name} is no longer ${[...new Set(gone.map((condition) => condition.slug))].join(" or ")}` : null;
+        }
         case "affliction":
             return handOffAffliction(state, target, actor, change.data);
         case "move":
@@ -315,6 +376,65 @@ async function timedCondition(actor, slug, value, duration, state) {
             rules: [{ key: "GrantItem", uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
         }
     }]);
+}
+
+// Off-guard to one creature only (Feint, Create a Diversion): an effect on the
+// creature whose attacks benefit, marking the target's token (PF2e's
+// TokenMark, as Hunt Prey does) and making the marked target off-guard to its
+// Strikes (melee ones only for Feint), for the duration.
+async function scopedOffGuard(state, change) {
+    const { actor: attacker } = await targetOf(state, change.scope.attacker);
+    const markedId = change.target;
+    const { target: marked, token } = await targetOf(state, markedId);
+    const offGuard = game.pf2e.ConditionManager.getCondition("off-guard");
+    if (!attacker || !token || !offGuard) return `${marked?.name ?? "The target"} is off-guard to ${attacker?.name ?? "one creature"}'s attacks (apply by hand).`;
+    const slug = `aar-${state.ability.slug ?? "mark"}-${token.id}`.toLowerCase();
+    const duration = change.duration?.mode === "fixed" ? change.duration : { value: 0, unit: "rounds", expiry: "turn-end" };
+    const rounds = duration.value === 0 ? 0 : 1;
+    await attacker.createEmbeddedDocuments("Item", [{
+        name: `${state.ability.name}: ${marked.name} is off-guard to you`,
+        type: "effect",
+        img: offGuard.img,
+        flags: { [MODULE_ID]: { scopedOffGuard: { target: token.uuid, melee: change.scope.attacks === "melee", uses: change.scope.uses ?? null } } },
+        system: {
+            description: { value: `<p>${marked.name} is off-guard to your ${change.scope.attacks === "melee" ? "melee Strikes" : "attacks"}${change.scope.uses === 1 ? " (your next one)" : ""}.</p>` },
+            duration: { value: rounds, unit: "rounds", expiry: duration.expiry ?? "turn-end", sustained: false },
+            start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
+            rules: [
+                { key: "TokenMark", slug, uuid: token.uuid },
+                { key: "EphemeralEffect", affects: "target", selectors: change.scope.attacks === "melee" ? ["melee-strike-attack-roll"] : ["strike-attack-roll", "spell-attack-roll"], uuid: offGuard._stats?.compendiumSource ?? offGuard.sourceId ?? offGuard.uuid, predicate: [{ or: [`target:mark:${slug}`, `self:mark:${slug}`] }] }
+            ]
+        }
+    }]);
+    return null;
+}
+
+// A Feint's success lasts for one melee attack: the attacker's next Strike at
+// the marked creature (melee, if only melee counts) spends it (active GM only).
+async function spendOffGuard(message) {
+    const context = message.flags?.pf2e?.context;
+    if (context?.type !== "attack-roll" || !context.target?.token) return;
+    const attacker = message.actor ?? game.actors.get(message.speaker?.actor);
+    const spent = (attacker?.itemTypes?.effect ?? []).filter((effect) => {
+        const scoped = effect.flags?.[MODULE_ID]?.scopedOffGuard;
+        if (!scoped || scoped.uses !== 1 || scoped.target !== context.target.token) return false;
+        return !scoped.melee || (context.options ?? []).includes("item:melee");
+    });
+    if (spent.length) await attacker.deleteEmbeddedDocuments("Item", spent.map((effect) => effect.id));
+}
+
+// Disarm: a success weakens the grip (PF2e's own Effect: Disarm (Success), which
+// asks which weapon); a critical success knocks the target's weapon out of its hands.
+async function disarm(actor, effect, target) {
+    if (effect.what === "weaken") {
+        const source = await fromUuid("Compendium.pf2e.other-effects.Item.PuDS0DEq0CnaSIFV");
+        if (source) await actor.createEmbeddedDocuments("Item", [source.toObject()]);
+        return source ? null : `${target.name}'s grip is weakened (−2 to attacks with it; apply by hand).`;
+    }
+    const weapon = actor.itemTypes.weapon?.filter((item) => item.isHeld && item.category !== "unarmed").sort((a, b) => (b.system.bonus?.value ?? 0) - (a.system.bonus?.value ?? 0))[0];
+    if (!weapon) return `${target.name} has no weapon in hand to drop.`;
+    await weapon.update({ "system.equipped.carryType": "dropped", "system.equipped.handsHeld": 0 });
+    return `${target.name} drops ${weapon.name}`;
 }
 
 // A push or pull: the token moves square by square away from (or toward) the

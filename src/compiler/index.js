@@ -1,10 +1,10 @@
 // The ability compiler: PF2e's non-spell abilities as plans for the
 // resolution core. Pure: Node, Web Workers and Foundry.
 
-import { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileSkillAction } from "./checks.js";
+import { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileReposition, compileSkillAction } from "./checks.js";
 import { compileMonsterAbility, glossarySlug, BUILT_IN } from "./monster.js";
 
-export { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileSkillAction, readSkillCheck } from "./checks.js";
+export { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileReposition, compileSkillAction, readSkillCheck } from "./checks.js";
 export { compileMonsterAbility, glossarySlug, BUILT_IN } from "./monster.js";
 export * as inline from "./inline.js";
 
@@ -12,7 +12,7 @@ export * as inline from "./inline.js";
 export const BASIC_ACTIONS = Object.freeze(["demoralize", "trip", "grapple", "shove", "escape", "disarm", "feint", "create-a-diversion", "administer-first-aid", "reposition"]);
 
 // The skill actions whose results need more than conditions.
-const SPECIAL = { escape: compileEscape, disarm: compileDisarm, feint: compileFeint, "create-a-diversion": compileDiversion, "administer-first-aid": compileFirstAid };
+const SPECIAL = { escape: compileEscape, disarm: compileDisarm, feint: compileFeint, "create-a-diversion": compileDiversion, "administer-first-aid": compileFirstAid, reposition: compileReposition };
 
 function compileBasic(item, slug) {
     return (SPECIAL[slug] ?? compileSkillAction)(item);

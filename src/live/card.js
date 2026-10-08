@@ -91,7 +91,7 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 lines.push(`${who} takes ${change.instances.map((instance) => `${instance.amount} ${instance.type}`).join(" and ")}`);
                 break;
             case "condition":
-                lines.push(`${who} is ${conditionLabel(change.slug)}${Number.isFinite(change.value) ? ` ${change.value}` : ""}`);
+                lines.push(`${who} is ${conditionLabel(change.slug)}${Number.isFinite(change.value) ? ` ${change.value}` : ""}${change.scope?.attacker ? ` to ${names[change.scope.attacker] ?? "one creature"}'s ${change.scope.uses === 1 ? "next " : ""}${change.scope.attacks === "melee" ? "melee " : ""}attack${change.scope.uses === 1 ? "" : "s"}` : ""}`);
                 break;
             case "move":
                 lines.push(`${who} is ${change.kind === "pull" ? "pulled" : "pushed"} ${change.distance} feet`);
@@ -100,10 +100,13 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 lines.push(`${who} is afflicted with ${change.data?.name ?? "the affliction"} (stage ${change.data?.stage ?? 1})`);
                 break;
             case "effect":
+                // A dropped weapon is named by the Foundry side, which knows which one fell.
+                if (change.effect?.kind === "disarm" && change.effect.what === "weaken") lines.push(`${who}'s grip is weakened (−${change.effect.penalty ?? 2} to attacks with that weapon)`);
                 if (change.effect?.kind === "swallow") lines.push(`${who} is swallowed (grabbed and slowed 1; takes ${change.effect.damage} at the end of each of its turns${change.effect.rupture ? `; Rupture ${change.effect.rupture}` : ""}${change.effect.escapeDC ? `; Escape DC ${change.effect.escapeDC}` : ""})`);
                 break;
             case "note":
-                lines.push(change.text);
+                // By-hand instructions name the creatures: {source} uses the ability on {target}.
+                lines.push(String(change.text).replaceAll("{source}", names.source ?? "the user").replaceAll("{target}", names[change.target] ?? "the target"));
                 break;
             default:
                 break;

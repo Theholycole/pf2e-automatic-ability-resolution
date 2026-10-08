@@ -118,6 +118,19 @@ export function compileFeint(item) {
     return plan;
 }
 
+// Reposition: the user picks where the creature goes (within reach, not into
+// or through obstacles), so the card says how far and who moves whom.
+export function compileReposition(item) {
+    const plan = compileSkillAction(item);
+    if (!plan) return null;
+    const outcomes = plan.resolution.outcomes;
+    const move = (feet) => `Move {target} up to ${feet} feet, staying within {source}'s reach and not into or through obstacles (by hand).`;
+    outcomes.criticalSuccess.manualInstructions = [move(10)];
+    outcomes.success.manualInstructions = [move(5)];
+    outcomes.criticalFailure.manualInstructions = ["{target} may move {source} up to 5 feet, as though it had Repositioned {source} (by hand)."];
+    return plan;
+}
+
 // Create a Diversion: one Deception check against each watcher's Perception DC.
 // On a success the actor is hidden to it, so its next Strike against that
 // creature this turn finds it off-guard. The +4 to later attempts is played as one try per creature.

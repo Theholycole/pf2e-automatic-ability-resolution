@@ -54,7 +54,7 @@ The simulator's defaults are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions
 - **Feint:** off-guard with a `scope` (`against: "actor"`, `attacks: "melee"`, `uses`). The core turns it into `scope.attacker`, so only the feinter's attacks gain. A critical failure is scoped the other way (`recipient: "self"`, `against: "target"`).
 - **Create a Diversion:** Deception against each watcher's Perception DC, up to 6 creatures within 30 feet. A success makes the watcher off-guard to the next attack (any, 1 use). It counts as an immunity, so one try per creature.
 - **Administer First Aid:** Medicine against `stabilize` (5 + 15 + dying), only on a dying creature (`targeting.dying`). A success ends dying with `stabilize`; a critical failure is dying +1. Stopping bleeding comes later.
-- **Reposition:** compiles with no effects. A move within reach changes nothing in the simulator's bands.
+- **Reposition:** compiles with by-hand instructions only (the live card says who moves whom, and how far). A move within reach changes nothing in the simulator's bands.
 
 ## More monster abilities (2026-10-08, the user: "keep working on monster abilities")
 

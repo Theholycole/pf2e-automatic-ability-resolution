@@ -46,6 +46,28 @@ test("what Apply did, in plain lines", () => {
     assert.deepEqual(lines, ["Valeros takes 24 bludgeoning", "Valeros is grabbed", "Seelah is pushed 10 feet", "Seelah is afflicted with Giant Scorpion Venom (stage 1)", "Seelah is swallowed (grabbed and slowed 1; takes (2d8+5)[bludgeoning] at the end of each of its turns; Rupture 20)"]);
 });
 
+test("off-guard to one creature: its attacks, or only its next melee attack", () => {
+    const lines = changeLines([
+        { op: "condition", target: "t0", slug: "off-guard", value: null, scope: { attacker: "source", attacks: "melee", uses: 1 } },
+        { op: "condition", target: "source", slug: "off-guard", value: null, scope: { attacker: "t0", attacks: "melee", uses: null } },
+        { op: "condition", target: "t0", slug: "off-guard", value: null, scope: { attacker: "source", attacks: "any", uses: 1 } }
+    ], { source: "Merisiel", t0: "Giant Scorpion" });
+    assert.deepEqual(lines, ["Giant Scorpion is off-guard to Merisiel's next melee attack", "Merisiel is off-guard to Giant Scorpion's melee attacks", "Giant Scorpion is off-guard to Merisiel's next attack"]);
+});
+
+test("Disarm: a weakened grip has a line; a dropped weapon is named when it falls", () => {
+    const lines = changeLines([
+        { op: "effect", target: "t0", effect: { kind: "disarm", what: "weaken", penalty: 2 } },
+        { op: "effect", target: "t0", effect: { kind: "disarm", what: "drop" } }
+    ], { t0: "Seelah" });
+    assert.deepEqual(lines, ["Seelah's grip is weakened (−2 to attacks with that weapon)"]);
+});
+
+test("by-hand instructions name the user and the target", () => {
+    const lines = changeLines([{ op: "note", audience: "gm", target: "t0", text: "Move {target} up to 5 feet, staying within {source}'s reach (by hand).", manual: true }], { source: "Valeros", t0: "Giant Scorpion" });
+    assert.deepEqual(lines, ["Move Giant Scorpion up to 5 feet, staying within Valeros's reach (by hand)."]);
+});
+
 test("a check card's row shows the user's roll against the target's DC", () => {
     const state = createCard({ plan: grab, ability: { name: "Grab" }, source: { actorUuid: "Actor.s", name: "Snake" }, targets: [{ actorUuid: "Actor.a", name: "Seelah", dc: 22 }] });
     assert.match(cardHTML(recordRoll(state, "t0", { total: 27, natural: 15, degree: "success" })), /Athletics 27 vs DC 22: success/);

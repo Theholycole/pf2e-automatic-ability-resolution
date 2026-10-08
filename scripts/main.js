@@ -43,7 +43,7 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
 });
 
 // Live play: the confirmation cards (scripts/live.js).
-Hooks.once("ready", () => setUpLivePlay({ compileItem: (item) => compileAbility(item, { basicActions }), loaded }));
+Hooks.once("ready", () => setUpLivePlay({ compileItem: (item) => compileAbility(item, { basicActions }), basicActions: () => basicActions, loaded }));
 
 Hooks.once("ready", async () => {
     await loadBasicActions();
