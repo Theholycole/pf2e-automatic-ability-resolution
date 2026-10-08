@@ -25,6 +25,7 @@ The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation
 | `scripts/auras.js`, `src/live/auras.js` | live play: cards when a foe enters a monster's aura or starts or ends its turn in it |
 | `scripts/swallow.js`, `src/live/swallow.js` | live play: Swallow Whole and Engulf over the turns (damage at the end of each turn, Rupture, Escape) |
 | `scripts/recharge.js`, `src/live/recharge.js` | live play: recharging abilities (rolled on Apply, a warning on reuse, Draconic Momentum) |
+| `scripts/reactions.js`, `src/live/reactions.js` | live play: monsters' reactions as GM-only offers (Reactive Strike, Twisting Tail, Nimble Dodge, Challenge Fate, Death Frenzy, Ferocity) |
 | `tools/` | `leveldb.mjs` (reads PF2e's packs), `census.mjs`, `spell-compiler-probe.mjs` |
 | `docs/` | `census.md`, `milestone-3.md` |
 

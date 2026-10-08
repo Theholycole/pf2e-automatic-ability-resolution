@@ -8,6 +8,7 @@ import { setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpRecharge } from "./recharge.js";
+import { setUpReactions } from "./reactions.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -53,6 +54,7 @@ Hooks.once("ready", () => {
     setUpAuras({ compileItem, loaded });
     setUpSwallow();
     setUpRecharge({ compileItem });
+    setUpReactions({ compileItem });
 });
 
 Hooks.once("ready", async () => {

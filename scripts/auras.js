@@ -87,7 +87,7 @@ function auraPlan(item) {
 const radiusOf = (item, plan) => Number(item.rules?.find((rule) => rule.key === "Aura")?.radius) || Number(plan.targeting?.area?.value) || 0;
 
 // The tokens taking part in an encounter.
-const inEncounter = (combat) => new Set(combat.combatants.map((combatant) => combatant.tokenId).filter(Boolean));
+export const inEncounter = (combat) => new Set(combat.combatants.map((combatant) => combatant.tokenId).filter(Boolean));
 
 // The auras of the encounter's monsters on a scene: { token, actor, item, plan, when, radius, key }.
 // (A monster on the map but not in the encounter brings no cards.)
@@ -107,13 +107,13 @@ function auraSources(scene, combat) {
 }
 
 // The encounter running on a scene, or null.
-const runningCombat = (scene) => game.combats.find((combat) => combat.started && (combat.scene?.id === scene.id || combat.combatants.some((combatant) => combatant.sceneId === scene.id))) ?? null;
+export const runningCombat = (scene) => game.combats.find((combat) => combat.started && (combat.scene?.id === scene.id || combat.combatants.some((combatant) => combatant.sceneId === scene.id))) ?? null;
 
-const gridOf = (scene) => ({ size: scene.grid.size, gridFeet: scene.grid.distance });
+export const gridOf = (scene) => ({ size: scene.grid.size, gridFeet: scene.grid.distance });
 
 // A token's space, at a point of a path or where it stands. (Its stored
 // position: while a move animates, Foundry 14's x and y can still show the old one.)
-const box = (token, size, at = token._source ?? token) => ({ x: at.x, y: at.y, w: Number(at.width ?? token.width ?? 1) * size, h: Number(at.height ?? token.height ?? 1) * size, elevation: Number(at.elevation ?? token.elevation ?? 0) });
+export const box = (token, size, at = token._source ?? token) => ({ x: at.x, y: at.y, w: Number(at.width ?? token.width ?? 1) * size, h: Number(at.height ?? token.height ?? 1) * size, elevation: Number(at.elevation ?? token.elevation ?? 0) });
 
 const isFoe = (source, token) => !!token.actor?.isOfType?.("creature") && token.id !== source.token.id && !token.hidden && !token.actor.isDead && token.disposition !== source.token.disposition;
 

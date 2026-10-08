@@ -30,7 +30,8 @@ const recharging = (actor, name) => (actor?.itemTypes?.effect ?? []).filter((eff
 
 // The card's warning while the ability still recharges, or null.
 export function rechargeWarning(actor, name) {
-    const effect = recharging(actor, name).find((entry) => !entry.isExpired);
+    // PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
+    const effect = recharging(actor, name).find((entry) => !(entry.remainingDuration?.expired ?? entry.isExpired));
     if (!effect) return null;
     const seconds = effect.remainingDuration?.remaining;
     return warningLine(name, Number.isFinite(seconds) ? Math.max(1, Math.ceil(seconds / 6)) : null);
