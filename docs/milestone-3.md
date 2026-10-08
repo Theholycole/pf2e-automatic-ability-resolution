@@ -39,7 +39,7 @@ Pieces 1–3 are built:
 - **Core:** the `check` family.
 - **Compiler:** 922 plans from the 5,796 abilities in Monster Core 1–2 and NPC Core, plus 200 rules the engine already plays, with no errors.
 - **Simulator:** 1,106 real creatures in 3,318 fights, with no errors.
-- **Tests:** 55 core, 110 simulator, 10 here.
+- **Tests:** 55 core, 112 simulator, 12 here.
 
 The simulator's defaults are in `../PF2e COMBAT SIMULATOR/docs/ability-decisions.md`. The user confirmed B1–B6 and B7–B11 (below) on 2026-10-08.
 
@@ -83,4 +83,8 @@ Chosen from a survey of what still compiled to nothing in Monster Core 1–2 and
 - Stench's slowed has the duration `{ mode: "while", condition: "sickened" }`.
 - In the simulator: the confused condition and the Retch action. The user confirmed defaults B22–B26 on 2026-10-08.
 
-**Next:** reactions with other triggers, charges with a save or push, Engulf, healing outside spells (Battle Medicine, potions), Stop Bleeding, and live-play confirmation cards.
+- Strike activities (`strike-activity` builtin): a Strike, perhaps after Strides, with more on a hit (conditions, push, extra damage, or a save plan in `onHit.save`), read sentence by sentence by `strikeActivity()` in `monster.js`. About a dozen abilities; the rest of the "makes a Strike" activities have shapes of their own.
+- Engulf: a Trample-style save whose failure is a `swallow` effect with `escapeDC`.
+- The user confirmed defaults B27–B28 on 2026-10-08, and chose PC class features next.
+
+**Next:** PC class features (Sneak Attack, Rage, Hunt Prey and the like); then healing outside spells (Battle Medicine, potions), Stop Bleeding, reactions with other triggers, and live-play confirmation cards.

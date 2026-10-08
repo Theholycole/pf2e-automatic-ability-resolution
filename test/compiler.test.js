@@ -188,8 +188,8 @@ test("saves whose outcomes are prose: \"must succeed at a save or …\", \"A cre
     assert.deepEqual(rows(ability("Lamia Matriarch", "Matriarch's Caress")), { criticalSuccess: "-", success: "-", failure: "- stupefied2", criticalFailure: "- stupefied4" });
     // "(on a critical failure, the creature also falls Prone)": added to the failure's.
     assert.deepEqual(rows(ability("Sewer Ooze", "Filth Wave")), { criticalSuccess: "-", success: "-", failure: "1d4[acid]", criticalFailure: "1d4[acid] prone" });
-    // Not actions of their own: after a Strike's hit, or when the creature dies.
-    assert.equal(ability("Rhinoceros", "Rhinoceros Charge"), null);
+    // Not actions of their own: after a Strike's hit (part of the Strike activity), or when the creature dies.
+    assert.equal(ability("Rhinoceros", "Rhinoceros Charge").builtin, "strike-activity");
     assert.equal(ability("Caligni Dancer", "Final Dance"), null);
 });
 
@@ -203,5 +203,32 @@ test("reactions the simulator plays, and charges with a bonus for moving 20 feet
     assert.deepEqual(ability("Reefclaw", "Death Frenzy"), { builtin: "death-strike", strike: "claw" });
     assert.deepEqual(ability("Boar", "Boar Charge"), { builtin: "charge", actions: 2, strides: 2, strike: "tusk", attackBonus: 2 });
     assert.deepEqual(ability("Great Cyclops", "Powerful Charge"), { builtin: "charge", actions: 2, strides: 2, strike: "horn", damage: "3d10+20" });
-    assert.equal(ability("Rhinoceros", "Rhinoceros Charge"), null, "a save after the hit isn't read yet");
+    assert.equal(ability("Rhinoceros", "Rhinoceros Charge").builtin, "strike-activity", "a save after the hit: a Strike activity");
+});
+
+test("Strike activities: a Strike (after Strides) with more on a hit", { skip: !available && "PF2e's packs not found" }, async () => {
+    const npcs = [...(await readPack("pathfinder-monster-core")), ...(await readPack("pathfinder-monster-core-2")), ...(await readPack("pathfinder-npc-core"))].filter((doc) => doc.collection === "actors" && doc.type === "npc");
+    const ability = (creature, name) => compileMonsterAbility(npcs.find((npc) => npc.name === creature).items.find((item) => item.name === name));
+    const wrestle = ability("Tiger", "Wrestle");
+    assert.deepEqual([wrestle.builtin, wrestle.actions, wrestle.strides, wrestle.strike, wrestle.requires], ["strike-activity", 1, 0, "claw", "grabbed"]);
+    assert.deepEqual(wrestle.onHit.conditions.map((c) => c.slug), ["prone"]);
+    const intimidating = ability("Jailer", "Intimidating Strike");
+    assert.deepEqual([intimidating.onHit.conditions.map((c) => `${c.slug} ${c.value}`), intimidating.onHit.critical.map((c) => `${c.slug} ${c.value}`)], [["frightened 1"], ["frightened 2"]]);
+    const rhino = ability("Rhinoceros", "Rhinoceros Charge");
+    assert.deepEqual([rhino.strides, rhino.strike, rhino.damage, rhino.onHit.size], [2, "horn", "(3d8+6)[piercing]", "medium"]);
+    assert.deepEqual(rhino.onHit.save.resolution.outcomes.failure.forcedMovement.distance, 5);
+    assert.deepEqual(rhino.onHit.save.resolution.outcomes.failure.effects.map((e) => e.slug), ["prone"]);
+    assert.equal(ability("Ifrit", "Combat Grab").requires, "free-hand");
+    assert.deepEqual([ability("Arboreal Warden", "Shield Push").onHit.push, ability("Skeletal Hulk", "Massive Rush").damageBonus], [10, 4]);
+    assert.equal(ability("Hyaenodon", "Drag"), null, "dragging the enemy along isn't read");
+});
+
+test("Engulf: a Reflex save for creatures in its path; a failure engulfs, with the listed Escape DC and Rupture", { skip: !available && "PF2e's packs not found" }, async () => {
+    const npcs = [...(await readPack("pathfinder-monster-core")), ...(await readPack("pathfinder-monster-core-2"))].filter((doc) => doc.collection === "actors" && doc.type === "npc");
+    const tar = npcs.find((npc) => npc.name === "Living Tar");
+    const plan = compileMonsterAbility(tar.items.find((item) => item.name === "Engulf"), { actor: tar });
+    assert.deepEqual(plan.targeting.trample, { size: "huge", strides: 2 });
+    assert.deepEqual(plan.resolution.check.against, { dc: "fixed", value: 22 });
+    assert.deepEqual(plan.resolution.outcomes.failure.effects, [{ kind: "swallow", damage: "(4d6)[acid]", rupture: 15, size: "huge", escapeDC: 22 }]);
+    assert.deepEqual(plan.resolution.outcomes.success.effects, []);
 });
