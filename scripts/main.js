@@ -6,6 +6,7 @@
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
 import { setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
+import { setUpSwallow } from "./swallow.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -43,11 +44,13 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
     });
 });
 
-// Live play: the confirmation cards (scripts/live.js) and the monsters' auras (scripts/auras.js).
+// Live play: the confirmation cards (scripts/live.js), the monsters' auras
+// (scripts/auras.js) and Swallow Whole over the turns (scripts/swallow.js).
 Hooks.once("ready", () => {
     const compileItem = (item) => compileAbility(item, { basicActions });
     setUpLivePlay({ compileItem, basicActions: () => basicActions, loaded });
     setUpAuras({ compileItem, loaded });
+    setUpSwallow();
 });
 
 Hooks.once("ready", async () => {

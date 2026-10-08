@@ -23,7 +23,6 @@ The user's decisions (2026-10-08):
 - **Grab** (a rider check): the anaconda's Athletics against the target's Fortitude DC. A success applied grabbed; a critical success, restrained, with a reminder of when it ends.
 
 **Not yet:**
-- Swallow Whole's damage at the end of each turn is a reminder line.
 - Recharge isn't tracked live; PF2e's own text has the roll.
 
 ## Timed conditions and pushes (2026-10-08, the user's choice)
@@ -101,3 +100,25 @@ How it works:
 - An aura's effects that last only while a creature stays in it ("can't reduce its frightened below 1 while in the aura").
 - Auras that act on other triggers (casting a spell).
 - Stench's "or recovers from being sickened" immunity.
+
+## Swallow Whole and Engulf over the turns (2026-10-08, the user's choice)
+
+- **Apply** on a Swallow Whole or Engulf card deals the damage and gives the creature a "Swallowed by …" effect (`scripts/swallow.js`, `src/live/swallow.js`):
+  - grabbed and slowed 1, granted by the effect so they end with it;
+  - the monster off-guard to its Strikes (a token mark, as Feint's);
+  - the rules in its description: hold its breath, unarmed or light weapons only, Escape, Rupture, the 3 actions to cut open a dead monster.
+  - The grab that held it in the jaws ends, as PF2e's text says.
+- **At the end of each of its turns** (`pf2e.endTurn`, active GM), the listed damage is rolled as a PF2e damage roll, with an "Apply to …" button for the GM. Several damage types roll together ("{(3d10+10)[bludgeoning],2d6[fire]}"). There's no roll once the monster is dead.
+- **Rupture:** when the monster takes piercing or slashing damage of at least its Rupture value from one attack or spell, a card offers "Cut free" for each creature it holds. The core's applyDamage listener notices this. The damage counted is the roll's piercing and slashing before resistances.
+- **Escape:** the Escape card's success ends grabbed, and the effect goes with it (and slowed with the effect).
+- Tokens aren't moved in or out: the GM places a creature that gets out.
+
+**Checked live in pftest** (the PFTEST SIM Megalodon and Valeros, in an encounter on the Live Cards scene):
+- Swallow Whole's card dealt 14 bludgeoning (78 to 64 HP) and gave the effect: grabbed and slowed 1, and the earlier grab ended.
+- Valeros's longsword needed AC 25 against the megalodon (27, off-guard), and stayed at 25 against the anaconda.
+- At the end of Valeros's turn: a 2d8+5 roll (10) with "Apply to Valeros", which took him to 54.
+- Rupture:
+  - 15 slashing to the megalodon brought no card;
+  - 25 slashing and 10 fire brought one, and "Cut free" ended the effect with its grabbed and slowed.
+- Swallowed again: with the megalodon at 0 HP, his turn ended with no roll.
+- His Escape (a critical success) ended grabbed, and the effect and slowed went with it.

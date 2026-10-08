@@ -11,6 +11,7 @@
 
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
+import { applySwallow } from "./swallow.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const CORE_ID = "pf2e-resolution-core";
@@ -352,10 +353,8 @@ async function applyChange(change, state) {
             return null;
         }
         case "effect":
-            if (change.effect?.kind === "swallow") {
-                await setCondition(actor, "grabbed", null);
-                await setCondition(actor, "slowed", 1);
-            }
+            // Swallowed: an effect granting grabbed and slowed 1, with the damage at the end of each turn (scripts/swallow.js).
+            if (change.effect?.kind === "swallow") return applySwallow(state, actor, change.effect);
             if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
             return null;
         case "end": {
