@@ -7,6 +7,7 @@ import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compi
 import { setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
+import { setUpRecharge } from "./recharge.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -51,6 +52,7 @@ Hooks.once("ready", () => {
     setUpLivePlay({ compileItem, basicActions: () => basicActions, loaded });
     setUpAuras({ compileItem, loaded });
     setUpSwallow();
+    setUpRecharge({ compileItem });
 });
 
 Hooks.once("ready", async () => {

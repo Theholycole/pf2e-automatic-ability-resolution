@@ -12,6 +12,7 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { applySwallow } from "./swallow.js";
+import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const CORE_ID = "pf2e-resolution-core";
@@ -63,7 +64,7 @@ function targetEntry(token, check) {
     return entry;
 }
 
-export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null }) {
+export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     const state = createCard({
@@ -73,7 +74,8 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
         targets: tokens.map((token) => targetEntry(token, check)),
         rider,
         cause,
-        aura
+        aura,
+        warning
     });
     return ChatMessage.create({
         content: cardHTML(state),
@@ -91,9 +93,16 @@ async function cardForAbility(message) {
     if (!item?.actor || item.actor.type !== "npc") return;
     await ready;
     const plan = compile(item);
-    if (!plan?.resolution || (plan.trigger?.event ?? "use") !== "use") return;
     const sourceToken = message.token ?? item.actor.getActiveTokens(true, true)[0] ?? null;
-    await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens: [...game.user.targets] });
+    const formula = rechargeFormula(item, plan);
+    // Used again while it recharges: the card says so (the GM decides).
+    const warning = formula ? rechargeWarning(item.actor, item.name) : null;
+    if (plan?.resolution && (plan.trigger?.event ?? "use") === "use" && cardCheck(plan)) {
+        await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens: [...game.user.targets], warning });
+        return;
+    }
+    // No card to apply: its recharge starts as it's used.
+    if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
 }
 
 // A Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each.
@@ -275,6 +284,13 @@ async function applyCard(message) {
         }
     }
     lines.push(...(await grantImmunity(state)));
+    // "It can't use it again for 1d4 rounds": rolled now.
+    const recharge = state.plan?.trigger?.recharge?.formula;
+    if (recharge && state.ability.uuid) {
+        const item = await fromUuid(state.ability.uuid).catch(() => null);
+        const actor = item?.actor ?? (await fromUuid(state.source.actorUuid));
+        if (item && actor) lines.push(await startRecharge({ actor, item, formula: recharge, tokenUuid: state.source.tokenUuid }));
+    }
     const names = { source: state.source.name, ...Object.fromEntries(state.targets.map((target) => [target.id, target.name])) };
     // What happened first, then the rolls and reminders.
     const next = { ...stateOf(message), status: "applied", results: [...changeLines(result.changes, names), ...lines] };
@@ -529,6 +545,7 @@ function injectStyles() {
 .pf2e-aar-card .aar-criticalFailure { color: #b71c1c; font-weight: bold; }
 .pf2e-aar-card .aar-controls { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
 .pf2e-aar-card .aar-applied li { font-size: 0.9em; }
-.pf2e-aar-card .aar-hint { font-size: 0.9em; font-style: italic; }`;
+.pf2e-aar-card .aar-hint { font-size: 0.9em; font-style: italic; }
+.pf2e-aar-card .aar-warning { margin: 0.25rem 0; font-size: 0.9em; font-weight: bold; color: #b26a00; }`;
     document.head.append(style);
 }

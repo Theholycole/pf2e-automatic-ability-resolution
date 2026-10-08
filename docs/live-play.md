@@ -23,7 +23,6 @@ The user's decisions (2026-10-08):
 - **Grab** (a rider check): the anaconda's Athletics against the target's Fortitude DC. A success applied grabbed; a critical success, restrained, with a reminder of when it ends.
 
 **Not yet:**
-- Recharge isn't tracked live; PF2e's own text has the roll.
 
 ## Timed conditions and pushes (2026-10-08, the user's choice)
 
@@ -122,3 +121,21 @@ How it works:
   - 25 slashing and 10 fire brought one, and "Cut free" ended the effect with its grabbed and slowed.
 - Swallowed again: with the megalodon at 0 HP, his turn ended with no roll.
 - His Escape (a critical success) ended grabbed, and the effect and slowed went with it.
+
+## Recharging abilities (2026-10-08, the user's choices)
+
+The user's decisions:
+- **The recharge starts on Apply:** it's rolled when the GM applies the card, and the card shows it ("Poison Breath recharges in 2 rounds (1d4)"). A recharging ability with no card (37 in the bestiary, such as Ink Cloud) starts when used from the sheet, with a note to the GM.
+- **Reuse is warned, not blocked:** using it again while it recharges still brings its card, with a warning ("Poison Breath is still recharging: 1 round left."). The GM decides.
+
+How it works (`scripts/recharge.js`, `src/live/recharge.js`):
+- **The effect:** "Recharging: …" on the monster, lasting the rolled number of rounds. It ends at the start of the monster's turn, counted on the monster's own initiative whoever's turn the GM applies it on. PF2e removes it when it runs out.
+- **Applying again** starts a new recharge in place of the old one.
+- **The formula** comes from the plan (182 of the bestiary's 219 recharging abilities) or from the text ("[[/gmr 1d4 #Recharge …]]", "can't use … again for 1d4 rounds").
+- **Draconic Momentum:** a critical hit with a Strike ends the recharge of the abilities it names, with a note to the GM (active GM).
+
+**Checked live in pftest** (the young horned dragon and Valeros, in an encounter on the Live Cards scene):
+- Poison Breath's card: Valeros took 15 poison, and the breath recharged in 2 rounds.
+- Breathing again at once brought a card warning "2 rounds left"; in round 2 the warning said "1 round left".
+- A critical Jaws hit ended the recharge, with the GM note.
+- A 1-round recharge was gone at the start of the dragon's next turn, and its next breath had no warning.
