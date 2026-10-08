@@ -1,0 +1,7464 @@
+{
+  "generated": "2026-10-08T08:37:11.400Z",
+  "packsDirectory": "/home/theholycole/.local/share/FoundryVTT/Data/systems/pf2e/packs",
+  "sources": {
+    "actions": {
+      "total": 574,
+      "byFamily": {
+        "other-prose": 149,
+        "strike": 108,
+        "other-structured": 85,
+        "save": 72,
+        "out-of-combat": 61,
+        "skill-check": 54,
+        "passive-text": 12,
+        "healing": 12,
+        "movement": 11,
+        "stance": 5,
+        "aura": 3,
+        "utility": 1,
+        "built-in": 1
+      },
+      "byActionType": {
+        "action": 347,
+        "reaction": 105,
+        "passive": 74,
+        "free": 48
+      },
+      "structured": 318,
+      "withDegreeTable": 66,
+      "conditions": {
+        "off-guard": 23,
+        "prone": 19,
+        "frightened": 17,
+        "unconscious": 15,
+        "hidden": 12,
+        "concealed": 10,
+        "grabbed": 9,
+        "immobilized": 9,
+        "restrained": 8,
+        "stupefied": 7,
+        "blinded": 7,
+        "dazzled": 7,
+        "fatigued": 6,
+        "undetected": 6,
+        "fleeing": 5,
+        "paralyzed": 5,
+        "slowed": 5,
+        "deafened": 5,
+        "enfeebled": 5,
+        "sickened": 5,
+        "clumsy": 4,
+        "drained": 4,
+        "confused": 4,
+        "stunned": 3,
+        "observed": 3,
+        "fascinated": 3,
+        "immobilizing": 2,
+        "dying": 2,
+        "doomed": 2,
+        "invisible": 2,
+        "wounded": 1,
+        "quickened": 1,
+        "persistent damage": 1,
+        "blind": 1,
+        "deaf": 1,
+        "grabs": 1,
+        "restrains": 1,
+        "restraining": 1,
+        "paralyzing": 1,
+        "bleeding": 1,
+        "unnoticed": 1,
+        "broken": 1,
+        "bleed": 1,
+        "encumbered": 1,
+        "controlled": 1
+      },
+      "byCategory": {
+        "offensive": 290,
+        "interaction": 187,
+        "defensive": 75,
+        "none": 22
+      }
+    },
+    "feats": {
+      "total": 6284,
+      "byFamily": {
+        "passive-text": 1744,
+        "passive-conditional": 1175,
+        "passive-always": 723,
+        "other-prose": 660,
+        "strike": 579,
+        "other-structured": 487,
+        "save": 338,
+        "skill-check": 250,
+        "healing": 113,
+        "stance": 93,
+        "out-of-combat": 52,
+        "aura": 41,
+        "movement": 15,
+        "affliction": 7,
+        "sense": 3,
+        "built-in": 2,
+        "spells": 1,
+        "troop": 1
+      },
+      "byActionType": {
+        "passive": 3977,
+        "action": 1619,
+        "reaction": 472,
+        "free": 216
+      },
+      "structured": 3650,
+      "withDegreeTable": 233,
+      "conditions": {
+        "off-guard": 218,
+        "concealed": 107,
+        "prone": 102,
+        "frightened": 96,
+        "grabbed": 79,
+        "hidden": 74,
+        "stupefied": 59,
+        "restrained": 55,
+        "slowed": 55,
+        "unconscious": 53,
+        "dazzled": 52,
+        "clumsy": 52,
+        "quickened": 51,
+        "sickened": 50,
+        "stunned": 49,
+        "enfeebled": 43,
+        "drained": 43,
+        "blinded": 32,
+        "dying": 31,
+        "doomed": 30,
+        "wounded": 30,
+        "undetected": 29,
+        "fatigued": 28,
+        "immobilized": 24,
+        "confused": 22,
+        "paralyzed": 22,
+        "fleeing": 20,
+        "invisible": 19,
+        "deafened": 19,
+        "fascinated": 18,
+        "controlled": 16,
+        "cursebound": 14,
+        "concealment": 8,
+        "observed": 5,
+        "broken": 4,
+        "petrified": 4,
+        "encumbered": 4,
+        "persistent fire damage": 4,
+        "unnoticed": 2,
+        "immobilize": 2,
+        "fascinate": 1,
+        "persistent bleed damage": 1,
+        "persistent poison damage": 1,
+        "immobilizing": 1,
+        "persistent acid or fire damage": 1,
+        "persistent damage": 1
+      },
+      "byCategory": {
+        "class": 4303,
+        "ancestry": 1586,
+        "skill": 338,
+        "general": 40,
+        "bonus": 14,
+        "classfeature": 3
+      }
+    },
+    "featsWithActions": {
+      "total": 2307,
+      "byFamily": {
+        "other-prose": 660,
+        "strike": 568,
+        "other-structured": 439,
+        "save": 289,
+        "skill-check": 151,
+        "stance": 93,
+        "healing": 65,
+        "aura": 19,
+        "movement": 15,
+        "affliction": 4,
+        "built-in": 2,
+        "spells": 1,
+        "troop": 1
+      },
+      "byActionType": {
+        "action": 1619,
+        "reaction": 472,
+        "free": 216
+      },
+      "structured": 1290,
+      "withDegreeTable": 174,
+      "conditions": {
+        "off-guard": 125,
+        "prone": 85,
+        "grabbed": 61,
+        "frightened": 61,
+        "concealed": 57,
+        "restrained": 43,
+        "dazzled": 40,
+        "stupefied": 37,
+        "stunned": 35,
+        "hidden": 35,
+        "clumsy": 33,
+        "unconscious": 33,
+        "slowed": 33,
+        "sickened": 28,
+        "quickened": 27,
+        "enfeebled": 24,
+        "blinded": 22,
+        "wounded": 19,
+        "drained": 18,
+        "dying": 17,
+        "immobilized": 14,
+        "fatigued": 14,
+        "doomed": 13,
+        "fascinated": 13,
+        "confused": 11,
+        "undetected": 11,
+        "deafened": 10,
+        "cursebound": 10,
+        "paralyzed": 9,
+        "fleeing": 9,
+        "invisible": 7,
+        "controlled": 7,
+        "concealment": 5,
+        "broken": 3,
+        "persistent fire damage": 3,
+        "encumbered": 3,
+        "observed": 2,
+        "petrified": 2,
+        "immobilizing": 1,
+        "immobilize": 1,
+        "unnoticed": 1,
+        "persistent acid or fire damage": 1,
+        "persistent damage": 1
+      }
+    },
+    "classFeatures": {
+      "total": 874,
+      "byFamily": {
+        "passive-conditional": 391,
+        "passive-text": 246,
+        "passive-always": 189,
+        "other-structured": 17,
+        "save": 10,
+        "healing": 7,
+        "skill-check": 6,
+        "strike": 4,
+        "aura": 2,
+        "built-in": 2
+      },
+      "byActionType": {
+        "passive": 873,
+        "action": 1
+      },
+      "structured": 637,
+      "withDegreeTable": 11,
+      "conditions": {
+        "off-guard": 18,
+        "cursebound": 11,
+        "immobilized": 10,
+        "stupefied": 9,
+        "concealed": 8,
+        "frightened": 8,
+        "prone": 6,
+        "drained": 5,
+        "clumsy": 5,
+        "enfeebled": 5,
+        "unconscious": 4,
+        "stunned": 4,
+        "grabbed": 4,
+        "sickened": 4,
+        "confused": 4,
+        "fatigued": 4,
+        "slowed": 4,
+        "concealment": 4,
+        "restrained": 3,
+        "hidden": 3,
+        "doomed": 2,
+        "paralyzed": 2,
+        "dying": 2,
+        "dazzled": 2,
+        "fascinated": 2,
+        "quickened": 2,
+        "broken": 1,
+        "undetected": 1,
+        "invisible": 1,
+        "deafened": 1,
+        "petrified": 1,
+        "controlled": 1
+      }
+    },
+    "familiarAbilities": {
+      "total": 111,
+      "byFamily": {
+        "passive-text": 63,
+        "passive-always": 24,
+        "sense": 5,
+        "other-prose": 5,
+        "save": 4,
+        "other-structured": 2,
+        "healing": 2,
+        "skill-check": 2,
+        "passive-conditional": 2,
+        "affliction": 1,
+        "strike": 1
+      },
+      "byActionType": {
+        "passive": 100,
+        "action": 11
+      },
+      "structured": 45,
+      "withDegreeTable": 0,
+      "conditions": {
+        "dazzled": 3,
+        "clumsy": 1,
+        "concealed": 1,
+        "hidden": 1,
+        "frightened": 1,
+        "sickened": 1,
+        "slowed": 1,
+        "invisible": 1,
+        "stupefied": 1,
+        "paralyzed": 1,
+        "fascinated": 1,
+        "blinded": 1,
+        "concealment": 1,
+        "off-guard": 1
+      }
+    },
+    "monsters": {
+      "creatures": 6421,
+      "packs": 64,
+      "distinctAbilities": 10040,
+      "abilityOccurrences": 31436,
+      "glossaryOccurrences": 8399,
+      "occurrencesByFamily": {
+        "healing": 852,
+        "skill-check": 1064,
+        "save": 5441,
+        "strike": 4549,
+        "aura": 1369,
+        "stance": 46,
+        "movement": 151,
+        "affliction": 621,
+        "troop": 358,
+        "spells": 657,
+        "utility": 289,
+        "out-of-combat": 85,
+        "sense": 1396,
+        "built-in": 939,
+        "passive-always": 1163,
+        "passive-conditional": 3645,
+        "passive-text": 4758,
+        "other-structured": 1740,
+        "other-prose": 2313
+      },
+      "distinctByFamily": {
+        "save": 2495,
+        "passive-text": 1870,
+        "strike": 1335,
+        "other-prose": 1023,
+        "passive-conditional": 795,
+        "other-structured": 711,
+        "aura": 510,
+        "skill-check": 493,
+        "affliction": 342,
+        "healing": 194,
+        "passive-always": 103,
+        "movement": 53,
+        "sense": 38,
+        "out-of-combat": 37,
+        "stance": 31,
+        "spells": 3,
+        "built-in": 3,
+        "troop": 3,
+        "utility": 1
+      },
+      "oneOffAbilities": 6654
+    },
+    "consumables": {
+      "total": 1574,
+      "byFamily": {
+        "other-prose": 673,
+        "save": 293,
+        "other-structured": 200,
+        "affliction": 135,
+        "healing": 109,
+        "strike": 95,
+        "skill-check": 62,
+        "aura": 4,
+        "sense": 3
+      },
+      "byActionType": {
+        "activate": 1574
+      },
+      "structured": 784,
+      "withDegreeTable": 94,
+      "conditions": {
+        "sickened": 59,
+        "stupefied": 58,
+        "clumsy": 49,
+        "enfeebled": 47,
+        "off-guard": 47,
+        "concealed": 41,
+        "dazzled": 38,
+        "slowed": 34,
+        "prone": 28,
+        "blinded": 27,
+        "frightened": 27,
+        "confused": 27,
+        "fatigued": 25,
+        "drained": 24,
+        "immobilized": 22,
+        "unconscious": 20,
+        "invisible": 19,
+        "stunned": 17,
+        "hidden": 16,
+        "fascinated": 11,
+        "fleeing": 11,
+        "wounded": 10,
+        "quickened": 10,
+        "undetected": 8,
+        "deafened": 8,
+        "grabbed": 7,
+        "restrained": 7,
+        "dying": 7,
+        "paralyzed": 7,
+        "doomed": 7,
+        "encumbered": 4,
+        "petrified": 2,
+        "observed": 2,
+        "fatigue": 1,
+        "concealment": 1,
+        "blind": 1,
+        "blindness": 1,
+        "deafness": 1,
+        "confusion": 1
+      },
+      "byCategory": {
+        "other": 523,
+        "potion": 183,
+        "talisman": 156,
+        "elixir": 146,
+        "wand": 119,
+        "poison": 115,
+        "catalyst": 87,
+        "snare": 82,
+        "gadget": 77,
+        "oil": 66,
+        "mutagen": 60,
+        "fulu": 46,
+        "drug": 24,
+        "scroll": 10,
+        "toolkit": 9
+      },
+      "leftToSpellModule": 129
+    }
+  },
+  "basicActions": [
+    {
+      "name": "Mutagenic Flashback",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fling Magic",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Furious Strike",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dazzle Seeker",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "concealed"
+      ]
+    },
+    {
+      "name": "Intercession Spell",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Raise Slabs",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Restore the Moment",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "stunned"
+      ]
+    },
+    {
+      "name": "Consume Flesh",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Deceptive Sidestep",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Recall Knowledge",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dancing Dodge",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Treat Wounds",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "wounded"
+      ]
+    },
+    {
+      "name": "Disengage",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Sense Motive",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "sense-motive"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tumble Through",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "tumble-through"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Catharsis",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Retraining",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reap the Field",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Clue In",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Pick a Lock",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "High Jump",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "high-jump"
+      ],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Act Together",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "For Talmandor! For Freedom!",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fleeing",
+        "grabbed",
+        "immobilized",
+        "paralyzed",
+        "restrained"
+      ]
+    },
+    {
+      "name": "Crescent Spray",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Once Bitten",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Demoralize",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "demoralize"
+      ],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Change Shape",
+      "family": "utility",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Overdrive",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "crafting"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spell-Woven Shot",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Share Senses",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bend Time",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "quickened"
+      ]
+    },
+    {
+      "name": "Sustain",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Buckle-Cut Blitz",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "clumsy"
+      ]
+    },
+    {
+      "name": "Devour Ambient Magic",
+      "family": "skill-check",
+      "actionType": "reaction",
+      "skillChecks": [
+        "arcana",
+        "nature"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Grab an Edge",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drink Blood",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "athletics"
+      ],
+      "saves": [],
+      "conditions": [
+        "grabbed",
+        "paralyzed",
+        "restrained",
+        "unconscious",
+        "drained"
+      ]
+    },
+    {
+      "name": "Subsist",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "subsist",
+        "subsist"
+      ],
+      "saves": [],
+      "conditions": [
+        "fatigued"
+      ]
+    },
+    {
+      "name": "Taunt",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Finish The Job",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bond with Spirit",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Haunting Visage",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "demoralize"
+      ],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Tenacious Stance",
+      "family": "stance",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Daydream Trance",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Defend Life",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Brandish the Gorgon's Gaze",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "slowed"
+      ]
+    },
+    {
+      "name": "Entity's Resurgence",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Turn Aside Ambient Magic",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Recenter",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Wait For It...",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Grow",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Winged Leap",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Protective Screen",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spinning Crush",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Influence",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Thundering Roar",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Pop, Drop, and Lock",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Death Drone",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "frightened",
+        "deafened"
+      ]
+    },
+    {
+      "name": "Elemental Blast",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Convocation of Greed",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Flowing Spirit Strike",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Strike Hard!",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mighty Rage",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Unleash Psyche",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "stupefied",
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Stupefying Raid",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "stupefied"
+      ]
+    },
+    {
+      "name": "Shove",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "shove"
+      ],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Forge Documents",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Warding Sign",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Energy Emanation",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Offer Story",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Scrappy Defiance",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Enter Runewell",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Instant Recovery",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fatigued"
+      ]
+    },
+    {
+      "name": "Anadi Venom",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Armor Up!",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Call Companion",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Twist Design",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Only You and I",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Call on Ancient Blood",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Transform Ammunition",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Inevitable Return",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Living Fortification",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Affix a Fulu",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Binding Vow",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "request",
+        "coerce"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shift Immanence",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Relentless Assault",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Stop",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Thoughtful Reload",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Automaton Aim",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Siegebreaker",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "immobilized"
+      ]
+    },
+    {
+      "name": "Delay",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "persistent damage"
+      ]
+    },
+    {
+      "name": "Remove Head",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "paralyzed",
+        "blind",
+        "deaf"
+      ]
+    },
+    {
+      "name": "Fade Into Daydreams",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "concealed"
+      ]
+    },
+    {
+      "name": "Impersonate",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "impersonate"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Hellbreaker Strike",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Marathon Dash",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rage",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fatigued",
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Dismiss",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Invoke Celestial Privilege",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Venom Draw",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Gossip",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Objection",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Conduct Energy",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "A Quick Glimpse Beyond",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Map the Area",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Stride",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Passage of Lines",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone",
+        "grabbed",
+        "immobilized"
+      ]
+    },
+    {
+      "name": "Seek",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "seek"
+      ],
+      "saves": [],
+      "conditions": [
+        "undetected",
+        "hidden",
+        "observed"
+      ]
+    },
+    {
+      "name": "Entreat Pact",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bestial Clarity",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Heavy is the Crown",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Reactive Falsehood",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mirror-Trickery",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Elemental Burst",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Channel Draconic Essence",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Crash Against Me",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "The Bigger They Are",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Steel Your Resolve",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drink from the Chalice",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Request",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "request"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spring the Trap",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Valkyrie's Charge",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "For My House!",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Eldritch Shot",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Long-Term Rest",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Recall Ammunition",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Solitary Invocation",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Disarm",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "disarm"
+      ],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Swarm Forth",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Track",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "track"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Retributive Strike",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Perform",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "perform",
+        "perform",
+        "perform",
+        "perform",
+        "perform",
+        "perform",
+        "perform",
+        "perform",
+        "perform"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Final Surge",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mirrored Wall",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "blinded",
+        "dazzled"
+      ]
+    },
+    {
+      "name": "Call Gun",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shadows in the Moonlight",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "hide",
+        "sneak"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Scout Location",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Ten Paces",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Opportune Riposte",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Settle Emotions",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fracture Mountains",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Harrow the Fiend",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Investigate",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Upstage",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dispelling Bullet",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Calculate Threats",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rampaging Ferocity",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fey Jump",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Accidental Shot",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "concealed",
+        "hidden"
+      ]
+    },
+    {
+      "name": "Drape Ambient Magic",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Stellar Misfortune",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Call to Hand",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Command a Thrall",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Executioner's Volley",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Create a Diversion",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "create-a-diversion",
+        "create-a-diversion",
+        "create-a-diversion"
+      ],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Spiritual Aid",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Harvest Blood",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Swirl Crimson Shroud",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Burrow",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Direct Follower",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Elemental Maelstrom",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Intensify Vulnerability",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Aid",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Influence Rumor",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "diplomacy"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Take the High Ground",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Consume Thrall",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drop Prone",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Arcane Cascade",
+      "family": "stance",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rejoin in Flight",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Hunt Runelord",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "seek",
+        "demoralize"
+      ],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Mist Blending",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "concealed",
+        "hidden"
+      ]
+    },
+    {
+      "name": "Raise the Walls",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Avoid Notice",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "avoid-notice"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "One Moment till Glory",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bribe Contact",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Roaring Charge",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "frightened",
+        "fleeing"
+      ]
+    },
+    {
+      "name": "Talon Stance",
+      "family": "stance",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Flash of Grandeur",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Expel Maelstrom",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Liberating Step",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "grabs",
+        "restrains",
+        "restraining",
+        "immobilizing",
+        "paralyzing"
+      ]
+    },
+    {
+      "name": "Manifest Realm",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Life Block",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Verdant Rest",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "drained",
+        "enfeebled",
+        "clumsy",
+        "stupefied"
+      ]
+    },
+    {
+      "name": "Discover",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drain Life",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "drained"
+      ]
+    },
+    {
+      "name": "Long Jump",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "long-jump"
+      ],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Hunt Prey",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "No Scar but This",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Gluttonous Feast",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Designate Ally",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Slayer's Identification",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Heaven Rains an Ending",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Hustle",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drain Realm",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Feral Swing",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Confident Finisher",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reactive Strike",
+      "family": "built-in",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Conjure Bullet",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tactical Retreat",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fleeing"
+      ]
+    },
+    {
+      "name": "Manifest Soulforged Armament",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Treat Poison",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "treat-poison"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Unwavering Resilience",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Coordinating Maneuvers",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tactical Takedown",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Fortify Camp",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dutiful Retaliation",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shields Up!",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Collect Spirit Remnant",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Starlit Transformation",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Balance",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "balance"
+      ],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Iron Command",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Administer First Aid",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "administer-first-aid",
+        "administer-first-aid"
+      ],
+      "saves": [],
+      "conditions": [
+        "dying",
+        "bleeding",
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Raise Neck",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Gain Contact",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Share Life",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mirror's Reflection",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Race the Skies",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Wish for Luck",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fuel Impossible Spell",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "doomed"
+      ]
+    },
+    {
+      "name": "Raise the Horde",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Warding Shift",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Acrid Barrage",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Create Familiar Fulu",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Piranha Assault",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Break Them Down",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "dazzled"
+      ]
+    },
+    {
+      "name": "Survive the Wilds",
+      "family": "aura",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reload!",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Ghost Shot",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "undetected",
+        "unnoticed"
+      ]
+    },
+    {
+      "name": "Aegis of Envy",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Empower Breath",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Repeat a Spell",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fatigued"
+      ]
+    },
+    {
+      "name": "Refocus",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Slip and Sizzle",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "slowed"
+      ]
+    },
+    {
+      "name": "Make an Impression",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "make-an-impression"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fleeting Arc through Heaven and Earth",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Stand",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Cycle Elemental Stance",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Borrow an Arcane Spell",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Resist Elf Magic",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bounce Away",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rearrange Bones",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Amulet's Abeyance",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Infiltrator's Draw",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Cobble Together",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mount",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Grapple",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "grapple"
+      ],
+      "saves": [],
+      "conditions": [
+        "grabbed",
+        "restrained",
+        "prone"
+      ]
+    },
+    {
+      "name": "Stitching Strike",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "immobilized"
+      ]
+    },
+    {
+      "name": "Administer Ambient Magic",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Enlightenment in Adversity",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Feed the Masses",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Activate Resonant Reflection",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Identify Alchemy",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Learn a Spell",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spellstrike",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Overawe Crowd",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "stunned"
+      ]
+    },
+    {
+      "name": "Quick Tincture",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reconnoiter",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Feint",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "feint"
+      ],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Enter Seat Of Power",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Maneuver in Flight",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "maneuver-in-flight"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Decompose",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Earn Income",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Raconteur's Reload",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "create-a-diversion",
+        "demoralize"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Steal",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "steal"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Master Strike",
+      "family": "save",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "off-guard",
+        "enfeebled",
+        "paralyzed",
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Toxic Touch",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "sickened"
+      ]
+    },
+    {
+      "name": "Lucky Break",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Summon Sloth",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Absorb into the Aegis",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Cover Tracks",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "survival"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bullet Dancer Stance",
+      "family": "stance",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Repel Ambient Magic",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rewrite Fate",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spirit's Mercy",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fortify Focus",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Force Open",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "force-open"
+      ],
+      "saves": [],
+      "conditions": [
+        "broken"
+      ]
+    },
+    {
+      "name": "Escape",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "escape",
+        "escape",
+        "escape"
+      ],
+      "saves": [],
+      "conditions": [
+        "grabbed",
+        "immobilized",
+        "restrained"
+      ]
+    },
+    {
+      "name": "Royal Grace",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spread Realm",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "My Legend Must Be Told",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "dying",
+        "doomed"
+      ]
+    },
+    {
+      "name": "Treat Disease",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "treat-disease"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Unravel the Future",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fey's Fortune",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Energy Shot",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bullying Press",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Search",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Crawl",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "One Shot, One Kill",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Flowing Engulf",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "grabbed",
+        "slowed"
+      ]
+    },
+    {
+      "name": "Affix a Talisman",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fire in the Hole",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Step",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Defensive Retreat",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Gather to Me!",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Avert Gaze",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Invigorating Fear",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Into the Fray",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Sustain an Effect",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fatigued"
+      ]
+    },
+    {
+      "name": "Wind Them Up",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Embrace of Destiny",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Accept Echo",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Patron's Presence",
+      "family": "aura",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "stupefied"
+      ]
+    },
+    {
+      "name": "Sever Conduit",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Guerrilla Assault",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "hidden"
+      ]
+    },
+    {
+      "name": "Sneak",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "sneak"
+      ],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "undetected",
+        "concealed",
+        "off-guard",
+        "invisible"
+      ]
+    },
+    {
+      "name": "Spellsling",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Foresight",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Stridulating Song",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "sickened"
+      ]
+    },
+    {
+      "name": "Shadow Step",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spread Propaganda",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Strike",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Liberate Self",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "grabbed",
+        "immobilized",
+        "restrained"
+      ]
+    },
+    {
+      "name": "Dragon Breath (Eidolon)",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Threatening Approach",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "demoralize"
+      ],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Tell Me More",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Command a Construct",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Impromptu Investment",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Trace Rune",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Touch and Go",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Swarming Assault",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Sever Four Dragonfly Wings",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Hide",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "hide"
+      ],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "observed",
+        "concealed",
+        "undetected"
+      ]
+    },
+    {
+      "name": "Indomitable Act",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Resist Magic",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Plummeting Roll",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shatter Glass",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Restore the Mind",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Blazing Conflagration",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "blinded"
+      ]
+    },
+    {
+      "name": "Blinding of the Needle",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "blinded"
+      ]
+    },
+    {
+      "name": "Break the Sun's Legs",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drifter's Wake",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Detect Magic",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rouse the World",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Glimpse Vulnerability",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Chaotic Destiny",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tendril Strike",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Topple the Pillar of Heaven",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Hunt the Razer's Pawn",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Alley-Oop",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Travel",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Patron's Claim",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "drained"
+      ]
+    },
+    {
+      "name": "Sorshen's Devotion",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Flash of Memory",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Sanguine Revitalization",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "bleed"
+      ]
+    },
+    {
+      "name": "Amassed Assault",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Overload Vision",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "dazzled",
+        "blinded"
+      ]
+    },
+    {
+      "name": "Break Free",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Deconstruct",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Inspired Stratagem",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Cleanse Soul Path",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Burn out of Time",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dragon's Protection",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Host of Wrath",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Blizzard Evasion",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "stunned"
+      ]
+    },
+    {
+      "name": "Call Warshard Weapon",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Quick-Tempered",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "encumbered"
+      ]
+    },
+    {
+      "name": "Cast a Spell",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Lantern Strobe",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "dazzled",
+        "blinded"
+      ]
+    },
+    {
+      "name": "Lantern Beam",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Spirit Sanctification",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Banshee Cry",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Salt Wound",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "sickened"
+      ]
+    },
+    {
+      "name": "Size Up",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mountaineering Training",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "climb"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Pistolero's Retort",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Board",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Repair",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Opportunistic Accusation",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Debilitating Strike",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "enfeebled"
+      ]
+    },
+    {
+      "name": "Share Death's Promises",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "A Challenge for Heroes",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Double Team",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Swim",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "swim"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Arrow Splits Arrow",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tangle in Riddle",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "stupefied",
+        "confused"
+      ]
+    },
+    {
+      "name": "Fly",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Disable a Device",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "disable-device"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Defend",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dampening Harmonics",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Redistribute",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Plant Thirty Barbs",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Ultimatum of Liberation",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Beast's Charge",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Thermal Eruption",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Swift Choreography",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "grabbed",
+        "immobilized",
+        "off-guard",
+        "prone",
+        "restrained"
+      ]
+    },
+    {
+      "name": "Leap",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Decipher Writing",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "decipher-writing",
+        "decipher-writing",
+        "decipher-writing",
+        "decipher-writing",
+        "decipher-writing"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Basic Finisher",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Overflowing Blade",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Ready",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Enter Spirit Trance",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Implement's Interruption",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spit Ambient Magic",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Flyby Attack",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Encouraging Words",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Find Fault",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Water Transfer",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Avoid Dire Fate",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Identify Magic",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Liar's Hidden Blade",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Selfish Shield",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tail Toxin",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Lie",
+      "family": "skill-check",
+      "actionType": "passive",
+      "skillChecks": [
+        "lie"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Skirt the Underworld",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "invisible",
+        "blinded"
+      ]
+    },
+    {
+      "name": "Spiritual Scar",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "slowed"
+      ]
+    },
+    {
+      "name": "Sense Direction",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "sense-direction"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Empty Vessel",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Exploit Vulnerability",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Name Drop",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Create Forgery",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "create-forgery"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Channel Elements",
+      "family": "aura",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Covered Reload",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone",
+        "concealed"
+      ]
+    },
+    {
+      "name": "Sidestep Through Time",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Invoke Rune",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fated Not to Die",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Trip",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "trip"
+      ],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Timely Dodge",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tap Ley Line",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Seek and Destroy",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "seek"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Harvest Heartsliver",
+      "family": "skill-check",
+      "actionType": "reaction",
+      "skillChecks": [
+        "acrobatics",
+        "athletics",
+        "medicine",
+        "nature",
+        "occultism",
+        "religion"
+      ],
+      "saves": [],
+      "conditions": [
+        "deafened"
+      ]
+    },
+    {
+      "name": "Absorb Magic",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Jinx",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "clumsy"
+      ]
+    },
+    {
+      "name": "Spin Tale",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Draconic Salvation",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Fight with Fear",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Craft Disharmonic Instrument",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "crafting"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Secure Disguises",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shift Spell",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Visions of Sin",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "slowed",
+        "confused"
+      ]
+    },
+    {
+      "name": "Psychic Defense",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "stupefied",
+        "concealed"
+      ]
+    },
+    {
+      "name": "Palm an Object",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "palm-an-object"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Double Spellstrike",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Ready, Aim, Fire!",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Surprising Anatomy",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Goblin Jubilee",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "dazzled",
+        "deafened",
+        "blinded"
+      ]
+    },
+    {
+      "name": "Mark the Center",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reloading Strike",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Captivating Charm",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "fascinated"
+      ]
+    },
+    {
+      "name": "Psychometric Assessment",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Final Spite",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Expeditious Inspection",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Restorative Teleportation",
+      "family": "healing",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Disarming Interception",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Tap the Past",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Makes Me Stronger",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Cry Havoc!",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "deafened"
+      ]
+    },
+    {
+      "name": "Stonestrike Stance",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Call to Axis",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bite and Sting",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "A Moment Unending",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Toxic Skin",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Squeeze",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "squeeze"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Recall the Teachings",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "aid"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "That's My Number",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Scout",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Trench Digging",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Primal Roar",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "demoralize"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Assume a Role",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Recall Under Pressure",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "End It!",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "fleeing",
+        "frightened"
+      ]
+    },
+    {
+      "name": "Run Over",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reposition",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "reposition"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Inscribe Shadow Pamor",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "dazzled"
+      ]
+    },
+    {
+      "name": "Extract Element",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Invest an Item",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Devise a Stratagem",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Ringing Challenge",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "deafened"
+      ]
+    },
+    {
+      "name": "Soaring Flight",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Coiling Serpents",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "immobilizing"
+      ]
+    },
+    {
+      "name": "Coughing Dragon",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Call Upon the Brightness",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Unleash Realm",
+      "family": "save",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Part the Veil",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "hide",
+        "sneak"
+      ],
+      "saves": [],
+      "conditions": [
+        "concealed"
+      ]
+    },
+    {
+      "name": "Manifest Eidolon",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Seething Frenzy",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Base Kinesis",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Weaponsight",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Explode",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Flurry of Blows",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Wicked Thorns",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Pacifying Infusion",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Barbed Quills",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Strike, Breathe, Rend",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dragon Breath",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Mark for Death",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "undetected",
+        "observed"
+      ]
+    },
+    {
+      "name": "Puncture Flesh",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "grapple"
+      ],
+      "saves": [],
+      "conditions": [
+        "grabbed",
+        "restrained"
+      ]
+    },
+    {
+      "name": "Smoke Blending",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "concealed",
+        "hidden"
+      ]
+    },
+    {
+      "name": "Gather Information",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "gather-information"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Speed of Arms",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "True Shapeshift",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Climb",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "climb"
+      ],
+      "saves": [],
+      "conditions": [
+        "off-guard",
+        "prone"
+      ]
+    },
+    {
+      "name": "Interact",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Demoralizing Charge",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Command an Animal",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "command-an-animal"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Conceal an Object",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "conceal-an-object"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Engineer's Efficiency",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Take a Breather",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Arrest a Fall",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Call Follower",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Forced Pact",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Destructive Vengeance",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Grim Swagger",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "deception",
+        "intimidation"
+      ],
+      "saves": [],
+      "conditions": [
+        "frightened",
+        "fleeing"
+      ]
+    },
+    {
+      "name": "Draw From the Pages",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Runelord's Response",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Shed the Mortal Skin",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Pitch-Perfect Projection",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Nudging Whisper",
+      "family": "passive-text",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Craft",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "crafting"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reclaim Destiny",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Divert Lightning",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Envenom",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Change Tradition Focus",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bless Ally",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Plaintive Plea",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "make-an-impression"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Point Out",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "hidden",
+        "undetected"
+      ]
+    },
+    {
+      "name": "Research",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Coerce",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [
+        "coerce"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Spasm of the Berserker",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Field of Roots",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": [
+        "immobilized"
+      ]
+    },
+    {
+      "name": "Follow the Expert",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Reloading Cascade",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Inured to Death",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Whirlwind Maul",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Glimpse of Redemption",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "enfeebled"
+      ]
+    },
+    {
+      "name": "Clear a Path",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Giant-Felling Comet",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Draconic Frenzy",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Chassis Deflection",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drive",
+      "family": "movement",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Sense Weakness",
+      "family": "strike",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Ring Bell",
+      "family": "save",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [
+        "fortitude",
+        "will"
+      ],
+      "conditions": [
+        "stupefied",
+        "enfeebled",
+        "clumsy"
+      ]
+    },
+    {
+      "name": "Bear Allies' Burdens",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mystic Aegis",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shed Spirit",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "will"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Take Cover",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "hide",
+        "sneak"
+      ],
+      "saves": [],
+      "conditions": [
+        "prone",
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Insta-Ballista",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drain Bonded Item",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Set Free",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "confused",
+        "controlled",
+        "fascinated",
+        "immobilized",
+        "paralyzed",
+        "restrained"
+      ]
+    },
+    {
+      "name": "Vital Shot",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Boarding Assault",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "acrobatics"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Drink of my Foes",
+      "family": "healing",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Prophecy's Pawn",
+      "family": "other-prose",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Intercept Attack",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Set Explosives",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shake It Off",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "I Defy You!",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Release",
+      "family": "strike",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Mythic Echo",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Erupting Spurs",
+      "family": "other-structured",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Primal Howl",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "frightened"
+      ]
+    },
+    {
+      "name": "Jumping Jenny",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "maneuver-in-flight"
+      ],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Lay Down Arms",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Sickening Assault",
+      "family": "other-structured",
+      "actionType": "free",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "sickened"
+      ]
+    },
+    {
+      "name": "Dueling Counter",
+      "family": "other-prose",
+      "actionType": "reaction",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Rally",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Pursue a Lead",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Pointed Question",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "diplomacy"
+      ],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Raise a Shield",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Anchor",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "prone"
+      ]
+    },
+    {
+      "name": "Compose Missive",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Dragon Breath (Dragon Form)",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Shielding Wave",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Learn Name",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Corpse Crenellation",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "unconscious"
+      ]
+    },
+    {
+      "name": "Launch Fireworks",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude"
+      ],
+      "conditions": [
+        "dazzled",
+        "confused",
+        "fascinated"
+      ]
+    },
+    {
+      "name": "Mobbing Assault",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "reflex"
+      ],
+      "conditions": []
+    },
+    {
+      "name": "Host Spirit",
+      "family": "out-of-combat",
+      "actionType": "passive",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "fatigued"
+      ]
+    },
+    {
+      "name": "Take Control",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Quick Alchemy",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Adopt Persona",
+      "family": "other-prose",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Pincer Attack",
+      "family": "other-structured",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": [
+        "off-guard"
+      ]
+    },
+    {
+      "name": "Overwhelming Combination",
+      "family": "strike",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Claw Stance",
+      "family": "stance",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [],
+      "conditions": []
+    },
+    {
+      "name": "Bloody Guillotine",
+      "family": "save",
+      "actionType": "action",
+      "skillChecks": [],
+      "saves": [
+        "fortitude",
+        "will"
+      ],
+      "conditions": [
+        "prone",
+        "sickened"
+      ]
+    },
+    {
+      "name": "Naval Training",
+      "family": "skill-check",
+      "actionType": "action",
+      "skillChecks": [
+        "swim"
+      ],
+      "saves": [],
+      "conditions": []
+    }
+  ],
+  "topMonsterAbilities": [
+    {
+      "name": "+2 Status to All Saves vs. Disease and Poison",
+      "slug": "1-status-to-all-saves-vs-magic",
+      "count": 854,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Grab",
+      "slug": "grab",
+      "count": 787,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Constant Spells",
+      "slug": "constant-spells",
+      "count": 562,
+      "family": "spells",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Void Healing",
+      "slug": "negative-healing",
+      "count": 548,
+      "family": "passive-always",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Sneak Attack",
+      "slug": "sneak-attack",
+      "count": 545,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Attack of Opportunity",
+      "slug": "attack-of-opportunity",
+      "count": 461,
+      "family": "built-in",
+      "actionType": "reaction",
+      "glossary": true
+    },
+    {
+      "name": "Telepathy 100 feet",
+      "slug": "telepathy",
+      "count": 425,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Reactive Strike",
+      "slug": "reactive-strike",
+      "count": 319,
+      "family": "built-in",
+      "actionType": "reaction",
+      "glossary": true
+    },
+    {
+      "name": "Frightful Presence",
+      "slug": "frightful-presence",
+      "count": 304,
+      "family": "aura",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Change Shape",
+      "slug": "change-shape",
+      "count": 289,
+      "family": "utility",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Void Healing",
+      "slug": "void-healing",
+      "count": 264,
+      "family": "passive-always",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Tremorsense (Imprecise) 30 feet",
+      "slug": "tremorsense",
+      "count": 261,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Draconic Frenzy",
+      "slug": "draconic-frenzy",
+      "count": 229,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Draconic Momentum",
+      "slug": "draconic-momentum",
+      "count": 217,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Constrict",
+      "slug": "constrict",
+      "count": 212,
+      "family": "save",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Improved Grab",
+      "slug": "improved-grab",
+      "count": 193,
+      "family": "strike",
+      "actionType": "free",
+      "glossary": true
+    },
+    {
+      "name": "Regeneration 10 (Deactivated by Holy or Silver)",
+      "slug": "regeneration",
+      "count": 177,
+      "family": "healing",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Greater Darkvision",
+      "slug": "greater-darkvision",
+      "count": 171,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Swallow Whole",
+      "slug": "swallow-whole",
+      "count": 170,
+      "family": "save",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Planar Fast Healing",
+      "slug": "fast-healing",
+      "count": 170,
+      "family": "healing",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Breath Weapon",
+      "slug": "breath-weapon",
+      "count": 168,
+      "family": "save",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Knockdown",
+      "slug": "knockdown",
+      "count": 162,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Troop Movement",
+      "slug": "troop-movement",
+      "count": 162,
+      "family": "troop",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Troop Defenses",
+      "slug": "troop-defenses",
+      "count": 162,
+      "family": "troop",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Shield Block",
+      "slug": "shield-block",
+      "count": 159,
+      "family": "built-in",
+      "actionType": "reaction",
+      "glossary": true
+    },
+    {
+      "name": "Trample",
+      "slug": "trample",
+      "count": 125,
+      "family": "save",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Lifesense 60 feet",
+      "slug": "lifesense",
+      "count": 121,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "All-Around Vision",
+      "slug": "all-around-vision",
+      "count": 105,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Ferocity",
+      "slug": "ferocity",
+      "count": 95,
+      "family": "other-structured",
+      "actionType": "reaction",
+      "glossary": true
+    },
+    {
+      "name": "Smoke Vision",
+      "slug": "smoke-vision",
+      "count": 95,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Light Blindness",
+      "slug": "light-blindness",
+      "count": 88,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Rend",
+      "slug": "rend",
+      "count": 83,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Goblin Scuttle",
+      "slug": "",
+      "count": 78,
+      "family": "other-prose",
+      "actionType": "reaction",
+      "glossary": false
+    },
+    {
+      "name": "Slow",
+      "slug": "slow",
+      "count": 77,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Stench",
+      "slug": "stench",
+      "count": 76,
+      "family": "aura",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Steady Spellcasting",
+      "slug": "steady-spellcasting",
+      "count": 76,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Swarm Mind",
+      "slug": "swarm-mind",
+      "count": 75,
+      "family": "passive-always",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Pack Attack",
+      "slug": "pack-attack",
+      "count": 73,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Rejuvenation",
+      "slug": "ghost-rejuvenation",
+      "count": 71,
+      "family": "skill-check",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Surprise Attack",
+      "slug": "surprise-attack",
+      "count": 71,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Pounce",
+      "slug": "pounce",
+      "count": 64,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Nimble Dodge",
+      "slug": "nimble-dodge",
+      "count": 63,
+      "family": "other-structured",
+      "actionType": "reaction",
+      "glossary": false
+    },
+    {
+      "name": "Throw Rock",
+      "slug": "throw-rock",
+      "count": 60,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Push",
+      "slug": "push",
+      "count": 56,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "At-Will Spells",
+      "slug": "at-will-spells",
+      "count": 56,
+      "family": "spells",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Deep Breath",
+      "slug": "deep-breath",
+      "count": 56,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Site Bound",
+      "slug": "ghost-site-bound",
+      "count": 51,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Deny Advantage",
+      "slug": "deny-advantage",
+      "count": 50,
+      "family": "passive-always",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Wavesense (Imprecise) 60 feet",
+      "slug": "wavesense",
+      "count": 49,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "+2 Status to All Saves vs. Primal",
+      "slug": "2-status-to-all-saves-vs-primal",
+      "count": 48,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Flurry of Blows",
+      "slug": "flurry-of-blows",
+      "count": 47,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Hunt Prey",
+      "slug": "hunt-prey",
+      "count": 47,
+      "family": "other-structured",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Greater Constrict",
+      "slug": "greater-constrict",
+      "count": 45,
+      "family": "save",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Drain Life",
+      "slug": "drain-life",
+      "count": 44,
+      "family": "save",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Quick Draw",
+      "slug": "quick-draw",
+      "count": 42,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Swarming Bites",
+      "slug": "swarming-bites",
+      "count": 40,
+      "family": "save",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Consume Flesh",
+      "slug": "ghoul-consume-flesh",
+      "count": 40,
+      "family": "healing",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Coffin Restoration",
+      "slug": "vampire-basic-coffin-restoration",
+      "count": 40,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Coven",
+      "slug": "coven",
+      "count": 39,
+      "family": "spells",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Swift Leap",
+      "slug": "ghoul-swift-leap",
+      "count": 39,
+      "family": "movement",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Focus Gaze",
+      "slug": "focus-gaze",
+      "count": 38,
+      "family": "save",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Quickened Casting",
+      "slug": "quickened-casting",
+      "count": 37,
+      "family": "other-prose",
+      "actionType": "free",
+      "glossary": false
+    },
+    {
+      "name": "Mythic Power",
+      "slug": "mythic-mythic-power",
+      "count": 37,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Improved Knockdown",
+      "slug": "improved-knockdown",
+      "count": 36,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Camouflage",
+      "slug": "camouflage",
+      "count": 36,
+      "family": "skill-check",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Sudden Charge",
+      "slug": "sudden-charge",
+      "count": 35,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Remove a Condition",
+      "slug": "mythic-remove-a-condition",
+      "count": 35,
+      "family": "other-prose",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "Infused Items",
+      "slug": "infused-items",
+      "count": 34,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Form Up",
+      "slug": "form-up",
+      "count": 34,
+      "family": "troop",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Motion Sense",
+      "slug": "motion-sense",
+      "count": 33,
+      "family": "sense",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Quick Bomber",
+      "slug": "quick-bomber",
+      "count": 33,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": false
+    },
+    {
+      "name": "+2 to Sense Motive",
+      "slug": "2-to-sense-motive",
+      "count": 33,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": true
+    },
+    {
+      "name": "Mythic Resilience (Reflex and Will)",
+      "slug": "mythic-mythic-resilience",
+      "count": 33,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Catch Rock",
+      "slug": "catch-rock",
+      "count": 32,
+      "family": "other-structured",
+      "actionType": "reaction",
+      "glossary": true
+    },
+    {
+      "name": "Buck",
+      "slug": "buck",
+      "count": 32,
+      "family": "save",
+      "actionType": "reaction",
+      "glossary": true
+    },
+    {
+      "name": "Earth Glide",
+      "slug": "earth-glide",
+      "count": 32,
+      "family": "passive-text",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "+2 Status to All Saves vs. Arcane",
+      "slug": "2-status-to-all-saves-vs-arcane",
+      "count": 32,
+      "family": "passive-conditional",
+      "actionType": "passive",
+      "glossary": false
+    },
+    {
+      "name": "Aquatic Ambush",
+      "slug": "aquatic-ambush",
+      "count": 31,
+      "family": "strike",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Engulf",
+      "slug": "engulf",
+      "count": 31,
+      "family": "save",
+      "actionType": "action",
+      "glossary": true
+    },
+    {
+      "name": "Wing Deflection",
+      "slug": "wing-deflection",
+      "count": 31,
+      "family": "other-structured",
+      "actionType": "reaction",
+      "glossary": false
+    }
+  ],
+  "attackEffects": [
+    {
+      "name": "grab",
+      "count": 933
+    },
+    {
+      "name": "improved-grab",
+      "count": 219
+    },
+    {
+      "name": "knockdown",
+      "count": 168
+    },
+    {
+      "name": "drain-life",
+      "count": 69
+    },
+    {
+      "name": "push",
+      "count": 58
+    },
+    {
+      "name": "improved-knockdown",
+      "count": 41
+    },
+    {
+      "name": "ghoul-paralysis",
+      "count": 38
+    },
+    {
+      "name": "improved-push",
+      "count": 30
+    },
+    {
+      "name": "tongue-grab",
+      "count": 28
+    },
+    {
+      "name": "ghoul-ghoul-fever",
+      "count": 24
+    },
+    {
+      "name": "ghast-paralysis",
+      "count": 24
+    },
+    {
+      "name": "grotesque-gift",
+      "count": 22
+    },
+    {
+      "name": "paralysis",
+      "count": 20
+    },
+    {
+      "name": "web-trap",
+      "count": 20
+    },
+    {
+      "name": "serpent-venom",
+      "count": 19
+    },
+    {
+      "name": "zombie-rot",
+      "count": 17
+    },
+    {
+      "name": "spirit-touch",
+      "count": 16
+    },
+    {
+      "name": "detonating-rune",
+      "count": 16
+    },
+    {
+      "name": "serpentfolk-venom",
+      "count": 16
+    },
+    {
+      "name": "infernal-wound",
+      "count": 15
+    },
+    {
+      "name": "wicked-bite",
+      "count": 14
+    },
+    {
+      "name": "attach",
+      "count": 14
+    },
+    {
+      "name": "bog-rot",
+      "count": 13
+    },
+    {
+      "name": "ghast-ghast-fever",
+      "count": 13
+    },
+    {
+      "name": "lethargy-poison",
+      "count": 12
+    },
+    {
+      "name": "corrupting-spite",
+      "count": 12
+    },
+    {
+      "name": "bloodbird",
+      "count": 12
+    },
+    {
+      "name": "spores",
+      "count": 12
+    },
+    {
+      "name": "filth-fever",
+      "count": 11
+    },
+    {
+      "name": "sinful-bite",
+      "count": 11
+    },
+    {
+      "name": "warpwave-strike",
+      "count": 10
+    },
+    {
+      "name": "endless-nightmare",
+      "count": 10
+    },
+    {
+      "name": "sever-fate",
+      "count": 9
+    },
+    {
+      "name": "rock",
+      "count": 9
+    },
+    {
+      "name": "crystal-corruption",
+      "count": 9
+    },
+    {
+      "name": "pukwudgie-poison",
+      "count": 9
+    },
+    {
+      "name": "all-made-one",
+      "count": 9
+    },
+    {
+      "name": "head-hunter",
+      "count": 8
+    },
+    {
+      "name": "grabbing-trunk",
+      "count": 8
+    },
+    {
+      "name": "magical-static",
+      "count": 8
+    }
+  ],
+  "healingConsumables": [
+    {
+      "name": "Healing Potion (Minor)",
+      "category": "potion",
+      "level": 1
+    },
+    {
+      "name": "Affliction Suppressant (Lesser)",
+      "category": "elixir",
+      "level": 1
+    },
+    {
+      "name": "Antiplague (Lesser)",
+      "category": "elixir",
+      "level": 1
+    },
+    {
+      "name": "Rust Scrub",
+      "category": "other",
+      "level": 1
+    },
+    {
+      "name": "Oil of Unlife (Minor)",
+      "category": "oil",
+      "level": 1
+    },
+    {
+      "name": "Elixir of Life (Minor)",
+      "category": "elixir",
+      "level": 1
+    },
+    {
+      "name": "Antidote (Lesser)",
+      "category": "elixir",
+      "level": 1
+    },
+    {
+      "name": "Digly's Oil of Sympathy (Minor)",
+      "category": "other",
+      "level": 1
+    },
+    {
+      "name": "Juggernaut Mutagen (Lesser)",
+      "category": "mutagen",
+      "level": 1
+    },
+    {
+      "name": "Vaccine (Minor)",
+      "category": "elixir",
+      "level": 1
+    },
+    {
+      "name": "Moon Radish Soup",
+      "category": "other",
+      "level": 2
+    },
+    {
+      "name": "Emetic Paste (Lesser)",
+      "category": "other",
+      "level": 2
+    },
+    {
+      "name": "Bottled Catharsis (Minor)",
+      "category": "other",
+      "level": 2
+    },
+    {
+      "name": "Lover's Knot",
+      "category": "talisman",
+      "level": 2
+    },
+    {
+      "name": "Mender's Soup",
+      "category": "other",
+      "level": 2
+    },
+    {
+      "name": "Surging Serum (Minor)",
+      "category": "other",
+      "level": 2
+    },
+    {
+      "name": "Soothing Tonic (Lesser)",
+      "category": "elixir",
+      "level": 2
+    },
+    {
+      "name": "Blood Booster (Lesser)",
+      "category": "elixir",
+      "level": 3
+    },
+    {
+      "name": "Life-Boosting Oil (Lesser)",
+      "category": "oil",
+      "level": 3
+    },
+    {
+      "name": "Oil of Unlife (Lesser)",
+      "category": "oil",
+      "level": 3
+    },
+    {
+      "name": "Digly's Oil of Sympathy (Lesser)",
+      "category": "other",
+      "level": 3
+    },
+    {
+      "name": "Healing Potion (Lesser)",
+      "category": "potion",
+      "level": 3
+    },
+    {
+      "name": "Quickpatch Glue",
+      "category": "potion",
+      "level": 3
+    },
+    {
+      "name": "Juggernaut Mutagen (Moderate)",
+      "category": "mutagen",
+      "level": 3
+    },
+    {
+      "name": "Vaccine (Lesser)",
+      "category": "elixir",
+      "level": 3
+    },
+    {
+      "name": "Surging Serum (Lesser)",
+      "category": "elixir",
+      "level": 4
+    },
+    {
+      "name": "Healing Vapor (Lesser)",
+      "category": "other",
+      "level": 4
+    },
+    {
+      "name": "Bottled Catharsis (Lesser)",
+      "category": "elixir",
+      "level": 4
+    },
+    {
+      "name": "Guardian Rose",
+      "category": "talisman",
+      "level": 4
+    },
+    {
+      "name": "Contagion Metabolizer (Lesser)",
+      "category": "elixir",
+      "level": 5
+    },
+    {
+      "name": "Soothing Powder (Lesser)",
+      "category": "other",
+      "level": 5
+    },
+    {
+      "name": "Soothing Tonic (Moderate)",
+      "category": "elixir",
+      "level": 5
+    },
+    {
+      "name": "Elixir of Life (Lesser)",
+      "category": "elixir",
+      "level": 5
+    },
+    {
+      "name": "Verdant Poultice",
+      "category": "other",
+      "level": 5
+    },
+    {
+      "name": "Wine of the Blood",
+      "category": "potion",
+      "level": 5
+    },
+    {
+      "name": "Invigorating Soap",
+      "category": "other",
+      "level": 5
+    },
+    {
+      "name": "Resurrection Tea",
+      "category": "potion",
+      "level": 5
+    },
+    {
+      "name": "Antidote (Moderate)",
+      "category": "elixir",
+      "level": 6
+    },
+    {
+      "name": "Affliction Suppressant (Moderate)",
+      "category": "elixir",
+      "level": 6
+    },
+    {
+      "name": "Healing Potion (Moderate)",
+      "category": "potion",
+      "level": 6
+    },
+    {
+      "name": "Vaccine (Moderate)",
+      "category": "elixir",
+      "level": 6
+    },
+    {
+      "name": "Digly's Oil of Sympathy (Moderate)",
+      "category": "other",
+      "level": 6
+    },
+    {
+      "name": "Restful Sleep Fulu",
+      "category": "fulu",
+      "level": 6
+    },
+    {
+      "name": "Oil of Unlife (Moderate)",
+      "category": "oil",
+      "level": 6
+    },
+    {
+      "name": "Salve of Antiparalysis",
+      "category": "oil",
+      "level": 6
+    },
+    {
+      "name": "Crimson Godsblood Serum (Lesser)",
+      "category": "potion",
+      "level": 6
+    },
+    {
+      "name": "Antiplague (Moderate)",
+      "category": "elixir",
+      "level": 6
+    },
+    {
+      "name": "Cindergrass Poultice",
+      "category": "oil",
+      "level": 6
+    },
+    {
+      "name": "Life-Boosting Oil (Moderate)",
+      "category": "oil",
+      "level": 7
+    },
+    {
+      "name": "Skinstitch Salve",
+      "category": "potion",
+      "level": 7
+    },
+    {
+      "name": "Saints' Balm",
+      "category": "oil",
+      "level": 7
+    },
+    {
+      "name": "Impelling Symbol",
+      "category": "other",
+      "level": 8
+    },
+    {
+      "name": "Bottled Catharsis (Moderate)",
+      "category": "elixir",
+      "level": 8
+    },
+    {
+      "name": "Healing Vapor (Moderate)",
+      "category": "other",
+      "level": 8
+    },
+    {
+      "name": "Therapeutic Snap Peas",
+      "category": "other",
+      "level": 8
+    },
+    {
+      "name": "Surging Serum (Moderate)",
+      "category": "elixir",
+      "level": 8
+    },
+    {
+      "name": "Emetic Paste (Moderate)",
+      "category": "other",
+      "level": 9
+    },
+    {
+      "name": "Oil of Corpse Restoration",
+      "category": "oil",
+      "level": 9
+    },
+    {
+      "name": "Elixir of Life (Moderate)",
+      "category": "elixir",
+      "level": 9
+    },
+    {
+      "name": "Body Recovery Kit",
+      "category": "other",
+      "level": 9
+    },
+    {
+      "name": "Affliction Suppressant (Greater)",
+      "category": "elixir",
+      "level": 10
+    },
+    {
+      "name": "Soothing Tonic (Greater)",
+      "category": "elixir",
+      "level": 10
+    },
+    {
+      "name": "Antiplague (Greater)",
+      "category": "elixir",
+      "level": 10
+    },
+    {
+      "name": "Antidote (Greater)",
+      "category": "elixir",
+      "level": 10
+    },
+    {
+      "name": "Life-Boosting Oil (Greater)",
+      "category": "oil",
+      "level": 11
+    },
+    {
+      "name": "Soothing Powder (Greater)",
+      "category": "other",
+      "level": 11
+    },
+    {
+      "name": "Gnawbone Toxin",
+      "category": "poison",
+      "level": 11
+    },
+    {
+      "name": "Contagion Metabolizer (Moderate)",
+      "category": "elixir",
+      "level": 11
+    },
+    {
+      "name": "Blood Booster (Moderate)",
+      "category": "elixir",
+      "level": 11
+    },
+    {
+      "name": "Juggernaut Mutagen (Greater)",
+      "category": "mutagen",
+      "level": 11
+    },
+    {
+      "name": "Bonebloom Rose",
+      "category": "other",
+      "level": 12
+    },
+    {
+      "name": "Surging Serum (Greater)",
+      "category": "elixir",
+      "level": 12
+    },
+    {
+      "name": "Vaccine (Greater)",
+      "category": "elixir",
+      "level": 12
+    },
+    {
+      "name": "Digly's Oil of Sympathy (Greater)",
+      "category": "other",
+      "level": 12
+    },
+    {
+      "name": "Oil of Unlife (Greater)",
+      "category": "oil",
+      "level": 12
+    },
+    {
+      "name": "Healing Potion (Greater)",
+      "category": "potion",
+      "level": 12
+    },
+    {
+      "name": "Crimson Godsblood Serum (Moderate)",
+      "category": "potion",
+      "level": 12
+    },
+    {
+      "name": "Healing Vapor (Greater)",
+      "category": "other",
+      "level": 12
+    },
+    {
+      "name": "Bottled Catharsis (Greater)",
+      "category": "elixir",
+      "level": 12
+    },
+    {
+      "name": "Leeching Fangs",
+      "category": "other",
+      "level": 12
+    },
+    {
+      "name": "Salve of Antiparalysis (Greater)",
+      "category": "oil",
+      "level": 12
+    },
+    {
+      "name": "Panacea",
+      "category": "potion",
+      "level": 13
+    },
+    {
+      "name": "Elixir of Life (Greater)",
+      "category": "elixir",
+      "level": 13
+    },
+    {
+      "name": "Antidote (Major)",
+      "category": "elixir",
+      "level": 14
+    },
+    {
+      "name": "Emetic Paste (Greater)",
+      "category": "other",
+      "level": 14
+    },
+    {
+      "name": "Antiplague (Major)",
+      "category": "elixir",
+      "level": 14
+    },
+    {
+      "name": "Affliction Suppressant (Major)",
+      "category": "elixir",
+      "level": 14
+    },
+    {
+      "name": "Elixir of Life (Major)",
+      "category": "elixir",
+      "level": 15
+    },
+    {
+      "name": "Life-Boosting Oil (Major)",
+      "category": "oil",
+      "level": 15
+    },
+    {
+      "name": "Juggernaut Mutagen (Major)",
+      "category": "mutagen",
+      "level": 17
+    },
+    {
+      "name": "Celestial Peach (Rejuvenation)",
+      "category": "other",
+      "level": 17
+    },
+    {
+      "name": "Healing Vapor (Major)",
+      "category": "other",
+      "level": 17
+    },
+    {
+      "name": "Soothing Tonic (Major)",
+      "category": "elixir",
+      "level": 17
+    },
+    {
+      "name": "Blood Booster (Greater)",
+      "category": "elixir",
+      "level": 18
+    },
+    {
+      "name": "Vaccine (Major)",
+      "category": "elixir",
+      "level": 18
+    },
+    {
+      "name": "Bottled Catharsis (Major)",
+      "category": "elixir",
+      "level": 18
+    },
+    {
+      "name": "Surging Serum (Major)",
+      "category": "elixir",
+      "level": 18
+    },
+    {
+      "name": "Digly's Oil of Sympathy (Major)",
+      "category": "other",
+      "level": 18
+    },
+    {
+      "name": "Crimson Godsblood Serum (Greater)",
+      "category": "potion",
+      "level": 18
+    },
+    {
+      "name": "Oil of Unlife (Major)",
+      "category": "oil",
+      "level": 18
+    },
+    {
+      "name": "Healing Potion (Major)",
+      "category": "potion",
+      "level": 18
+    },
+    {
+      "name": "Panacea Fruit",
+      "category": "other",
+      "level": 19
+    },
+    {
+      "name": "Ambrosia of Undying Hope",
+      "category": "elixir",
+      "level": 19
+    },
+    {
+      "name": "Contagion Metabolizer (Greater)",
+      "category": "elixir",
+      "level": 19
+    },
+    {
+      "name": "Elixir of Life (True)",
+      "category": "elixir",
+      "level": 19
+    },
+    {
+      "name": "Golden Breath Fulu",
+      "category": "fulu",
+      "level": 20
+    },
+    {
+      "name": "Sun Orchid Elixir",
+      "category": "elixir",
+      "level": 20
+    },
+    {
+      "name": "Elixir of Rejuvenation",
+      "category": "elixir",
+      "level": 20
+    },
+    {
+      "name": "Celestial Peach (Life)",
+      "category": "other",
+      "level": 20
+    }
+  ],
+  "healing": {
+    "actions": [
+      "Instant Recovery",
+      "Valkyrie's Charge",
+      "Verdant Rest",
+      "No Scar but This",
+      "Administer Ambient Magic",
+      "Feed the Masses",
+      "Restore the Mind",
+      "Blazing Conflagration",
+      "Sorshen's Devotion",
+      "Restorative Teleportation",
+      "Shed the Mortal Skin",
+      "Drink of my Foes"
+    ],
+    "feats": [
+      {
+        "name": "Spirit's Absolution",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Cellular Reconstruction",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "In Lightning, Life",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Ocean's Balm",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Glory and Valor!",
+        "category": "ancestry",
+        "actionType": "action"
+      },
+      {
+        "name": "You Can't Keep Us Down",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "It's Not Over",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Blood Pool",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Cantorian Rejuvenation",
+        "category": "ancestry",
+        "actionType": "action"
+      },
+      {
+        "name": "Heraldic Proclamation",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Align Qi",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Leverage Anguish",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Draining Strike",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Come In From the Wilderness",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Healing Transformation",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Ruby Resurrection",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Rallying Banner",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Harrow Casting",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Solidarity",
+        "category": "ancestry",
+        "actionType": "action"
+      },
+      {
+        "name": "Wisteria-and-Peony Reunion",
+        "category": "class",
+        "actionType": "free"
+      },
+      {
+        "name": "Fresh Produce",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Reclaim Power",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Divine Infusion",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Waters of Creation",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Heroic Recovery",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Healing Nexus",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Crimson Shroud",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Spirit's Sacrifice",
+        "category": "class",
+        "actionType": "free"
+      },
+      {
+        "name": "The Cycle Continues",
+        "category": "ancestry",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Cantorian Restoration",
+        "category": "ancestry",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Chromotherapy",
+        "category": "skill",
+        "actionType": "action"
+      },
+      {
+        "name": "Battle Hymn to the Lost",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Sprout Fruit",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Complete the Hero's Journey",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Desperate Resuscitation",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Nudge the Scales",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Dash of Herbs",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Ease the Burden",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Life's Blood",
+        "category": "ancestry",
+        "actionType": "action"
+      },
+      {
+        "name": "Blessing of the Five",
+        "category": "bonus",
+        "actionType": "action"
+      },
+      {
+        "name": "Stand Back, I'm A Doctor!",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Tap Vitality",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Defensive Recovery",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Rekindled Light",
+        "category": "ancestry",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Martyr",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Floral Restoration",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Vital Compound Invocation",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Torrent in the Blood",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Conduit of Void and Vitality",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Fiery Rebirth",
+        "category": "class",
+        "actionType": "free"
+      },
+      {
+        "name": "Sustaining Steel",
+        "category": "class",
+        "actionType": "free"
+      },
+      {
+        "name": "Resuscitate",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Feral Mending",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Channeler's Stance",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Searing Restoration",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Purge Sins",
+        "category": "ancestry",
+        "actionType": "action"
+      },
+      {
+        "name": "Treat Condition",
+        "category": "skill",
+        "actionType": "action"
+      },
+      {
+        "name": "Fish From the Falls' Edge",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Desperate Revival",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "Benefactor's Majesty",
+        "category": "ancestry",
+        "actionType": "action"
+      },
+      {
+        "name": "Fermenting Liquors",
+        "category": "class",
+        "actionType": "action"
+      },
+      {
+        "name": "Battle Medicine",
+        "category": "skill",
+        "actionType": "action"
+      },
+      {
+        "name": "Emergency Regeneration",
+        "category": "class",
+        "actionType": "reaction"
+      },
+      {
+        "name": "High-Speed Regeneration",
+        "category": "class",
+        "actionType": "free"
+      },
+      {
+        "name": "Improvised Repair",
+        "category": "general",
+        "actionType": "action"
+      }
+    ],
+    "classFeatures": [
+      "Shield",
+      "Greater Field Discovery (Chirurgeon)",
+      "Chirurgeon",
+      "Elemental Eidolon",
+      "Undead Eidolon",
+      "Sorcerous Potency",
+      "Curse of Outpouring Life"
+    ],
+    "monsterOccurrences": 852,
+    "consumablesByCategory": {
+      "elixir": 44,
+      "other": 29,
+      "oil": 14,
+      "potion": 13,
+      "mutagen": 4,
+      "talisman": 2,
+      "fulu": 2,
+      "poison": 1
+    }
+  }
+}
