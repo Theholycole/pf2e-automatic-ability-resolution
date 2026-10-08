@@ -57,3 +57,35 @@ export function immunityEffect(moduleId, immunity, { ability, source, time }) {
         }
     };
 }
+
+// --- Conditions that last while a creature stays in an aura --------------------
+
+// "Stupefied 1 for as long as they remain within the aura": an effect granting
+// the condition, which scripts/auras.js ends when the creature leaves (or the
+// monster dies or goes), or keeps for a while longer ("persists for 3 rounds
+// after leaving"). template: the condition's { name, img, uuid };
+// source: { actorUuid, tokenUuid, name }; ability: { name, uuid }; targetUuid: the creature's actor.
+export function auraConditionEffect(moduleId, { slug, value, template, source, ability, radius, after = null, time, targetUuid = null }) {
+    const label = `${template.name}${Number.isFinite(value) ? ` ${value}` : ""}`;
+    return {
+        name: `${ability.name}: ${label}`,
+        type: "effect",
+        img: template.img,
+        flags: { [moduleId]: { whileInAura: { slug, sourceToken: source.tokenUuid, sourceActor: source.actorUuid, radius, after, lingering: false } } },
+        system: {
+            description: { value: `<p>${label} from <strong>${ability.name}</strong> (${source.name}), while in the aura${after ? ` and for ${after.value} ${after.unit} after leaving it` : ""}.</p>` },
+            duration: { value: -1, unit: "unlimited", expiry: null, sustained: false },
+            start: { value: time.worldTime, initiative: time.initiative ?? null },
+            context: { origin: { actor: source.actorUuid, item: ability.uuid ?? null }, target: { actor: targetUuid }, roll: null },
+            rules: [{ key: "GrantItem", uuid: template.uuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
+        }
+    };
+}
+
+// What happens to such an effect now: "keep" (still inside), "end", "linger"
+// (it left, and the effect outlasts that), or "resume" (back inside while lingering).
+export function auraConditionStep({ inside, sourceGone, after, lingering }) {
+    if (sourceGone) return lingering ? "keep" : after ? "linger" : "end";
+    if (inside) return lingering ? "resume" : "keep";
+    return lingering ? "keep" : after ? "linger" : "end";
+}

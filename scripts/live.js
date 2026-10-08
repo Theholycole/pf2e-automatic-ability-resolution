@@ -12,6 +12,7 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { applySwallow } from "./swallow.js";
+import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
@@ -360,6 +361,11 @@ async function applyChange(change, state) {
             }
             // Off-guard to one creature's attacks (Feint, Create a Diversion): an effect on that creature.
             if (change.slug === "off-guard" && change.scope?.attacker) return scopedOffGuard(state, change);
+            // While it stays in the aura (Aura of Sobs' stupefied): an effect scripts/auras.js ends when it leaves.
+            if (change.duration?.mode === "in-aura" && (await applyAuraCondition(actor, change, state))) {
+                const after = change.duration.after;
+                return `${target.name}'s ${change.slug} lasts while it stays in the aura${after ? `, and ${after.value} ${after.value === 1 ? after.unit.replace(/s$/, "") : after.unit} after it leaves` : ""}`;
+            }
             // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
             if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {
                 await timedCondition(actor, change.slug, change.value, change.duration, state);

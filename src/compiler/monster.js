@@ -11,7 +11,7 @@
 //   the target's Reflex DC"): compiled as basic actions are.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
-import { STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, readCheck, readConditions, readDamage, readImmunity, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
+import { STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, readCheck, readConditions, readDamage, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
 import { compileSkillAction } from "./checks.js";
 import { compileBuiltin } from "./builtins.js";
 import { compileAffliction } from "./afflictions.js";
@@ -381,12 +381,26 @@ function inlineSave(item) {
             }
             outcomes[degree] = row;
         }
+        // "As failure, but the effect persists for 3 rounds after leaving the aura": the failure's row,
+        // with what the row names itself in place of the same conditions ("As failure, but frightened 3").
+        for (const [degree, like] of [["criticalFailure", "failure"], ["criticalSuccess", "success"]]) {
+            const text = sections[degree] ? htmlToPlainText(sections[degree]).trim() : "";
+            if (!new RegExp(`^As ${like}\\b`, "i").test(text)) continue;
+            const copy = structuredClone(outcomes[like]);
+            const linger = readLinger(text);
+            if (linger) for (const effect of copy.effects) if (effect.duration?.mode === "in-aura") effect.duration = { ...effect.duration, after: linger };
+            const own = outcomes[degree];
+            outcomes[degree] = { ...copy, ...(own.damage?.mode !== "none" ? { damage: own.damage } : {}), effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects] };
+        }
     } else {
         outcomes = saveOrOutcomes(html, components);
         if (!outcomes) return null;
     }
     const plain = htmlToPlainText(html);
     const passive = item.system?.actionType?.value === "passive";
+    // "It recovers after it has been out of the aura for 1 minute": its conditions last while inside, and that long after.
+    const recovers = /\brecovers after (?:it has been|being) out of the (?:aura|area|emanation)\b/i.test(plain) ? readLinger(plain) : null;
+    if (recovers) for (const row of Object.values(outcomes)) for (const effect of row.effects ?? []) if (effect.kind === "condition" && !effect.duration) effect.duration = { mode: "in-aura", after: recovers };
     // A real aura (the trait, or PF2e's Aura rule); other passives (Death Throes, Defensive Quills) act on their own triggers.
     const aura = passive && ((item.system?.traits?.value ?? []).includes("aura") || (item.system?.rules ?? []).some((rule) => rule?.key === "Aura"));
     // An aura with no template: "30 feet." at the start of its text.

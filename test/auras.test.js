@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 
 import { compileBasicActions, compileMonsterAbility, inline } from "../src/compiler/index.js";
 import { damageOnly, readActiveAfter, readAuraTiming } from "../src/compiler/auras.js";
-import { activeAfterUse, auraWhen, entered, immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
+import { activeAfterUse, auraConditionEffect, auraConditionStep, auraWhen, entered, immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { cardHTML, createCard } from "../src/live/card.js";
 
 const PACKS = `${process.env.HOME}/.local/share/FoundryVTT/Data/systems/pf2e/packs`;
@@ -73,4 +73,34 @@ test("an aura's card says why it appeared", () => {
     const state = createCard({ plan, ability: { name: "Stench" }, source: { actorUuid: "Actor.g", name: "Ghoul" }, targets: [{ actorUuid: "Actor.v", name: "Valeros" }], cause: "entered the aura", aura: { key: "t1:stench", when: "enter" } });
     assert.match(cardHTML(state), /Stench<\/strong> <span class="aar-rider">entered the aura<\/span>/);
     assert.deepEqual(state.aura, { key: "t1:stench", when: "enter" });
+});
+
+test("conditions while in an aura: until leaving, or a while after; 'As failure, but' rows", { skip: !available && "PF2e's packs not found" }, async () => {
+    assert.deepEqual(inline.readDuration("or become fatigued while it remains in the area."), { mode: "in-aura" });
+    assert.deepEqual(inline.readDuration("stupefied 1 for as long as they remain within the aura."), { mode: "in-aura" });
+    assert.deepEqual(inline.readLinger("As failure, but the effect persists for 3 rounds after leaving the aura."), { value: 3, unit: "rounds" });
+    // "If the creature is already encumbered, it is immobilized": conditional on what it already has, left to the GM.
+    assert.deepEqual(inline.readConditions("<p>The creature is encumbered while it remains in the area. If the creature is already encumbered, it is @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized} while it remains within the aura.</p>").map((effect) => `${effect.slug} ${effect.duration?.mode}`), ["encumbered in-aura"]);
+    const npcs = [...(await readPack("pathfinder-monster-core")), ...(await readPack("pathfinder-monster-core-2"))].filter((doc) => doc.collection === "actors" && doc.type === "npc");
+    const plan = (name) => { for (const npc of npcs) { const item = npc.items.find((entry) => entry.name === name); if (item) return compileMonsterAbility(item, { actor: npc }); } return null; };
+    const heavy = plan("Heavy Aura").resolution.outcomes;
+    assert.deepEqual(heavy.failure.effects.map((effect) => [effect.slug, effect.duration]), [["encumbered", { mode: "in-aura" }]]);
+    assert.deepEqual(heavy.criticalFailure.effects.map((effect) => [effect.slug, effect.duration]), [["encumbered", { mode: "in-aura", after: { value: 3, unit: "rounds" } }]]);
+    assert.deepEqual(plan("Draining Presence").resolution.outcomes.failure.effects.map((effect) => [effect.slug, effect.duration]), [["drained", { mode: "in-aura", after: { value: 1, unit: "minutes" } }]]);
+    // "As failure, but frightened 3": the failure's fascinated, with its own frightened in place of the failure's.
+    assert.deepEqual(plan("Scarecrow's Leer").resolution.outcomes.criticalFailure.effects.map((effect) => `${effect.slug} ${effect.value ?? ""}`.trim()), ["fascinated", "frightened 3"]);
+});
+
+test("live: the effect of a condition while in an aura, and what leaving does to it", () => {
+    const effect = auraConditionEffect("aar", { slug: "stupefied", value: 1, template: { name: "Stupefied", img: "s.svg", uuid: "Compendium.pf2e.conditionitems.Item.s" }, source: { actorUuid: "Actor.w", tokenUuid: "Scene.s.Token.w", name: "Attic Whisperer" }, ability: { name: "Aura of Sobs" }, radius: 10, time: { worldTime: 0 }, targetUuid: "Actor.v" });
+    assert.equal(effect.name, "Aura of Sobs: Stupefied 1");
+    assert.deepEqual(effect.flags.aar.whileInAura, { slug: "stupefied", sourceToken: "Scene.s.Token.w", sourceActor: "Actor.w", radius: 10, after: null, lingering: false });
+    assert.equal(effect.system.duration.unit, "unlimited");
+    const after = { value: 3, unit: "rounds" };
+    assert.equal(auraConditionStep({ inside: true, sourceGone: false, after: null, lingering: false }), "keep");
+    assert.equal(auraConditionStep({ inside: false, sourceGone: false, after: null, lingering: false }), "end");
+    assert.equal(auraConditionStep({ inside: false, sourceGone: false, after, lingering: false }), "linger");
+    assert.equal(auraConditionStep({ inside: false, sourceGone: false, after, lingering: true }), "keep", "already counting down");
+    assert.equal(auraConditionStep({ inside: true, sourceGone: false, after, lingering: true }), "resume", "back inside");
+    assert.equal(auraConditionStep({ inside: false, sourceGone: true, after: null, lingering: false }), "end", "the monster died");
 });

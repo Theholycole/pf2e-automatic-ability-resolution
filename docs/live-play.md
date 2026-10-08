@@ -63,7 +63,7 @@ The user's decisions:
 - **Foes only:** creatures whose token disposition differs from the monster's. The GM can add others with "Use my targets". Exceptions an aura names ("a non-demon creature", "a living creature") are the GM's call.
 - **Combat start counts as entering:** when an encounter starts, every foe inside an aura that acts on entering gets its card ("in the aura as combat began").
 - **A moving aura counts:** when the monster moves, foes its aura newly covers have entered it.
-- **Combat only:** nothing triggers unless an encounter is running on the scene.
+- **Combat only:** nothing triggers unless an encounter is running on the scene. Cards come only from monsters in the encounter, for creatures in it. A monster on the map but not in the fight brings none (found in the live test of 2026-10-08).
 
 How it works:
 - **When an aura acts** comes from its text (`src/compiler/auras.js`): a creature "enters" it, "starts its turn" in it, or "ends its turn" in it.
@@ -96,7 +96,7 @@ How it works:
 - With the encounter deleted, walking into the stench brought no card.
 
 **Not yet:**
-- An aura's effects that last only while a creature stays in it ("can't reduce its frightened below 1 while in the aura").
+- Rules that hold only inside an aura without a save: "can't reduce its frightened below 1 while in the aura" (Scarecrow's Leer), "can't reduce the value of the sickened condition" (Miasma of Pollution).
 - Auras that act on other triggers (casting a spell).
 - Stench's "or recovers from being sickened" immunity.
 
@@ -139,3 +139,30 @@ How it works (`scripts/recharge.js`, `src/live/recharge.js`):
 - Breathing again at once brought a card warning "2 rounds left"; in round 2 the warning said "1 round left".
 - A critical Jaws hit ended the recharge, with the GM note.
 - A 1-round recharge was gone at the start of the dragon's next turn, and its next breath had no warning.
+
+## Conditions while in an aura (2026-10-08, the user's choice)
+
+- **The compiler** reads "while it remains in the area" and "for as long as they remain within the aura" as `duration: { mode: "in-aura" }`. It reads "persists for 3 rounds after leaving the aura" and "recovers after it has been out of the aura for 1 minute" as `after: { value, unit }`. In Monster Core, Monster Core 2 and NPC Core:
+  - Aura of Sobs: stupefied 1.
+  - Heat of the Forge: fatigued.
+  - Heavy Aura: encumbered; on a critical failure also 3 rounds after leaving.
+  - Draining Presence: drained 1 until a minute after leaving.
+- **Apply** gives such a condition as an effect that grants it ("Aura of Sobs: Stupefied 1"), tied to the monster's token and the aura's radius. A newer one from the same aura replaces it.
+- **Leaving** (`scripts/auras.js`, the active GM, in or out of an encounter) is checked when any token moves, when the monster's HP changes, and when a token is removed:
+  - When the creature has left, or the monster is dead or gone, the effect ends, and the condition with it.
+  - If the text says it lasts longer, the effect instead runs for that time from then ("1 minute").
+  - Coming back in during that time makes it last while inside again.
+- **Compiler fixes found on the way:**
+  - "As failure, but …" (and "As success, but …") rows now copy the failure's row, with the row's own conditions in place of the same ones: Scarecrow's Leer's critical failure is fascinated and frightened 3. This changes 57 abilities (50 distinct) whose critical rows had been empty or partial.
+  - "If the creature is already encumbered, it is immobilized" is left to the GM.
+  - "encumbered" is read in words.
+
+**Checked live in pftest** (Ezren, and new PFTEST SIM Attic Whisperer and War Wraith, in an encounter on the Live Cards scene):
+- Aura of Sobs:
+  - walking in brought its card; a failure gave stupefied 1 "while it stays in the aura";
+  - walking out ended it.
+- Draining Presence:
+  - a failure gave drained 1 with no end while inside;
+  - walking out turned it into 1 minute;
+  - walking back in brought a new card (entering again) and made it last while inside again;
+  - the wraith's death started the minute.

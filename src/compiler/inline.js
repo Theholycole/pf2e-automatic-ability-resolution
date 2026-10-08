@@ -101,11 +101,25 @@ export function readRange(text) {
 
 const CONDITION_LINK = /@UUID\[Compendium\.pf2e\.conditionitems\.Item\.[A-Za-z0-9]+\]\{([A-Za-z-]+(?: [A-Za-z-]+)?)(?: (\d+))?\}/g;
 // Conditions PF2e's text names without a link.
-const PLAIN_CONDITIONS = ["restrained", "grabbed", "prone", "off-guard", "frightened", "immobilized"];
+const PLAIN_CONDITIONS = ["restrained", "grabbed", "prone", "off-guard", "frightened", "immobilized", "encumbered"];
 
 // "until the end of your next turn" and the like → a duration, or null.
+// How long a condition outlasts leaving an aura: "persists for 3 rounds after
+// leaving the aura", "recovers after it has been out of the aura for 1 minute" → { value, unit }.
+export function readLinger(text) {
+    const match = /\b(?:persists?|lasts?) for (\d+|an?|one) (round|minute|hour)s? after (?:it leaves|leaving)\b|\bout of the (?:aura|area|emanation) for (\d+|an?|one) (round|minute|hour)s?\b|\bfor (\d+|an?|one) (round|minute|hour)s? thereafter\b/i.exec(String(text ?? ""));
+    if (!match) return null;
+    const [count, unit] = match[1] ? [match[1], match[2]] : match[3] ? [match[3], match[4]] : [match[5], match[6]];
+    return { value: /^\d+$/.test(count) ? Number(count) : 1, unit: `${unit.toLowerCase()}s` };
+}
+
 export function readDuration(text) {
     const plain = String(text ?? "");
+    // "while it remains in the area", "for as long as they remain within the aura": until it leaves.
+    if (/\b(?:while|as long as) (?:it|they|the creature|the target) (?:remains?|stays?|is) (?:in|within|inside) (?:the|this|its|their) (?:aura|area|emanation)/i.test(plain)) {
+        const after = readLinger(plain);
+        return { mode: "in-aura", ...(after ? { after } : {}) };
+    }
     if (/until the end of (?:your|its|the monster's|the creature's) next turn/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
     if (/until the (?:start|beginning) of (?:your|its|the monster's) next turn/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "source-turn" };
     if (/(?:before|until) the end of (?:your|its) (?:current )?turn/i.test(plain)) return { mode: "fixed", value: 0, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
@@ -139,6 +153,8 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         if (LIFTS.test(plain)) continue;
         // Only some creatures ("Animals are also paralyzed", "Undead creatures are…"): left out.
         if (/^\s*(?:[A-Z][a-z]+s|[A-Z][a-z]+ creatures|Creatures (?:with|that|of)\b[^.]*?)\s+(?:are|become|is)\b/.test(plain)) continue;
+        // Only if it already has a condition ("If the creature is already encumbered, it is immobilized"): the GM's.
+        if (/^\s*If (?:the creature|it|the target|they) (?:is|are) already\b/i.test(plain)) continue;
         const duration = readDuration(plain);
         const self = recipientOf(plain) === "self";
         const found = new Map();

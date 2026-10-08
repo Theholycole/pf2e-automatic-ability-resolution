@@ -5,7 +5,7 @@
 //   (the GM can add others with "Use my targets");
 // - being inside when combat starts counts as entering;
 // - an aura moving onto a creature (the monster moves) counts as entering;
-// - only while an encounter runs on the scene.
+// - only while an encounter runs on the scene, and only between creatures in it.
 //
 // An aura acts when its text says (src/compiler/auras.js): a creature enters
 // it, starts its turn in it or ends its turn in it. Distances are PF2e's
@@ -16,7 +16,7 @@
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
 import { cardCheck } from "../src/live/card.js";
-import { AURA_CAUSES, activeAfterUse, auraWhen, entered, isImmune } from "../src/live/auras.js";
+import { AURA_CAUSES, activeAfterUse, auraConditionEffect, auraConditionStep, auraWhen, entered, isImmune } from "../src/live/auras.js";
 import { isActiveGM, postCard, stateOf } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
@@ -43,7 +43,17 @@ export function setUpAuras({ compileItem, loaded }) {
     // Encounters already under way when the world loads have had their start.
     for (const combat of game.combats) if (combat.started) started.add(combat.id);
     Hooks.on("moveToken", (token, movement) => {
-        if (isActiveGM()) serially("move", () => onMove(token, movement));
+        if (!isActiveGM()) return;
+        serially("move", () => onMove(token, movement));
+        // Conditions that last while in an aura, in or out of an encounter.
+        serially("leaving", () => checkAuraConditions(token.parent));
+    });
+    Hooks.on("updateActor", (actor, changed) => {
+        if (!isActiveGM() || changed.system?.attributes?.hp?.value === undefined) return;
+        for (const scene of new Set(actor.getActiveTokens(false, true).map((token) => token.parent))) serially("aura's creature down", () => checkAuraConditions(scene));
+    });
+    Hooks.on("deleteToken", (token) => {
+        if (isActiveGM() && token.parent) serially("aura's creature gone", () => checkAuraConditions(token.parent));
     });
     Hooks.on("updateCombat", (combat, changed) => {
         if (!isActiveGM() || changed.round !== 1 || started.has(combat.id) || !combat.started) return;
@@ -76,12 +86,17 @@ function auraPlan(item) {
 
 const radiusOf = (item, plan) => Number(item.rules?.find((rule) => rule.key === "Aura")?.radius) || Number(plan.targeting?.area?.value) || 0;
 
-// The monsters' auras on a scene: { token, actor, item, plan, when, radius, key }.
-function auraSources(scene) {
+// The tokens taking part in an encounter.
+const inEncounter = (combat) => new Set(combat.combatants.map((combatant) => combatant.tokenId).filter(Boolean));
+
+// The auras of the encounter's monsters on a scene: { token, actor, item, plan, when, radius, key }.
+// (A monster on the map but not in the encounter brings no cards.)
+function auraSources(scene, combat) {
     const sources = [];
+    const taking = inEncounter(combat);
     for (const token of scene.tokens) {
         const actor = token.actor;
-        if (!actor || actor.type !== "npc" || token.hidden || actor.isDead) continue;
+        if (!actor || actor.type !== "npc" || token.hidden || actor.isDead || !taking.has(token.id)) continue;
         for (const item of actor.itemTypes.action) {
             const plan = auraPlan(item);
             if (!plan) continue;
@@ -121,14 +136,15 @@ async function onMove(token, movement) {
     await ready;
     const grid = gridOf(scene);
     const path = pathPositions([movement.origin, ...movement.passed.waypoints], { size: grid.size, teleport: (point) => point.action === "displace" });
-    for (const source of auraSources(scene)) {
+    const taking = inEncounter(combat);
+    for (const source of auraSources(scene, combat)) {
         if (!source.when.includes("enter") || !active(source, combat)) continue;
         const inside = (from, to) => distanceFeet(from, to, grid) <= source.radius;
         let targets = [];
         if (source.token.id === token.id) {
             // The aura moved with its monster.
-            targets = scene.tokens.filter((other) => isFoe(source, other) && entered(path.map((at) => inside(box(token, grid.size, at), box(other, grid.size)))));
-        } else if (isFoe(source, token) && entered(path.map((at) => inside(box(source.token, grid.size), box(token, grid.size, at))))) {
+            targets = scene.tokens.filter((other) => taking.has(other.id) && isFoe(source, other) && entered(path.map((at) => inside(box(token, grid.size, at), box(other, grid.size)))));
+        } else if (taking.has(token.id) && isFoe(source, token) && entered(path.map((at) => inside(box(source.token, grid.size), box(token, grid.size, at))))) {
             targets = [token];
         }
         if (targets.length) await trigger(source, targets, "enter", combat);
@@ -141,9 +157,10 @@ async function onCombatStart(combat) {
     if (!scene) return;
     await ready;
     const grid = gridOf(scene);
-    for (const source of auraSources(scene)) {
+    const taking = inEncounter(combat);
+    for (const source of auraSources(scene, combat)) {
         if (!source.when.includes("enter") || !active(source, combat)) continue;
-        const targets = scene.tokens.filter((other) => isFoe(source, other) && distanceFeet(box(source.token, grid.size), box(other, grid.size), grid) <= source.radius);
+        const targets = scene.tokens.filter((other) => taking.has(other.id) && isFoe(source, other) && distanceFeet(box(source.token, grid.size), box(other, grid.size), grid) <= source.radius);
         if (targets.length) await trigger(source, targets, "combat-start", combat);
     }
 }
@@ -158,7 +175,7 @@ async function onTurn(combatant, combat, when) {
     // When a turn ends, the encounter has already moved on: the moment is the ended turn's.
     const turn = combat.turns.findIndex((entry) => entry.id === combatant.id);
     const position = when === "end-turn" && turn >= 0 ? { round: turn > combat.turn ? combat.round - 1 : combat.round, turn } : undefined;
-    for (const source of auraSources(scene)) {
+    for (const source of auraSources(scene, combat)) {
         if (!source.when.includes(when) || !active(source, combat, position) || !isFoe(source, token)) continue;
         if (distanceFeet(box(source.token, grid.size), box(token, grid.size), grid) <= source.radius) await trigger(source, [token], when, combat);
     }
@@ -190,4 +207,60 @@ async function trigger(source, tokens, when, combat) {
     targets = targets.filter((token) => !waiting.has(token.uuid));
     if (!targets.length) return;
     await postCard({ plan: source.plan, item: source.item, sourceActor: source.actor, sourceToken: source.token, tokens: targets, cause: AURA_CAUSES[when] ?? null, aura: { key: source.key, when } });
+}
+
+// --- Conditions that last while in an aura ------------------------------------------
+
+// Apply's part for a condition lasting "while it remains in the area": an
+// effect granting it, tied to the monster's token and the aura's radius. A
+// newer one from the same aura replaces the old. false when there's no such condition.
+export async function applyAuraCondition(actor, change, state) {
+    const template = game.pf2e.ConditionManager.getCondition(change.slug);
+    if (!template) return false;
+    const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+    const radius = (item && radiusOf(item, state.plan)) || Number(state.plan?.targeting?.area?.value) || 0;
+    const old = actor.itemTypes.effect.filter((effect) => {
+        const flag = effect.flags?.[MODULE_ID]?.whileInAura;
+        return flag?.sourceToken === state.source.tokenUuid && flag.slug === change.slug;
+    });
+    if (old.length) await actor.deleteEmbeddedDocuments("Item", old.map((effect) => effect.id));
+    await actor.createEmbeddedDocuments("Item", [auraConditionEffect(MODULE_ID, {
+        slug: change.slug,
+        value: change.value,
+        template: { name: template.name, img: template.img, uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid },
+        source: state.source,
+        ability: { name: state.ability.name, uuid: state.ability.uuid },
+        radius,
+        after: change.duration?.after ?? null,
+        time: { worldTime: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
+        targetUuid: actor.uuid
+    })]);
+    return true;
+}
+
+// Each such effect on the scene: ended when its creature has left the aura, or
+// the monster is dead or gone; or kept for its stated time after leaving.
+async function checkAuraConditions(scene) {
+    if (!scene) return;
+    const grid = gridOf(scene);
+    for (const token of scene.tokens) {
+        for (const effect of token.actor?.itemTypes?.effect ?? []) {
+            const flag = effect.flags?.[MODULE_ID]?.whileInAura;
+            if (!flag) continue;
+            const source = flag.sourceToken ? fromUuidSync(flag.sourceToken) : null;
+            const sourceGone = !source || source.parent?.id !== scene.id || source.hidden || !source.actor || source.actor.isDead;
+            const inside = !sourceGone && distanceFeet(box(source, grid.size), box(token, grid.size), grid) <= Number(flag.radius);
+            const step = auraConditionStep({ inside, sourceGone, after: flag.after, lingering: flag.lingering });
+            if (step === "end") await effect.delete();
+            else if (step === "linger") {
+                await effect.update({
+                    "system.duration": { value: flag.after.value, unit: flag.after.unit, expiry: "turn-start", sustained: false },
+                    "system.start": { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
+                    [`flags.${MODULE_ID}.whileInAura.lingering`]: true
+                });
+            } else if (step === "resume") {
+                await effect.update({ "system.duration": { value: -1, unit: "unlimited", expiry: null, sustained: false }, [`flags.${MODULE_ID}.whileInAura.lingering`]: false });
+            }
+        }
+    }
 }
