@@ -268,7 +268,9 @@ function saveOrOutcomes(html, components, { afterHit = false } = {}) {
     });
     // A critical failure's condition with no duration of its own lasts as long as the failure's.
     const lasting = failEffects.find((effect) => effect.duration)?.duration ?? null;
-    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (effect.slug === "frightened" && effects.some((other) => other.slug === "fleeing")) ? effect : { ...effect, duration: lasting }));
+    // Not a fixed time for frightened, which fades by its own rule ("As failure, but Frightened 3" after
+    // "…Fascinated until the end of its next turn"); "as long as it remains in the aura" still carries over.
+    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (effect.slug === "frightened" && lasting.mode === "fixed") ? effect : { ...effect, duration: lasting }));
     // "(1 minute on a critical failure)": the failure's conditions, for longer.
     const longer = critical && !criticalAdds ? /^(\d+) (round|minute|hour)s?$/i.exec(htmlToPlainText(critical).trim()) : null;
     const critEffects = longer

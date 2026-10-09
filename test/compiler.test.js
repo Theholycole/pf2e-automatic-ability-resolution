@@ -37,7 +37,7 @@ test("conditions: sentence by sentence, the actor's own, and not the ones a sent
     assert.ok(inline.readImmunity("<p>Regardless of the result, creatures are temporarily immune to all griffons' Regal Shrieks for 10 minutes.</p>"));
 });
 
-test("fleeing and immunity wording: as long as it's frightened, during their next turn, frightened's own decay, \"is then immune to …\"", () => {
+test("fleeing and immunity wording: as long as it's frightened, during their next turn, frightened's own decay beside any timed condition, \"is then immune to …\"", () => {
     const frightened = (n) => `@UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened ${n}}`;
     const fleeing = "@UUID[Compendium.pf2e.conditionitems.Item.sDPxOjQ9kx2RZE8D]{Fleeing}";
     // Vision of Death, Dread Promise: fleeing while frightened lasts; frightened keeps its own decay.
@@ -50,6 +50,14 @@ test("fleeing and immunity wording: as long as it's frightened, during their nex
     // "Fleeing for 1 round and Frightened 3": the round is fleeing's.
     const screech = inline.readConditions(`The creature is ${fleeing} for 1 round and ${frightened(3)}.`);
     assert.deepEqual(screech.map((e) => [e.slug, e.duration?.value ?? null]), [["fleeing", 1], ["frightened", null]]);
+    // Any other timed condition beside it: the time is that condition's, frightened fades by its own rule.
+    const paralyzed = "@UUID[Compendium.pf2e.conditionitems.Item.6uEgoh53GbXuHpTF]{Paralyzed}";
+    const shriek = inline.readConditions(`The creature is ${frightened(2)} and ${paralyzed} for 1 round.`);
+    assert.deepEqual(shriek.map((e) => [e.slug, e.duration?.value ?? null]), [["frightened", null], ["paralyzed", 1]]);
+    assert.equal(inline.readConditions(`The creature is ${frightened(1)} and is then temporarily immune for 1 minute.`)[0].duration, null);
+    // A time that is frightened's own: straight after it, or when it can't be reduced.
+    assert.equal(inline.readConditions(`The creature is ${frightened(1)} for 1 minute.`)[0].duration.unit, "minutes");
+    assert.equal(inline.readConditions(`As failure, but the creature can't reduce its frightened condition below 2 for 1 minute and is ${frightened(2)}.`).find((e) => e.slug === "frightened").duration.unit, "minutes");
     // Immunity without "temporarily", when it names this ability; not another ability's.
     const cry = inline.readImmunity("<p>Each creature in a 120-foot emanation must attempt a Will save and is then immune to the hantu denai's Terrifying Cry for 1 minute.</p>", ["Terrifying Cry", "Hantu Denai"]);
     assert.deepEqual([cry.duration, cry.degrees.length], [{ value: 1, unit: "minutes" }, 4]);

@@ -140,6 +140,9 @@ function recipientOf(sentence) {
     return /\b(?:you|you're|you are)\b[^.]*\b(?:fall|land|balance|off-guard|prone|become)\b/i.test(sentence) ? "self" : "target";
 }
 
+// A sentence whose stated time is frightened's own (see readConditions).
+const FRIGHTENED_TIMED = /\bfrightened(?: \d+)? (?:for|until)\b|\b(?:can't|cannot|can not) reduce\b[^.]*\bfrightened\b|\bfrightened (?:condition|value) (?:can't|cannot) be reduced\b/i;
+
 // Sentences that end or lift a condition rather than impose it.
 // ("those conditions on the target end", "it breaks free"; not "until the end of your next turn".)
 const LIFTS = /\b(?:conditions?\b[^.]*\bend\b|(?:it|that|this|the effect|the condition) ends\b|break(?:s)? free|released|fail to|no longer|already had)/i;
@@ -173,9 +176,11 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
             if (named) found.set(slug, named[1] ? Number(named[1]) : null);
         }
         for (const [slug, value] of found) {
-            // Frightened and the like fade by their own rules; a stated duration still applies, except
-            // fleeing's ("Frightened 3 and Fleeing for 1 round") and one tied to the condition itself.
-            const own = ["prone"].includes(slug) || (duration?.mode === "while" && duration.condition === slug) || (slug === "frightened" && found.has("fleeing"));
+            // Prone has no duration, nor a condition tied to itself. Frightened fades by its own rule: a stated
+            // time is its own only straight after it ("Frightened 2 for 1 minute") or when it can't be reduced;
+            // otherwise the time is the other condition's ("Confused for 1 round and Frightened 2",
+            // "Frightened 2 and slowed 1 for 1 minute", "Frightened 1 … and is then temporarily immune for 1 minute").
+            const own = ["prone"].includes(slug) || (duration?.mode === "while" && duration.condition === slug) || (slug === "frightened" && duration?.mode === "fixed" && !FRIGHTENED_TIMED.test(plain.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")));
             effects.push({ kind: "condition", slug, value, duration: own ? null : duration, ...(self ? { recipient: "self" } : {}) });
         }
     }
