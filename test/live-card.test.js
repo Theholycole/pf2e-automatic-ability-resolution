@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
+import { abilitySlug, allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
 
 const breath = {
     source: { name: "Avalanche Breath", slug: "avalanche-breath" },
@@ -72,3 +72,12 @@ test("a check card's row shows the user's roll against the target's DC", () => {
     const state = createCard({ plan: grab, ability: { name: "Grab" }, source: { actorUuid: "Actor.s", name: "Snake" }, targets: [{ actorUuid: "Actor.a", name: "Seelah", dc: 22 }] });
     assert.match(cardHTML(recordRoll(state, "t0", { total: 27, natural: 15, degree: "success" })), /Athletics 27 vs DC 22: success/);
 });
+
+test("an ability with no slug of its own gets one from its name, for its immunity effects", () => {
+    assert.equal(abilitySlug({ source: { slug: "frightful-presence" } }, "Frightful Presence"), "frightful-presence");
+    assert.equal(abilitySlug({ source: { slug: null, name: "Baleful Shriek" } }), "baleful-shriek");
+    assert.equal(abilitySlug({ source: {} }, "Gogunta's Croak"), "goguntas-croak");
+    const state = createCard({ plan: { ...grab, source: { name: "Baleful Shriek", slug: null } }, ability: { name: "Baleful Shriek" }, source: { actorUuid: "Actor.s", name: "Revenant" }, targets: [{ actorUuid: "Actor.a", name: "Seelah" }] });
+    assert.equal(state.ability.slug, "baleful-shriek");
+});
+

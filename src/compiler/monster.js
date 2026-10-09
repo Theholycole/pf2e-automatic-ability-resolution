@@ -268,7 +268,7 @@ function saveOrOutcomes(html, components, { afterHit = false } = {}) {
     });
     // A critical failure's condition with no duration of its own lasts as long as the failure's.
     const lasting = failEffects.find((effect) => effect.duration)?.duration ?? null;
-    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" ? effect : { ...effect, duration: lasting }));
+    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (effect.slug === "frightened" && effects.some((other) => other.slug === "fleeing")) ? effect : { ...effect, duration: lasting }));
     // "(1 minute on a critical failure)": the failure's conditions, for longer.
     const longer = critical && !criticalAdds ? /^(\d+) (round|minute|hour)s?$/i.exec(htmlToPlainText(critical).trim()) : null;
     const critEffects = longer
@@ -354,7 +354,7 @@ function strikeActivity(item, actor) {
 }
 
 // Breath weapons and other abilities with an inline save.
-function inlineSave(item) {
+function inlineSave(item, actor = null) {
     const html = item.system?.description?.value ?? "";
     const checks = inlineTags(html, "Check").map(readCheck).filter((check) => check.save && check.dc);
     if (!checks.length) return null;
@@ -407,12 +407,13 @@ function inlineSave(item) {
     const template = inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? (passive && /^(\d+) feet/i.test(plain) ? { type: "emanation", value: Number(/^(\d+) feet/i.exec(plain)[1]) } : null);
     const range = readRange(plain);
     const recharge = readRecharge(html);
+    const immunity = readImmunity(html, [item.name, (actor ?? item.actor ?? item.parent)?.name]);
     // Only creatures it's holding ("each creature it has grabbed").
     const grabbed = /\b(?:creatures?|targets?) (?:it(?:'s| is| has)?|the monster(?:'s| is| has)?) (?:grabbed|grabbing|restrained|restraining)|\b(?:grabbed|restrained) by (?:it|the monster)\b/i.test(plain);
     return {
         ...base(item),
         targeting: { target: template ? null : "1 creature", range: range ? `${range} feet` : template ? null : "touch", area: template, ...(grabbed ? { grabbed: true } : {}) },
-        trigger: { event: aura ? "aura" : passive ? "passive" : "use", ...(aura ? readAuraTiming(plain) : {}), ...(aura && readActiveAfter(plain) ? { activeAfter: readActiveAfter(plain) } : {}), ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}), ...(readImmunity(html) ? { immunity: readImmunity(html) } : {}) },
+        trigger: { event: aura ? "aura" : passive ? "passive" : "use", ...(aura ? readAuraTiming(plain) : {}), ...(aura && readActiveAfter(plain) ? { activeAfter: readActiveAfter(plain) } : {}), ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}), ...(immunity ? { immunity } : {}) },
         resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: check.basic, against: { dc: "fixed", value: check.dc } }, sharedDamage: components.length ? { rollOnce: true, components } : null, outcomes }
     };
 }
@@ -437,5 +438,5 @@ export function compileMonsterAbility(item, { basicActions = {}, actor = null } 
     if (slug === "engulf") return engulf(item, actor);
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    return compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item) ?? compileSkillAction(item);
+    return compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item);
 }

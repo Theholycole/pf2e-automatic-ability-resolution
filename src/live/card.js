@@ -24,12 +24,21 @@ export function cardCheck(plan) {
 // A new card's state. source: { actorUuid, tokenUuid, name }; targets: [{ actorUuid, tokenUuid, name }].
 // cause: why it appeared, for the header ("entered the aura"); aura: { key, when } for an aura's card;
 // warning: a line for the GM ("Avalanche Breath is still recharging: 2 rounds left.").
+// The ability's slug, for its immunity effects and marks: PF2e's, or one from its name (most bestiary
+// abilities have none, and without it Apply couldn't record "immune to the Revenant's Baleful Shriek").
+export function abilitySlug(plan, name = null) {
+    const slug = plan?.source?.slug;
+    if (slug) return slug;
+    const from = name ?? plan?.source?.name;
+    return from ? String(from).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || null : null;
+}
+
 export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null, warning = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     return {
         version: CARD_VERSION,
-        ability: { name: ability?.name ?? plan?.source?.name ?? "Ability", uuid: ability?.uuid ?? plan?.source?.uuid ?? null, slug: plan?.source?.slug ?? null },
+        ability: { name: ability?.name ?? plan?.source?.name ?? "Ability", uuid: ability?.uuid ?? plan?.source?.uuid ?? null, slug: abilitySlug(plan, ability?.name) },
         source,
         plan,
         check,

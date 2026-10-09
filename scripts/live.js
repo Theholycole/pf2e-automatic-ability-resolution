@@ -372,6 +372,8 @@ async function applyChange(change, state) {
                 return `${target.name}'s ${change.slug} lasts ${durationText(change.duration, state.source.name)}`;
             }
             await setCondition(actor, change.slug, change.value);
+            // "Fleeing for as long as it's frightened": the GM ends it with that condition.
+            if (change.duration?.mode === "while" && change.duration.condition) return `${target.name}'s ${change.slug} lasts as long as it's ${change.duration.condition}`;
             return null;
         }
         case "effect":

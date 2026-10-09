@@ -15,7 +15,7 @@
 // Only the active GM's client acts, one trigger at a time.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { cardCheck } from "../src/live/card.js";
+import { abilitySlug, cardCheck } from "../src/live/card.js";
 import { AURA_CAUSES, activeAfterUse, auraConditionEffect, auraConditionStep, auraWhen, entered, isImmune } from "../src/live/auras.js";
 import { isActiveGM, postCard, stateOf } from "./live.js";
 
@@ -195,7 +195,7 @@ function recordUse(message) {
 // The card for an aura's targets, less those immune, already hit this round
 // (a damage aura) or waiting on an open card from the same aura.
 async function trigger(source, tokens, when, combat) {
-    const slug = source.plan.source?.slug ?? null;
+    const slug = abilitySlug(source.plan, source.item?.name);
     const immunity = source.plan.trigger?.immunity;
     const sourceUuid = source.actor.uuid;
     let targets = tokens.filter((token) => !(slug && isImmune(token.actor.itemTypes.effect.map((effect) => effect.flags?.[MODULE_ID]), { slug, source: immunity?.against === "all" ? null : sourceUuid })));

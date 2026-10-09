@@ -120,7 +120,11 @@ export function readDuration(text) {
         const after = readLinger(plain);
         return { mode: "in-aura", ...(after ? { after } : {}) };
     }
-    if (/until the end of (?:your|its|the monster's|the creature's) next turn/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
+    // "Fleeing for as long as it's frightened", "as long as they remain frightened": while that condition lasts.
+    const lasting = /\b(?:for )?as long as (?:it|they|the creature|the target)(?:'s|'re| is| are| remains?| stays?) (frightened|sickened|grabbed|restrained)\b/i.exec(plain);
+    if (lasting) return { mode: "while", condition: lasting[1].toLowerCase() };
+    // "Fleeing during their next turn": until the end of that turn, as "until the end of its next turn".
+    if (/until the end of (?:your|its|the monster's|the creature's) next turn|\bduring (?:its|their|the creature's|the target's) next turn\b/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
     if (/until the (?:start|beginning) of (?:your|its|the monster's) next turn/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "source-turn" };
     if (/(?:before|until) the end of (?:your|its) (?:current )?turn/i.test(plain)) return { mode: "fixed", value: 0, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
     const fixed = /\bfor (\d+) (round|minute|hour)s?\b/i.exec(plain);
@@ -169,18 +173,33 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
             if (named) found.set(slug, named[1] ? Number(named[1]) : null);
         }
         for (const [slug, value] of found) {
-            // Frightened and the like fade by their own rules; a stated duration still applies.
-            effects.push({ kind: "condition", slug, value, duration: ["prone"].includes(slug) ? null : duration, ...(self ? { recipient: "self" } : {}) });
+            // Frightened and the like fade by their own rules; a stated duration still applies, except
+            // fleeing's ("Frightened 3 and Fleeing for 1 round") and one tied to the condition itself.
+            const own = ["prone"].includes(slug) || (duration?.mode === "while" && duration.condition === slug) || (slug === "frightened" && found.has("fleeing"));
+            effects.push({ kind: "condition", slug, value, duration: own ? null : duration, ...(self ? { recipient: "self" } : {}) });
         }
     }
     return effects;
 }
 
 // "temporarily immune … for 10 minutes" → { scope: "target", raw }, or null.
-export function readImmunity(html) {
-    const plain = htmlToPlainText(html);
-    const match = /[^.]*\btemporarily immune\b[^.]*\./i.exec(plain);
-    return match ? immunityDetails(match[0].trim()) : null;
+// names: the ability's and the creature's, which an "immune to …" sentence must name to be about this ability.
+export function readImmunity(html, names = []) {
+    // Each result heading and each line its own sentence ("…save\nCritical Success The creature is unaffected and immune…").
+    const plain = htmlToPlainText(String(html ?? "").replace(/<strong>\s*(Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/gi, "\n$1")).replace(/\s*\n+\s*/g, ". ").replace(/\.\s*\./g, ".");
+    const temporarily = /[^.]*\btemporarily immune\b[^.]*\./i.exec(plain);
+    if (temporarily) return immunityDetails(temporarily[0].trim());
+    // "is then immune to the hantu denai's Terrifying Cry for 1 minute", "immune to this ability for 24 hours";
+    // not "immune to all thatchlings' distracting giggle" (another ability) or "to the sight of that creature".
+    for (const match of plain.matchAll(/[^.]*\bimmune to ([^.]*?)\bfor (?:\d+|an?|one) (?:round|minute|hour|day)s?\b[^.]*\./gi)) {
+        const what = match[1].toLowerCase();
+        // "All of the creature's equipment is immune to Wasting Gaze": not the creature.
+        if (/\b(?:equipment|items?|objects?|gear)\b[^.]*\bimmune\b/i.test(match[0])) continue;
+        const own = /^(?:this|the|that|its) (?:ability|effect|effects|aura|trap|hazard)\b|^its effects\b|^the effects of\b/.test(what)
+            || names.filter(Boolean).some((name) => what.includes(name.replace(/\s*\([^)]*\)\s*$/, "").toLowerCase()));
+        if (own) return immunityDetails(match[0].trim());
+    }
+    return null;
 }
 
 const UNITS = { round: "rounds", minute: "minutes", hour: "hours", day: "days" };
@@ -196,8 +215,8 @@ export function immunityDetails(raw) {
     const value = time ? (/^\d+$/.test(time[1]) ? Number(time[1]) : 1) : 1;
     const unit = time ? UNITS[time[2].toLowerCase()] : "minutes";
     const degrees = /^Critical Success\b|\bcritically succeeds?\b/i.test(raw) ? ["criticalSuccess"]
-        : /\bregardless\b/i.test(raw) ? ALL_DEGREES
-        : /\bsucceeds?\b|\bsuccessful(?:ly)?\b|^Success\b/i.test(raw) ? ["criticalSuccess", "success"]
+        : /\bregardless\b|\bsucceeds? or fails?\b|\bfails? or succeeds?\b/i.test(raw) ? ALL_DEGREES
+        : /\bsucceed(?:s|ed)?\b|\bsuccessful(?:ly)?\b|^Success\b/i.test(raw) ? ["criticalSuccess", "success"]
         : ALL_DEGREES;
     return { scope: "target", raw, duration: { value, unit }, degrees: [...degrees], against: /\bimmune to all\b/i.test(raw) ? "all" : "source" };
 }
