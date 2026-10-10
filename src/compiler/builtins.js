@@ -158,6 +158,21 @@ export function readSweep(text) {
     return { strike: name, sameMap };
 }
 
+// "X Flies up to double its fly Speed and then makes a talon Strike." and other moves before one Strike (2026-10-10):
+// { strides, strike } (how many Strides it counts as, the Strike's name or null), or null. The move: Strides, Flies,
+// Swims, Climbs, Burrows or Leaps (or one of two), once, twice, "up to three times", "up to double its Speed", "up to
+// 10 feet"; the Strike "at any point during that movement", "at the end of its movement", "against a foe within its
+// reach", "against an adjacent creature at the end of its movement".
+const MOVES = String.raw`(?:Strides?|Flies|Fly|Swims?|Climbs?|Burrows?|Leaps?)`;
+export function moveThenStrike(text) {
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)))*)\.$`, "i").exec(text);
+    if (!match) return null;
+    const how = match[2].trim();
+    const strides = /three times/i.test(how) ? 3 : /twice|double/i.test(how) ? 2 : 1;
+    const name = match[3] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[3].trim()) ? match[3].trim().replace(/^(?:melee|ranged)\s+/i, "").toLowerCase() : null;
+    return { strides, strike: name };
+}
+
 // "The smilodon Strides and makes a Strike at the end of that movement." (the
 // hidden note after it changes nothing in the simulation) → { strides, strike }.
 // A charge's bonus for moving 20 feet comes along: "it gains a +2 circumstance
@@ -165,9 +180,13 @@ export function readSweep(text) {
 // to 3d10+20" → damage. Any other sentence: null.
 export function readCharge(text) {
     const sentences = text.trim().split(/(?<=\.)\s+/);
+    // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
+    if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^The [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
     const match = /^The [^.]+? Strides( twice)? and (?:then )?makes an? (?:([\w' -]+?) )?Strike(?: at the end of that movement)?\.$/i.exec(sentences[0] ?? "");
-    if (!match) return null;
-    const charge = { strides: match[1] ? 2 : 1, strike: match[2] ? match[2].toLowerCase() : null };
+    // Other moves and wordings (2026-10-10): "Flies up to double its fly Speed and then makes a talon Strike".
+    const other = match ? null : moveThenStrike(sentences[0] ?? "");
+    if (!match && !other) return null;
+    const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] ? match[2].toLowerCase() : null };
     const moved = "^(?:If|As long as) (?:it|they|the [\\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, ";
     for (const sentence of sentences.slice(1)) {
         if (/remains? hidden until after/i.test(sentence)) continue;

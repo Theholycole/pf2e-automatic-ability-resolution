@@ -13,7 +13,7 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readSkillCheck } from "./checks.js";
-import { compileBuiltin } from "./builtins.js";
+import { compileBuiltin, moveThenStrike } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 
@@ -551,6 +551,12 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
 //   "The arboreal warden Strides and then makes a shield bash Strike. If the attack hits, the target is pushed 10 feet."
 //   "… makes a weapon Strike. If the Strike hits, the target must succeed at a @Check[fortitude|dc:19] save or become Blinded …"
 //   "The rhinoceros Strides twice, then makes a horn Strike. As long as … moved at least 20 feet, … A Medium or smaller creature struck by this attack must succeed at …"
+// "1d12 electricity", "3d6 precision" (plain dice with a type) → "1d12[electricity]"; null for anything else.
+function plainDice(text) {
+    const match = /^(\d+d\d+(?:\s*[+-]\s*\d+)?)(?: ([a-z]+))?$/i.exec(String(text ?? "").trim());
+    return match ? `${match[1].replace(/\s+/g, "")}[${(match[2] ?? "untyped").toLowerCase()}]` : null;
+}
+
 export const strikeActivityReject = { last: null };
 
 function strikeActivity(item, actor) {
@@ -562,6 +568,7 @@ function strikeActivity(item, actor) {
     const sentences = html.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ").split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
     let opened = false;
+    let flavorSkipped = false;
     const hit = "^(?:If|When) (?:it|the (?:Strike|attack|strike)|this (?:Strike|attack)) hits(?: and deals damage)?, ";
     const conditions = (text) => readConditions(text, { plain: STAGE_CONDITIONS }).map((effect) => ({ slug: effect.slug, value: effect.value, duration: effect.duration }));
     for (const sentence of sentences) {
@@ -574,20 +581,46 @@ function strikeActivity(item, actor) {
             if (/(?:has|must have) (?:a creature|an enemy|a foe) Grabbed|is grabbing a creature/i.test(match[1])) activity.requires = "grabbed";
             else if (/has a (?:free )?hand(?: free)?/i.test(match[1])) activity.requires = "free-hand";
             else if (!/is wielding|is holding/i.test(match[1])) return reject(text);
-        } else if (!opened && (match = /^The [^.]+? (?:(Strides(?: twice)?),? (?:and |then |and then )*)?(?:makes|attempts) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll))?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*)?\.$/i.exec(text)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(text.slice(text.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
+        } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides(?: twice| or Steps)?),? (?:and |then |and then )*)?(?:makes|attempts) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll))?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*)?\.$/i.exec(text)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(text.slice(text.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
+            // A move written into the subject ("The worm Burrows at least 10 feet and then attempts a jaws Strike"): read as a move.
+            const moving = !match[1] && /\b(?:Flies|Swims|Climbs|Burrows|Leaps|Steps|Strides)\b/.test(text.slice(0, text.search(/\b(?:makes|attempts)\b/i)));
+            const moved = moving ? moveThenStrike(text.replace(/(?:,| and)? (?:with|against) [^,.]*$/i, ".")) : null;
+            if (moving && !moved) return reject(text);
             opened = true;
-            activity.strides = match[1] ? (/twice/i.test(match[1]) ? 2 : 1) : 0;
-            activity.strike = match[2] && !/^(?:melee|weapon)$/i.test(match[2]) ? match[2].toLowerCase() : null;
+            activity.strides = moved ? moved.strides : match[1] ? (/twice/i.test(match[1]) ? 2 : 1) : 0;
+            activity.strike = match[2] && !/^(?:melee|weapon|unarmed)$/i.test(match[2]) ? match[2].toLowerCase() : null;
             if (match[3]) activity[/damage/i.test(match[4]) ? "damageBonus" : "attackBonus"] = Number(match[3]);
             if (/Grabbed|grabbing|Restrained/i.test(text)) activity.requires = "grabbed";
             else if (/\bProne (?:creature|foe|enemy)\b/i.test(text)) activity.requires = "prone";
+        } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides(?: twice| or Steps)?),? (?:and |then )+)?Strikes(?: with (?:its|his|her|their|that) ([\w' -]+?))?\.$/i.exec(text)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three)\b/i.test(text)) {
+            // "Viro Strikes with his longsword.", "The skirmisher Strides or Steps, then Strikes."
+            opened = true;
+            activity.strides = match[1] ? (/twice/i.test(match[1]) ? 2 : 1) : 0;
+            activity.strike = match[2] && !/^(?:melee|weapon|that weapon)$/i.test(match[2]) ? match[2].toLowerCase() : null;
+        } else if (!opened && (match = moveThenStrike(text))) {
+            // Other ways to move first (2026-10-10): "Flies up to double its fly Speed and then makes a talon Strike",
+            // "Uri Strides and makes a scimitar Strike at any point during the Stride", "Strides twice and makes a horn
+            // Strike against a foe within its reach at the end of the movement".
+            opened = true;
+            activity.strides = match.strides;
+            activity.strike = match.strike;
+        } else if (!opened && !flavorSkipped && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentence) && /^(?:The )?[A-Z][\w' -]*? [a-z]+s\b/.test(text)) {
+            // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
+            flavorSkipped = true;
+            continue;
         } else if (!opened) return reject(text);
         else if (/^The target is Off-Guard to the Strike\.$/i.test(text)) activity.offGuard = true;
+        // "This Strike deals an additional 3d6 precision damage." (only a hit deals it).
+        else if ((match = /^(?:This|The) Strike deals an? (?:additional|extra) (.+?) damage\.$/i.exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]));
+        // "This counts as two attacks for his multiple attack penalty."
+        else if ((match = /^This counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the [\w' -]+?'s) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
+        // "If this Strike hits, he deals an extra die of weapon damage."
+        else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (?:weapon )?die of (?:weapon )?(?:\\w+ )?damage\\.$`, "i").test(text)) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
         else if (/remains? hidden until after|^During the Stride/i.test(text)) continue;
         else if ((match = /^(?:If|As long as) (?:it|they|the [\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, (?:it gains|they gain) a \+(\d+) circumstance bonus to (?:its|their|this) attack roll\.$/i.exec(text))) activity.attackBonus += Number(match[1]);
         else if (/^(?:If|As long as) (?:it|they|the [\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, the Strike's damage (?:is increased to|increases to) /i.test(text)) activity.damage = inlineTags(sentence, "Damage").map(readDamage)[0] ?? /(?:to) (\d+d\d+(?:\s*[+-]\s*\d+)?)/i.exec(text)?.[1] ?? null;
         else if ((match = new RegExp(`${hit}(?:the [\\w ]+? )?(?:automatically )?push(?:es)? the target (\\d+) feet\\.$`, "i").exec(text)) || (match = new RegExp(`${hit}the target is pushed (\\d+) feet\\.$`, "i").exec(text))) activity.onHit.push = Number(match[1]);
-        else if ((match = new RegExp(`${hit}it deals an? (?:additional|extra) `, "i").exec(text)) && inlineTags(sentence, "Damage").length === 1 && /damage\.$/i.test(text)) activity.onHit.damage.push(readDamage(inlineTags(sentence, "Damage")[0]));
+        else if ((match = new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (.+?) damage\\.$`, "i").exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]));
         else if ((match = new RegExp(`${hit}(?:the target|that creature|the creature|the foe) is (.+?)\\.$`, "i").exec(text)) || (match = /^On a hit, (?:the target|the creature) is (.+?)\.$/i.exec(text))) {
             const [plain, critical] = match[1].split(/, or (?=[^,]+ on a critical hit$)/i);
             if (/push|Grab/i.test(plain) && !conditions(sentence).length) return reject(text);
@@ -610,7 +643,7 @@ function strikeActivity(item, actor) {
         } else return reject(text);
     }
     const rider = activity.onHit;
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus)) return null;
+    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length) return null;
     return activity;
 }

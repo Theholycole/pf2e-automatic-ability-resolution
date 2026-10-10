@@ -605,3 +605,20 @@ test("Strike abilities (2026-10-10, batch 6): follow-ups after a hit, several St
     // A Strike at each creature in reach.
     assert.deepEqual(multi("The test shambler makes a vine Strike against each creature within reach. Its multiple attack penalty increases only after all the attacks.", 2), { builtin: "multi-strike", actions: 2, strikes: ["vine"], each: true, sameMap: true });
 });
+
+test("moves before a Strike and more Strike activities (2026-10-10, batch 7)", () => {
+    const action = (name, html, actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const one = (name, text, actions) => compileMonsterAbility(action(name, `<p>${text}</p>`, actions));
+    // Other moves: a charge, after a sentence that only describes it.
+    assert.deepEqual(one("Test Dive", "The test osprey Flies up to double its fly Speed in a straight line, descending at least 10 feet, and then makes a talon Strike.", 2), { builtin: "charge", actions: 2, strides: 2, strike: "talon" });
+    assert.deepEqual(one("Test Slash", "Test Uri Strides and makes a scimitar Strike at any point during the Stride.", 1), { builtin: "charge", actions: 1, strides: 1, strike: "scimitar" });
+    assert.deepEqual(one("Test Lunge", "The test shark dashes forward and extends its jaws. The test shark Swims up to 10 feet and makes a jaws Strike against a foe within its reach.", 1), { builtin: "charge", actions: 1, strides: 1, strike: "jaws" });
+    // Strike activities: "This Strike deals an additional 3d6 precision damage", an extra weapon die, counted as two attacks.
+    const skirmish = one("Test Skirmish", "The test skirmisher Strides or Steps, then Strikes. This Strike deals an additional 3d6 precision damage.", 2);
+    assert.deepEqual([skirmish.builtin, skirmish.strides, skirmish.onHit.damage], ["strike-activity", 1, ["3d6[precision]"]]);
+    const power = one("Test Power", "Test Alak unleashes a mighty swing. He makes a melee Strike. This counts as two attacks when calculating his multiple attack penalty. If this Strike hits, he deals an extra die of weapon damage.", 2);
+    assert.deepEqual([power.builtin, power.countsAs, power.extraWeaponDice], ["strike-activity", 2, 1]);
+    // A move written into the subject is read as a move ("Burrows at least 10 feet and then attempts …").
+    const glide = one("Test Tunnel", "The test mole Burrows at least 10 feet and then attempts a claw Strike. If the Strike hits, it deals an additional 1d8 fire damage.", 2);
+    assert.deepEqual([glide.strides, glide.strike, glide.onHit.damage], [1, "claw", ["1d8[fire]"]]);
+});
