@@ -11,7 +11,7 @@
 //   the target's Reflex DC"): compiled as basic actions are.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
-import { STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, readCheck, readConditions, readDamage, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
+import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
 import { compileSkillAction } from "./checks.js";
 import { compileBuiltin } from "./builtins.js";
 import { compileAffliction } from "./afflictions.js";
@@ -52,7 +52,7 @@ function activationTime(item) {
 }
 
 function damageComponents(html) {
-    return inlineTags(html, "Damage").map((raw, index) => ({ id: String(index), formula: readDamage(raw), type: null, category: null }));
+    return inlineTags(html, "Damage").filter((raw) => !/\bhealing\b/i.test(raw)).map((raw, index) => ({ id: String(index), formula: readDamage(raw), type: null, category: null }));
 }
 
 // A rider: Grapple, Trip or Shove after a Strike that lists it, without the
@@ -228,40 +228,154 @@ function trample(item, actor) {
 //   A creature that fails its save is Slowed 1 for 1 round (or Slowed 2 on a critical failure)."
 // - "… must succeed at a @Check[reflex|dc:17] save or take @Damage[1d4[acid]] damage … (on a critical failure, the creature also falls Prone)."
 // Damage dealt before the save (a breath) is halved on a success, as a basic save. null when the text isn't one of these.
-function saveOrOutcomes(html, components, { afterHit = false } = {}) {
+// A save's results said in sentences after it (html from the check on).
+//   "…save, becoming Frightened 2 on a failure. On a critical failure, it's also Fleeing…"
+//   "…save. On a failure, the creature is Frightened 2; on a critical failure, it's Frightened 4."
+//   "…save. If it fails, it's Slowed 1 for 1 minute, and if it critically fails, it is instead Paralyzed…"
+//   "…save. On a success, the creature gains the Frightened 1 condition; on a failure, …"
+// → { failure: html | null, critical: { text, adds } | null, success: html | null }. A degree named inside
+// brackets ("Frightened 2 (Frightened 3 on a critical failure)") is left to the failure's own reading.
+const SUBJECT = String.raw`(?:it(?:'s| is)|it becomes|they are|they become|the (?:creature|target) (?:is|becomes)|a creature (?:is|becomes)|creatures are)`;
+// Who a result sentence is about: "A creature that fails", "Targets who critically fail their saving throw".
+const WHO = String.raw`(?:(?:A|Each|Any) (?:creature|target|foe|enemy)|(?:Creatures|Targets|Foes|Enemies|Those)|(?:and )?one)`;
+const FAIL_LEAD = new RegExp(String.raw`(?:On a (?:failure|failed save|failed or critically failed save)|If (?:it|they|the (?:creature|target)) fails?(?: (?:its|the|this|their) (?:save|saving throw))?|${WHO} (?:that|who) fails?(?: (?:its|the|this|their) (?:saves?|saving throws?))?)\s*,?\s*`, "i");
+const CRIT_LEAD = new RegExp(String.raw`(?:On a critical failure|On a critically failed save|If (?:it|they|the (?:creature|target)) critically fails?(?: (?:its|the|this|their) (?:save|saving throw))?|${WHO} (?:that|who) critically fails?(?: (?:its|the|this|their) (?:saves?|saving throws?))?)\s*,?\s*`, "i");
+const SUCCESS_LEAD = /(?:On a (?:success|successful save)|If (?:it|they|the (?:creature|target)) succeeds?(?: at (?:its|the|this|their) (?:save|saving throw))?)\s*,?\s*/i;
+function proseOutcomes(html, { criticalOnly = false } = {}) {
+    const text = String(html).replace(/<\/?(?:p|hr|strong|em)[^>]*>/gi, " ").replace(/\s+/g, " ");
+    // Brackets masked, so a degree named inside them isn't taken for a clause of its own.
+    const masked = text.replace(/\([^()]*\)/g, (group) => `(${"_".repeat(group.length - 2)})`);
+    // A lead that ends its sentence ("…2d6 bleed, or 4d6 bleed on a critical failure.") closes a clause rather than opening one.
+    const find = (lead) => {
+        for (const match of masked.matchAll(new RegExp(lead.source, "gi"))) {
+            if (!/^(?:[.;)]|$)/.test(masked.slice(match.index + match[0].length))) return { at: match.index, from: match.index + match[0].length };
+        }
+        return null;
+    };
+    const crit = find(CRIT_LEAD);
+    const succ = find(SUCCESS_LEAD);
+    // A clause runs to the end of its sentence or the next degree's lead.
+    const clause = (from) => {
+        let end = masked.slice(from).search(/(?<=[.;])\s|;/);
+        end = end < 0 ? text.length : from + end;
+        for (const other of [crit, succ]) if (other && other.at >= from && other.at < end) end = other.at;
+        return text.slice(from, end).replace(/[\s,;.]*(?:and|or)?[\s,;.]*$/i, "");
+    };
+    // "A creature is Dazzled for 1 round on a success, Blinded for 1 round on a failure, and blinded for 1 minute on
+    // a critical failure": each degree's own.
+    const listed = new RegExp(`${SUBJECT}\\s+(.+?) on a success, (.+?) on a failure,? and (.+?) on a critical failure\\b`, "i").exec(text);
+    if (listed) return { failure: `becomes ${listed[2]}`, critical: { text: listed[3], adds: false }, success: `becomes ${listed[1]}` };
+    let failure = null;
+    const becoming = /(?:saving throw|save),? becoming (.+?) on a failure\b/i.exec(text);
+    if (becoming) failure = becoming[1];
+    else {
+        const lead = find(FAIL_LEAD);
+        if (lead) failure = clause(lead.from).replace(new RegExp(`^${SUBJECT}\\s+`, "i"), "becomes ");
+    }
+    // Only a critical failure's rider ("Creatures that critically fail also take 5 persistent acid damage"), when asked.
+    if (!failure && !(criticalOnly && crit)) return { failure: null, critical: null, success: null };
+    // Left to the GM: a result about someone else ("the evangelist is Concealed from the creature"), or
+    // results that differ by creature type ("Humanoids that fail… Animals are…").
+    if (/^the (?!creature|target|victim)[\w' -]+? (?:is|becomes|gains)\b/i.test(htmlToPlainText(failure ?? clause(crit.from)).trim())) return { failure: null, critical: null, success: null };
+    if (/\b(?:Humanoids|Animals|Undead|Constructs|Plants|Fey|Beasts|Dragons|Fiends|Celestials|Elementals)\b (?:that|who|are|is)\b/.test(htmlToPlainText(text))) return { failure: null, critical: null, success: null };
+    // …or results that hang on the target's state ("if the creature was already Doomed, on a failed save, …").
+    if (/\bif (?:the creature|it|the target|they) (?:was|is|were|are) already\b|\bwhile already\b/i.test(htmlToPlainText(text))) return { failure: null, critical: null, success: null };
+    let critical = null;
+    if (crit) {
+        const raw = clause(crit.from);
+        const adds = new RegExp(`^(?:${SUBJECT}\\s+|(?:is|are|becomes?)\\s+)?also\\b`, "i").test(raw);
+        critical = { text: raw.replace(new RegExp(`^${SUBJECT}\\s+`, "i"), "").replace(/^(?:is|are|becomes?)\s+(?=also\b|instead\b)/i, "").replace(/^(?:also|instead)\s+/i, ""), adds };
+    }
+    const success = succ ? clause(succ.from) : null;
+    return { failure, critical, success };
+}
+
+// Words that say the save is for someone the ability affects, not the monster saving for itself
+// ("The golem attempts a Fortitude save", "Whenever a desa-desa takes electricity damage, it must attempt…").
+const TARGET_WORDS = /\b(?:creatures?|targets?|enem(?:y|ies)|foes?|victims?|each|all|any|anyone|those|characters?|PCs?|riders?|attackers?|triggering|ally|allies|living|someone)\b/i;
+
+function saveOrOutcomes(html, components, { afterHit = false, riders = false } = {}) {
     const sentences = String(html).replace(/<\/?p[^>]*>/gi, " ").split(/(?<=\.)\s+(?=[A-Z@<])/);
-    const index = sentences.findIndex((sentence) => /@Check\[(?:fortitude|reflex|will)/i.test(sentence));
+    const index = sentences.findIndex((sentence) => /@Check\[(?:type:)?(?:fortitude|reflex|will)/i.test(sentence));
     if (index < 0) return null;
     const upTo = htmlToPlainText(sentences.slice(0, index + 1).join(" "));
     // A save that follows a Strike's hit ("On a hit, …", "struck by this attack") or a death ("When the dancer dies"): not an action of its own.
-    if (!afterHit && /\bStrike\b|\bOn a (?:hit|success)\b|\bstruck by\b|\bhits\b/i.test(upTo)) return null;
+    if (!afterHit && !riders && /\bStrike\b|\bOn a (?:hit|success)\b|\bstruck by\b|\bhits\b/i.test(upTo)) return null;
     if (/\bWhen (?:a creature (?:slays|kills)|(?:the|this|a|an) [\w' -]+? (?:dies|is (?:killed|destroyed|slain))|killed)\b/i.test(upTo)) return null;
     // Damage before the save counts only in the save's own sentence ("dealing 6d6 damage in a cone (Will save)").
     const checkAt = sentences[index].search(/@Check\[/i);
     if (components.length && !/@Damage\[/i.test(sentences[index].slice(0, checkAt))) components = [];
-    let failure = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? null;
-    if (!failure) failure = /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? null;
-    if (!failure) return null;
+    // "must succeed at a … save or be …" (since 2026-10-10 also "must succeed a … saving throw or fall Prone").
+    const legacy = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? null;
+    let failure = legacy ?? /succeed(?: at)? an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? null;
+    // "On a failed save, the creature falls Prone; on a critical failure, it is Immobilized": the critical failure's own.
+    let legacyCritical = null;
+    const critAt = failure ? failure.search(/[;,]\s*(?:and )?(?:on a critical failure|on a critically failed save|if (?:it|they|the (?:creature|target)) critically fails?)\b/i) : -1;
+    if (critAt > 0) {
+        const raw = failure.slice(critAt).replace(/^[;,]\s*(?:and )?/, "").replace(CRIT_LEAD, "");
+        legacyCritical = { text: raw.replace(new RegExp(`^${SUBJECT}\\s+`, "i"), "").replace(/^(?:also|instead)\s+/i, ""), adds: new RegExp(`^(?:${SUBJECT}\\s+)?also\\b`, "i").test(raw) };
+        failure = failure.slice(0, critAt);
+    }
+    // The results said after the save (2026-10-10): "…save, becoming Frightened 2 on a failure", or the next
+    // sentences' "On a failure, …", "If it fails, …", "A creature who fails …", "…; on a critical failure, it's …".
+    let proseCritical = null;
+    let proseSuccess = null;
+    const after = [sentences[index].slice(sentences[index].search(/@Check\[/i)), ...sentences.slice(index + 1, index + 3)].join(" ");
+    if (!failure) {
+        const prose = proseOutcomes(after, { criticalOnly: riders });
+        failure = prose.failure;
+        proseCritical = prose.critical;
+        proseSuccess = prose.success;
+    } else if (!legacyCritical) {
+        // "…save or be Deafened for 1 round. On a critical failure, a creature is also Off-Guard for 1 round."
+        const next = sentences.slice(index + 1, index + 3).join(" ");
+        if (CRIT_LEAD.test(next)) proseCritical = proseOutcomes(next, { criticalOnly: true }).critical;
+    }
+    // A basic save's riders may be a critical failure's alone.
+    if (!failure && !(riders && proseCritical)) return null;
+    failure ??= "";
+    // The newer readings only for a save someone else makes (not "The golem attempts a Fortitude save"); a basic
+    // save's riders are its targets' already.
+    if (!legacy && !riders && !TARGET_WORDS.test(htmlToPlainText(`${sentences[index - 1] ?? ""} ${sentences[index].slice(0, sentences[index].search(/@Check\[/i))}`))) return null;
     // "(Stupefied 4 on a critical failure)" replaces; "(on a critical failure, the creature also falls Prone)" adds.
     let critical = null;
     let criticalAdds = false;
-    const replaced = /\((?:or )?([^()]+?) on a critical failure\)/i.exec(failure);
-    const added = /\(on a critical failure,? ([^()]+?)\)/i.exec(failure);
-    if (added) {
-        critical = added[1];
+    // A sentence of its own that adds to the critical failure ("Creatures that critically fail also take …") on top of
+    // the failure's own "(or Blinded on a critical failure)".
+    let extraCritical = null;
+    proseCritical ??= legacyCritical;
+    const replaced = /\((?:or )?([^()]+?) on (?:a )?critical failure\)/i.exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
+    const added = /\(on (?:a )?critical failure,? ([^()]+?)\)/i.exec(failure);
+    const bracket = added ? { text: added[1], adds: true } : replaced ? { text: replaced[1], adds: false } : null;
+    if (added) failure = failure.replace(added[0], "");
+    else if (replaced) failure = failure.replace(replaced[0], "");
+    const chosen = proseCritical && bracket && proseCritical.adds ? bracket : proseCritical ?? bracket;
+    if (chosen) {
+        critical = chosen.text;
+        criticalAdds = chosen.adds;
+        if (chosen === bracket && proseCritical) extraCritical = proseCritical.text;
+    }
+    // "(plus Slowed 1 as long as it's sickened on a critical failure)": in addition, not instead.
+    if (critical && !criticalAdds && /^\s*(?:plus|and also|also)\b/i.test(htmlToPlainText(critical))) {
         criticalAdds = true;
-        failure = failure.replace(added[0], "");
-    } else if (replaced) {
-        critical = replaced[1];
-        failure = failure.replace(replaced[0], "");
+        critical = critical.replace(/^\s*(?:plus|and also|also)\s+/i, "");
     }
     const read = (text) => readConditions(text, { plain: STAGE_CONDITIONS }).map((effect) => ({ ...effect, recipient: undefined })).map(({ recipient, ...effect }) => effect);
     const failEffects = read(failure);
     // "be automatically Shoved back 5 feet and knocked Prone"
-    const shoved = /\b(?:push(?:es|ed)?|shoved?)(?: back| away)? (?:up to )?(\d+) feet/i.exec(htmlToPlainText(failure.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")));
-    const failDamage = inlineTags(failure, "Damage").map((raw) => ({ formula: readDamage(raw) }));
+    const SHOVE = /\b(?:push(?:es|ed)?|shoved?)(?: back| away)?(?: from (?:the |its |their )?[\w' -]+?)? (?:up to )?(\d+) feet/i;
+    const shovedText = htmlToPlainText(failure.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const shovedMatch = SHOVE.exec(shovedText);
+    // Not a push the GM steers ("moved 20 feet in a direction of the dragon's choice", "toward the wall").
+    const shoved = shovedMatch && !OTHER_WAY.test(shovedText.slice(shovedMatch.index + shovedMatch[0].length)) ? shovedMatch : null;
+    // Not the monster's own healing ("Opkherab regains 3 Hit Points").
+    const failDamage = inlineTags(failure, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) }));
     const before = components.length && !failDamage.length;
-    if (!failEffects.length && !failDamage.length && !before && !shoved) return null;
+    // A critical failure's own damage: in addition when it says "also", otherwise in place of the failure's.
+    const critDamage = critical ? inlineTags(critical, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })) : [];
+    const extraDamage = extraCritical ? inlineTags(extraCritical, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })) : [];
+    const critFormulas = [...(criticalAdds ? [...failDamage, ...critDamage] : critDamage.length ? critDamage : failDamage), ...extraDamage];
+    if (!failEffects.length && !failDamage.length && !before && !shoved && !(riders && (critDamage.length || extraDamage.length || (critical && (read(critical).length || /\bpush|\bshove/i.test(critical)))))) return null;
     const row = (effects, damage, multiplier) => ({
         damage: before ? { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) } : damage.length ? { mode: "formulas", formulas: damage, rollScope: "outcome" } : { mode: "none", multiplier: 0, sourceComponentIds: [] },
         effects
@@ -271,17 +385,33 @@ function saveOrOutcomes(html, components, { afterHit = false } = {}) {
     // Not a fixed time for frightened, which fades by its own rule ("As failure, but Frightened 3" after
     // "…Fascinated until the end of its next turn"); "as long as it remains in the aura" still carries over.
     const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (effect.slug === "frightened" && lasting.mode === "fixed") ? effect : { ...effect, duration: lasting }));
-    // "(1 minute on a critical failure)": the failure's conditions, for longer.
-    const longer = critical && !criticalAdds ? /^(\d+) (round|minute|hour)s?$/i.exec(htmlToPlainText(critical).trim()) : null;
-    const critEffects = longer
-        ? failEffects.map((effect) => ({ ...effect, duration: { mode: "fixed", value: Number(longer[1]), unit: `${longer[2].toLowerCase()}s`, expiry: "turn-start", anchor: "effect-start" } }))
-        : critical ? (criticalAdds ? [...failEffects, ...read(critical)] : read(critical).length ? timed(read(critical)) : failEffects) : failEffects;
-    const pushed = (outcome) => (shoved ? { ...outcome, forcedMovement: { kind: "push", distance: Number(shoved[1]), upTo: false, optional: false, direction: "away" } } : outcome);
+    // "(1 minute on a critical failure)", "(2d4 rounds on a critical failure)", "on a critical failure, the duration is
+    // 1 minute": the failure's conditions, for longer.
+    const time = critical && !criticalAdds ? htmlToPlainText(critical).trim().replace(/^(?:the duration is|for)\s+/i, "") : null;
+    const longer = time && /^(?:\d+|\d+d\d+|\[\[[^\]]*\]\](?:\{[^}]*\})?) (?:round|minute|hour)s?$|^\[\[[^\]]*\]\]\{[^}]*\}$/i.test(time) ? readDuration(`for ${time}`) : null;
+    // A critical failure naming only conditions the failure has ("Frightened 2 (Frightened 4 on a critical failure)
+    // and Stunned 1", "…instead Doomed 2") swaps those and keeps the rest; one naming others replaces them all.
+    const critRead = critical && !criticalAdds ? read(critical) : [];
+    const swaps = critRead.length > 0 && critRead.every((effect) => failEffects.some((other) => other.slug === effect.slug));
+    const swapped = () => failEffects.map((effect) => {
+        const instead = critRead.find((other) => other.slug === effect.slug);
+        return instead ? timed([{ ...effect, ...instead, value: instead.value ?? effect.value, duration: instead.duration ?? effect.duration }])[0] : effect;
+    });
+    const critEffects = [...(longer
+        ? failEffects.map((effect) => (effect.slug === "prone" ? effect : { ...effect, duration: longer }))
+        : critical ? (criticalAdds ? [...failEffects, ...read(critical)] : critRead.length ? (swaps ? swapped() : timed(critRead)) : failEffects) : failEffects), ...(extraCritical ? read(extraCritical) : [])];
+    // "On a success, the creature gains the Frightened 1 condition" (2026-10-10).
+    const successEffects = proseSuccess ? read(proseSuccess) : [];
+    // "pushed 15 feet (30 feet on a critical failure)": farther on a critical failure.
+    // …or a push the critical failure names itself ("Creatures that critically fail are pushed 10 feet away").
+    const farther = critical && !criticalAdds ? /^(\d+) feet$/i.exec(htmlToPlainText(critical).trim()) : null;
+    const critShoved = critical && !farther ? SHOVE.exec(htmlToPlainText(critical.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"))) : null;
+    const pushed = (outcome, distance = shoved?.[1]) => (distance ? { ...outcome, forcedMovement: { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } } : outcome);
     return {
         criticalSuccess: row([], [], 0),
-        success: before ? row([], [], 0.5) : row([], [], 0),
+        success: before ? row(successEffects, [], 0.5) : row(successEffects, [], 0),
         failure: pushed(row(failEffects, failDamage, 1)),
-        criticalFailure: pushed(row(critEffects, failDamage, 2))
+        criticalFailure: pushed(row(critEffects, critFormulas, 2), farther?.[1] ?? critShoved?.[1] ?? shoved?.[1])
     };
 }
 
@@ -356,15 +486,104 @@ function strikeActivity(item, actor) {
 }
 
 // Breath weapons and other abilities with an inline save.
+// Unlinked condition names a result section is read for: not "controlled" ("a body directly controlled by the whale").
+const SECTION_CONDITIONS = STAGE_CONDITIONS.filter((slug) => slug !== "controlled");
+
+// One row's damage and another's together: formulas joined, shared damage with formulas as "mixed".
+function addDamage(first, second) {
+    if (!first || first.mode === "none") return second;
+    if (first.mode === "formulas" && second.mode === "formulas") return { ...first, formulas: [...first.formulas, ...second.formulas] };
+    if (first.mode === "shared" && second.mode === "formulas") return { mode: "mixed", shared: first, formulas: second.formulas, rollScope: "outcome" };
+    return second;
+}
+
+// The @Damage tags of a text, each masked as "\u0000n\u0000", so brackets around them can be read.
+function maskDamage(text) {
+    const tags = inlineTags(text, "Damage");
+    let masked = String(text);
+    tags.forEach((raw, index) => {
+        masked = masked.replace(`@Damage[${raw}]`, `\u0000${index}\u0000`);
+    });
+    return { masked, tags };
+}
+
+// Damage in brackets beside damage outside them is an alternative ("12d10 slashing (14d10 in its other form)"): left out.
+function withoutAlternatives(html) {
+    const { masked, tags } = maskDamage(html);
+    if (!/\u0000\d+\u0000/.test(masked.replace(/\([^()]*\)/g, ""))) return html;
+    return masked.replace(/\([^()]*\)/g, (group) => (/\u0000\d+\u0000/.test(group) && !/@Check\[/.test(group) ? "" : group)).replace(/\u0000(\d+)\u0000/g, (_match, index) => `@Damage[${tags[Number(index)]}]`);
+}
+
+// A basic save's own damage (2026-10-10): the @Damage before the check in the save's sentence, or after it
+// when there's none before, or else in the sentence before ("…deals 3d8 void damage. It must attempt a basic
+// Fortitude save"). Not healing, not an alternative in brackets ("8d6 (10d6 while it's charged)
+// damage"), not a rider after the save ("A creature that fails also takes 1d4 persistent acid", the riders'), not a
+// trigger's or requirement's ("Trigger An effect deals at least 8 electricity or 4 fire damage; Effect …"). null when the
+// damage is one of several ("12d12 acid, 12d12 cold or 12d12 electricity"); [] when there's none to find.
+function basicSaveDamage(html) {
+    const blocks = String(html).split(/<strong>\s*Effect\s*<\/strong>/i);
+    const effect = blocks.findLast((block) => /@Check\[(?:type:)?(?:fortitude|reflex|will)\b/i.test(block)) ?? blocks[blocks.length - 1];
+    const sentences = effect.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ").split(/(?<=\.)\s+(?=[A-Z@<])/);
+    const index = sentences.findIndex((sentence) => /@Check\[(?:type:)?(?:fortitude|reflex|will)\b/i.test(sentence));
+    if (index < 0) return [];
+    const own = (text) => {
+        const { masked, tags } = maskDamage(text);
+        // Damage in brackets beside damage outside them: an alternative ("8d6 (10d6 with … active)").
+        const outside = masked.replace(/\([^()]*\)/g, "");
+        const kept = /\u0000\d+\u0000/.test(outside) ? masked.replace(/\([^()]*\)/g, (group) => (/\u0000\d+\u0000/.test(group) && !/@Check\[/.test(group) ? "" : group)) : masked;
+        const found = [...kept.matchAll(/\u0000(\d+)\u0000/g)];
+        // Only in brackets, more than one ("the damage increases by 1d8 (2d8 with 2 actions, 3d8 with 3)"): alternatives.
+        if (found.length > 1 && !/\u0000\d+\u0000/.test(outside)) return null;
+        // Alternatives: "or" between two of them.
+        for (let at = 1; at < found.length; at++) if (/\bor\b/i.test(kept.slice(found[at - 1].index, found[at].index).replace(/\u0000\d+\u0000/g, ""))) return null;
+        return found.map((match) => tags[Number(match[1])]).filter((raw) => !/\bhealing\b/i.test(raw));
+    };
+    const sentence = sentences[index];
+    const at = sentence.search(/@Check\[/i);
+    // Damage that scales with something ("1d6 slashing damage per creature it has swallowed"): not one amount.
+    if (/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)? per\b/i.test(sentence)) return null;
+    // A type left to a choice ("The damage type depends on the color of the aeon star").
+    if (/\bdamage type depends on\b|\btype of damage (?:depends on|is chosen)\b/i.test(htmlToPlainText(html))) return null;
+    let tags = own(sentence.slice(0, at));
+    if (tags && !tags.length) tags = own(sentence.slice(at).split(/\b(?:on a (?:critical )?failure|if (?:it|they|the (?:creature|target)) (?:critically )?fails?|(?:a|each|any) creature (?:that|who)|creatures (?:that|who))\b/i)[0]);
+    if (tags && !tags.length && index > 0) tags = own(sentences[index - 1]);
+    return tags ? tags.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null })) : null;
+}
+
 function inlineSave(item, actor = null) {
     const html = item.system?.description?.value ?? "";
     const checks = inlineTags(html, "Check").map(readCheck).filter((check) => check.save && check.dc);
     if (!checks.length) return null;
     const check = checks[0];
-    const components = damageComponents(html.split(/<strong>\s*(?:Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/i)[0]);
+    // Two ways to use it, each with its own save ("The wyrm breathes in one of two ways"): the GM's.
+    if (new Set(checks.map((each) => each.statistic)).size > 1 && /\bin one of (?:two|three|four|the following) ways\b|\bone of the following (?:ways|modes|forms)\b|\bchooses? one effect\b/i.test(htmlToPlainText(html))) return null;
+    // One of several modes picked by the monster's state ("its attack depends on its current form").
+    if (/\bdepending on (?:its|their|the [\w' -]+?'s) (?:[\w-]+ )?(?:attunement|form|stance|mode|aspect)\b/i.test(htmlToPlainText(html))) return null;
+    // Damage by the number of actions spent ("The damage depends on the number of actions"): not one plan.
+    if (/\bdepends on the number of actions\b|\bfor each additional action\b/i.test(htmlToPlainText(html))) return null;
+    // An effect picked from a roll on a list ("Roll on the alchemical chambers list to determine which one shatters"): the GM's.
+    if (/\broll on (?:the|a|an|its) [^.]*?\b(?:list|table)\b|\broll [^.]*? to determine which\b/i.test(htmlToPlainText(html))) return null;
+    let components = damageComponents(withoutAlternatives(html.split(/<strong>\s*(?:Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/i)[0]));
     const sections = degreeSections(html);
+    const basicDamage = check.basic && components.length ? basicSaveDamage(html) : [];
     let outcomes;
-    if (check.basic && components.length) outcomes = basicRows(components.map((component) => component.id));
+    if (basicDamage?.length) {
+        components = basicDamage;
+        outcomes = basicRows(components.map((component) => component.id));
+        // What a failure or critical failure adds (2026-10-10): "A creature that fails its save is also Stupefied 1",
+        // "Creatures that critically fail also take 5 persistent acid damage", "also knocked Prone".
+        // Not when they're one of several effects to choose from ("chooses one of the following additional effects").
+        const riders = /\bchooses? one of the following\b|\bone of the following (?:additional )?effects\b/i.test(htmlToPlainText(html)) ? null : saveOrOutcomes(html, [], { riders: true });
+        if (riders) for (const degree of ["success", "failure", "criticalFailure"]) {
+            const rider = riders[degree];
+            const row = outcomes[degree];
+            row.effects = rider.effects;
+            if (rider.forcedMovement) row.forcedMovement = rider.forcedMovement;
+            // Not the save's own damage again ("must succeed at a basic Reflex save or take 6d6 sonic damage").
+            const extra = rider.damage?.mode === "formulas" ? rider.damage.formulas.filter((entry) => !components.some((component) => component.formula === entry.formula)) : [];
+            if (extra.length) row.damage = { mode: "mixed", shared: row.damage, formulas: extra, rollScope: "outcome" };
+        }
+    } else if (basicDamage === null && !Object.keys(sections).length) return null;
     else if (Object.keys(sections).length) {
         outcomes = {};
         for (const degree of ["criticalSuccess", "success", "failure", "criticalFailure"]) {
@@ -377,7 +596,8 @@ function inlineSave(item, actor = null) {
                 const plain = htmlToPlainText(section);
                 const multiplier = /double damage/i.test(plain) ? 2 : /full damage/i.test(plain) ? 1 : /half damage/i.test(plain) ? 0.5 : null;
                 if (multiplier !== null && components.length) row.damage = { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) };
-                row.effects = readConditions(section);
+                // Conditions named without links count too ("Failure The creature is slowed 1 for 1d4 rounds").
+                row.effects = readConditions(section, { plain: SECTION_CONDITIONS });
                 const push = readPush(section);
                 if (push) row.forcedMovement = push;
             }
@@ -391,8 +611,15 @@ function inlineSave(item, actor = null) {
             const copy = structuredClone(outcomes[like]);
             const linger = readLinger(text);
             if (linger) for (const effect of copy.effects) if (effect.duration?.mode === "in-aura") effect.duration = { ...effect.duration, after: linger };
+            // "As failure, but the duration is 1 minute", "…, but the effect lasts 10 minutes": the copied conditions, for that long.
+            const lasts = /\b(?:the duration is|(?:the )?(?:effect|condition)s? lasts?|lasting)\s+(?:for\s+)?((?:\d+|one|two|three|ten)\s+(?:round|minute|hour)s?\b|\[\[[^\]]*\]\](?:\{[^}]*\})?|\d+d\d+\s+(?:round|minute)s?\b)/i.exec(text);
+            const longer = lasts ? readDuration(`for ${lasts[1]}`) : null;
+            if (longer) for (const effect of copy.effects) if (effect.kind === "condition" && effect.slug !== "prone" && effect.duration?.mode !== "while") effect.duration = longer;
             const own = outcomes[degree];
-            outcomes[degree] = { ...copy, ...(own.damage?.mode !== "none" ? { damage: own.damage } : {}), effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects] };
+            // "As failure, plus 1d4 persistent fire damage": the failure's damage and this; otherwise this in its place.
+            const plus = new RegExp(`^As ${like},? (?:plus|and)\\b`, "i").test(text);
+            const damage = own.damage?.mode === "none" ? copy.damage : plus ? addDamage(copy.damage, own.damage) : own.damage;
+            outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects] };
         }
     } else {
         outcomes = saveOrOutcomes(html, components);
@@ -420,11 +647,24 @@ function inlineSave(item, actor = null) {
     };
 }
 
+// The item as the readers see it: one written in older inline syntax (other publishers' monsters)
+// with its text in PF2e's current form; PF2e's own items unchanged.
+function modernItem(item) {
+    const html = item.system?.description?.value;
+    if (typeof html !== "string") return item;
+    const modern = modernInline(html);
+    if (modern === html) return item;
+    const description = { ...item.system.description, value: modern };
+    const system = new Proxy(item.system, { get: (target, key) => (key === "description" ? description : Reflect.get(target, key)) });
+    return new Proxy(item, { get: (target, key) => (key === "system" ? system : Reflect.get(target, key)) });
+}
+
 // A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
-export function compileMonsterAbility(item, { basicActions = {}, actor = null } = {}) {
-    if (!item || (item.type !== "action" && item.type !== "feat")) return null;
+export function compileMonsterAbility(source, { basicActions = {}, actor = null } = {}) {
+    if (!source || (source.type !== "action" && source.type !== "feat")) return null;
+    const item = modernItem(source);
     const slug = glossarySlug(item);
     if (BUILT_IN.has(slug)) {
         const strike = slug === "rend" ? htmlToPlainText(item.system?.description?.value ?? "").split(/\n/)[0].trim() : null;

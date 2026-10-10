@@ -56,8 +56,10 @@ function saveBonuses(item) {
 }
 
 // "The frost drake makes two Fangs Strikes and one Tail Strike in any order." → ["fangs", "fangs", "tail"].
+// Also "…and one horn Strike. They can make these Strikes in any order." and "…, which they can make in any order."
 export function readMultiStrike(text) {
-    const match = /^The [^.]+? makes (a|an|one|two|three|four) ([\w' -]+?) Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: in any order)?\.$/i.exec(text.trim());
+    const trimmed = text.trim().replace(/,? which (?:it|they) can make in any order\.$/i, ".").replace(/\.\s+(?:It|They) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i, ".");
+    const match = /^The [^.]+? makes (a|an|one|two|three|four) ([\w' -]+?) Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: in any order)?\.$/i.exec(trimmed);
     if (!match) return null;
     const strikes = [];
     for (const [count, name] of [[match[1], match[2]], [match[3], match[4]]]) {

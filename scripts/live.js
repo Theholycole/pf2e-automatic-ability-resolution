@@ -355,7 +355,9 @@ async function applyChange(change, state) {
         case "condition": {
             if (change.slug === "persistent-damage") {
                 const DamageRoll = damageRollClass();
-                const roll = await new DamageRoll(`(${change.damage?.formula ?? change.damage?.amount ?? 1})[persistent,${change.damage?.type ?? "untyped"}]`).evaluate();
+                // Its dice ("1d4 bleed" rolls each round), unless a basic save halved or doubled the rolled amount.
+                const dice = change.damage?.dice?.length && !change.damage?.multiplier ? instanceFormula(change.damage) : null;
+                const roll = await new DamageRoll(`(${change.damage?.formula ?? dice ?? change.damage?.amount ?? 1})[persistent,${change.damage?.type ?? "untyped"}]`).evaluate();
                 await actor.applyDamage({ damage: roll, token: token ?? undefined });
                 return null;
             }
@@ -368,8 +370,10 @@ async function applyChange(change, state) {
             }
             // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
             if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {
-                await timedCondition(actor, change.slug, change.value, change.duration, state);
-                return `${target.name}'s ${change.slug} lasts ${durationText(change.duration, state.source.name)}`;
+                // "for 1d4 rounds": rolled for each creature.
+                const duration = change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration;
+                await timedCondition(actor, change.slug, change.value, duration, state);
+                return `${target.name}'s ${change.slug} lasts ${durationText(duration, state.source.name)}${change.duration.valueRoll ? ` (rolled ${change.duration.valueRoll})` : ""}`;
             }
             await setCondition(actor, change.slug, change.value);
             // "Fleeing for as long as it's frightened": the GM ends it with that condition.
@@ -534,6 +538,8 @@ async function setCondition(actor, slug, value) {
 }
 
 function durationText(duration, source) {
+    // Minutes and longer: the time itself ("1 minute"); the monster's turns only count rounds.
+    if (duration.unit && duration.unit !== "rounds") return `${duration.value} ${duration.value === 1 ? duration.unit.replace(/s$/, "") : duration.unit}`;
     if (duration.expiry === "turn-end") return duration.value === 0 ? `until the end of ${source}'s turn` : `until the end of ${source}'s next turn`;
     if (duration.expiry === "turn-start") return `until the start of ${source}'s turn ${duration.value === 1 ? "next round" : `in ${duration.value} rounds`}`;
     return `${duration.value} ${duration.unit}`;

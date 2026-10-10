@@ -1,6 +1,6 @@
 # PF2e Automatic Ability Resolution
 
-The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation for everything in PF2e that isn't a spell (basic actions, class features, feats, monster abilities, afflictions, non-spell consumables). It compiles them into plans for `pf2e-resolution-core`, which resolves them for live play and the PF2e Combat Simulator, the same way the spell module does.
+The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation for everything in PF2e that isn't a spell or an item (basic actions, class features, feats, monster abilities, afflictions). Items (consumables, weapons, armor, worn items) will get their own module later (the user, 2026-10-10). It compiles them into plans for `pf2e-resolution-core`, which resolves them for live play and the PF2e Combat Simulator, the same way the spell module does.
 
 - Plan and family order: [the simulator's docs/ability-module-plan.md](https://github.com/Theholycole/pf2e-combat-simulator/blob/main/docs/ability-module-plan.md)
 - Census of what there is to automate: [docs/census.md](docs/census.md), with raw data in `reports/census.json`
@@ -26,6 +26,15 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - Swallow Whole, Trample, Stench, and creature afflictions with their stages (`afflictions.js`)
   - Ferocity, Rend, Sneak Attack, Pack Attack, Regeneration, Fast Healing, Draconic Frenzy, Pounce, Draconic Momentum and save bonuses against magic are flagged as builtins for the simulator to play (`builtins.js`)
 - Compiling Monster Core 1–2 and NPC Core gives 922 plans from 5,796 abilities, with 200 more built in and no errors. Live-play confirmation cards come later.
+- **Other publishers' monsters** (2026-10-10): the Battlezoo bestiaries by Roll For Combat (Bestiary, Strange and Unusual, Elemental Storm, and the Battle, Fairy, Leshy and Misfit dragons) compile like PF2e's own.
+  - Their older inline syntax is read as PF2e's current syntax: `[[/r 2d6[fire]]]` damage rolls, `@Compendium[…]` links (by ID or by name), and "basic" written only in a check's label or before it.
+  - Of their 4,910 abilities, 1,353 get a card and 571 are built in. Before, it was 1,221 and 562, and some of those plans were wrong.
+  - Their text isn't copied here: the tests read the installed modules and are skipped without them.
+- **Readings shared by all monsters** (2026-10-10), which also changed about 1,300 plans in PF2e's own books:
+  - A basic save's damage is only the damage in the save's own sentence. Riders after it now count: "A creature that fails is also knocked Prone", "Creatures that critically fail also take 1d6 persistent fire".
+  - "For 1d4 rounds" is rolled when the card is applied; the simulator uses the average.
+  - The GM is left to decide abilities with several modes or a choice ("in one of two ways", "the damage depends on the number of actions", "Enfeebled 1, Clumsy 1, or Stupefied 1"), along with conditional and negated conditions.
+  - A push is played only when it's away from the monster.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

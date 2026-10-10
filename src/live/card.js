@@ -106,6 +106,13 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 lines.push(`${who} takes ${change.instances.map((instance) => `${instance.amount} ${instance.type}`).join(" and ")}`);
                 break;
             case "condition":
+                // "Valeros takes 1d4 persistent bleed" (the dice when they stand as rolled, else the amount).
+                if (change.slug === "persistent-damage") {
+                    const damage = change.damage ?? {};
+                    const dice = damage.dice?.length && !damage.multiplier ? [...damage.dice.map((term) => `${term.factor && term.factor !== 1 ? `${term.factor}×` : ""}${term.count}d${term.die}`), damage.constant ? String(damage.constant) : null].filter(Boolean).join("+") : null;
+                    lines.push(`${who} takes ${damage.formula ?? dice ?? damage.amount ?? "some"} persistent ${damage.type ?? "untyped"}`);
+                    break;
+                }
                 lines.push(`${who} is ${conditionLabel(change.slug)}${Number.isFinite(change.value) ? ` ${change.value}` : ""}${change.scope?.attacker ? ` to ${names[change.scope.attacker] ?? "one creature"}'s ${change.scope.uses === 1 ? "next " : ""}${change.scope.attacks === "melee" ? "melee " : ""}attack${change.scope.uses === 1 ? "" : "s"}` : ""}`);
                 break;
             case "move":
