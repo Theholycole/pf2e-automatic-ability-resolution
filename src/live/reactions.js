@@ -59,6 +59,11 @@ export function offerHTML(state) {
         if (state.kind === "ac") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(degreeWords(state.attack.after))}</button>`);
         if (state.kind === "misfortune") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the worse</button>`);
         if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at 1 HP</button>`);
+        // Retributive Strike: the ally's resistance, then a Strike at the foe if it's in reach.
+        if (state.kind === "retribution") {
+            for (const strike of state.strikes ?? []) buttons.push(`<button type="button" data-aar-reaction="strike" data-slug="${escape(strike.slug)}">Resist, then ${escape(strike.label)}</button>`);
+            buttons.push(`<button type="button" data-aar-reaction="use">Resist only</button>`);
+        }
         buttons.push(`<button type="button" data-aar-reaction="decline">Not now</button>`);
     }
     const detail = state.kind === "ac" ? `<p class="aar-hint">+${state.attack.value} AC against it turns ${escape(degreeWords(state.attack.before))} into ${escape(degreeWords(state.attack.after))}.</p>` : "";

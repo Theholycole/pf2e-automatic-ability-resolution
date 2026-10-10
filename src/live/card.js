@@ -40,6 +40,36 @@ export function createModeCard({ modes, ability, source, targets, warning = null
     };
 }
 
+// An ability whose result is a PF2e effect (Battle Cry, Raise Guard, Fiery Rhetoric): a card naming who gets it, with
+// the GM's Apply. targets: [{ actorUuid, tokenUuid, name, allied }] (allied: on the user's side); none when the
+// effect is the user's own.
+export function createEffectCard({ plan, ability, source, targets, warning = null }) {
+    const application = plan?.resolution?.applications?.[0];
+    if (plan?.resolution?.kind !== "effect" || !application) return null;
+    return {
+        version: CARD_VERSION,
+        kind: "effect",
+        modes: null,
+        ability: { name: ability?.name ?? plan?.source?.name ?? "Ability", uuid: ability?.uuid ?? plan?.source?.uuid ?? null, slug: abilitySlug(plan, ability?.name) },
+        source,
+        plan,
+        check: null,
+        warning,
+        targets: application.recipients === "self" ? [] : targets.map((target, index) => ({ id: `t${index}`, actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name, allied: Boolean(target.allied) })),
+        status: "open",
+        results: []
+    };
+}
+
+// Who an effect card's effect goes to, in words.
+export function effectRecipients(state) {
+    const application = state.plan?.resolution?.applications?.[0] ?? {};
+    const area = state.plan?.targeting?.area;
+    if (application.recipients === "self") return "on itself";
+    if (application.recipients === "allies-in-area") return area?.value ? `on its allies within ${area.value} feet (target them)` : "on the allies you target";
+    return "on the creature you target";
+}
+
 // The ability's slug, for its immunity effects and marks: PF2e's, or one from its name (most bestiary
 // abilities have none, and without it Apply couldn't record "immune to the Revenant's Baleful Shriek").
 export function abilitySlug(plan, name = null) {
@@ -107,6 +137,7 @@ export function checkLine(state) {
 // "apply") and data-target-id; the Foundry side shows each to whoever may press it.
 export function cardHTML(state) {
     if (state.kind === "modes") return modeCardHTML(state);
+    if (state.kind === "effect") return effectCardHTML(state);
     const rows = state.targets.map((target) => {
         // A save: the target's roll; a check: the user's roll against the target's DC.
         const roll = state.check.kind === "check" ? `${statisticLabel(state.check.statistic)} ${target.total} vs DC ${target.dc}` : `${target.total}`;
@@ -128,6 +159,22 @@ export function cardHTML(state) {
         : state.status === "open" ? `<p class="aar-actions">Actions spent: ${counts.map((count) => `<button type="button" data-aar-action="actions" data-actions="${count}" data-gm-only="true"${count === state.actions ? ' class="aar-chosen" disabled' : ""}>${count}</button>`).join("")}</p>`
         : `<p class="aar-actions">With ${escape(state.actions ?? counts[0])} action${(state.actions ?? counts[0]) === 1 ? "" : "s"}</p>`;
     return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong>${rider}<span class="aar-check">${escape(checkLine(state))}</span></header>${warning}${actions}${empty}<ul class="aar-targets">${rows}</ul>${results}${controls}</section>`;
+}
+
+// An effect card: the effect, who gets it, the targets (allies marked), Apply.
+function effectCardHTML(state) {
+    const application = state.plan?.resolution?.applications?.[0] ?? {};
+    const self = application.recipients === "self";
+    const allies = application.recipients === "allies-in-area";
+    const rows = state.targets.map((target) => `<li class="aar-target" data-target-id="${escape(target.id)}"><span class="aar-name">${escape(target.name)}</span><span class="aar-result">${allies && !target.allied ? "not an ally: left out" : target.allied ? "ally" : "foe"}</span></li>`).join("");
+    const ready = self || state.targets.some((target) => !allies || target.allied);
+    const controls = state.status === "open"
+        ? `<footer class="aar-controls">${self ? "" : `<button type="button" data-aar-action="targets" data-gm-only="true">Use my targets</button>`}<button type="button" data-aar-action="apply" data-gm-only="true"${ready ? "" : " disabled"}>Apply</button></footer>`
+        : "";
+    const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
+    const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";
+    const empty = self || state.targets.length ? "" : `<p class="aar-hint">No targets: target the creatures, then press Use my targets.</p>`;
+    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${escape(application.label ?? "Effect")} ${escape(effectRecipients(state))}</span></header>${warning}${empty}${rows ? `<ul class="aar-targets">${rows}</ul>` : ""}${results}${controls}</section>`;
 }
 
 // A choice of ways: a GM button for each ("Flame", "Weakening Gas (by hand)").
@@ -174,7 +221,8 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 }
                 // A dropped weapon is named by the Foundry side, which knows which one fell.
                 if (change.effect?.kind === "disarm" && change.effect.what === "weaken") lines.push(`${who}'s grip is weakened (−${change.effect.penalty ?? 2} to attacks with that weapon)`);
-                if (change.effect?.kind === "swallow") lines.push(`${who} is swallowed (grabbed and slowed 1; takes ${change.effect.damage} at the end of each of its turns${change.effect.rupture ? `; Rupture ${change.effect.rupture}` : ""}${change.effect.escapeDC ? `; Escape DC ${change.effect.escapeDC}` : ""})`);
+                if (change.effect?.kind === "native") lines.push(`${who} gets ${change.effect.label ?? "the effect"}`);
+                if (change.effect?.kind === "swallow") lines.push(`${who} is swallowed (grabbed and slowed 1; ${change.effect.damage ? `takes ${change.effect.damage}` : "no damage"} at the end of each of its turns${change.effect.rupture ? `; Rupture ${change.effect.rupture}` : ""}${change.effect.escapeDC ? `; Escape DC ${change.effect.escapeDC}` : ""})`);
                 break;
             case "note":
                 // By-hand instructions name the creatures: {source} uses the ability on {target}.

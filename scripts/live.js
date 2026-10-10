@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, changeLines, createCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, changeLines, createCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { applySwallow } from "./swallow.js";
 import { applyAuraCondition } from "./auras.js";
@@ -65,6 +65,12 @@ function targetEntry(token, check) {
     return entry;
 }
 
+// A target of an effect card: on the user's side or not (its token's disposition).
+function effectTarget(token, sourceToken) {
+    const disposition = (token.document ?? token).disposition;
+    return { actorUuid: token.actor.uuid, tokenUuid: token.document?.uuid ?? token.uuid ?? null, name: token.name ?? token.actor.name, allied: !!sourceToken && disposition === (sourceToken.document ?? sourceToken).disposition };
+}
+
 export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
@@ -100,6 +106,19 @@ async function cardForAbility(message) {
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;
     if (plan?.resolution && (plan.trigger?.event ?? "use") === "use" && cardCheck(plan)) {
         await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens: [...game.user.targets], warning });
+        return;
+    }
+    // A PF2e effect on itself, its allies or a target (Battle Cry, Fiery Rhetoric): the card applies it. Not its own
+    // self effect, which PF2e's card already applies.
+    if (plan?.resolution?.kind === "effect" && (plan.trigger?.event ?? "use") === "use" && !plan.resolution.applications.every((application) => application.selfEffect)) {
+        const state = createEffectCard({
+            plan,
+            ability: { name: item.name, uuid: item.uuid },
+            source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
+            targets: [...game.user.targets].map((token) => effectTarget(token, sourceToken)),
+            warning
+        });
+        if (state) await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
     }
     // Used in one of several ways (two breath weapons): the GM picks the way on the card.
@@ -253,6 +272,11 @@ async function press(message, action, targetId, data = {}) {
     if (action === "targets") {
         const tokens = [...game.user.targets];
         if (!tokens.length) throw new Error("Target the creatures first.");
+        if (state.kind === "effect") {
+            const sourceToken = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
+            const next = { ...state, targets: createEffectCard({ plan: state.plan, ability: state.ability, source: state.source, targets: tokens.map((token) => effectTarget(token, sourceToken)) }).targets };
+            return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+        }
         const kept = new Map(state.targets.map((target) => [target.tokenUuid ?? target.actorUuid, target]));
         const fresh = createCard({ plan: state.plan, ability: state.ability, source: state.source, targets: tokens.map((token) => targetEntry(token, state.check)) });
         const targets = fresh.targets.map((target) => {
@@ -297,12 +321,14 @@ const instanceFormula = (instance) => [...(instance.dice ?? []).map((term) => `$
 async function applyCard(message) {
     const state = stateOf(message);
     if (!state || state.status !== "open") return null;
-    if (!allRolled(state)) throw new Error("Not every target has rolled yet.");
+    if (state.kind !== "effect" && !allRolled(state)) throw new Error("Not every target has rolled yet.");
     const core = game.modules.get(CORE_ID)?.api;
     if (!core) throw new Error("The resolution core isn't active.");
     const caster = { id: "source" };
     const wrappers = state.targets.map((target) => ({ id: target.id }));
-    const context = { caster, targets: wrappers, id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 10 }), allied: () => false, ...(Number.isFinite(state.actions) ? { actions: state.actions } : {}) };
+    // Allies (an effect card's): on the user's side, as the card recorded.
+    const allied = (wrapper) => wrapper?.id === "source" || Boolean(state.targets.find((target) => target.id === wrapper?.id)?.allied);
+    const context = { caster, targets: wrappers, id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 10 }), allied, ...(Number.isFinite(state.actions) ? { actions: state.actions } : {}) };
     const rolled = [];
     const io = {
         roll: (_statistic, options) => {
@@ -428,6 +454,7 @@ async function applyChange(change, state) {
             if (change.effect?.kind === "swallow") return applySwallow(state, actor, change.effect);
             if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
             if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state);
+            if (change.effect?.kind === "native") return nativeEffect(actor, change.effect, state);
             return null;
         case "end": {
             // Escape: the user's grabbed or restrained ends (an effect granting it goes with it).
@@ -480,6 +507,20 @@ async function timedCondition(actor, slug, value, duration, state) {
 
 // A penalty or bonus from the result (Bon Mot's -2 status to Perception and
 // Will for 1 minute): a PF2e effect with that FlatModifier, for its duration.
+// A PF2e effect item (an effect card's): a copy on the creature, its origin the monster and its ability, so PF2e
+// counts "until the start of its next turn" on the monster's turns.
+async function nativeEffect(actor, effect, state) {
+    const template = await fromUuid(effect.uuid).catch(() => null);
+    if (!template) return `${actor.name}: ${effect.label ?? "the effect"} wasn't found; apply it by hand.`;
+    const source = template.toObject();
+    delete source._id;
+    source._stats = { ...(source._stats ?? {}), compendiumSource: effect.uuid };
+    source.system.context = { ...(source.system.context ?? {}), origin: { ...(source.system.context?.origin ?? {}), actor: state.source.actorUuid, token: state.source.tokenUuid ?? null, item: state.ability.uuid ?? null } };
+    source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true } };
+    await actor.createEmbeddedDocuments("Item", [source]);
+    return null;
+}
+
 async function penaltyEffect(actor, modifier, state) {
     const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const sign = modifier.value > 0 ? "+" : "−";

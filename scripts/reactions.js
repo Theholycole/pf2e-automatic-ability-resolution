@@ -12,6 +12,10 @@
 // - Challenge Fate: after a hit on it, a reroll keeping the worse (PF2e's own reroll).
 // - Death Frenzy: a Strike when reduced to 0 HP (at the GM's target).
 // - Ferocity: back to 1 HP, wounded +1, when reduced to 0 HP (not at wounded 3).
+// - Retributive Strike (a monster's, the glossary's): when PF2e applies damage to
+//   its ally and the creature whose turn it is (taken as the attacker) is a foe,
+//   both within 15 feet. Using it gives the ally back what its resistance
+//   (2 + the monster's level) would have kept off, then Strikes if in reach.
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
@@ -21,7 +25,7 @@ import { isActiveGM } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -38,8 +42,10 @@ export function setUpReactions({ compileItem }) {
     Hooks.on("createChatMessage", (message) => {
         if (isActiveGM()) serially("message", () => onMessage(message));
     });
-    Hooks.on("updateActor", (actor, changed) => {
+    Hooks.on("updateActor", (actor, changed, options) => {
         if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) serially("down", () => onDown(actor));
+        // PF2e's damage, with the amount it applied (not its undo).
+        if (isActiveGM() && options?.damageTaken > 0 && !options.damageUndo) serially("damaged", () => onDamaged(actor, options.damageTaken));
     });
     Hooks.on("renderChatMessageHTML", (message, html) => wire(message, html));
     for (const element of document.querySelectorAll("[data-message-id]")) {
@@ -189,8 +195,36 @@ async function onDown(actor) {
     }
 }
 
+// Damage on a monster's ally: Retributive Strike, against the creature whose turn it is when that's a foe.
+async function onDamaged(actor, amount) {
+    for (const token of actor.getActiveTokens(false, true)) {
+        const scene = token.parent;
+        const combat = scene && runningCombat(scene);
+        if (!combat || !inEncounter(combat).has(token.id)) continue;
+        const attacker = combat.combatant?.token;
+        if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
+        const grid = gridOf(scene);
+        for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
+            if (monster.id === token.id || monster.disposition !== token.disposition || !isFoe(monster, attacker)) continue;
+            const entry = reactions.find(({ plan }) => plan.builtin === "retributive-strike");
+            if (!entry) continue;
+            const distance = (other) => distanceFeet(box(monster, grid.size), box(other, grid.size), grid);
+            if (distance(token) > 15 || distance(attacker) > 15) continue;
+            const strikes = meleeStrikes(monsterActor, entry.item.name).filter((strike) => distance(attacker) <= strike.reach);
+            const resistance = entry.plan.resistance ?? 0;
+            const restore = Math.min(amount, resistance);
+            await offer({
+                kind: "retribution", item: entry.item, monster, actor: monsterActor, target: attacker, strikes,
+                trigger: `damaged ${token.name} (${amount})`,
+                note: `${token.name} resists ${restore} of it (resistance ${resistance}).${strikes.length ? "" : ` ${attacker.name} isn't in reach for a Strike.`}`,
+                retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore }
+            });
+        }
+    }
+}
+
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -206,6 +240,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         penalty,
         note,
         attack,
+        retribution,
         status: "open",
         result: null
     };
@@ -246,15 +281,19 @@ async function use(message, action, slug) {
     if (reactionUsed(actor)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
     let result;
     if (state.kind === "strike") {
-        const strike = actor.system.actions.find((entry) => entry.slug === slug);
-        if (!strike) throw new Error(`${state.monster.name} has no such Strike.`);
-        const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
-        if (target?.object) target.object.setTarget(true, { releaseOthers: true, groupSelection: false });
-        else if (!game.user.targets.size) throw new Error("Target a creature first.");
-        const modifiers = state.penalty ? [new game.pf2e.Modifier({ slug: "reaction-penalty", label: state.ability.name, modifier: -state.penalty, type: "untyped" })] : [];
-        // Shift skips PF2e's roll dialog when the GM shows it by default.
-        await strike.variants[0].roll({ event: new PointerEvent("click", { shiftKey: !!game.user.settings?.showCheckDialogs }), modifiers });
-        result = `${state.monster.name} Strikes with ${strike.label}.`;
+        result = await rollStrike(state, actor, slug);
+    } else if (state.kind === "retribution") {
+        // The resistance after the fact: the damage it would have kept off, back as Hit Points.
+        const ally = await fromUuid(state.retribution.ally.actorUuid);
+        const hp = ally?.system?.attributes?.hp;
+        const lines = [];
+        if (hp && state.retribution.restore > 0) {
+            const value = Math.min(hp.max, hp.value + state.retribution.restore);
+            await ally.update({ "system.attributes.hp.value": value });
+            lines.push(`${state.retribution.ally.name} resists ${state.retribution.restore} damage (back to ${value} HP).`);
+        }
+        if (action === "strike") lines.push(await rollStrike(state, actor, slug));
+        result = lines.join(" ") || "Nothing to resist.";
     } else if (state.kind === "ac") {
         result = `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
     } else if (state.kind === "misfortune") {
@@ -273,6 +312,19 @@ async function use(message, action, slug) {
     }
     await markUsed(actor, monster);
     return settle(message, state, "used", result);
+}
+
+// The monster's Strike at the offer's target (the GM's targets when it has none).
+async function rollStrike(state, actor, slug) {
+    const strike = actor.system.actions.find((entry) => entry.slug === slug);
+    if (!strike) throw new Error(`${state.monster.name} has no such Strike.`);
+    const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
+    if (target?.object) target.object.setTarget(true, { releaseOthers: true, groupSelection: false });
+    else if (!game.user.targets.size) throw new Error("Target a creature first.");
+    const modifiers = state.penalty ? [new game.pf2e.Modifier({ slug: "reaction-penalty", label: state.ability.name, modifier: -state.penalty, type: "untyped" })] : [];
+    // Shift skips PF2e's roll dialog when the GM shows it by default.
+    await strike.variants[0].roll({ event: new PointerEvent("click", { shiftKey: !!game.user.settings?.showCheckDialogs }), modifiers });
+    return `${state.monster.name} Strikes with ${strike.label}.`;
 }
 
 const settle = (message, state, status, result) => message.update({ content: offerHTML({ ...state, status, result }), [`flags.${MODULE_ID}.${FLAG}`]: { ...state, status, result } });

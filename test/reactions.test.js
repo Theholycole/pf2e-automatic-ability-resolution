@@ -41,3 +41,12 @@ test("the offer card: a button per Strike, a decline, and what it did", () => {
     const ac = offerHTML({ ...state, kind: "ac", ability: { name: "Nimble Dodge" }, attack: { value: 2, before: "success", after: "failure" } });
     assert.match(ac, /\+2 AC against it turns a hit into a miss/);
 });
+
+test("Retributive Strike's offer: resist then Strike, or resist only", () => {
+    const state = { kind: "retribution", ability: { name: "Retributive Strike" }, monster: { name: "Warden" }, target: { name: "Valeros" }, trigger: "damaged Guard (12)", strikes: [{ slug: "halberd", label: "Halberd" }], note: "Guard resists 8 of it (resistance 8).", retribution: { ally: { name: "Guard" }, restore: 8 }, status: "open", result: null };
+    const html = offerHTML(state);
+    assert.match(html, /data-aar-reaction="strike" data-slug="halberd">Resist, then Halberd</);
+    assert.match(html, /data-aar-reaction="use">Resist only</);
+    assert.match(html, /Guard resists 8 of it/);
+    assert.doesNotMatch(offerHTML({ ...state, status: "used", result: "Guard resists 8 damage (back to 40 HP)." }), /data-aar-reaction/);
+});

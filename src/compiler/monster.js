@@ -31,8 +31,9 @@ export function glossarySlug(item) {
 
 // Rules PF2e's own engine or the simulator already play: no plan needed.
 export const BUILT_IN = new Set(["attack-of-opportunity", "reactive-strike", "shield-block", "throw-rock", "ferocity", "rend"]);
-// Abilities that change nothing in a fight's numbers (Change Shape keeps the creature's Speed, attacks and damage).
-const NO_EFFECT = new Set(["change-shape"]);
+// Abilities that change nothing in a fight's numbers (Change Shape keeps the creature's Speed, attacks and damage; Form
+// Up only rearranges a troop's squares; Catch Rock guards against thrown rocks, which no party throws).
+const NO_EFFECT = new Set(["change-shape", "form-up", "catch-rock"]);
 
 function base(item, { time, traits = item?.system?.traits?.value ?? [] } = {}) {
     return {
@@ -58,10 +59,11 @@ function damageComponents(html) {
 // A rider: Grapple, Trip or Shove after a Strike that lists it, without the
 // multiple attack penalty; "improved" ones are free actions.
 function rider(item, slug, basicActions) {
-    const action = { grab: "grapple", "improved-grab": "grapple", knockdown: "trip", "improved-knockdown": "trip", push: "shove", "improved-push": "shove" }[slug];
+    const action = { grab: "grapple", "improved-grab": "grapple", knockdown: "trip", "improved-knockdown": "trip", push: "shove", "improved-push": "shove", pull: "reposition", "improved-pull": "reposition" }[slug];
     const plan = basicActions?.[action];
     if (!plan) return null;
-    const improved = slug.startsWith("improved-");
+    // Improved by its slug, or by its name when the slug is the plain one's ("Improved Pull 15 Feet", slug "pull").
+    const improved = slug.startsWith("improved-") || /^Improved\b/i.test(item?.name ?? "");
     const attackEffect = slug.replace(/^improved-/, "");
     const rider = structuredClone(plan);
     rider.source = { name: item?.name ?? slug, slug, uuid: item?.uuid ?? null, type: "action" };
@@ -69,7 +71,17 @@ function rider(item, slug, basicActions) {
     rider.trigger = { event: "strike", on: ["success", "criticalSuccess"], attackEffect, cost: improved ? "free" : "action", map: false };
     // "If Push lists a distance": the distance on a success (and a critical success pushes no less).
     // (In the name, "Push 15 feet", or the text.)
-    const distance = /\b(\d+) (?:feet|foot)\b/.exec(`${item?.name ?? ""} ${htmlToPlainText(item?.system?.description?.value ?? "")}`)?.[1];
+    const distance = /\b(\d+) ?(?:feet|foot|ft)\b/i.exec(`${item?.name ?? ""} ${htmlToPlainText(item?.system?.description?.value ?? "")}`)?.[1];
+    // Pull: a Reposition that moves the creature closer to the monster, 5 feet on a success (or the listed distance) and
+    // 10 on a critical success (no less than the listed one).
+    if (attackEffect === "pull") {
+        const outcomes = rider.resolution.outcomes;
+        const pull = (feet) => ({ kind: "pull", distance: feet, upTo: true, optional: false, direction: "toward" });
+        outcomes.success.forcedMovement = pull(Number(distance) || 5);
+        outcomes.criticalSuccess.forcedMovement = pull(Math.max(10, Number(distance) || 0));
+        delete outcomes.success.manualInstructions;
+        delete outcomes.criticalSuccess.manualInstructions;
+    }
     if (attackEffect === "push" && distance && rider.resolution.outcomes.success.forcedMovement) {
         rider.resolution.outcomes.success.forcedMovement.distance = Number(distance);
         const critical = rider.resolution.outcomes.criticalSuccess.forcedMovement;
@@ -180,13 +192,14 @@ function engulf(item, actor) {
     const html = item.system?.description?.value ?? "";
     const raw = inlineTags(html, "Check")[0];
     const check = raw ? readCheck(raw) : null;
-    const formula = damageComponents(html)[0]?.formula;
+    const formula = damageComponents(html)[0]?.formula ?? null;
     const escapeDC = Number(/\[\[\/act escape dc=(\d+)\]\]/i.exec(html)?.[1]) || null;
     const rupture = Number(/Rupture (\d+)/i.exec(htmlToPlainText(html))?.[1]) || null;
-    if (!check?.dc || !formula) return null;
+    // "…save, no damage, Escape DC 35, Rupture 28" (a water elemental vessel): engulfed, with no damage each turn.
+    if (!check?.dc || (!formula && !/\bno damage\b/i.test(htmlToPlainText(html)))) return null;
     const sizes = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
     const size = sizes[(actor ?? item.actor ?? item.parent)?.system?.traits?.size?.value] ?? "medium";
-    const engulfed = () => ({ damage: { mode: "formulas", formulas: [{ formula }], rollScope: "outcome" }, effects: [{ kind: "swallow", damage: formula, rupture, size, escapeDC }] });
+    const engulfed = () => ({ damage: formula ? { mode: "formulas", formulas: [{ formula }], rollScope: "outcome" } : none().damage, effects: [{ kind: "swallow", damage: formula, rupture, size, escapeDC }] });
     return {
         ...base(item),
         targeting: { target: "creatures whose space it moves through", range: null, area: null, trample: { size, strides: 2 } },
@@ -199,7 +212,9 @@ function engulf(item, actor) {
 function strikeComponents(item, name, actor) {
     const items = [...(actor?.items ?? item?.actor?.items ?? item?.parent?.items ?? [])];
     const wanted = name.trim().toLowerCase();
-    const strike = items.find((entry) => entry.type === "melee" && entry.name.toLowerCase() === wanted) ?? items.find((entry) => entry.type === "melee" && entry.name.toLowerCase().startsWith(wanted));
+    // The name, its start, or its last word ("blade" for a Dulled Blade).
+    const strike = items.find((entry) => entry.type === "melee" && entry.name.toLowerCase() === wanted) ?? items.find((entry) => entry.type === "melee" && entry.name.toLowerCase().startsWith(wanted))
+        ?? (wanted ? items.find((entry) => entry.type === "melee" && entry.name.toLowerCase().endsWith(` ${wanted}`)) : null);
     if (!strike) return [];
     return Object.values(strike.system?.damageRolls ?? {}).filter((roll) => roll?.damage).map((roll, index) => ({ id: String(index), formula: `(${roll.damage})[${roll.damageType ?? "untyped"}]`, type: null, category: roll.category ?? null }));
 }
@@ -211,9 +226,19 @@ function trample(item, actor) {
     const raw = inlineTags(html, "Check")[0];
     const check = raw ? readCheck(raw) : null;
     const first = htmlToPlainText(html.split(/<hr\s*\/?>/i)[0]);
-    const [sizeText, strikeName] = first.split(",").map((part) => part.trim());
+    let [sizeText, strikeName] = first.split(/[,;]/).map((part) => part.trim());
     // The damage itself in place of a Strike's name ("Large or smaller, @Damage[(2d6+2)[bludgeoning]], …").
-    const second = html.split(/<hr\s*\/?>/i)[0].replace(/<[^>]+>/g, "").split(/,\s*(?![^[]*\])/)[1] ?? "";
+    let second = html.split(/<hr\s*\/?>/i)[0].replace(/<[^>]+>/g, "").split(/[,;]\s*(?![^[]*\])/)[1] ?? "";
+    // The listing after other text ("Requirements … Effect As Trample, except … Huge or smaller, body, @Check…"), or
+    // written out ("creatures of size Small or smaller …, the damage of the headbutt Strike").
+    if (!sizeOf(sizeText ?? "")) {
+        const flat = html.split(/@Localize\[/i)[0].replace(/<[^>]+>/g, " ");
+        const listing = /\b((?:tiny|small|medium|large|huge|gargantuan) or smaller)\s*[,;]\s*(@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^,;@]*)/i.exec(flat);
+        const size = listing?.[1] ?? /\b((?:tiny|small|medium|large|huge|gargantuan) or smaller)\b/i.exec(flat)?.[1];
+        sizeText = size ?? sizeText;
+        second = listing?.[2] ?? "";
+        strikeName = listing ? htmlToPlainText(listing[2]).trim() : /\bdamage of (?:the|its) ([\w' -]+?) Strike\b/i.exec(htmlToPlainText(flat))?.[1] ?? null;
+    }
     const listed = /^\s*@Damage\[/.test(second) ? damageComponents(second) : [];
     // "hoof (3d6+6 damage; Prone creatures take 4d6+6 damage)": the Strike named before the brackets.
     const named = listed.length ? listed : strikeName ? strikeComponents(item, strikeName.replace(/\s*\(.*$/, ""), actor) : [];
@@ -894,7 +919,74 @@ function exposureSave(item, actor) {
     return exposes ? plan : null;
 }
 
-// A plan for an NPC ability, { builtin } for rules the simulator plays itself,
+// An ability whose one result is a PF2e effect item, linked in its text ("Effect: Battle Cry") or its own self effect
+// (PF2e's "Use" button), with nothing else to resolve: no check, damage, Strike, spell, choice, trigger or movement. A
+// plan of the core's effect family, { kind: "effect", applications: [{ kind: "native-spell-effect", uuid, label,
+// recipients }] }. Who gets it is read from the sentence that grants it ("… gains a +2 circumstance bonus to AC"):
+// - its self effect, or a sentence about the monster itself ("The swordkeeper raises …, gaining …"): the monster;
+// - many allies ("herself and all allies within 60 feet", "each ally within a 5-foot emanation"): its allies, in that
+//   emanation when one is given, else the GM's targets;
+// - one other creature ("an adjacent ally", "an enemy within 30 feet", "the construct gains"): the GM's target.
+// null otherwise.
+const EFFECT_LINK = /@UUID\[(Compendium\.[\w-]+\.(?:bestiary-effects|[\w-]*effects?)\.Item\.[A-Za-z0-9]{16})\](?:\{([^}]*)\})?/gi;
+const GRANTS = /\b(?:gains?|gaining|takes? an?|taking an?|grants?|granting|gives?|giving|becomes?|has|have)\b[^.]*?\b(?:bonus|penalty|resistance|weakness|temporary Hit Points|fast healing|regeneration|immun\w*|cover|Quickened|concealed|reach|Speeds?)\b/i;
+const OTHERS = /\b(?:all(?:y|ies)|allied|bodyguards?|minions?|companions?|host|rider|target|targets|creatures?|characters?|enem(?:y|ies)|foes?|constructs?|infantry)\b/i;
+const MANY_ALLIES = /\b(?:all|each|every|its|their|his|her|other|up to \w+|any number of)\b[^.]{0,30}?\b(?:all(?:y|ies)|allied)\b|\ballies\b/i;
+function effectAbility(item) {
+    const html = item.system?.description?.value ?? "";
+    const type = item.system?.actionType?.value;
+    if (!["action", "free"].includes(type) || /<strong>\s*Trigger\s*<\/strong>/i.test(html)) return null;
+    if (inlineTags(html, "Check").length || inlineTags(html, "Damage").length || /\[\[\//.test(html)) return null;
+    const links = [...html.matchAll(EFFECT_LINK)];
+    const own = item.system?.selfEffect?.uuid ?? null;
+    const uuids = [...new Set([...(own ? [own] : []), ...links.map((match) => match[1])])];
+    if (uuids.length !== 1) return null;
+    const label = links.find((match) => match[1] === uuids[0])?.[2] ?? item.name;
+    // The text without the effect's own link, an area kept as words ("within a 20-foot emanation").
+    const text = html.replace(EFFECT_LINK, "").replace(/(?:\ban?\s+)?@Template\[(?:type:)?(\w+)\|distance:(\d+)[^\]]*\](?:\{[^}]*\})?/gi, "a $2-foot $1").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1");
+    const plain = htmlToPlainText(text).replace(/\bEffect:\s*$/i, "").trim();
+    // Something else to do: a Strike, a check, a spell, a choice, movement, terrain, an area everyone's in.
+    if (/\bStrikes?\b|\bchecks?\b|\bDemoralize\b|\bone of the following\b|\b(?:its|the [\w' -]+?'s) choice\b|\bchooses?\b|\bcasts?\b|\bspells?\b|\bsummons?\b|\bteleports?\b|\b(?:Strides?|Steps?|Flies|Burrows?|Swims?|Leaps?)\b|\bterrain\b|\ball creatures in the area\b|\bsaving throw against\b/i.test(plain)) return null;
+    let recipients = "self";
+    let targeting = { target: null, range: null, area: null };
+    if (!own) {
+        // The sentence that grants it, and who it's about: what's given to ("grants an adjacent ally a +2 …", "gives
+        // themself and all orc allies …"), or the last clause before the verb ("When the swarm gets into formation, it gains").
+        const sentence = plain.split(/(?<=[.!?])\s+(?=[A-Z])/).find((part) => GRANTS.test(part));
+        if (!sentence) return null;
+        const match = GRANTS.exec(sentence);
+        const verb = match[0].split(/\s/)[0];
+        const clauses = sentence.slice(0, match.index).split(",");
+        // A pronoun after a clause that names the creature ("As long as the creature bears the sigil, it takes …").
+        const pronoun = /^\s*(?:it|they|he|she)\s*$/i.test(clauses.at(-1)) && OTHERS.test(clauses.slice(0, -1).join(","));
+        const about = /^(?:grants?|granting|gives?|giving)$/i.test(verb) ? sentence.slice(match.index + verb.length) : pronoun ? clauses.join(",") : clauses.at(-1);
+        // The allies' area, from that sentence or said of them ("all allies within 60 feet", "within a 30-foot emanation").
+        const area = /\ba (\d+)-foot (?:emanation|radius|aura)\b/i.exec(sentence)?.[1] ?? /\bwithin (\d+) feet\b/i.exec(sentence)?.[1]
+            ?? /\b(?:all(?:y|ies)|allied [\w-]+)\b[^.]*?\bwithin (?:a )?(\d+)(?:-foot\b| feet\b)/i.exec(plain)?.[1];
+        const within = Number(area) || null;
+        // One creature's range, from anywhere in the text ("an enemy within 30 feet. The target takes …").
+        const near = Number(/\bwithin (\d+) feet\b/i.exec(plain)?.[1]) || null;
+        const range = near ? `${near} feet` : /\badjacent\b|\btouch(?:es)?\b/i.test(plain) ? "touch" : null;
+        // Its own kind around it ("Each caligni within 30 feet", "All vescavor swarms within …") are its allies.
+        const kind = /^\s*(?:Each|All|Every) (?!creatures?\b|enem|foes?\b|targets?\b|living\b)[\w' -]+?\s+(?:within|in a \d+-foot)\b/i.test(about);
+        const allies = /\ball(?:y|ies)\b|\ballied\b/i.test(about);
+        if (kind || (allies && MANY_ALLIES.test(about) && !/\bone of\b/i.test(about))) {
+            recipients = "allies-in-area";
+            targeting = within ? { target: null, range: null, area: { type: "emanation", value: within } } : { target: "up to 6 creatures", range: null, area: null };
+        } else if (allies || OTHERS.test(about)) {
+            recipients = allies ? "allies-in-area" : "target";
+            targeting = { target: "1 creature", range, area: null };
+        }
+    }
+    return {
+        ...base(item),
+        targeting,
+        trigger: { event: "use" },
+        resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: uuids[0], label, recipients, ...(own ? { selfEffect: true } : {}) }] }
+    };
+}
+
+// A plan for an NPC ability, { builtin } for rules the simulator plays itself,// A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
 export function compileMonsterAbility(source, { basicActions = {}, actor = null } = {}) {
@@ -906,7 +998,12 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
         return { builtin: slug, ...(strike ? { strike } : {}) };
     }
     if (NO_EFFECT.has(slug)) return { builtin: "no-effect" };
-    if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push"].includes(slug)) return rider(item, slug, basicActions);
+    if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push", "pull", "improved-pull"].includes(slug)) return rider(item, slug, basicActions);
+    // Retributive Strike (the glossary's): as a champion's, the ally's resistance is 2 + the monster's level.
+    if (slug === "retributive-strike") {
+        const level = Number((actor ?? item.actor ?? item.parent)?.system?.details?.level?.value);
+        return { builtin: "retributive-strike", resistance: Number.isFinite(level) ? 2 + level : null };
+    }
     if (slug === "constrict" || slug === "greater-constrict") return constrict(item, { greater: slug === "greater-constrict" });
     if (slug === "frightful-presence") return frightfulPresence(item);
     if (slug === "stench") return stench(item);
@@ -928,7 +1025,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (exposure) return exposure;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item);
+    const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item) ?? effectAbility(item);
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     return plan;

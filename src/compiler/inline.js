@@ -65,6 +65,8 @@ export function modernInline(html) {
         .replace(/@Check\[((?![^\]]*\bbasic\b)[^\]]*)\](\{[^}]*\bbasic\b[^}]*\})/gi, "@Check[$1|basic]$2")
         .replace(/\[\[\/r(?:oll)? ((?:[^[\]]|\[[^[\]]*\])+?)\]\](?:\{([^}]*)\})?/g, (match, roll, label) => {
             const formula = roll.trim().replace(/^\{([\s\S]*)\}$/, "$1").trim();
+            // No type, but labelled as damage ("[[/r {1d8 + 8}]]{1d8 + 8 damage}"): untyped damage.
+            if (!formula.includes("#") && /^[\dd\s+\-*()]+$/i.test(formula) && /\dd\d/i.test(formula) && label && /\bdamage\s*$/i.test(label)) return `@Damage[(${formula.replace(/\s+/g, "")})[untyped]] damage`;
             if (formula.includes("#") || !/[\d)}]\s*\[[a-z]+(?:,\s*[a-z]+)*\]/i.test(formula)) return match;
             return `@Damage[${formula}]${label && /\bdamage\s*$/i.test(label) ? " damage" : ""}`;
         });

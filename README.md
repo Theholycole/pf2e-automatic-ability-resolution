@@ -41,6 +41,11 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - The card names, per target, what it leaves to the GM: damage that happens only "if…", splash on nearby creatures, results it can't apply (a creature that loses its reactions for a while).
   - Since batch 1's commit: PF2e's bestiaries give 8,051 cards (was 7,675) plus 52 cards with a choice of ways; Monster Core and NPC Core give 1,336 (was 1,278) plus 3. Battlezoo gives 1,348 plus 74 with a choice of ways (was 1,353, some of them only one of the ways).
   - See [docs/live-play.md](docs/live-play.md#abilities-with-several-ways-troops-action-counts-and-notes-for-the-gm-2026-10-10).
+- **Effects and glossary abilities** (2026-10-10, batch 4):
+  - An ability whose one result is a PF2e effect (Battle Cry, Raise Guard, Fiery Rhetoric) gets an effect card that applies it to the monster, its allies or a target, as its text says.
+  - Retributive Strike is offered to the GM when a foe damages the monster's ally; Pull is a rider like Push; Form Up and Catch Rock change nothing in a fight.
+  - Since batch 3's commit: 165 abilities apply an effect (27 of them in Monster Core and NPC Core, 9 Battlezoo), 90 more are built in, 19 more get a card.
+  - See [docs/live-play.md](docs/live-play.md#effects-retributive-strike-pull-and-other-glossary-abilities-2026-10-10-batch-4).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -106,3 +106,20 @@ test("damage by the number of actions: the GM picks 1, 2 or 3 actions on the car
     assert.match(cardHTML({ ...state, actions: 3, status: "applied" }), /With 3 actions/);
     assert.doesNotMatch(cardHTML(createCard({ plan: breath, ability: { name: "Avalanche Breath" }, source: { actorUuid: "Actor.d", name: "Dragon" }, targets: [] })), /aar-actions/);
 });
+
+test("an effect card: who gets the effect, allies marked, Apply", async () => {
+    const { createEffectCard } = await import("../src/live/card.js");
+    const plan = (recipients, area = null) => ({ source: { name: "Test Cry" }, targeting: { target: null, range: null, area }, resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: "Compendium.pf2e.bestiary-effects.Item.AAAAAAAAAAAAAAA4", label: "Effect: Test Cry", recipients }] } });
+    const source = { actorUuid: "Actor.c", tokenUuid: null, name: "Chief" };
+    const allies = createEffectCard({ plan: plan("allies-in-area", { type: "emanation", value: 60 }), ability: { name: "Test Cry" }, source, targets: [{ actorUuid: "Actor.o", name: "Orc", allied: true }, { actorUuid: "Actor.v", name: "Valeros", allied: false }] });
+    const html = cardHTML(allies);
+    assert.match(html, /Effect: Test Cry on its allies within 60 feet/);
+    assert.match(html, /Orc<\/span><span class="aar-result">ally/);
+    assert.match(html, /Valeros<\/span><span class="aar-result">not an ally: left out/);
+    assert.match(html, /data-aar-action="apply" data-gm-only="true">Apply/);
+    // On itself: no targets, Apply at once.
+    const self = createEffectCard({ plan: plan("self"), ability: { name: "Test Guard" }, source, targets: [{ actorUuid: "Actor.v", name: "Valeros" }] });
+    assert.deepEqual(self.targets, []);
+    assert.doesNotMatch(cardHTML(self), /Use my targets|disabled/);
+    assert.deepEqual(changeLines([{ op: "effect", target: "source", effect: { kind: "native", uuid: "x", label: "Effect: Test Guard" } }], { source: "Chief" }), ["Chief gets Effect: Test Guard"]);
+});

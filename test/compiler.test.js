@@ -498,3 +498,53 @@ test("ways and action counts (2026-10-10, batch 3): modes, troops, results only 
     assert.deepEqual([spew.trigger.event, spew.resolution.check.statistic, outcomes(spew).criticalFailure.damage.multiplier], ["use", "reflex", 2]);
     assert.deepEqual(outcomes(spew).failure.manualInstructions, ["{target} is exposed to Test Rot: a DC 22 Fortitude save against it (its stages are in the ability's text)."]);
 });
+
+test("glossary abilities (2026-10-10, batch 4): Pull, Trample's other listings, Engulf with no damage, Retributive Strike", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const glossary = (key) => `<p>@Localize[PF2E.NPC.Abilities.Glossary.${key}]</p>`;
+    const action = (name, html, { actionType = "action", slug = null, actions = 1 } = {}) => ({ type: "action", name, system: { slug, actionType: { value: actionType }, actions: { value: actionType === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const strike = (name, damage) => ({ type: "melee", name, system: { damageRolls: { a: { damage, damageType: "bludgeoning" } } } });
+    const actor = (name, level, strikes = []) => ({ name, system: { details: { level: { value: level } }, traits: { size: { value: "lg" } } }, items: strikes });
+    // Pull: a Reposition toward the monster, 5 feet (or the listed distance) on a success, 10 or more on a critical success.
+    const pull = compileMonsterAbility(action("Pull", glossary("Pull"), { slug: "pull" }), { basicActions });
+    assert.deepEqual([pull.trigger.attackEffect, pull.trigger.cost, pull.resolution.outcomes.success.forcedMovement.kind, pull.resolution.outcomes.success.forcedMovement.distance, pull.resolution.outcomes.criticalSuccess.forcedMovement.distance], ["pull", "action", "pull", 5, 10]);
+    const far = compileMonsterAbility(action("Improved Pull 15 Feet", `<p>The test lord uses Pull.</p>${glossary("Pull")}`, { slug: "pull", actionType: "free" }), { basicActions });
+    assert.deepEqual([far.trigger.cost, far.resolution.outcomes.success.forcedMovement.distance, far.resolution.outcomes.criticalSuccess.forcedMovement.distance], ["free", 15, 15]);
+    assert.equal(compileMonsterAbility(action("Push 10ft", glossary("Push"), { slug: "push" }), { basicActions }).resolution.outcomes.success.forcedMovement.distance, 10);
+    // Trample listed with semicolons, after other text, or written out; a Strike found by its last word.
+    const centaur = actor("Test Centaur", 4, [strike("Iron Hoof", "1d10+5")]);
+    const semi = compileMonsterAbility(action("Trample", `<p>Medium or Smaller; Hoof; @Check[reflex|dc:21|basic]</p>${glossary("Trample")}`, { slug: "trample", actions: 3 }), { actor: centaur });
+    assert.deepEqual([semi.targeting.trample.size, semi.resolution.sharedDamage.components[0].formula], ["medium", "(1d10+5)[bludgeoning]"]);
+    const wheel = compileMonsterAbility(action("Test Wheel", `<p><strong>Requirements</strong> It is rolling.</p><hr /><p><strong>Effect</strong> As Trample, except it Flies. Huge or smaller, hoof, @Check[reflex|dc:30|basic]</p>${glossary("Trample")}`, { slug: "trample", actions: 3 }), { actor: centaur });
+    assert.equal(wheel.targeting.trample.size, "huge");
+    const prose = compileMonsterAbility(action("Trample", `<p>It Strides through creatures of size Small or smaller. It deals the damage of the hoof Strike, with a basic Reflex save at @Check[reflex|dc:14|basic]</p><hr />${glossary("Trample")}`, { slug: "trample", actions: 3 }), { actor: centaur });
+    assert.deepEqual([prose.targeting.trample.size, prose.resolution.sharedDamage.components[0].formula], ["small", "(1d10+5)[bludgeoning]"]);
+    // Engulf with no damage: engulfed all the same, nothing each turn.
+    const vessel = compileMonsterAbility(action("Engulf", `<p>@Check[reflex|dc:35] save, no damage, [[/act escape dc=35]], Rupture 28</p>${glossary("Engulf")}`, { slug: "engulf", actions: 2 }), { actor: actor("Test Vessel", 10) });
+    assert.deepEqual([vessel.resolution.outcomes.failure.damage.mode, vessel.resolution.outcomes.failure.effects[0].damage, vessel.resolution.outcomes.failure.effects[0].rupture], ["none", null, 28]);
+    // An untyped roll labelled as damage ("[[/r {1d8 + 8}]]{1d8 + 8 damage}").
+    const constrict = compileMonsterAbility(action("Constrict", `<p>[[/r {1d8 + 8}]]{1d8 + 8 damage}, @Check[type:fortitude|dc:23] save</p>${glossary("Constrict")}`, { slug: "constrict" }));
+    assert.equal(constrict.resolution.sharedDamage.components[0].formula, "(1d8+8)[untyped]");
+    // Retributive Strike: the ally's resistance is 2 + the monster's level; Form Up and Catch Rock change nothing in a fight.
+    assert.deepEqual(compileMonsterAbility(action("Retributive Strike", glossary("RetributiveStrike"), { actionType: "reaction" }), { actor: actor("Test Warden", 6) }), { builtin: "retributive-strike", resistance: 8 });
+    for (const key of ["FormUp", "CatchRock"]) assert.equal(compileMonsterAbility(action(key, glossary(key))).builtin, "no-effect");
+});
+
+test("abilities whose result is a PF2e effect (2026-10-10, batch 4): on itself, its allies, or a target", () => {
+    const effect = (id, label) => `@UUID[Compendium.pf2e.bestiary-effects.Item.${id}]{${label}}`;
+    const action = (name, html, { actionType = "action", selfEffect = null } = {}) => ({ type: "action", name, system: { slug: null, actionType: { value: actionType }, actions: { value: actionType === "action" ? 1 : null }, traits: { value: [] }, description: { value: html }, ...(selfEffect ? { selfEffect: { uuid: selfEffect, name: "Effect" } } : {}) } });
+    const read = (plan) => plan && [plan.resolution.kind, plan.resolution.applications[0].recipients, plan.targeting.target, plan.targeting.range, plan.targeting.area?.value ?? null];
+    // Itself: "gaining a +2 circumstance bonus to AC"; "When the swarm forms up, it gains …"; its PF2e self effect.
+    assert.deepEqual(read(compileMonsterAbility(action("Test Guard", `<p>The test knight raises its blade to protect itself, gaining a +2 circumstance bonus to AC until the start of its next turn.</p><p>${effect("AAAAAAAAAAAAAAA1", "Effect: Test Guard")}</p>`))), ["effect", "self", null, null, null]);
+    assert.deepEqual(read(compileMonsterAbility(action("Test Formation", `<p>When the test swarm closes ranks, it gains a +2 circumstance bonus to AC.</p><p>${effect("AAAAAAAAAAAAAAA2", "Effect: Test Formation")}</p>`))), ["effect", "self", null, null, null]);
+    const own = compileMonsterAbility(action("Test Shields", "<p>The troop raises its shields.</p>", { selfEffect: "Compendium.pf2e.bestiary-effects.Item.AAAAAAAAAAAAAAA3" }));
+    assert.deepEqual([...read(own), own.resolution.applications[0].selfEffect], ["effect", "self", null, null, null, true]);
+    // Its allies in an emanation; one adjacent ally; its own kind around it.
+    assert.deepEqual(read(compileMonsterAbility(action("Test Cry", `<p>The test chief gives themself and all allies within 60 feet a +1 status bonus to attack and damage rolls until the start of its next turn.</p><p>${effect("AAAAAAAAAAAAAAA4", "Effect: Test Cry")}</p>`))), ["effect", "allies-in-area", null, null, 60]);
+    assert.deepEqual(read(compileMonsterAbility(action("Test Defense", `<p>The test guard grants an adjacent ally a +2 circumstance bonus to AC.</p><p>${effect("AAAAAAAAAAAAAAA5", "Effect: Test Defense")}</p>`))), ["effect", "allies-in-area", "1 creature", "touch", null]);
+    assert.deepEqual(read(compileMonsterAbility(action("Test Call", `<p>Each test goblin within @Template[emanation|distance:30] gains a +2 status bonus to attack rolls.</p><p>${effect("AAAAAAAAAAAAAAA6", "Effect: Test Call")}</p>`))), ["effect", "allies-in-area", null, null, 30]);
+    // Another creature: "an enemy within 30 feet. The target takes a –2 status penalty …".
+    assert.deepEqual(read(compileMonsterAbility(action("Test Taunt", `<p>The test bard mocks an enemy within 30 feet. The target takes a –2 status penalty to Will saves for 1 minute.</p><p>${effect("AAAAAAAAAAAAAAA7", "Effect: Test Taunt")}</p>`))), ["effect", "target", "1 creature", "30 feet", null]);
+    // Not when there's more to it: a Strike, a check, a choice, a trigger, movement.
+    for (const html of ["<p>The test knight makes a Strike, then gains a +2 circumstance bonus to AC.</p>", "<p>It attempts an Intimidation check; on a success it gains a +1 status bonus.</p>", "<p>The test knight Strides, then gains a +2 circumstance bonus to AC.</p>"]) assert.equal(compileMonsterAbility(action("Test Busy", `${html}<p>${effect("AAAAAAAAAAAAAAA8", "Effect: Test Busy")}</p>`)), null, html);
+});
