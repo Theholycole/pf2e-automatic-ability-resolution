@@ -1286,6 +1286,9 @@ const DAMAGE_WORDS = /\b(bludgeoning|piercing|slashing|physical|fire|cold|acid|e
 const ATTACKER = /\b(?:attacker|assailant|tormentor|triggering|creature (?:who|that) (?:dealt|made|hit|damaged|attacked)|that creature)\b/i;
 
 export function readReactionTrigger(text) {
+    // Batch 22: Reactive Strike's triggers, with results of its own (on the whole text: its ", or …" are its triggers).
+    const provoked = provokeTrigger(String(text ?? "").trim().replace(/[.;]\s*$/, ""));
+    if (provoked) return provoked;
     const trigger = String(text ?? "").trim().replace(/[.;]\s*$/, "").replace(/, or\b.*$/i, "");
     const types = (words) => {
         const found = [...String(words ?? "").matchAll(DAMAGE_WORDS)].map((match) => match[1].toLowerCase());
@@ -1454,6 +1457,48 @@ function ownStrikePassive(item, plan) {
     return { ...plan, targeting: { target: "the creature the Strike hits", range: "touch", area: null }, trigger: { ...plan.trigger, event: "own-strike", on, ...(weapon ? { weapon } : {}), ...(strike ? { strike } : {}) } };
 }
 
+// A reaction to a creature acting near it, as Reactive Strike's triggers go, with results of its own (2026-10-10, batch 22): "A
+// creature within the razorbones' reach uses a manipulate action or a move action or leaves a square during a move action it's
+// using", "An enemy within 5 feet of the arboreal copse uses …, makes a ranged attack, or …", "A creature within 30 feet
+// Strides", "A creature the brine dragon observes within 30 feet uses a concentrate action", "A creature enters the
+// thunderbird's reach or uses a move action within their reach", "A creature moves adjacent to the pakalchi".
+// { event: "provoke", reaction: true, triggers: ["move", "leave", "enter", "manipulate", "ranged", "concentrate"], within: feet |
+// "reach" }. Not one in a place ("in area A7", "in the bridge's area", an aura it leaves).
+function provokeTrigger(text) {
+    const trigger = String(text).replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action");
+    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: within (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|${SELF}'s? reach|reach|(${SELF}))(?: of ${SELF})?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves)\b.*)$`).exec(trigger);
+    if (!subject) return null;
+    const rest = subject[6];
+    const triggers = new Set();
+    // (Within the swarm, "adjacent": 5 feet.)
+    let within = subject[1] || subject[5] || subject[4] ? 5 : Number(subject[2] ?? subject[3]) || (/ within [^ ]+? reach| within reach/.test(trigger.slice(0, trigger.length - rest.length)) ? "reach" : null);
+    for (const part of rest.split(/,? or |, /).map((piece) => piece.trim()).filter(Boolean)) {
+        if (/^uses? (?:a |an )?manipulate-or-move action$/i.test(part)) triggers.add("manipulate").add("move");
+        else if (new RegExp(String.raw`^leaves? a (?:square|space) within ${SELF}'s? reach$`).test(part)) {
+            triggers.add("leave");
+            within ??= "reach";
+        }
+        else if (/^(?:uses? )?(?:a |an )?(manipulate|move|concentrate) action$/i.test(part)) triggers.add(/manipulate/i.test(part) ? "manipulate" : /concentrate/i.test(part) ? "concentrate" : "move");
+        else if (/^(?:uses? )?an action (?:with|that has) the (manipulate|move|concentrate) trait$/i.test(part)) triggers.add(/manipulate/.test(part) ? "manipulate" : /concentrate/.test(part) ? "concentrate" : "move");
+        else if (/^makes? a ranged attack$/i.test(part)) triggers.add("ranged");
+        else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during a move action)?$/i.test(part)) triggers.add("leave");
+        else if (/^Strides$/.test(part)) triggers.add("move");
+        else if (new RegExp(String.raw`^enters ${SELF}'s? reach$`).test(part)) {
+            triggers.add("enter");
+            within ??= "reach";
+        } else if (/^uses? a move action within (?:their|its|his|her) reach$/i.test(part)) {
+            triggers.add("move");
+            within ??= "reach";
+        } else if (new RegExp(String.raw`^moves adjacent to ${SELF}$`).test(part)) {
+            triggers.add("enter");
+            within = 5;
+        } else return null;
+    }
+    if (!triggers.size) return null;
+    // "A creature leaves a space within Kas Xi Rai's reach".
+    return { event: "provoke", reaction: true, triggers: [...triggers], within: within ?? "reach" };
+}
+
 // "targets the hound with a mental effect" (2026-10-10, batch 17): { event: "targeted-by", traits, spells? } (spells: any spell
 // too, "with a mental effect or spell"); null for anything else ("a divination spell that has the mental trait").
 const TRAIT_WORDS = new Set(["mental", "auditory", "linguistic", "emotion", "fear", "visual", "sonic", "olfactory"]);
@@ -1494,7 +1539,7 @@ function reactionTrigger(item, plan) {
     // (The creature that set it off when it targets one creature: the one attacking it, starting its turn near it.)
     // (Not "chooses a different creature … and attempts to swap places with that creature".)
     const other = /\b(?:a different|another) creature\b/i.test(effect);
-    const single = !other && ["attacked", "turn-start"].includes(trigger.event) && plan.targeting?.target === "1 creature";
+    const single = !other && ["attacked", "turn-start", "provoke"].includes(trigger.event) && plan.targeting?.target === "1 creature";
     const onAttacker = !other && !["death", "own-strike", "initiative"].includes(trigger.event) && !plan.targeting?.area && (single || ATTACKER.test(effect) || /^the creature$/i.test(first));
     const around = !plan.targeting?.area && !onAttacker && trigger.event !== "own-strike" ? (/^(?:all |each )?adjacent creatures\b/i.test(first) || /\b(?:on|to|all|each) adjacent creatures\b/i.test(effect) ? 5 : Number(/(?:\b(?:any|each|every|all) (?:[\w-]+ )?creatures?|(?:^|[.!?]\s+)Creatures) within (\d+) feet\b/i.exec(effect)?.[1]) || null) : null;
     // Its own Strike's: on the creature it hit, or around it ("a blast of lightning in a 10-foot burst centered on the target").

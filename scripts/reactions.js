@@ -124,6 +124,19 @@ async function onMove(token, movement) {
     const squares = path.length - 1;
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
+        // Tentacle Trip, Ectoplasmic Filaments, Entangling Train: leaving a square within its distance, moving within it, or
+        // coming into it (batch 22).
+        const own = reactions.find(({ plan }) => {
+            const trigger = plan.trigger;
+            if (!trigger?.reaction || trigger.event !== "provoke") return false;
+            const radius = provokeRadius(actor, trigger.within);
+            const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= radius);
+            return (trigger.triggers.includes("leave") && leftReach(insides)) || (trigger.triggers.includes("move") && insides.some(Boolean)) || (trigger.triggers.includes("enter") && !insides[0] && insides.some(Boolean));
+        });
+        if (own) {
+            await offer({ kind: "card", item: own.item, monster, actor, target: token, trigger: `moved within ${typeof own.plan.trigger.within === "number" ? `${own.plan.trigger.within} feet` : "its reach"}`, free: !!own.plan.trigger.free, note: squares === 1 ? "If this was a Step, it doesn't trigger." : null });
+            continue;
+        }
         for (const { item, plan } of reactions) {
             const movesTrigger = plan.builtin === "reactive-strike" || (plan.builtin === "reaction-strike" && plan.triggers?.includes("move"));
             if (!movesTrigger) continue;
@@ -162,13 +175,36 @@ async function onMessage(message) {
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
         if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach");
+        if (ranged) await provokeTrigger(scene, combat, token, "ranged", "made a ranged attack");
         await defend(message, context, scene, combat, token);
         await ownStrike(message, context, scene, combat, token);
         return;
     }
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
-    if ((context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" && (message.item?.system?.traits?.value ?? []).includes("manipulate")) {
+    const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
+    if (castTraits?.includes("manipulate")) {
         await reachTrigger(scene, combat, token, "cast a manipulate spell in its reach");
+        await provokeTrigger(scene, combat, token, "manipulate", "cast a manipulate spell");
+    }
+    // A concentrate action: a spell with the trait, or a check with it (Demoralize; batch 22).
+    if (castTraits?.includes("concentrate") || (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("concentrate"))) {
+        await provokeTrigger(scene, combat, token, "concentrate", castTraits ? "cast a concentrate spell" : "used a concentrate action");
+    }
+}
+
+// Its reach, or the feet its trigger names.
+function provokeRadius(actor, within) {
+    if (typeof within === "number") return within;
+    return Math.max(5, ...meleeStrikes(actor, "").map((strike) => strike.reach));
+}
+
+// A reaction with results of its own to a creature acting within its distance (Quick Spike, Brine Spit, Baleful Gaze; batch 22).
+async function provokeTrigger(scene, combat, token, kind, words) {
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, token)) continue;
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "provoke" && plan.trigger.triggers.includes(kind) && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) <= provokeRadius(actor, plan.trigger.within));
+        if (entry) await offer({ kind: "card", item: entry.item, monster, actor, target: token, trigger: words, free: !!entry.plan.trigger.free });
     }
 }
 

@@ -922,3 +922,21 @@ test("a condition the monster always has (2026-10-10, batch 21)", async () => {
     assert.equal(readPermanent("The test monger is permanently Clumsy 1, Drained 1, Enfeebled 1, or Stupefied 1 by a curse. The GM chooses the condition."), null);
     assert.equal(readPermanent("The test shade is permanently Slowed 1 while it's in sunlight."), null);
 });
+
+test("reactions to a creature acting near the monster, as Reactive Strike's triggers go (2026-10-10, batch 22)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    assert.deepEqual(readReactionTrigger("A creature within the test bones' reach uses a manipulate action or a move action or leaves a square during a move action it's using"), { event: "provoke", reaction: true, triggers: ["manipulate", "move", "leave"], within: "reach" });
+    assert.deepEqual(readReactionTrigger("A creature within 15 feet of the test master uses a manipulate or move action, makes a ranged attack, or leaves a square during a move action it's using"), { event: "provoke", reaction: true, triggers: ["manipulate", "move", "ranged", "leave"], within: 15 });
+    assert.deepEqual(readReactionTrigger("An enemy within a @Template[type:emanation|distance:10] uses a manipulate action or a move action, makes a ranged attack, or leaves a square in the area during a move action it's using"), { event: "provoke", reaction: true, triggers: ["manipulate", "move", "ranged", "leave"], within: 10 });
+    assert.deepEqual(readReactionTrigger("A creature the test dragon observes within 30 feet uses a concentrate action"), { event: "provoke", reaction: true, triggers: ["concentrate"], within: 30 });
+    assert.deepEqual(readReactionTrigger("A creature within 30 feet Strides"), { event: "provoke", reaction: true, triggers: ["move"], within: 30 });
+    assert.deepEqual(readReactionTrigger("A creature adjacent to the test squad leaves a square during a move action it's using"), { event: "provoke", reaction: true, triggers: ["leave"], within: 5 });
+    assert.deepEqual(readReactionTrigger("A creature leaves a space within Tobin's reach"), { event: "provoke", reaction: true, triggers: ["leave"], within: "reach" });
+    assert.deepEqual(readReactionTrigger("A creature enters the test bird's reach or uses a move action within their reach"), { event: "provoke", reaction: true, triggers: ["enter", "move"], within: "reach" });
+    // Not one in a place, or an aura it leaves.
+    for (const text of ["a creature attempts a Move action in area A7", "A creature Strides beneath the portcullis while it is raised", "A creature attempts to leave the test lantern's aura during a move action"]) assert.equal(readReactionTrigger(text), null, text);
+    // On the creature that acted.
+    const reaction = { type: "action", name: "Test Filaments", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature within the test bones' reach uses a manipulate action or a move action</p><p><strong>Effect</strong> Filaments lash out. The creature must succeed at a @Check[reflex|dc:24] save or become @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized} for 1 round.</p>" } } };
+    const plan = compileMonsterAbility(reaction);
+    assert.deepEqual([plan.trigger.event, plan.targeting.target], ["provoke", "the attacker"]);
+});
