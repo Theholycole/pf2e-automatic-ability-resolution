@@ -582,3 +582,26 @@ test("Resilient Form and the like: a critical hit on it becomes a normal hit on 
     assert.deepEqual(compileMonsterAbility(action("Test Form", "<p><strong>Trigger</strong> The test dragon is critically hit with a weapon or unarmed attack;</p><hr /><p><strong>Effect</strong> The dragon's scales ward off deadly attacks. The dragon attempts a @Check[flat|dc:14]. On a success, the triggering attack becomes a normal hit.</p>")), { builtin: "crit-downgrade", dc: 14 });
     assert.deepEqual(compileMonsterAbility(action("Test Blow", "<p><strong>Trigger</strong> It is critically hit with a Strike</p><hr /><p><strong>Effect</strong> It attempts a @Check[flat|dc:11]. On a success, the attack becomes a normal hit instead.</p>", "free", { max: 3, per: "day" })), { builtin: "crit-downgrade", dc: 11, uses: 3 });
 });
+
+test("Strike abilities (2026-10-10, batch 6): follow-ups after a hit, several Strikes in one action, a Strike at each creature in reach", () => {
+    const link = (id, label) => `@UUID[Compendium.pf2e.conditionitems.Item.${id}]{${label}}`;
+    const action = (name, html, actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    // A follow-up: the save on the creature the claw hit, used as before; the simulator only straight after such a hit.
+    const stitch = compileMonsterAbility(action("Test Follow-up", `<p><strong>Requirements</strong> The test fairy's last action was a successful claw Strike</p><hr /><p><strong>Effect</strong> The test fairy twists the creature's neck. It must succeed at a @Check[reflex|dc:21] save or become ${link("eIcWbB5o3pP6OIMe", "Immobilized")}.</p>`));
+    assert.deepEqual([stitch.resolution.check.statistic, stitch.resolution.outcomes.failure.effects[0].slug, stitch.trigger.event, stitch.trigger.followUp, stitch.targeting.target], ["reflex", "immobilized", "use", { strike: "claw", melee: false, on: ["success", "criticalSuccess"] }, "the creature the Strike hits"]);
+    const any = compileMonsterAbility(action("Test Delay", `<p><strong>Requirements</strong> The test daemon's last action was a successful Strike that dealt damage</p><hr /><p><strong>Effect</strong> The creature must succeed at a @Check[will|dc:25] save or be ${link("xYTAsEpcJE1Ccni3", "Slowed 1")} for 1 round.</p>`));
+    assert.equal(any.trigger.followUp.strike, null);
+    // Not when the Strike is one of several ("…or a Draconic Frenzy that included …").
+    assert.equal(compileMonsterAbility(action("Test Weaken", "<p><strong>Requirements</strong> The test dragon's last action was a successful Strike with a melee unarmed attack or a Draconic Frenzy that included a successful Strike</p><hr /><p><strong>Effect</strong> The creature must succeed at a @Check[fortitude|dc:30] save or be enfeebled 1.</p>"))?.trigger?.followUp, undefined);
+    // Several Strikes: more wordings, the penalty, the target, once a turn.
+    const multi = (text, actions = 1) => compileMonsterAbility(action("Test Multi", `<p>${text}</p>`, actions));
+    assert.deepEqual(multi("The test dragon makes one claw Strike and one tail Strike in either order.", 2), { builtin: "multi-strike", actions: 2, strikes: ["claw", "tail"] });
+    assert.deepEqual(multi("Test Froglegs makes two dagger Strikes."), { builtin: "multi-strike", actions: 1, strikes: ["dagger", "dagger"] });
+    assert.deepEqual(multi("The test captain makes two Strikes, one with their rapier and one with their dagger."), { builtin: "multi-strike", actions: 1, strikes: ["rapier", "dagger"] });
+    assert.deepEqual(multi("The test beast makes three claw Strikes against a single creature within reach. Its multiple attack penalty doesn't increase until after it makes all three Strikes.", 2), { builtin: "multi-strike", actions: 2, strikes: ["claw", "claw", "claw"], sameMap: true, sameTarget: true });
+    assert.deepEqual(compileMonsterAbility(action("Test Flurry", "<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test monk makes two unarmed Strikes. If both hit the same creature, combine their damage for the purpose of resistances and weaknesses.</p>")), { builtin: "multi-strike", actions: 1, strikes: [null, null], oncePerTurn: true });
+    // …but not with more to it (a save when both hit is a Strike activity's).
+    assert.notEqual(multi("The test monk makes two unarmed Strikes. If both hit the same creature, combine their damage, and the creature must succeed at a @Check[fortitude|dc:20] save or be stunned 1.")?.builtin, "multi-strike");
+    // A Strike at each creature in reach.
+    assert.deepEqual(multi("The test shambler makes a vine Strike against each creature within reach. Its multiple attack penalty increases only after all the attacks.", 2), { builtin: "multi-strike", actions: 2, strikes: ["vine"], each: true, sameMap: true });
+});

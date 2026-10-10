@@ -58,15 +58,104 @@ function saveBonuses(item) {
 // "The frost drake makes two Fangs Strikes and one Tail Strike in any order." → ["fangs", "fangs", "tail"].
 // Also "…and one horn Strike. They can make these Strikes in any order." and "…, which they can make in any order."
 export function readMultiStrike(text) {
-    const trimmed = text.trim().replace(/,? which (?:it|they) can make in any order\.$/i, ".").replace(/\.\s+(?:It|They) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i, ".");
-    const match = /^The [^.]+? makes (a|an|one|two|three|four) ([\w' -]+?) Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: in any order)?\.$/i.exec(trimmed);
-    if (!match) return null;
-    const strikes = [];
-    for (const [count, name] of [[match[1], match[2]], [match[3], match[4]]]) {
-        if (!count) continue;
-        for (let index = 0; index < NUMBERS[count.toLowerCase()]; index++) strikes.push(name.trim().toLowerCase());
+    return readMultiStrikes(text)?.strikes ?? null;
+}
+
+// The same, with what the sentences after it say (2026-10-10): { strikes, sameMap, sameTarget } or null.
+//   "The Iroran skeleton makes two claw Strikes. If both hit the same creature, the damage is combined …. The multiple
+//   attack penalty applies to the Strikes as normal."
+//   "The dragon makes one claw Strike and one tail Strike in either order."
+//   "The captain makes two Strikes, one with their rapier and one with their dagger."
+//   "The deghuun makes three tentacle Strikes, each against a different creature within reach."
+//   "… makes three claw Strikes against a single creature within reach. His multiple attack penalty doesn't increase
+//   until after he makes all three Strikes."
+// A Strike with no name ("two unarmed Strikes", "two Strikes") is null: the creature's best melee Strike.
+export function readMultiStrikes(text) {
+    // "Frequency once per turn Effect The bruiser makes …": once a turn; a longer frequency or a requirement: not read.
+    let body = text.trim();
+    let oncePerTurn = false;
+    const frequency = /^Frequency (.+?) Effect /i.exec(body);
+    if (frequency) {
+        if (!/^once per (?:turn|round)$/i.test(frequency[1].trim())) return null;
+        oncePerTurn = true;
+        body = body.slice(frequency[0].length);
     }
-    return strikes.length >= 2 ? strikes : null;
+    if (/^(?:Requirements?|Trigger|Prerequisites?)\b/i.test(body)) return null;
+    const sentences = body.replace(/,? which (?:it|they) can make in any order\./i, ".").split(/(?<=\.)\s+(?=[A-Z])/);
+    const first = sentences.shift() ?? "";
+    let sameMap = false;
+    let sameTarget = false;
+    const strikes = [];
+    const count = (word) => NUMBERS[String(word).toLowerCase()] ?? 0;
+    // "scimitar or fangs": the first; "melee", "unarmed", "ranged" or none: the best (null).
+    const named = (name) => {
+        const plain = String(name ?? "").trim().replace(/\s+or\s+.*$/i, "");
+        if (!plain || /^(?:melee|unarmed|ranged|weapon|melee weapon)(?: (?:strikes|attacks))?$/i.test(plain)) return null;
+        // "ranged oathbow", "melee echoblade": the Strike's own name.
+        return plain.replace(/^(?:melee|ranged)\s+/i, "").toLowerCase();
+    };
+    // Who they're against: "against the same target", "all targeting the same creature", "each against a different creature".
+    const WHO = String.raw`(?:,? (?:each |all |both )?(?:against|targeting) (?:a|an|one|the|two|different|single) (?:single |same |different |adjacent )?(?:creature|target|foe|enemy|enemies|targets|creatures)s?(?: (?:within|in) (?:(?:its|their|his|her) )?reach)?)?`;
+    let match;
+    if ((match = new RegExp(String.raw`^(?:The )?[^.]+? makes (a|an|one|two|three|four) (?:([\w' -]+?) )??Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: with (?:its|their|his|her) ([\w' -]+?))?(?: in (?:any|either) order)?(${WHO})(?:,? one (?:Strike )?(?:with each of (?:its|their|his|her) [\w' -]+|per weapon))?\.$`, "i").exec(first))) {
+        for (const [number, name] of [[match[1], match[2] ?? match[5]], [match[3], match[4]]]) for (let index = 0; index < count(number ?? 0); index++) strikes.push(named(name));
+        if (/single|same|one (?:creature|target|foe|enemy)/i.test(match[6] ?? "")) sameTarget = true;
+    } else if ((match = /^(?:The )?[^.]+? makes (two) Strikes(?: against the same target)?, one with (?:its|their|his|her) ([\w' -]+?) and (?:one|the other) with (?:its|their|his|her) ([\w' -]+?)\.$/i.exec(first))) {
+        strikes.push(named(match[2]), named(match[3]));
+        if (/same target/i.test(first)) sameTarget = true;
+    } else if ((match = /^(?:The )?[^.]+? makes (two|three|four) ([\w' -]+?) Strikes, ignoring the multiple attack penalty until after (?:both|all|the (?:second|last)) (?:Strikes|attacks|Strike|attack)\.$/i.exec(first)) || (match = /^(?:The )?[^.]+? makes (one|a) ([\w' -]+?) Strike and (?:one|a) ([\w' -]+?) Strike, ignoring the multiple attack penalty until after (?:both|the second) (?:Strikes|Strike)\.$/i.exec(first))) {
+        if (match[3]) strikes.push(named(match[2]), named(match[3]));
+        else for (let index = 0; index < count(match[1]); index++) strikes.push(named(match[2]));
+        sameMap = true;
+    } else return null;
+    if (strikes.length < 2) return null;
+    // What may follow: the order, the attack penalty, damage combined against resistances, who it's against.
+    for (const sentence of sentences) {
+        if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
+        if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty (?:doesn't|does not) increase until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
+            sameMap = true;
+            continue;
+        }
+        if (/\bmultiple attack penalty\b[^.]*\b(?:as normal|normally)\b|\bcount(?:s)? toward (?:its|their|his|her|the [\w' -]+?'s) multiple attack penalty(?: as normal)?\.$|^Apply the multiple attack penalty to these Strikes normally\.$/i.test(sentence)) continue;
+        // Damage combined against resistances, and nothing more ("…, and the creature must succeed at a save" isn't).
+        if (/\bcombine(?:s|d)? (?:their|the) damage\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
+        if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) continue;
+        if (/^Both (?:Strikes|attacks) must (?:have|target) the same (?:target|creature)\.$/i.test(sentence)) {
+            sameTarget = true;
+            continue;
+        }
+        return null;
+    }
+    return { strikes, sameMap, sameTarget, oncePerTurn };
+}
+
+// A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
+// Its multiple attack penalty increases only after all the attacks." → { strike, sameMap }, or null.
+export function readSweep(text) {
+    const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const match = /^(?:The )?[^.]+? (?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike (?:once )?against each (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i.exec(sentences.shift() ?? "");
+    if (!match) return null;
+    let sameMap = false;
+    for (const sentence of sentences) {
+        if (/\b(?:multiple attack )?penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\b(?:multiple attack )?penalty increases only after\b/i.test(sentence)) {
+            sameMap = true;
+            continue;
+        }
+        if (/^(?:Each attack|These attacks) counts? toward [^.]*multiple attack penalty(?: as normal)?\.$/i.test(sentence)) continue;
+        // "It can Strike up to once with its jaws and any number of times with its body": its Strikes, the best one played.
+        if (/^(?:It|They) can Strike up to once with (?:its|their) [\w' -]+ and any number of times with (?:its|their) [\w' -]+\.$/i.test(sentence)) continue;
+        if (/^This counts as (?:two|three|four|\w+) attacks for [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.test(sentence)) {
+            sameMap = true;
+            continue;
+        }
+        if (/^Make only one attack roll, and roll damage once for all targets\.$/i.test(sentence)) {
+            sameMap = true;
+            continue;
+        }
+        return null;
+    }
+    const name = match[1] && !/^(?:melee|melee weapon|weapon|unarmed)$/i.test(match[1].trim()) ? match[1].trim().replace(/^(?:melee|ranged)\s+/i, "").toLowerCase() : null;
+    return { strike: name, sameMap };
 }
 
 // "The smilodon Strides and makes a Strike at the end of that movement." (the
@@ -154,8 +243,10 @@ export function compileBuiltin(item, slug) {
     if (type === "reaction" || (type === "free" && /\bTrigger\b/.test(text))) return readReaction(item, text);
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
-    const strikes = readMultiStrike(text);
-    if (strikes) return { builtin: "multi-strike", actions, strikes };
+    const multi = readMultiStrikes(text);
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}) };
+    const sweep = readSweep(text);
+    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}) };
     const charge = readCharge(text);
     if (charge && actions === charge.strides) return { builtin: "charge", actions, ...charge };
     return null;

@@ -986,6 +986,43 @@ function effectAbility(item) {
     };
 }
 
+// A follow-up to a Strike that hit (2026-10-10): "Requirements The skull fairy's last action was a successful fist Strike
+// … Effect … The creature must succeed at a … save or be Stunned 1", "…damaged a creature with a jaws Strike on its
+// last action". The Effect compiled as an ability of its own (a save, a check, an effect) on the creature the
+// Strike hit, used as before (the card comes when the GM uses it), with trigger.followUp { strike, melee, on } for the
+// simulator, which uses it only straight after such a hit: strike is the Strike's name ("claw"; null for any), on the
+// degrees ("a critical hit": criticalSuccess only). null otherwise.
+function followUp(item, actor) {
+    const html = item.system?.description?.value ?? "";
+    const block = /<strong>\s*Requirements?\s*<\/strong>([\s\S]*?)(?=<\/p>|<hr|<strong>\s*Effect\s*<\/strong>)/i.exec(html);
+    if (!block) return null;
+    const need = htmlToPlainText(block[1].replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const last = /\blast action was an? (successful|critical hit with an?|critical) (?:([\w' -]+?) )??Strike\b(.*)$/i.exec(need)
+        ?? /\b(hit|damaged|struck|critically hit) an? (?:[\w-]+ )?(?:creature|target|foe|enemy) with (?:an?|its|their|his|her) (?:([\w' -]+?) )??Strike (?:on|during) (?:its|their|his|her) last action\b(.*)$/i.exec(need);
+    if (!last) return null;
+    // Only the Strike's own conditions: not "or a Draconic Frenzy that included …", "against a Medium or larger creature".
+    if (/\bor (?:a|an)\b|\bagainst an? (?:Tiny|Small|Medium|Large|Huge|Gargantuan)\b/i.test(last[3] ?? "")) return null;
+    const critical = /critical/i.test(last[1]);
+    const name = last[2] && !/^(?:melee|ranged|weapon|unarmed)$/i.test(last[2].trim()) ? last[2].trim().toLowerCase() : null;
+    const melee = /\bmelee\b/i.test(last[2] ?? "");
+    // The Effect, as an ability of its own.
+    const effect = html.slice(block.index + block[0].length).replace(/^\s*<\/p>\s*(?:<hr\s*\/?>)?\s*/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "");
+    const own = withDescription(item, effect);
+    let plan = null;
+    try {
+        plan = inlineSave(own, actor) ?? compileSkillAction(own, { actor }) ?? effectAbility(own);
+    } catch {
+        plan = null;
+    }
+    if (!plan?.resolution) return null;
+    if (plan.resolution.outcomes) noteUnread(plan.resolution.outcomes, effect);
+    return {
+        ...plan,
+        targeting: plan.targeting?.area ? plan.targeting : { target: "the creature the Strike hits", range: "touch", area: null },
+        trigger: { ...(plan.trigger ?? {}), event: "use", followUp: { strike: name, melee, on: critical ? ["criticalSuccess"] : ["success", "criticalSuccess"] } }
+    };
+}
+
 // A plan for an NPC ability, { builtin } for rules the simulator plays itself,// A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
@@ -1023,6 +1060,9 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (byActions) return byActions;
     const exposure = exposureSave(item, actor);
     if (exposure) return exposure;
+    // A follow-up to a Strike that hit ("Requirements … last action was a successful claw Strike").
+    const after = item.system?.actionType?.value === "action" ? followUp(item, actor) : null;
+    if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
     const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item);
