@@ -42,8 +42,13 @@ export function inlineTags(html, tag) {
 //     (by name too: @Compendium[pf2e.conditionitems.Sickened]{Sickened 1})
 //   "basic @Check[type:reflex|dc:40] save" → the check marked basic
 //   @UUID[Compendium.pf2e.conditionitems.dfCMdR4wnpbYNTix] (no document type) → the same with .Item.
+//   @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg] (no label) → the same with {Off-Guard}
 //   @Check[type:will|dc:31]{basic Will} (basic only in its label) → @Check[type:will|dc:31|basic]{basic Will}
-const LEGACY = /\[\[\/r(?:oll)? |@Compendium\[|\bbasic @Check\[(?![^\]]*\bbasic\b)|@UUID\[Compendium\.[\w-]+\.[\w-]+\.[A-Za-z0-9]{16}\]|@Check\[(?![^\]]*\bbasic\b)[^\]]*\]\{[^}]*\bbasic\b/i;
+// PF2e's condition items by ID (pf2e.conditionitems), for links written with no label.
+const CONDITION_IDS = {"XgEqL1kFApUbl5Z2": "blinded", "6dNUvdb1dhToNDj3": "broken", "i3OJZU2nk64Df3xm": "clumsy", "DmAIPqOBomZ7H95W": "concealed", "yblD8fOR1J8rDwEQ": "confused", "9qGBRpbX9NEwtAAr": "controlled", "zXZjC8HLaRoLR17U": "cursebound", "TkIyaNPgTZFBCCuh": "dazzled", "9PR9y0bi4JPKnHPR": "deafened", "3uh1r86TzbQvosxv": "doomed", "4D2KBtexWXa6oUMR": "drained", "yZRUzMqrMmfLu0V1": "dying", "D5mg6Tc7Jzrj6ro7": "encumbered", "MIRkyAjyBeXivMa7": "enfeebled", "AdPVz7rbaVSRxHFg": "fascinated", "HL2l2VRSaQHu9lUw": "fatigued", "sDPxOjQ9kx2RZE8D": "fleeing", "TBSHQspnbcqxsmjL": "frightened", "kWc1fhmv9LBiTuei": "grabbed", "iU0fEDdBp3rXpTMC": "hidden", "eIcWbB5o3pP6OIMe": "immobilized", "zJxUflt9np0q4yML": "invisible", "1wQY3JYyhMYeeV2G": "observed", "AJh5ex99aV6VTggg": "off-guard", "6uEgoh53GbXuHpTF": "paralyzed", "lDVqvLKA6eF3Df60": "persistent-damage", "dTwPJuKgBQCMxixg": "petrified", "j91X7x0XSomq8d60": "prone", "nlCjDvLMf2EkV2dl": "quickened", "VcDeM8A5oI6VqhbM": "restrained", "fesd1n5eVhpCSS18": "sickened", "xYTAsEpcJE1Ccni3": "slowed", "dfCMdR4wnpbYNTix": "stunned", "e1XGnhKNSQIm5IXg": "stupefied", "fBnFDH2MTzgFijKf": "unconscious", "VRSef5y1LmL2Hkjf": "undetected", "9evPzg9E6muFcoSk": "unnoticed", "Yl48xTdMh3aeQYL2": "wounded"};
+const conditionLabel = (key) => (CONDITION_IDS[key] ?? key).split("-").map((word) => word[0].toUpperCase() + word.slice(1)).join("-");
+
+const LEGACY = /\[\[\/r(?:oll)? |@Compendium\[|\bbasic @Check\[(?![^\]]*\bbasic\b)|@UUID\[Compendium\.[\w-]+\.[\w-]+\.[A-Za-z0-9]{16}\]|@Check\[(?![^\]]*\bbasic\b)[^\]]*\]\{[^}]*\bbasic\b|@UUID\[Compendium\.pf2e\.conditionitems\.Item\.[^\]]+\](?!\{)/i;
 const ACTOR_PACK = /(?:^|-)(?:bestiary(?:-\d)?|actors|monster-core(?:-\d)?|npc-gallery|npc-core)$/;
 const documentType = (pack) => (ACTOR_PACK.test(pack) && !/glossary|effects/.test(pack) ? "Actor" : "Item");
 
@@ -55,6 +60,8 @@ export function modernInline(html) {
         .replace(/@Compendium\[([\w-]+)\.([\w-]+)\.([^\]]+)\]/g, link)
         .replace(/\bbasic (@Check\[(?![^\]]*\bbasic\b)[^\]]*)\]/gi, "basic $1|basic]")
         .replace(/@UUID\[Compendium\.([\w-]+)\.([\w-]+)\.([A-Za-z0-9]{16})\]/g, link)
+        // A condition link with no label: its condition's name ("@UUID[…Item.AJh5ex99aV6VTggg] for 1 round" is off-guard).
+        .replace(/@UUID\[Compendium\.pf2e\.conditionitems\.Item\.([^\]]+)\](?!\{)/g, (match, key) => `${match}{${conditionLabel(key)}}`)
         .replace(/@Check\[((?![^\]]*\bbasic\b)[^\]]*)\](\{[^}]*\bbasic\b[^}]*\})/gi, "@Check[$1|basic]$2")
         .replace(/\[\[\/r(?:oll)? ((?:[^[\]]|\[[^[\]]*\])+?)\]\](?:\{([^}]*)\})?/g, (match, roll, label) => {
             const formula = roll.trim().replace(/^\{([\s\S]*)\}$/, "$1").trim();
@@ -155,7 +162,8 @@ export function readDuration(text) {
         return { mode: "in-aura", ...(after ? { after } : {}) };
     }
     // "Fleeing for as long as it's frightened", "as long as they remain frightened": while that condition lasts.
-    const lasting = /\b(?:for )?as long as (?:it|they|the creature|the target)(?:'s|'re| is| are| remains?| stays?) (frightened|sickened|grabbed|restrained)\b/i.exec(plain);
+    // "for 1d4 rounds or as long as it's frightened, whichever comes first": the time (a fight's worth of the other).
+    const lasting = /\bwhichever comes first\b/i.test(plain) && /\bfor (?:\d|one\b|an?\b|\[\[)/i.test(plain) ? null : /\b(?:for )?as long as (?:it|they|the creature|the target)(?:'s|'re| is| are| remains?| stays?) (frightened|sickened|grabbed|restrained)\b/i.exec(plain);
     if (lasting) return { mode: "while", condition: lasting[1].toLowerCase() };
     // "Fleeing during their next turn": until the end of that turn, as "until the end of its next turn".
     if (/until the end of (?:your|its|their|the monster's|the creature's|the target's|the [\w' -]+?'s) next turn|\bduring (?:its|their|the creature's|the target's) next turn\b/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
@@ -200,6 +208,37 @@ const LIFTS = /\b(?:conditions?\b[^.]*\bend\b|(?:it|that|this|the effect|the con
 // Conditions named in words in an affliction's stages ("2d4 poison damage and enfeebled 1").
 export const STAGE_CONDITIONS = [...PLAIN_CONDITIONS, "enfeebled", "clumsy", "drained", "stupefied", "sickened", "slowed", "stunned", "fatigued", "dazzled", "blinded", "deafened", "confused", "paralyzed", "unconscious", "doomed", "fleeing", "fascinated", "controlled", "wounded", "petrified"];
 
+// The time written straight after a condition's name, up to the next condition named ("Off-Guard for 1 round and
+// Deafened for 1 minute": off-guard's 1 round, deafened's 1 minute), or null.
+function ownDuration(sentence, slug, slugs) {
+    const words = htmlToPlainText(String(sentence).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const at = new RegExp(`\\b${slug}\\b(?: \\d+)?`, "i").exec(words);
+    if (!at) return null;
+    const rest = words.slice(at.index + at[0].length);
+    if (!/^\s*(?:for|until)\b/i.test(rest)) return null;
+    let end = rest.length;
+    for (const other of slugs) {
+        if (other === slug) continue;
+        const next = new RegExp(`\\b${other}\\b`, "i").exec(rest);
+        if (next && next.index < end) end = next.index;
+    }
+    return readDuration(rest.slice(0, end));
+}
+
+// Of the conditions named before a phrase in a sentence, the one named last (null when none is).
+function lastBefore(sentence, slugs, phrase) {
+    const words = htmlToPlainText(String(sentence).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const at = words.search(phrase);
+    if (at < 0) return null;
+    let best = null;
+    for (const slug of slugs) {
+        const mentions = [...words.slice(0, at).matchAll(new RegExp(`\\b${slug}\\b`, "gi"))];
+        const last = mentions.at(-1)?.index ?? -1;
+        if (last >= 0 && (!best || last > best.at)) best = { slug, at: last };
+    }
+    return best?.slug ?? null;
+}
+
 // Every mention of a condition in a sentence follows a negation ("is not Confused", "doesn't fall Prone";
 // not "Frightened 1 and can't reduce its frightened value").
 function onlyNegated(sentence, slug) {
@@ -229,6 +268,57 @@ function choiceSlugs(sentence) {
 
 // Conditions a passage imposes: [{ kind: "condition", slug, value, duration, recipient? }],
 // linked or named in words, sentence by sentence. plain: the condition words to look for unlinked.
+// A sentence that only applies in some case ("If the creature would collide with the wall, they take 1d10+5 damage"),
+// other than a Strike's hit ("If the Strike hits, …").
+const IF_ONLY = /^\s*If\b(?! (?:it|the (?:Strike|attack|strike)|this (?:Strike|attack)) (?:critically )?hits\b)/i;
+// Sentences, also those ended by a list item or paragraph ("…then stop.</li><li><strong>Discordant Blast</strong>").
+const SENTENCES = /(?<=[.!?])\s+(?=[A-Z@<])/;
+export const sentencesOf = (html) => String(html ?? "").replace(/(?<=[.!?])((?:<\/?(?:p|li|ul|ol|br)\b[^>]*>)+)/gi, "$1 ").split(SENTENCES);
+// The html without its "If…" sentences: what always happens.
+export function unconditional(html) {
+    return sentencesOf(html).filter((sentence) => !IF_ONLY.test(htmlToPlainText(sentence))).join(" ");
+}
+
+// Its "If…" sentences that deal damage, as text for the GM ("If the creature would collide with the wall, they take
+// 1d10+5 bludgeoning damage.").
+export function conditionalDamage(html) {
+    return sentencesOf(html).filter((sentence) => IF_ONLY.test(htmlToPlainText(sentence)) && /@Damage\[/.test(sentence)).map(readableText);
+}
+
+// Inline syntax as words: "@Damage[(2d10+5)[bludgeoning]]" → "2d10+5 bludgeoning", "@Check[reflex|dc:29|basic]" →
+// "DC 29 basic Reflex", "@UUID[…]{Stunned 1}" → "Stunned 1".
+export function readableText(html) {
+    let text = String(html ?? "");
+    for (const raw of inlineTags(text, "Damage")) {
+        // Its parts, split at the "+" and "," outside brackets: "1d6[fire],(2d6+3)[cold]".
+        const parts = [];
+        let depth = 0;
+        let start = 0;
+        const formula = parameters(raw)[0];
+        for (let index = 0; index <= formula.length; index++) {
+            const character = formula[index];
+            if (character === "[" || character === "(") depth++;
+            else if (character === "]" || character === ")") depth--;
+            if (index === formula.length || (depth === 0 && (character === "+" || character === ","))) {
+                parts.push(formula.slice(start, index).trim());
+                start = index + 1;
+            }
+        }
+        const words = parts.filter(Boolean).map((part) => {
+            const match = /^\(?(.+?)\)?\[([\w,-]+)\]$/.exec(part);
+            return match ? `${match[1]} ${match[2].replaceAll(",", " ")}` : part;
+        });
+        // Its label when it has one ("@Damage[(5[splash])[acid]]{5 acid splash}").
+        text = text.replace(new RegExp(`@Damage\\[${raw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\](?:\\{([^}]*)\\})?`), (whole, label) => label ?? words.join(" plus "));
+    }
+    for (const raw of inlineTags(text, "Check")) {
+        const check = readCheck(raw);
+        const name = check.statistic ? check.statistic[0].toUpperCase() + check.statistic.slice(1) : "";
+        text = text.replace(`@Check[${raw}]`, [check.dc ? `DC ${check.dc}` : null, check.basic ? "basic" : null, name].filter(Boolean).join(" "));
+    }
+    return htmlToPlainText(text.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Template\[([^\]]*)\](?:\{([^}]*)\})?/g, (whole, raw, label) => label ?? (readTemplate(raw) ? `${readTemplate(raw).value}-foot ${readTemplate(raw).type}` : ""))).replace(/\s+/g, " ").trim();
+}
+
 export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS } = {}) {
     const effects = [];
     const sentences = String(html ?? "").split(/(?<=[.!?])\s+(?=[A-Z@<])/);
@@ -243,7 +333,10 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         // state or a later save ("If the target was Dying, it remains Unconscious", "If it's still unconscious after
         // 1 minute", "If it fails, it's Controlled on that turn" inside a result): the GM's.
         if (/\bif (?:the creature|it|the target|they)(?:'s|'re| is| are| was| were) already\b|\bwhile already\b/i.test(plain)) continue;
-        if (/^\s*If\b(?! (?:it|the (?:Strike|attack|strike)|this (?:Strike|attack)) (?:critically )?hits\b)/i.test(plain)) continue;
+        if (IF_ONLY.test(plain)) continue;
+        // Some other set of creatures, or a later state ("A creature unable to act due to the slowed condition … is
+        // Petrified permanently", "A creature that is already slowed is instead stunned").
+        if (/^\s*(?:A|Any|Each) creature (?:that|who|unable|reduced|whose)\b(?! (?:fails|critically fails|is hit|is struck|takes damage))/i.test(plain)) continue;
         const duration = readDuration(plain);
         const self = recipientOf(plain) === "self";
         const found = new Map();
@@ -263,6 +356,9 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         for (const slug of choiceSlugs(scan)) found.delete(slug);
         // Named only as what doesn't happen ("is not Confused", "They do not fall prone").
         for (const slug of [...found.keys()]) if (onlyNegated(scan, slug)) found.delete(slug);
+        // "Doomed 1, Frightened 4, and Fleeing for as long as they remain frightened": the time is the last one's
+        // before the phrase (fleeing), not the others'.
+        const whileOf = duration?.mode === "while" ? lastBefore(sentence, [...found.keys()], /\b(?:for )?as long as\b|\buntil (?:it|they|the creature|the target)(?:'s|'re| is| are) no longer\b/i) : null;
         for (const [slug, value] of found) {
             // Once each: a later sentence naming it again ("…falls Unconscious. … while unconscious") adds nothing.
             if (effects.some((effect) => effect.slug === slug)) continue;
@@ -270,8 +366,14 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
             // time is its own only straight after it ("Frightened 2 for 1 minute") or when it can't be reduced;
             // otherwise the time is the other condition's ("Confused for 1 round and Frightened 2",
             // "Frightened 2 and slowed 1 for 1 minute", "Frightened 1 … and is then temporarily immune for 1 minute").
-            const own = ["prone"].includes(slug) || (duration?.mode === "while" && duration.condition === slug) || (slug === "frightened" && duration?.mode === "fixed" && !FRIGHTENED_TIMED.test(plain.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")));
-            effects.push({ kind: "condition", slug, value, duration: own ? null : duration, ...(self ? { recipient: "self" } : {}) });
+            // A time written right after the condition is its own ("Off-Guard for 1 round and Deafened for 1 minute").
+            const mine = ownDuration(sentence, slug, [...found.keys()]);
+            const time = mine ?? duration;
+            // Stunned with a value counts itself down; it takes no timer.
+            const own = ["prone"].includes(slug) || (slug === "stunned" && Number.isFinite(value)) || (!mine && duration?.mode === "while" && (duration.condition === slug || (whileOf && whileOf !== slug))) || (time?.mode === "while" && time.condition === slug) || (slug === "frightened" && time?.mode === "fixed" && !FRIGHTENED_TIMED.test(plain.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")))
+                // Sickened ends by retching: a time is its own only straight after it, or when it can't be reduced.
+                || (slug === "sickened" && time?.mode === "fixed" && !mine && !/\b(?:can't|cannot|can not) (?:reduce|recover)\b/i.test(plain));
+            effects.push({ kind: "condition", slug, value, duration: own ? null : time, ...(self ? { recipient: "self" } : {}) });
         }
     }
     return effects;
@@ -319,9 +421,14 @@ export function immunityDetails(raw) {
 // A push's direction when it isn't away from the monster ("… 10 feet in a random direction").
 export const OTHER_WAY = /^\s*(?:back\s+|away\s+)?(?:in (?:a|any) (?:random )?direction|in a direction of|toward|towards|along|into the (?:air|empty air)|up\b|down\b)/i;
 
-// "push your target up to 10 feet away" → { kind: "push", distance: 10 }.
-export function readPush(text) {
+// "push your target up to 10 feet away" → { kind: "push", distance: 10 }; "The creature takes full damage and is pulled
+// 30 feet toward the kun" → { kind: "pull", distance: 30 }, only toward the monster (names: its names, for "toward the <name>").
+export function readPush(text, names = []) {
     const plain = htmlToPlainText(text);
+    const own = names.filter(Boolean).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    const toward = `(?:closer|nearer)(?! to (?!(?:it|them|the monster|${own || "\\0"})\\b))|(?:closer to |toward |towards )(?:it|them|the monster|itself|(?:the )?(?:[\\w'-]+ ){0,2}(?:${own || "\\0"}))\\b`;
+    const pull = new RegExp(`\\bpull(?:s|ed)? (?:the (?:target|creature) |it |them )?(?:up to )?(\\d+) (?:feet|foot) (?:${toward})`, "i").exec(plain);
+    if (pull) return { kind: "pull", distance: Number(pull[1]), upTo: /up to/i.test(pull[0]), optional: false, direction: "toward" };
     const match = /\bpush(?:es|ed)? (?:your |the )?(?:target|creature|it)?\s*(?:back |up to |away )?(\d+) (?:feet|foot)/i.exec(plain);
     // Only away from the monster, which is how the push is played; "in a random direction", "toward the wall", "along
     // the line" are the GM's to move.
@@ -343,4 +450,43 @@ export function degreeSections(html) {
         if (key) sections[key] = text.slice(mark.end, marks[index + 1]?.start ?? text.length).replace(/<\/?(?:p|hr)[^>]*>/gi, " ").trim();
     });
     return sections;
+}
+
+// Results with nothing to say ("The creature is unaffected.", "Unaffected, and temporarily immune for 24 hours.").
+const NOTHING = /^(?:[\w' -]+? (?:(?:is|are) )?)?(?:unaffected|(?:is|are)n't affected|(?:is|are) not affected)(?: by [^.,]*)?(?:,? and (?:is |becomes |are )?(?:temporarily )?immune\b[^.]*)?\.?$|^No (?:further |additional |other )?effects?\.?$|^(?:The [\w' -]+?|It|They) takes? no damage\.?$/i;
+// A result row that applies nothing (no damage, conditions, push or modifiers) though its text says something ("It can't
+// use reactions for 1 round", "The creature takes a –5-foot status penalty to its Speeds for one round"): its text, for the
+// GM to apply by hand, in place of any notes it had ("If this brings it to the ground, it takes 10d6": the whole result).
+// "As failure, except …" brings the failure's text too. The outcomes are changed in place.
+// A row that applies something, but whose text has more it can't ("is fascinated for 1 minute, can't use reactions while fascinated"):
+// rules of these kinds left once what it applies is taken out.
+const MORE = /\bcan(?:'t|not) (?:use|take|move|speak|cast|fly|attack|see|hear|act|reduce|end|recover|regain|benefit|Stride|Step)\b|\b(?:status|circumstance|item) (?:penalty|bonus)\b|\bpenalty to\b|\bweakness\b|\bresistance\b|\bmust (?:spend|use|move|Stride|Step)\b|\bteleport|\bdies\b(?! out)|\bslain\b|\bdestroyed\b|\btransforms?\b|\bcursed\b|\bwastes?\b|\bloses? (?:its|their|\d+|an?|the)\b/i;
+function hasMore(text, row) {
+    let rest = text;
+    for (const effect of row.effects ?? []) if (effect.slug) rest = rest.replace(new RegExp(`\\b${effect.slug.replace(/-/g, "[- ]")}\\b(?: \\d+)?`, "gi"), "");
+    // Penalties it applies as modifiers, and immunity (the trigger's) are read.
+    if (row.modifiers?.length) rest = rest.replace(/\b(?:status|circumstance|item) (?:penalty|bonus)\b|\bpenalty to\b/gi, "");
+    return MORE.test(rest);
+}
+
+export function noteUnread(outcomes, html) {
+    const sections = degreeSections(html);
+    for (const [degree, label] of DEGREE_LABELS) {
+        const row = outcomes?.[degree];
+        const section = sections[degree];
+        if (!row || !section) continue;
+        const applies = (row.damage?.mode ?? "none") !== "none" || row.effects?.length || row.forcedMovement || row.modifiers?.length || row.affliction || row.noteEffects?.length || row.nativeEffects?.length || row.terminal;
+        const text = readableText(section);
+        if (!text || NOTHING.test(text)) continue;
+        // A row that applies something: its text too when more is left for the GM, after the notes it has.
+        if (applies) {
+            if (hasMore(text, row)) row.manualInstructions = [...(row.manualInstructions ?? []), `{target} (${label.toLowerCase()}, the rest by hand): ${text}`];
+            continue;
+        }
+        const like = /^As (critical success|success|failure|critical failure)\b/i.exec(text)?.[1]?.toLowerCase();
+        const other = like ? DEGREE_LABELS.find(([, name]) => name.toLowerCase() === like)?.[0] : null;
+        const base = other && sections[other] ? readableText(sections[other]) : null;
+        row.manualInstructions = [`{target} (${label.toLowerCase()}): ${text}${base ? ` (${like}: ${base})` : ""}`];
+    }
+    return outcomes;
 }

@@ -33,8 +33,14 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 - **Readings shared by all monsters** (2026-10-10), which also changed about 1,300 plans in PF2e's own books:
   - A basic save's damage is only the damage in the save's own sentence. Riders after it now count: "A creature that fails is also knocked Prone", "Creatures that critically fail also take 1d6 persistent fire".
   - "For 1d4 rounds" is rolled when the card is applied; the simulator uses the average.
-  - The GM is left to decide abilities with several modes or a choice ("in one of two ways", "the damage depends on the number of actions", "Enfeebled 1, Clumsy 1, or Stupefied 1"), along with conditional and negated conditions.
-  - A push is played only when it's away from the monster.
+  - The GM is left to decide a choice of conditions ("Enfeebled 1, Clumsy 1, or Stupefied 1"), along with conditional and negated conditions.
+  - A push is played only when it's away from the monster. A pull is played when it's toward the monster.
+- **Several ways and action counts** (2026-10-10, batch 3):
+  - An ability used "in one of two ways" gets a card where the GM picks the way. The simulator plays each way, with one recharge between them.
+  - A troop's damage "depends on the number of actions": the GM picks 1, 2 or 3 actions on the card.
+  - The card names, per target, what it leaves to the GM: damage that happens only "if…", splash on nearby creatures, results it can't apply (a creature that loses its reactions for a while).
+  - Since batch 1's commit: PF2e's bestiaries give 8,051 cards (was 7,675) plus 52 cards with a choice of ways; Monster Core and NPC Core give 1,336 (was 1,278) plus 3. Battlezoo gives 1,348 plus 74 with a choice of ways (was 1,353, some of them only one of the ways).
+  - See [docs/live-play.md](docs/live-play.md#abilities-with-several-ways-troops-action-counts-and-notes-for-the-gm-2026-10-10).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

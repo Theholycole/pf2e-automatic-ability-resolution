@@ -275,3 +275,35 @@ How it works (`scripts/hazards.js`, `src/live/hazards.js`):
     - Valeros failed: 1d6 piercing plus "fail also take 1d4 bleed", as persistent bleed 1d4.
     - Seelah succeeded: half damage.
   - Corpsesewn Colossus's Spew Smog, basic Fortitude DC 32: critical failures took double damage and became sickened 2; a success took half. Apply started "Recharging: Spew Smog" for a rolled 1d4 rounds.
+
+## Abilities with several ways, troops' action counts, and notes for the GM (2026-10-10)
+
+- **A choice of ways.** Some abilities can be used in one of several ways, each in its own list item: "breathes in one of two ways", "creating one of two effects", "one of the following modes". Using one posts a card asking **which way?**, with a GM button for each.
+  - Picking a way turns the card into that way's normal card, for the same targets. Its recharge starts on Apply.
+  - A way the module can't read is marked "(by hand)". Picking it starts the recharge at once.
+  - The simulator plays each way as an option of its own. The ways share one recharge, and Draconic Momentum recharges them together.
+- **Damage by the number of actions** (a troop's attacks, "The damage depends on the number of actions"). The card shows **Actions spent: 1 2 3** buttons for the GM, starting at the fewest. Apply uses the damage for the count picked, and the applied card says "With 2 actions". The simulator picks the count itself.
+  - A troop with no template, "each enemy within 10 feet" or "each adjacent enemy", gets that emanation.
+- **Notes for the GM.** The card lists, per target, what the module doesn't apply itself:
+  - Damage that only happens in some case, such as extra damage if a pushed creature hits a wall.
+  - Splash on the creatures around a target ("Splash: 10 acid splash damage to each creature within 5 feet of Valeros").
+  - Damage with a save of its own inside a result ("takes 2d10+9 piercing damage (DC 25 basic Fortitude save)").
+  - A result with nothing it can apply, such as a creature that can't use reactions for a while: "Valeros (failure): " and the result's text. "As failure, but …" adds the failure's text.
+  - A result that applies something but has more it can't, its whole text: "Seelah (critical failure, the rest by hand): " and the text. For a result that slows the creature and also takes away its reactions, slowed is applied and the note is for the rest. This covers "can't …", penalties and bonuses, weakness, "must spend …", teleporting, dying and transforming.
+  - Exposure to a disease written after the save (Vamollaroth's Spew Pollution): "Valeros is exposed to Brain Worm: a DC 44 Fortitude save against it". The Reflex result isn't the disease's own save, so it isn't handed to Pseudo Afflictions.
+- **Readings fixed along the way:**
+  - "takes full damage … and 2d6 persistent bleed" keeps the bleed (it used to drop).
+  - "As failure, except the creature is pushed 70 feet" pushes 70 feet.
+  - A pull "closer to" or "toward" the monster itself ("toward the kun") pulls the target toward the monster. A copy named otherwise ("Elite Kun", "PFTEST SIM Kun") counts too: its token's name and the last word of its name are read.
+  - Damage under "one of the following effects, as chosen by …" is left to the GM.
+- **Checked live in pftest** (2026-10-10). PFTEST SIM copies of Floral Dragon (Young), Harlequin Dragon (Great Wyrm), Kelp Dragon (Young) (Battlezoo), Conscript Squad (NPC Core) and Kun (Lost Omens) were used on the Live Cards scene; all were deleted afterwards and the PCs restored.
+  - Floral Dragon's Breath Weapon: the "which way?" card. Slumber Pollen became a DC 28 Will card. Valeros and Seelah failed: unconscious for 1 round and prone. Apply started the Breath Weapon recharge.
+  - Harlequin Dragon:
+    - Laughing Gas: two critical failures were slowed 1 for 3 rounds, with the "the rest by hand" note for the reactions they lose.
+    - Using it again warned "Breath Weapon is still recharging: 3 rounds left".
+  - Kelp Dragon's "Grasping Reeds (by hand)": "resolve it by hand", and the recharge started.
+  - Conscript Squad's Indiscriminate Assault:
+    - The GM picked 3 actions, and the card read "With 3 actions".
+    - Damage 2d8+4 = 11: Merisiel failed and took 11; Valeros succeeded and took 5.
+  - Kun's Funnel: Ezren critically failed. He took double damage and was pulled toward the kun until a creature in the way stopped him.
+    - The first try found no pull, because the copy's name "PFTEST SIM Kun" didn't match "toward the kun". The name reading above was added for that.

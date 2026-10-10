@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { abilitySlug, allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
+import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, changeLines, createCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
 
 const breath = {
     source: { name: "Avalanche Breath", slug: "avalanche-breath" },
@@ -81,3 +81,28 @@ test("an ability with no slug of its own gets one from its name, for its immunit
     assert.equal(state.ability.slug, "baleful-shriek");
 });
 
+
+test("a choice of ways: a GM button for each way, then that way's own card", () => {
+    const source = { actorUuid: "Actor.d", tokenUuid: null, name: "Dragon" };
+    const state = createModeCard({ modes: [{ name: "Flame", plan: breath }, { name: "Odd Gas", plan: null }], ability: { name: "Breath Weapon", uuid: "Item.b" }, source, targets: [{ actorUuid: "Actor.a", name: "Amiri" }] });
+    assert.deepEqual([state.kind, state.status, state.modes.map((mode) => !!mode.plan)], ["modes", "choose", [true, false]]);
+    const html = cardHTML(state);
+    assert.match(html, /data-aar-action="mode" data-mode="0" data-gm-only="true">Flame</);
+    assert.match(html, /data-mode="1" data-gm-only="true">Odd Gas \(by hand\)</);
+    // The way's card replaces every key the choice had (a chat flag update merges).
+    const card = createCard({ plan: breath, ability: { name: "Breath Weapon (Flame)", uuid: "Item.b" }, source, targets: state.targets });
+    assert.deepEqual([card.kind, card.modes, card.actions, card.targets[0].id], ["resolve", null, null, "t0"]);
+});
+
+test("damage by the number of actions: the GM picks 1, 2 or 3 actions on the card", () => {
+    const troop = { ...breath, resolution: { ...breath.resolution, native: { byActions: { 3: { sharedDamage: { components: [] } }, 1: { sharedDamage: { components: [] } }, 2: { sharedDamage: { components: [] } } } } } };
+    assert.deepEqual(actionCounts(troop), [1, 2, 3]);
+    assert.deepEqual(actionCounts(breath), []);
+    const state = createCard({ plan: troop, ability: { name: "Clash of Steel" }, source: { actorUuid: "Actor.t", name: "Infantry" }, targets: [] });
+    assert.equal(state.actions, 1);
+    const open = cardHTML({ ...state, actions: 2 });
+    assert.match(open, /data-actions="2" data-gm-only="true" class="aar-chosen" disabled>2</);
+    assert.match(open, /data-actions="3" data-gm-only="true">3</);
+    assert.match(cardHTML({ ...state, actions: 3, status: "applied" }), /With 3 actions/);
+    assert.doesNotMatch(cardHTML(createCard({ plan: breath, ability: { name: "Avalanche Breath" }, source: { actorUuid: "Actor.d", name: "Dragon" }, targets: [] })), /aar-actions/);
+});

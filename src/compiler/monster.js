@@ -11,10 +11,10 @@
 //   the target's Reflex DC"): compiled as basic actions are.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
-import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate } from "./inline.js";
-import { compileSkillAction } from "./checks.js";
+import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
+import { compileSkillAction, readSkillCheck } from "./checks.js";
 import { compileBuiltin } from "./builtins.js";
-import { compileAffliction } from "./afflictions.js";
+import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 
 const none = () => ({ damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] });
@@ -212,13 +212,90 @@ function trample(item, actor) {
     const check = raw ? readCheck(raw) : null;
     const first = htmlToPlainText(html.split(/<hr\s*\/?>/i)[0]);
     const [sizeText, strikeName] = first.split(",").map((part) => part.trim());
-    const components = strikeName ? strikeComponents(item, strikeName, actor) : [];
+    // The damage itself in place of a Strike's name ("Large or smaller, @Damage[(2d6+2)[bludgeoning]], …").
+    const second = html.split(/<hr\s*\/?>/i)[0].replace(/<[^>]+>/g, "").split(/,\s*(?![^[]*\])/)[1] ?? "";
+    const listed = /^\s*@Damage\[/.test(second) ? damageComponents(second) : [];
+    // "hoof (3d6+6 damage; Prone creatures take 4d6+6 damage)": the Strike named before the brackets.
+    const named = listed.length ? listed : strikeName ? strikeComponents(item, strikeName.replace(/\s*\(.*$/, ""), actor) : [];
+    // No such Strike (a troop has none): the first damage written beside the name.
+    const components = named.length ? named : damageComponents(second).slice(0, 1);
     if (!check?.dc || !components.length) return null;
     return {
         ...base(item),
         targeting: { target: "creatures whose space it moves through", range: null, area: null, trample: { size: sizeOf(sizeText ?? "") ?? "medium", strides: 2 } },
         trigger: { event: "use" },
-        resolution: { kind: "save", check: { roll: "save", statistic: "reflex", basic: true, against: { dc: "fixed", value: check.dc } }, sharedDamage: { rollOnce: true, components }, outcomes: basicRows(components.map((component) => component.id)) }
+        // "…; creatures that fail the save are also knocked Prone" (the glossary's own text is a @Localize, not read).
+        resolution: { kind: "save", check: { roll: "save", statistic: "reflex", basic: true, against: { dc: "fixed", value: check.dc } }, sharedDamage: { rollOnce: true, components }, outcomes: withRiders(basicRows(components.map((component) => component.id)), html.split(/<hr\s*\/?>|@Localize\[/i)[0], components) }
+    };
+}
+
+// A basic save's rows with what a failure or critical failure adds (2026-10-10): "A creature that fails its save is
+// also Stupefied 1", "Creatures that critically fail also take 5 persistent acid damage", "also knocked Prone". Not
+// when they're one of several effects to choose from ("chooses one of the following additional effects").
+function withRiders(outcomes, html, components) {
+    const riders = /\bchooses? one of the following\b|\bone of the following (?:additional )?effects\b/i.test(htmlToPlainText(html)) ? null : saveOrOutcomes(html, [], { riders: true });
+    if (riders) for (const degree of ["success", "failure", "criticalFailure"]) {
+        const rider = riders[degree];
+        const row = outcomes[degree];
+        row.effects = rider.effects;
+        if (rider.forcedMovement) row.forcedMovement = rider.forcedMovement;
+        // Not the save's own damage again ("must succeed at a basic Reflex save or take 6d6 sonic damage").
+        const extra = rider.damage?.mode === "formulas" ? rider.damage.formulas.filter((entry) => !components.some((component) => component.formula === entry.formula)) : [];
+        if (extra.length) row.damage = { mode: "mixed", shared: row.damage, formulas: extra, rollScope: "outcome" };
+    }
+    return outcomes;
+}
+
+// Drink Blood and its kin (vampires, strigoi): "This requires an @Check[athletics|defense:fortitude] check against the
+// victim's Fortitude DC if the victim is grabbed …. The victim is Drained 2 and the vampire regains 16 HP". A success
+// drains the victim; the monster's healing (none when the victim was already drained) and the automatic cases are the
+// GM's, said on the card.
+function drinkBlood(item) {
+    const html = item.system?.description?.value ?? "";
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    if (!/\b(?:sinks? (?:its|their|his|her) fangs|drinks? (?:its|the) blood|Drink (?:Blood|Essence))\b/i.test(`${item.name} ${plain}`)) return null;
+    const check = readSkillCheck(html);
+    const drained = /\b(?:victim|creature|target) (?:is|becomes) Drained (\d+)\b/i.exec(plain);
+    // When no check is needed: "…and is automatic for any of the other conditions", "If the victim is grabbed, this is automatic".
+    const automatic = /\bif the (?:victim|creature) is grabbed,? this is automatic\b/i.test(plain) ? "No check is needed against a grabbed victim: count it as a success."
+        : /\bautomatic for any of the other conditions\b/i.test(plain) ? "No check is needed against a paralyzed, restrained, unconscious or willing victim: count it as a success." : null;
+    if (!check || check.statistic !== "athletics" || !drained) return null;
+    const healing = inlineTags(html, "Damage").map(readDamage).find((formula) => /healing/i.test(formula));
+    const amount = healing ? healing.replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1") : null;
+    const drain = { ...none(), effects: [condition("drained", Number(drained[1]))] };
+    return {
+        ...base(item),
+        targeting: { target: "the victim", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: {
+            kind: "check",
+            check,
+            sharedDamage: null,
+            outcomes: { criticalSuccess: drain, success: structuredClone(drain), failure: none(), criticalFailure: none() },
+            reminders: [
+                ...(amount ? [`{source} regains ${amount} Hit Points (any excess as temporary Hit Points), unless {target} was already drained; then {target}'s drained value goes up by 1 instead.`] : []),
+                ...(automatic ? [automatic] : [])
+            ]
+        }
+    };
+}
+
+// Buck (the glossary's): the triggering rider must succeed at a Reflex save against the listed DC or fall off and
+// land Prone; on a critical failure it also takes 1d6 bludgeoning damage (and the fall's, the GM's).
+function buck(item) {
+    const raw = inlineTags(item.system?.description?.value ?? "", "Check")[0];
+    const check = raw ? readCheck(raw) : null;
+    if (!check?.dc) return null;
+    return {
+        ...base(item),
+        targeting: { target: "the triggering rider", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: {
+            kind: "save",
+            check: { roll: "save", statistic: "reflex", basic: false, against: { dc: "fixed", value: check.dc } },
+            sharedDamage: null,
+            outcomes: { criticalSuccess: none(), success: none(), failure: { ...none(), effects: [condition("prone")] }, criticalFailure: { damage: { mode: "formulas", formulas: [{ formula: "1d6[bludgeoning]" }], rollScope: "outcome" }, effects: [condition("prone")] } }
+        }
     };
 }
 
@@ -256,7 +333,9 @@ function proseOutcomes(html, { criticalOnly = false } = {}) {
     const succ = find(SUCCESS_LEAD);
     // A clause runs to the end of its sentence or the next degree's lead.
     const clause = (from) => {
-        let end = masked.slice(from).search(/(?<=[.;])\s|;/);
+        // A semicolon ends it only before another degree's lead ("…; on a critical failure, …"), which cuts it below.
+        // …or before a condition of its own ("…; if the Strike was an unarmed attack, …"), which is the GM's.
+        let end = masked.slice(from).search(/(?<=\.)\s|;\s*(?=(?:if|unless)\b)/i);
         end = end < 0 ? text.length : from + end;
         for (const other of [crit, succ]) if (other && other.at >= from && other.at < end) end = other.at;
         return text.slice(from, end).replace(/[\s,;.]*(?:and|or)?[\s,;.]*$/i, "");
@@ -294,8 +373,15 @@ function proseOutcomes(html, { criticalOnly = false } = {}) {
 // ("The golem attempts a Fortitude save", "Whenever a desa-desa takes electricity damage, it must attempt…").
 const TARGET_WORDS = /\b(?:creatures?|targets?|enem(?:y|ies)|foes?|victims?|each|all|any|anyone|those|characters?|PCs?|riders?|attackers?|triggering|ally|allies|living|someone)\b/i;
 
+// "X unless it succeeds at a @Check[…] save (Y on a critical failure)" → "becomes X (Y on a critical failure)", or null.
+function unlessClause(sentence) {
+    const match = /\b(?:becomes?|is|are|falls?) (.+?) unless (?:it|they|the (?:creature|target)) succeeds? (?:at|on) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save)(.*)$/i.exec(sentence);
+    return match ? `becomes ${match[1]}${/^\s*\(/.test(match[2]) ? ` ${match[2].trim()}` : ""}` : null;
+}
+
 function saveOrOutcomes(html, components, { afterHit = false, riders = false } = {}) {
-    const sentences = String(html).replace(/<\/?p[^>]*>/gi, " ").split(/(?<=\.)\s+(?=[A-Z@<])/);
+    // (Line breaks inside a paragraph read as spaces.)
+    const sentences = String(html).replace(/<\/?p[^>]*>/gi, " ").replace(/\s+/g, " ").split(/(?<=\.)\s+(?=[A-Z@<])/);
     const index = sentences.findIndex((sentence) => /@Check\[(?:type:)?(?:fortitude|reflex|will)/i.test(sentence));
     if (index < 0) return null;
     const upTo = htmlToPlainText(sentences.slice(0, index + 1).join(" "));
@@ -307,7 +393,19 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     if (components.length && !/@Damage\[/i.test(sentences[index].slice(0, checkAt))) components = [];
     // "must succeed at a … save or be …" (since 2026-10-10 also "must succeed a … saving throw or fall Prone").
     const legacy = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? null;
-    let failure = legacy ?? /succeed(?: at)? an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? null;
+    let failure = legacy ?? /(?:succeed(?: at)?|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1]
+        // "becomes Frightened 1 unless they succeed at a @Check[will|dc:28] save (Frightened 2 on a critical failure)":
+        // the brackets after the save are the failure's too.
+        ?? unlessClause(sentences[index])
+        ?? null;
+    // "…unless it succeeds at a save": a success leaves it untouched, damage included.
+    const negates = failure !== null && unlessClause(sentences[index]) === failure;
+    // "…save or @Check[acrobatics|dc:15] check. On a failure, …": a choice of check; the results come after.
+    // "…save or @Check[acrobatics|dc:20] check or fall Prone": the result after the choice.
+    if (failure) {
+        const choice = /^(?:an? )?(?:@Check\[[^\]]*\](?:\{[^}]*\})?|[A-Z][a-z]+) check\b(?:\s+or\s+(.+))?/.exec(failure.trim());
+        if (choice) failure = choice[1] ?? null;
+    }
     // "On a failed save, the creature falls Prone; on a critical failure, it is Immobilized": the critical failure's own.
     let legacyCritical = null;
     const critAt = failure ? failure.search(/[;,]\s*(?:and )?(?:on a critical failure|on a critically failed save|if (?:it|they|the (?:creature|target)) critically fails?)\b/i) : -1;
@@ -336,7 +434,9 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     failure ??= "";
     // The newer readings only for a save someone else makes (not "The golem attempts a Fortitude save"); a basic
     // save's riders are its targets' already.
-    if (!legacy && !riders && !TARGET_WORDS.test(htmlToPlainText(`${sentences[index - 1] ?? ""} ${sentences[index].slice(0, sentences[index].search(/@Check\[/i))}`))) return null;
+    const lead = `${sentences[index - 1] ?? ""} ${sentences[index].slice(0, sentences[index].search(/@Check\[/i))}`;
+    // …or the save follows an area or damage of the ability's own ("exhales … in a @Template[cone] dealing @Damage[…] damage (@Check…").
+    if (!legacy && !riders && !TARGET_WORDS.test(htmlToPlainText(lead)) && !/@Template\[|@Damage\[/.test(sentences[index].slice(0, sentences[index].search(/@Check\[/i)))) return null;
     // "(Stupefied 4 on a critical failure)" replaces; "(on a critical failure, the creature also falls Prone)" adds.
     let critical = null;
     let criticalAdds = false;
@@ -344,8 +444,11 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     // the failure's own "(or Blinded on a critical failure)".
     let extraCritical = null;
     proseCritical ??= legacyCritical;
-    const replaced = /\((?:or )?([^()]+?) on (?:a )?critical failure\)/i.exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
-    const added = /\(on (?:a )?critical failure,? ([^()]+?)\)/i.exec(failure);
+    // Tags inside the brackets ("(@Damage[(6d6+18)[piercing]] damage on a critical failure)") are read whole; what
+    // follows a semicolon in them ("…on a critical failure; creatures in the hall gain +2 …)") isn't the critical's.
+    const TAGGED = String.raw`(?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^();@])`;
+    const replaced = new RegExp(String.raw`\((?:or )?(${TAGGED}+?) on (?:a )?critical failure(?:;[^()]*)?\)`, "i").exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
+    const added = new RegExp(String.raw`\(on (?:a )?critical failure,? (${TAGGED}+?)\)`, "i").exec(failure);
     const bracket = added ? { text: added[1], adds: true } : replaced ? { text: replaced[1], adds: false } : null;
     if (added) failure = failure.replace(added[0], "");
     else if (replaced) failure = failure.replace(replaced[0], "");
@@ -384,7 +487,7 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     const lasting = failEffects.find((effect) => effect.duration)?.duration ?? null;
     // Not a fixed time for frightened, which fades by its own rule ("As failure, but Frightened 3" after
     // "…Fascinated until the end of its next turn"); "as long as it remains in the aura" still carries over.
-    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (effect.slug === "frightened" && lasting.mode === "fixed") ? effect : { ...effect, duration: lasting }));
+    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (["frightened", "sickened"].includes(effect.slug) && lasting.mode === "fixed") || (effect.slug === "stunned" && Number.isFinite(effect.value)) ? effect : { ...effect, duration: lasting }));
     // "(1 minute on a critical failure)", "(2d4 rounds on a critical failure)", "on a critical failure, the duration is
     // 1 minute": the failure's conditions, for longer.
     const time = critical && !criticalAdds ? htmlToPlainText(critical).trim().replace(/^(?:the duration is|for)\s+/i, "") : null;
@@ -395,6 +498,8 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     const swaps = critRead.length > 0 && critRead.every((effect) => failEffects.some((other) => other.slug === effect.slug));
     const swapped = () => failEffects.map((effect) => {
         const instead = critRead.find((other) => other.slug === effect.slug);
+        // "…it's permanently blinded": no end.
+        if (instead && /\bpermanent(?:ly)?\b/i.test(critical)) return { ...effect, ...instead, value: instead.value ?? effect.value, duration: null };
         return instead ? timed([{ ...effect, ...instead, value: instead.value ?? effect.value, duration: instead.duration ?? effect.duration }])[0] : effect;
     });
     const critEffects = [...(longer
@@ -409,7 +514,7 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     const pushed = (outcome, distance = shoved?.[1]) => (distance ? { ...outcome, forcedMovement: { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } } : outcome);
     return {
         criticalSuccess: row([], [], 0),
-        success: before ? row(successEffects, [], 0.5) : row(successEffects, [], 0),
+        success: before && !negates ? row(successEffects, [], 0.5) : row(successEffects, [], 0),
         failure: pushed(row(failEffects, failDamage, 1)),
         criticalFailure: pushed(row(critEffects, critFormulas, 2), farther?.[1] ?? critShoved?.[1] ?? shoved?.[1])
     };
@@ -556,7 +661,7 @@ function inlineSave(item, actor = null) {
     if (!checks.length) return null;
     const check = checks[0];
     // Two ways to use it, each with its own save ("The wyrm breathes in one of two ways"): the GM's.
-    if (new Set(checks.map((each) => each.statistic)).size > 1 && /\bin one of (?:two|three|four|the following) ways\b|\bone of the following (?:ways|modes|forms)\b|\bchooses? one effect\b/i.test(htmlToPlainText(html))) return null;
+    if (new Set(checks.map((each) => each.statistic)).size > 1 && (MODES.test(htmlToPlainText(html)) || /\bin one of the following ways\b/i.test(htmlToPlainText(html)))) return null;
     // One of several modes picked by the monster's state ("its attack depends on its current form").
     if (/\bdepending on (?:its|their|the [\w' -]+?'s) (?:[\w-]+ )?(?:attunement|form|stance|mode|aspect)\b/i.test(htmlToPlainText(html))) return null;
     // Damage by the number of actions spent ("The damage depends on the number of actions"): not one plan.
@@ -569,20 +674,7 @@ function inlineSave(item, actor = null) {
     let outcomes;
     if (basicDamage?.length) {
         components = basicDamage;
-        outcomes = basicRows(components.map((component) => component.id));
-        // What a failure or critical failure adds (2026-10-10): "A creature that fails its save is also Stupefied 1",
-        // "Creatures that critically fail also take 5 persistent acid damage", "also knocked Prone".
-        // Not when they're one of several effects to choose from ("chooses one of the following additional effects").
-        const riders = /\bchooses? one of the following\b|\bone of the following (?:additional )?effects\b/i.test(htmlToPlainText(html)) ? null : saveOrOutcomes(html, [], { riders: true });
-        if (riders) for (const degree of ["success", "failure", "criticalFailure"]) {
-            const rider = riders[degree];
-            const row = outcomes[degree];
-            row.effects = rider.effects;
-            if (rider.forcedMovement) row.forcedMovement = rider.forcedMovement;
-            // Not the save's own damage again ("must succeed at a basic Reflex save or take 6d6 sonic damage").
-            const extra = rider.damage?.mode === "formulas" ? rider.damage.formulas.filter((entry) => !components.some((component) => component.formula === entry.formula)) : [];
-            if (extra.length) row.damage = { mode: "mixed", shared: row.damage, formulas: extra, rollScope: "outcome" };
-        }
+        outcomes = withRiders(basicRows(components.map((component) => component.id)), html, components);
     } else if (basicDamage === null && !Object.keys(sections).length) return null;
     else if (Object.keys(sections).length) {
         outcomes = {};
@@ -590,15 +682,33 @@ function inlineSave(item, actor = null) {
             const section = sections[degree];
             const row = none();
             if (section) {
-                const formulas = inlineTags(section, "Damage").map((raw) => ({ formula: readDamage(raw) }));
+                // Damage only in some case ("If the creature would collide with the wall, they take 1d10+5"): the GM's.
+                // Effects picked from a list ("one of the following effects, as chosen by the performer"): the GM's.
+                const always = section.split(/\bone of the following\b/i)[0];
+                // Not the row's own, told to the GM: damage with a save of its own ("takes 2d10+9 piercing damage (basic
+                // Fortitude save)", "inflicting 2d6 fire damage to them (basic Reflex save)"), and splash on the creatures around it.
+                const sentences = sentencesOf(unconditional(always));
+                const ownSave = (sentence) => /@Check\[/.test(sentence);
+                const splash = (raw) => /\[splash\]/i.test(raw);
+                const formulas = sentences.filter((sentence) => !ownSave(sentence)).flatMap((sentence) => inlineTags(sentence, "Damage")).filter((raw) => !splash(raw)).map((raw) => ({ formula: readDamage(raw) }));
+                const byHand = [
+                    ...conditionalDamage(always),
+                    ...sentences.filter((sentence) => ownSave(sentence) && inlineTags(sentence, "Damage").length).map(readableText),
+                    ...sentences.filter((sentence) => !ownSave(sentence)).flatMap((sentence) => [...sentence.matchAll(/@Damage\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*)\](?:\{[^}]*\})?/g)].filter((match) => splash(match[1])).map((match) => `Splash: ${readableText(match[0])} damage to each creature within 5 feet of {target}.`))
+                ];
+                if (byHand.length) row.manualInstructions = byHand.map((text) => (text.includes("{target}") ? text : `{target}: ${text}`));
                 if (formulas.length) row.damage = { mode: "formulas", formulas, rollScope: "outcome" };
                 // "takes half damage" / "full damage" / "double damage" against the ability's own damage.
                 const plain = htmlToPlainText(section);
                 const multiplier = /double damage/i.test(plain) ? 2 : /full damage/i.test(plain) ? 1 : /half damage/i.test(plain) ? 0.5 : null;
-                if (multiplier !== null && components.length) row.damage = { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) };
+                // With its own damage too ("takes full damage, is knocked prone, and takes 2d6 persistent bleed"): both.
+                if (multiplier !== null && components.length) {
+                    const shared = { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) };
+                    row.damage = formulas.length ? { mode: "mixed", shared, formulas, rollScope: "outcome" } : shared;
+                }
                 // Conditions named without links count too ("Failure The creature is slowed 1 for 1d4 rounds").
                 row.effects = readConditions(section, { plain: SECTION_CONDITIONS });
-                const push = readPush(section);
+                const push = readPush(section, ownNames(actor ?? item.actor ?? item.parent));
                 if (push) row.forcedMovement = push;
             }
             outcomes[degree] = row;
@@ -619,7 +729,8 @@ function inlineSave(item, actor = null) {
             // "As failure, plus 1d4 persistent fire damage": the failure's damage and this; otherwise this in its place.
             const plus = new RegExp(`^As ${like},? (?:plus|and)\\b`, "i").test(text);
             const damage = own.damage?.mode === "none" ? copy.damage : plus ? addDamage(copy.damage, own.damage) : own.damage;
-            outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects] };
+            // "As failure, except the creature is pushed 70 feet away": its own push in place of the failure's.
+            outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects], ...(own.forcedMovement ? { forcedMovement: own.forcedMovement } : {}) };
         }
     } else {
         outcomes = saveOrOutcomes(html, components);
@@ -659,6 +770,130 @@ function modernItem(item) {
     return new Proxy(item, { get: (target, key) => (key === "system" ? system : Reflect.get(target, key)) });
 }
 
+// An ability used in one of several ways, each listed as "<li><strong>Name</strong> (traits) …</li>" ("Mengkare breathes in
+// one of two ways": Flame, Weakening Gas; Powerful Utterance; Halo Pulse) → { builtin: "modes", actions, modes: [{ name,
+// plan }] }: each way compiled on its own with what comes before the list (the area, the recharge); a way that compiles
+// to nothing has plan null (the GM's). null when the text isn't one of these, or no way compiles.
+const MODES = /\bin one of (?:two|three|four) ways\b|\bone of (?:two|three|four) effects\b|\bone of the following (?:ways|modes|forms)\b|\bchooses? one effect\b/i;
+function compileModes(item, options) {
+    const html = item.system?.description?.value ?? "";
+    if (!MODES.test(htmlToPlainText(html))) return null;
+    const start = html.search(/<ul\b/i);
+    const end = html.search(/<\/ul>/i);
+    if (start < 0 || end < start) return null;
+    const preamble = html.slice(0, start).replace(new RegExp(MODES.source, "gi"), "");
+    // Results written after the list belong to its last way (a duel dragon's Demoralizing Cry).
+    const after = html.slice(end + "</ul>".length);
+    const parts = html.slice(start, end).split(/<li\b[^>]*>/i).slice(1).map((part) => part.replace(/<\/li>\s*$/i, ""));
+    if (parts.length < 2) return null;
+    const modes = parts.map((part, index) => {
+        const name = /^\s*(?:<p>)?\s*<strong>([^<]+)<\/strong>/i.exec(part)?.[1]?.trim();
+        if (!name) return null;
+        const body = part.replace(/^\s*(?:<p>)?\s*<strong>[^<]+<\/strong>\s*(?:\([^)]*\))?\s*;?\s*/i, "");
+        const description = { ...(item.system?.description ?? {}), value: `${preamble}<p>${body}</p>${index === parts.length - 1 ? after : ""}` };
+        const system = new Proxy(item.system, { get: (target, key) => (key === "description" ? description : key === "slug" ? null : Reflect.get(target, key)) });
+        const way = new Proxy(item, { get: (target, key) => (key === "system" ? system : key === "name" ? `${item.name} (${name})` : Reflect.get(target, key)) });
+        let plan = null;
+        try {
+            plan = compileMonsterAbility(way, options);
+        } catch {
+            plan = null;
+        }
+        return { name, plan: plan?.resolution ? plan : null };
+    });
+    if (modes.some((mode) => !mode) || !modes.some((mode) => mode.plan)) return null;
+    return { builtin: "modes", actions: Number(item.system?.actions?.value) || 1, modes };
+}
+
+// A save whose damage "depends on the number of actions" (a troop's coordinated attacks), each count's damage after its
+// action glyph ("<span class="action-glyph">2</span> @Damage[(3d6+10)[bludgeoning]] damage") or its number
+// ("2 @Damage[…]"): the basic save with the lowest count's damage, and resolution.native.byActions[n] with each
+// count's (the core's planWithActions; live play asks how many actions, the simulator picks). null otherwise.
+function actionCountSave(item, actor) {
+    const html = item.system?.description?.value ?? "";
+    const phrase = /\bdepends on the number of actions\b/i.exec(html);
+    if (!phrase) return null;
+    const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry.save && entry.dc);
+    if (!check?.basic) return null;
+    // From the phrase on: a count, then its damage, up to the next count.
+    const { masked, tags } = maskDamage(html.slice(phrase.index));
+    const markers = [...masked.matchAll(/<span class="action-glyph">([123])<\/span>|(?<![\w\u0000])([123])(?=\s*\u0000)/g)];
+    const variants = {};
+    markers.forEach((marker, index) => {
+        const segment = masked.slice(marker.index + marker[0].length, markers[index + 1]?.index ?? masked.length);
+        const found = [...segment.matchAll(/\u0000(\d+)\u0000/g)].map((match) => tags[Number(match[1])]).filter((raw) => !/\bhealing\b/i.test(raw));
+        if (found.length) variants[marker[1] ?? marker[2]] = found.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null }));
+    });
+    const counts = Object.keys(variants).map(Number).sort((a, b) => a - b);
+    // Every count with the same parts, so the rows' damage ids stay the same.
+    if (counts.length < 2 || counts.some((count) => variants[count].length !== variants[counts[0]].length)) return null;
+    const components = variants[counts[0]];
+    const before = html.slice(0, phrase.index);
+    const plain = htmlToPlainText(before);
+    // No template: "each enemy within 10 feet", "each adjacent enemy" around the troop.
+    const around = /\beach (?:adjacent )?enem(?:y|ies) within (\d+) feet\b/i.exec(plain)?.[1] ?? (/\beach adjacent enem(?:y|ies)\b/i.test(plain) ? "5" : null);
+    const template = inlineTags(before, "Template").map(readTemplate).find(Boolean) ?? (around ? { type: "emanation", value: Number(around) } : undefined);
+    const range = readRange(plain);
+    const recharge = readRecharge(html);
+    return {
+        ...base(item, { time: String(counts[0]) }),
+        targeting: { target: template ? null : "each enemy in reach", range: range && !around ? `${range} feet` : template ? null : "touch", area: template ?? null },
+        trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
+        resolution: {
+            kind: "save",
+            check: { roll: "save", statistic: check.statistic, basic: true, against: { dc: "fixed", value: check.dc } },
+            sharedDamage: { rollOnce: true, components },
+            outcomes: withRiders(basicRows(components.map((component) => component.id)), before, components),
+            native: { byActions: Object.fromEntries(counts.map((count) => [count, { sharedDamage: { components: variants[count] } }])) }
+        }
+    };
+}
+
+// What the text may call the monster ("toward the kun"): its name, its token's, without "(Young)", and its last word
+// ("Elite Kun", "PFTEST SIM Kun").
+function ownNames(actor) {
+    const names = [actor?.name, actor?.prototypeToken?.name].filter(Boolean);
+    const plain = names.map((name) => name.replace(/\s*\([^)]*\)\s*/g, " ").trim());
+    const last = plain.map((name) => name.split(/\s+/).at(-1)).filter((word) => word && word.length >= 3);
+    return [...new Set([...names, ...plain, ...last])];
+}
+
+// The item with other text, as the readers see it.
+function withDescription(item, html) {
+    const description = { ...(item.system?.description ?? {}), value: html };
+    const system = new Proxy(item.system, { get: (target, key) => (key === "description" ? description : Reflect.get(target, key)) });
+    return new Proxy(item, { get: (target, key) => (key === "system" ? system : Reflect.get(target, key)) });
+}
+
+// A save whose results expose the creature to an affliction written after them (Vamollaroth's Spew Pollution: "takes full
+// damage and is exposed to a level 18 variant of brain worm", then "Brain Worm", its save and stages): the save read from
+// the text before the affliction, and on the results that expose, a note for the GM to roll the affliction's own save
+// (this save's result isn't the affliction's, so it isn't handed to Pseudo Afflictions). null otherwise.
+function exposureSave(item, actor) {
+    const html = item.system?.description?.value ?? "";
+    const stage = html.search(/<strong>\s*Stage\s+1\s*<\/strong>/i);
+    const cut = stage < 0 ? -1 : html.lastIndexOf("<hr", stage);
+    if (cut < 0 || !/<strong>\s*(?:Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/i.test(html.slice(0, cut))) return null;
+    const block = html.slice(cut);
+    const plan = inlineSave(withDescription(item, html.slice(0, cut)), actor);
+    const name = /^<hr[^>]*>\s*<p>\s*<strong>([^<]+)<\/strong>\s*<\/p>/i.exec(block)?.[1]?.trim();
+    const affliction = readAffliction(withDescription(item, block));
+    if (!plan?.resolution?.outcomes || !affliction) return null;
+    if (name) affliction.name = name;
+    const sections = degreeSections(html.slice(0, cut));
+    let exposes = false;
+    for (const [degree, row] of Object.entries(plan.resolution.outcomes)) {
+        const text = htmlToPlainText(sections[degree] ?? "");
+        const like = /^As (failure|success)\b/i.exec(text)?.[1]?.toLowerCase();
+        if (/\bexposed to\b/i.test(text) || (like && /\bexposed to\b/i.test(htmlToPlainText(sections[like] ?? "")))) {
+            const save = affliction.statistic[0].toUpperCase() + affliction.statistic.slice(1);
+            row.manualInstructions = [`{target} is exposed to ${affliction.name}: a DC ${affliction.dc} ${save} save against it (its stages are in the ability's text).`];
+            exposes = true;
+        }
+    }
+    return exposes ? plan : null;
+}
+
 // A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
@@ -677,8 +912,24 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (slug === "stench") return stench(item);
     if (slug === "swallow-whole") return swallowWhole(item);
     if (slug === "trample") return trample(item, actor);
+    if (slug === "buck") return buck(item);
+    if (/drink-blood|drink-essence/.test(slug ?? "") || /^Drink (?:Blood|Essence)$/i.test(item.name ?? "")) {
+        const plan = drinkBlood(item);
+        if (plan) return plan;
+    }
     if (slug === "engulf") return engulf(item, actor);
+    // Used in one of several ways (two breath weapons): a plan for each.
+    const modes = compileModes(item, { basicActions, actor });
+    if (modes) return modes;
+    // Damage by the number of actions spent (a troop's attacks): one plan, the damage for each count.
+    const byActions = actionCountSave(item, actor);
+    if (byActions) return byActions;
+    const exposure = exposureSave(item, actor);
+    if (exposure) return exposure;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    return compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item);
+    const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item);
+    // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
+    if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
+    return plan;
 }

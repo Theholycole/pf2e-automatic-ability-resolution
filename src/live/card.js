@@ -24,6 +24,22 @@ export function cardCheck(plan) {
 // A new card's state. source: { actorUuid, tokenUuid, name }; targets: [{ actorUuid, tokenUuid, name }].
 // cause: why it appeared, for the header ("entered the aura"); aura: { key, when } for an aura's card;
 // warning: a line for the GM ("Avalanche Breath is still recharging: 2 rounds left.").
+// An ability used in one of several ways (a dragon's two breath weapons): a card where the GM picks the way, which then
+// becomes that way's card (createCard). modes: [{ name, plan }], plan null for a way the GM resolves by hand.
+export function createModeCard({ modes, ability, source, targets, warning = null }) {
+    return {
+        version: CARD_VERSION,
+        kind: "modes",
+        ability: { name: ability?.name ?? "Ability", uuid: ability?.uuid ?? null, slug: null },
+        source,
+        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && cardCheck(mode.plan) ? mode.plan : null })),
+        warning,
+        targets: targets.map((target) => ({ actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name })),
+        status: "choose",
+        results: []
+    };
+}
+
 // The ability's slug, for its immunity effects and marks: PF2e's, or one from its name (most bestiary
 // abilities have none, and without it Apply couldn't record "immune to the Revenant's Baleful Shriek").
 export function abilitySlug(plan, name = null) {
@@ -33,11 +49,23 @@ export function abilitySlug(plan, name = null) {
     return from ? String(from).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || null : null;
 }
 
+// The action counts a plan's damage depends on (a troop's attacks: 1, 2 or 3 actions), lowest first; [] for one cost.
+export function actionCounts(plan) {
+    const variants = plan?.resolution?.native?.byActions;
+    return variants && typeof variants === "object" ? Object.keys(variants).map(Number).filter(Number.isFinite).sort((a, b) => a - b) : [];
+}
+
 export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null, warning = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
+    const counts = actionCounts(plan);
     return {
         version: CARD_VERSION,
+        // A card that was a choice of ways before (createModeCard) is one no longer.
+        kind: "resolve",
+        modes: null,
+        // How many actions the monster spent, for damage by the number of actions (the GM picks; the fewest at first).
+        actions: counts.length ? counts[0] : null,
         ability: { name: ability?.name ?? plan?.source?.name ?? "Ability", uuid: ability?.uuid ?? plan?.source?.uuid ?? null, slug: abilitySlug(plan, ability?.name) },
         source,
         plan,
@@ -78,6 +106,7 @@ export function checkLine(state) {
 // The card's HTML. Buttons carry data-aar-action ("roll", "roll-all", "targets",
 // "apply") and data-target-id; the Foundry side shows each to whoever may press it.
 export function cardHTML(state) {
+    if (state.kind === "modes") return modeCardHTML(state);
     const rows = state.targets.map((target) => {
         // A save: the target's roll; a check: the user's roll against the target's DC.
         const roll = state.check.kind === "check" ? `${statisticLabel(state.check.statistic)} ${target.total} vs DC ${target.dc}` : `${target.total}`;
@@ -93,7 +122,23 @@ export function cardHTML(state) {
     const empty = state.targets.length ? "" : `<p class="aar-hint">No targets: target the creatures, then press Use my targets.</p>`;
     const rider = state.rider ? ` <span class="aar-rider">after ${escape(state.rider.strikeName)}</span>` : state.cause ? ` <span class="aar-rider">${escape(state.cause)}</span>` : "";
     const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";
-    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong>${rider}<span class="aar-check">${escape(checkLine(state))}</span></header>${warning}${empty}<ul class="aar-targets">${rows}</ul>${results}${controls}</section>`;
+    // Damage by the number of actions: the GM's pick while the card is open, then the count used.
+    const counts = actionCounts(state.plan);
+    const actions = !counts.length ? ""
+        : state.status === "open" ? `<p class="aar-actions">Actions spent: ${counts.map((count) => `<button type="button" data-aar-action="actions" data-actions="${count}" data-gm-only="true"${count === state.actions ? ' class="aar-chosen" disabled' : ""}>${count}</button>`).join("")}</p>`
+        : `<p class="aar-actions">With ${escape(state.actions ?? counts[0])} action${(state.actions ?? counts[0]) === 1 ? "" : "s"}</p>`;
+    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong>${rider}<span class="aar-check">${escape(checkLine(state))}</span></header>${warning}${actions}${empty}<ul class="aar-targets">${rows}</ul>${results}${controls}</section>`;
+}
+
+// A choice of ways: a GM button for each ("Flame", "Weakening Gas (by hand)").
+function modeCardHTML(state) {
+    const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";
+    const buttons = state.status === "choose"
+        ? `<footer class="aar-controls aar-modes">${state.modes.map((mode, index) => `<button type="button" data-aar-action="mode" data-mode="${index}" data-gm-only="true">${escape(mode.name)}${mode.plan ? "" : " (by hand)"}</button>`).join("")}</footer>`
+        : "";
+    const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
+    const targets = state.targets.length ? `<p class="aar-hint">Targets: ${escape(state.targets.map((target) => target.name).join(", "))}</p>` : "";
+    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${state.status === "choose" ? `which way? (${state.modes.length})` : ""}</span></header>${warning}${targets}${results}${buttons}</section>`;
 }
 
 // Plain lines for what Apply did, from the core's changes. names: { id: name }.

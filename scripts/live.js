@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, changeLines, createCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, changeLines, createCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { applySwallow } from "./swallow.js";
 import { applyAuraCondition } from "./auras.js";
@@ -100,6 +100,18 @@ async function cardForAbility(message) {
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;
     if (plan?.resolution && (plan.trigger?.event ?? "use") === "use" && cardCheck(plan)) {
         await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens: [...game.user.targets], warning });
+        return;
+    }
+    // Used in one of several ways (two breath weapons): the GM picks the way on the card.
+    if (plan?.builtin === "modes" && plan.modes.some((mode) => mode.plan && (mode.plan.trigger?.event ?? "use") === "use" && cardCheck(mode.plan))) {
+        const state = createModeCard({
+            modes: plan.modes,
+            ability: { name: item.name, uuid: item.uuid },
+            source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
+            targets: [...game.user.targets].map((token) => targetEntry(token, null)),
+            warning
+        });
+        await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
     }
     // No card to apply: its recharge starts as it's used.
@@ -213,7 +225,7 @@ function wireCard(message, html) {
             event.preventDefault();
             button.disabled = true;
             try {
-                await press(message, button.dataset.aarAction, button.dataset.targetId);
+                await press(message, button.dataset.aarAction, button.dataset.targetId, button.dataset);
             } catch (error) {
                 ui.notifications.error(`${state.ability.name}: ${error.message}`);
                 console.error(`${MODULE_ID} |`, error);
@@ -223,10 +235,17 @@ function wireCard(message, html) {
     }
 }
 
-async function press(message, action, targetId) {
+async function press(message, action, targetId, data = {}) {
     const state = stateOf(message);
     if (action === "roll") return rollTarget(message, state.targets.find((target) => target.id === targetId));
     if (!game.user.isGM) throw new Error("Only the GM can use this control.");
+    if (action === "mode") return chooseMode(message, state, Number(data.mode));
+    // Damage by the number of actions: the count the monster spent.
+    if (action === "actions") {
+        if (state.status !== "open") return null;
+        const next = { ...state, actions: Number(data.actions) };
+        return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    }
     if (action === "roll-all") {
         for (const target of state.targets.filter((entry) => !entry.degree)) await rollTarget(message, target);
         return null;
@@ -247,6 +266,30 @@ async function press(message, action, targetId) {
     return null;
 }
 
+// The way the GM picked: the card becomes that way's card, for the same targets; a way to resolve by hand starts the
+// ability's recharge now (an automated way's starts on Apply).
+async function chooseMode(message, state, index) {
+    const mode = state?.kind === "modes" && state.status === "choose" ? state.modes[index] : null;
+    if (!mode) return null;
+    const name = `${state.ability.name} (${mode.name})`;
+    if (!mode.plan) {
+        const lines = [`${name}: resolve it by hand.`];
+        const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+        const formula = item ? rechargeFormula(item) : null;
+        if (item && formula) lines.push(await startRecharge({ actor: item.actor, item, formula, tokenUuid: state.source.tokenUuid }));
+        const next = { ...state, status: "chosen", results: lines };
+        return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    }
+    const check = cardCheck(mode.plan);
+    const targets = [];
+    for (const target of state.targets) {
+        const actor = await fromUuid(target.actorUuid).catch(() => null);
+        targets.push({ ...target, dc: check?.kind === "check" ? actor?.getStatistic?.(check.against)?.dc?.value ?? null : null });
+    }
+    const next = createCard({ plan: mode.plan, ability: { name, uuid: state.ability.uuid }, source: state.source, targets, warning: state.warning });
+    return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+}
+
 // --- Apply ----------------------------------------------------------------------
 
 const instanceFormula = (instance) => [...(instance.dice ?? []).map((term) => `${term.factor && term.factor !== 1 ? `${term.factor}*` : ""}${term.count}d${term.die}`), instance.constant ? String(instance.constant) : null].filter(Boolean).join(" + ") || "0";
@@ -259,7 +302,7 @@ async function applyCard(message) {
     if (!core) throw new Error("The resolution core isn't active.");
     const caster = { id: "source" };
     const wrappers = state.targets.map((target) => ({ id: target.id }));
-    const context = { caster, targets: wrappers, id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 10 }), allied: () => false };
+    const context = { caster, targets: wrappers, id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 10 }), allied: () => false, ...(Number.isFinite(state.actions) ? { actions: state.actions } : {}) };
     const rolled = [];
     const io = {
         roll: (_statistic, options) => {
@@ -581,6 +624,10 @@ function injectStyles() {
 .pf2e-aar-card .aar-controls { display: flex; gap: 0.25rem; margin-top: 0.25rem; }
 .pf2e-aar-card .aar-applied li { font-size: 0.9em; }
 .pf2e-aar-card .aar-hint { font-size: 0.9em; font-style: italic; }
-.pf2e-aar-card .aar-warning { margin: 0.25rem 0; font-size: 0.9em; font-weight: bold; color: #b26a00; }`;
+.pf2e-aar-card .aar-warning { margin: 0.25rem 0; font-size: 0.9em; font-weight: bold; color: #b26a00; }
+.pf2e-aar-card .aar-actions { display: flex; align-items: center; gap: 0.25rem; margin: 0.25rem 0; font-size: 0.9em; }
+.pf2e-aar-card .aar-actions button { flex: 0 0 auto; width: auto; line-height: 1.4; padding: 0 0.6rem; }
+.pf2e-aar-card .aar-actions button.aar-chosen { font-weight: bold; opacity: 1; box-shadow: 0 0 0 2px #b26a00 inset; }
+.pf2e-aar-card .aar-modes { display: flex; flex-wrap: wrap; gap: 0.25rem; }`;
     document.head.append(style);
 }
