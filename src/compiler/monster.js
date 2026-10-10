@@ -16,6 +16,7 @@ import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
 import { compileBuiltin, moveThenStrike } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
+import { castSpell } from "./casts.js";
 
 const none = () => ({ damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] });
 const shared = (multiplier, ids) => ({ damage: { mode: "shared", multiplier, sourceComponentIds: ids }, effects: [] });
@@ -1137,5 +1138,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
+    // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? plan;
     return plan;
 }

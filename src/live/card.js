@@ -61,6 +61,32 @@ export function createEffectCard({ plan, ability, source, targets, warning = nul
     };
 }
 
+// An ability that casts a spell or has its effects (Dominate, Turn to Mist): a card with the spell, its rank and DC (the GM
+// can change them) and what the ability changes, and the GM's Cast, which casts the spell through PF2e. plan: the
+// compiler's { builtin: "cast-spell" }; spell: { uuid, name }; rank, dc: what the card starts with (the plan's, or the
+// creature's own); attack: its spell attack modifier (dc − 10 unless the text gives a counteract or attack modifier).
+export function createCastCard({ plan, ability, source, spell, rank, dc, warning = null }) {
+    if (plan?.builtin !== "cast-spell") return null;
+    return {
+        version: CARD_VERSION,
+        kind: "cast",
+        modes: null,
+        ability: { name: ability?.name ?? plan.source?.name ?? "Ability", uuid: ability?.uuid ?? plan.source?.uuid ?? null, slug: null },
+        source,
+        spell: { uuid: spell?.uuid ?? plan.spell.uuid, name: spell?.name ?? plan.spell.name ?? "the spell" },
+        rank: rank ?? plan.rank ?? null,
+        dc: dc ?? plan.dc ?? null,
+        attack: plan.attack ?? null,
+        tradition: plan.tradition ?? null,
+        notes: [...(plan.notes ?? [])],
+        check: null,
+        warning,
+        targets: [],
+        status: "open",
+        results: []
+    };
+}
+
 // Who an effect card's effect goes to, in words.
 export function effectRecipients(state) {
     const application = state.plan?.resolution?.applications?.[0] ?? {};
@@ -137,6 +163,7 @@ export function checkLine(state) {
 // "apply") and data-target-id; the Foundry side shows each to whoever may press it.
 export function cardHTML(state) {
     if (state.kind === "modes") return modeCardHTML(state);
+    if (state.kind === "cast") return castCardHTML(state);
     if (state.kind === "effect") return effectCardHTML(state);
     const rows = state.targets.map((target) => {
         // A save: the target's roll; a check: the user's roll against the target's DC.
@@ -175,6 +202,18 @@ function effectCardHTML(state) {
     const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";
     const empty = self || state.targets.length ? "" : `<p class="aar-hint">No targets: target the creatures, then press Use my targets.</p>`;
     return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${escape(application.label ?? "Effect")} ${escape(effectRecipients(state))}</span></header>${warning}${empty}${rows ? `<ul class="aar-targets">${rows}</ul>` : ""}${results}${controls}</section>`;
+}
+
+// A spell cast: the spell, its rank and DC (fields the GM can change before Cast), the ability's changes, Cast.
+function castCardHTML(state) {
+    const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";
+    const notes = state.notes?.length ? `<ul class="aar-notes">${state.notes.map((note) => `<li>${escape(note)}</li>`).join("")}</ul>` : "";
+    const numbers = [state.rank ? `rank ${state.rank}` : null, state.dc ? `DC ${state.dc}` : null, state.attack != null ? `+${state.attack}` : null].filter(Boolean).join(", ");
+    const controls = state.status === "open"
+        ? `<footer class="aar-controls aar-cast"><label>Rank <input type="number" min="1" max="10" data-aar-field="rank" value="${escape(state.rank ?? "")}"></label><label>DC <input type="number" min="1" data-aar-field="dc" value="${escape(state.dc ?? "")}"></label><button type="button" data-aar-action="cast" data-gm-only="true">Cast ${escape(state.spell.name)}</button></footer>`
+        : "";
+    const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
+    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${escape(state.spell.name)}${numbers ? ` (${escape(numbers)})` : ""}</span></header>${warning}${notes}${results}${controls}</section>`;
 }
 
 // A choice of ways: a GM button for each ("Flame", "Weakening Gas (by hand)").

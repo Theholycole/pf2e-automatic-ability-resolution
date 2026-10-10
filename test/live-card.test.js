@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, changeLines, createCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
+import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
 
 const breath = {
     source: { name: "Avalanche Breath", slug: "avalanche-breath" },
@@ -126,4 +126,18 @@ test("an effect card: who gets the effect, allies marked, Apply", async () => {
 
 test("a card line for a creature that dies", () => {
     assert.deepEqual(changeLines([{ op: "death", target: "t0" }, { op: "death", target: "t0", ifReducedTo: 0 }], { t0: "Valeros" }), ["Valeros dies"]);
+});
+
+test("a cast card: the spell, its rank and DC as fields the GM can change, what the ability changes, Cast", () => {
+    const plan = { builtin: "cast-spell", source: { name: "Test Haunt" }, spell: { uuid: "Compendium.pf2e.spells-srd.Item.AAAAAAAAAAAAAAD2", name: "Possession" }, rank: null, dc: 23, attack: null, tradition: null, notes: ["This has the same effect as the Possession spell (DC 23 Will), except the test ghost has no body to leave behind."] };
+    const state = createCastCard({ plan, ability: { name: "Test Haunt", uuid: "Actor.a.Item.b" }, source: { actorUuid: "Actor.a", name: "Test Ghost" }, spell: { uuid: plan.spell.uuid, name: "Possession" }, rank: 7 });
+    assert.deepEqual([state.kind, state.rank, state.dc, state.status, state.targets], ["cast", 7, 23, "open", []]);
+    const html = cardHTML(state);
+    assert.match(html, /Possession \(rank 7, DC 23\)/);
+    assert.match(html, /data-aar-field="rank" value="7"/);
+    assert.match(html, /data-aar-field="dc" value="23"/);
+    assert.match(html, /data-aar-action="cast"[^>]*>Cast Possession</);
+    assert.match(html, /<li>This has the same effect as the Possession spell \(DC 23 Will\), except the test ghost has no body to leave behind\.<\/li>/);
+    assert.doesNotMatch(cardHTML({ ...state, status: "cast", results: ["Cast Possession at rank 7 (DC 23)."] }), /data-aar-action="cast"/);
+    assert.equal(createCastCard({ plan: { builtin: "trample" } }), null);
 });

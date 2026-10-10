@@ -645,3 +645,38 @@ test("save or die, pulls in prose saves, and the PF2e effect a save or check lin
     const probe = compileMonsterAbility(action("Test Probe", `<p>The test nerve probes a creature within 100 feet, attempting an @Check[occultism|against:will] check against the creature's Will DC. On a success, the test nerve can Step, and gains a +2 circumstance bonus to AC against that creature until the start of its next turn.</p><p>${effect("AAAAAAAAAAAAAAB1", "Effect: Test Probe")}</p>`));
     assert.deepEqual(probe.resolution.outcomes.success.nativeEffects, [{ uuid: "Compendium.pf2e.bestiary-effects.Item.AAAAAAAAAAAAAAB1", label: "Test Probe", recipient: { actor: "source" } }]);
 });
+
+test("abilities that cast a spell or have its effects (2026-10-10, batch 9): the spell, at the ability's rank and DC, and what it changes", () => {
+    const action = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 2 : null }, traits: { value: [] }, description: { value: html } } });
+    const spell = (id, label) => `@UUID[Compendium.pf2e.spells-srd.Item.${id}]{${label}}`;
+    const dominate = spell("AAAAAAAAAAAAAAD1", "Dominate");
+    // "can cast … at will as a divine innate spell", its DC in a check after it.
+    const glare = compileMonsterAbility(action("Test Glare", `<p>The test vampire can cast ${dominate} at will as a divine innate spell. It requires meeting the target's gaze (@Check[will|dc:26]). A creature that succeeds is temporarily immune for 24 hours.</p>`));
+    assert.deepEqual([glare.builtin, glare.spell.uuid, glare.spell.name, glare.rank, glare.dc, glare.tradition], ["cast-spell", "Compendium.pf2e.spells-srd.Item.AAAAAAAAAAAAAAD1", "Dominate", null, 26, "divine"]);
+    assert.deepEqual(glare.notes, ["It requires meeting the target's gaze (DC 26 Will).", "A creature that succeeds is temporarily immune for 24 hours."]);
+    // "This has the same effect as the X spell (DC), except …": the exception for the GM.
+    const haunt = compileMonsterAbility(action("Test Haunt", `<p>The test ghost enters an adjacent creature. This has the same effect as the ${spell("AAAAAAAAAAAAAAD2", "Possession")} spell (@Check[will|dc:23]), except the test ghost has no body to leave behind.</p>`));
+    assert.deepEqual([haunt.dc, haunt.notes], [23, ["This has the same effect as the Possession spell (DC 23 Will), except the test ghost has no body to leave behind."]]);
+    // "casts a 5th-rank X on …"; "heightened to 6th rank"; a counteract modifier; the rest of the sentence as a note.
+    const oath = compileMonsterAbility(action("Test Oath", `<p><strong>Requirements</strong> The test spirit's last action was a successful claw Strike.</p><hr /><p><strong>Effect</strong> The test spirit casts a 5th-rank ${spell("AAAAAAAAAAAAAAD3", "Geas")} on the creature it hit (@Check[will|dc:30]).</p>`));
+    assert.deepEqual([oath.builtin, oath.rank, oath.dc, oath.notes], ["cast-spell", 5, 30, []]);
+    const swarm = compileMonsterAbility(action("Test Swarm", `<p>The test druids cast ${spell("AAAAAAAAAAAAAAD4", "Swarm Form")} heightened to 6th rank, but the duration is 1 hour instead of 5 minutes.</p>`));
+    assert.deepEqual([swarm.rank, swarm.notes], [6, ["The test druids cast Swarm Form heightened to 6th rank, but the duration is 1 hour instead of 5 minutes."]]);
+    const plating = compileMonsterAbility(action("Test Plating", `<p>The test construct's plating casts ${spell("AAAAAAAAAAAAAAD5", "Spell Turning")} on it (counteract modifier +32).</p>`));
+    assert.deepEqual([plating.attack, plating.dc], [32, null]);
+    const mist = compileMonsterAbility(action("Test Mist", `<p>The test vampire turns into a cloud of vapor, as the ${spell("AAAAAAAAAAAAAAD6", "Vapor Form")} spell, or back to its normal form.</p>`));
+    assert.deepEqual([mist.self, mist.notes], [true, ["The test vampire turns into a cloud of vapor, as the Vapor Form spell, or back to its normal form."]]);
+    // On itself: "gains the effects of", "on himself".
+    const blur = compileMonsterAbility(action("Test Shade", `<p>The test giant gains the effect of the ${spell("AAAAAAAAAAAAAAE1", "Blur")} spell for 1 minute.</p>`));
+    assert.deepEqual([blur.self, haunt.self, oath.self], [true, false, false]);
+    // Not a casting: a trigger that names the spell, a rule on its own casting, a choice, a Strike with it, a permission, a reflection.
+    const not = (name, html, type) => assert.notEqual(compileMonsterAbility(action(name, html, type))?.builtin, "cast-spell", name);
+    not("Test Ride", `<p><strong>Trigger</strong> The test wendigo casts ${spell("AAAAAAAAAAAAAAD7", "Migration")} while it has a foe Grabbed.</p><hr /><p><strong>Effect</strong> The grabbed creature comes along.</p>`, "reaction");
+    not("Test Rule", `<p>When the test acolyte casts ${spell("AAAAAAAAAAAAAAD8", "Harm")} to damage one creature, that creature is knocked Prone.</p>`);
+    not("Test Pounce", `<p>The test warden Strides up to its Speed, Leaps up to its Speed, or casts ${spell("AAAAAAAAAAAAAAD9", "Translocate")}; at the end of that movement, it Strikes.</p>`);
+    not("Test Ambush", `<p>The test hound casts ${spell("AAAAAAAAAAAAAAD9", "Translocate")}, then makes a melee Strike that deals one extra die of damage.</p>`);
+    not("Test Domain", `<p>The test blight projects its senses into its domain. A test blight can cast ${dominate} through this sensory link.</p>`);
+    not("Test Mirror", `<p><strong>Trigger</strong> The test dragon critically succeeds at a save against a spell.</p><hr /><p><strong>Effect</strong> The spell is reflected back upon the caster, with the effect of ${spell("AAAAAAAAAAAAAAD5", "Spell Turning")}.</p>`, "reaction");
+    not("Test Passive", `<p>The test vampire can cast ${dominate} at will as a divine innate spell.</p>`, "passive");
+    not("Test Choice", `<p>The test herecite casts ${dominate}, ${spell("AAAAAAAAAAAAAAD8", "Harm")}, or ${spell("AAAAAAAAAAAAAAD3", "Geas")} (DC 31).</p>`);
+});

@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, changeLines, createCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { applySwallow } from "./swallow.js";
 import { applyAuraCondition } from "./auras.js";
@@ -133,8 +133,101 @@ async function cardForAbility(message) {
         await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
     }
+    // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
+    if (plan?.builtin === "cast-spell") {
+        const spell = await fromUuid(plan.spell.uuid).catch(() => null);
+        const state = createCastCard({
+            plan,
+            ability: { name: item.name, uuid: item.uuid },
+            source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
+            spell: spell ? { uuid: plan.spell.uuid, name: spell.name } : null,
+            rank: plan.rank ?? (spell ? defaultRank(spell, item.actor) : null),
+            dc: plan.dc ?? spellDC(item.actor),
+            warning
+        });
+        await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
+        return;
+    }
     // No card to apply: its recharge starts as it's used.
     if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+}
+
+// A spell an ability casts, with no rank given: half the creature's level rounded up (as its focus spells and cantrips), not
+// below the spell's own rank.
+function defaultRank(spell, actor) {
+    const half = Math.min(10, Math.max(1, Math.ceil(Number(actor.level ?? 1) / 2)));
+    return spell.isCantrip ? half : Math.max(Number(spell.system?.level?.value ?? 1), half);
+}
+
+// The creature's spell DC: its best spellcasting entry's, or null.
+function spellDC(actor) {
+    const dcs = [...(actor.spellcasting ?? [])].filter((entry) => entry.isOfType?.("spellcastingEntry")).map((entry) => Number(entry.statistic?.dc?.value)).filter(Number.isFinite);
+    return dcs.length ? Math.max(...dcs) : null;
+}
+
+// Cast: through PF2e, at the card's rank, which posts the spell's card (the spell module resolves it as it does any cast);
+// nothing is spent. The creature's own copy of the spell when it has one at that DC (a vampire's innate Dominate), or else
+// the spell from an innate spellcasting entry of the ability's own (made on the first use, its DC and attack kept up to date).
+async function castFromCard(message, state, data) {
+    if (state?.kind !== "cast" || state.status !== "open") return null;
+    const actor = await fromUuid(state.source.actorUuid);
+    if (!actor) throw new Error("The creature isn't there any more.");
+    const source = (await fromUuid(state.spell.uuid).catch(() => null))?.toObject();
+    if (!source) throw new Error(`${state.spell.name} isn't in PF2e's compendium.`);
+    const cantrip = (source.system?.traits?.value ?? []).includes("cantrip");
+    const rank = Math.min(10, Math.max(Number(source.system?.level?.value ?? 1), Number(data.rank) || state.rank || 1));
+    const dc = Number(data.dc) || state.dc || 10;
+    const attack = state.attack ?? dc - 10;
+    // A hazard (PF2e gives hazards no spells): the spell module's plan for the spell, from the core's registry, as a save card
+    // at the ability's DC for the creatures targeted now.
+    if (actor.type === "hazard") return hazardCast(message, state, { rank, dc });
+    const own = actor.itemTypes.spell.find((spell) => (spell.sourceId ?? spell._stats?.compendiumSource) === state.spell.uuid && !spell.flags?.[MODULE_ID]?.abilityCast
+        && spell.spellcasting?.isOfType?.("spellcastingEntry") && Number(spell.spellcasting.statistic?.dc?.value) === dc && (state.attack == null || Number(spell.spellcasting.statistic?.check?.mod) === attack));
+    if (own) await own.spellcasting.cast(own, { rank, consume: false });
+    else {
+        const key = state.ability.uuid ?? `${actor.uuid}:${state.ability.name}`;
+        let entry = actor.itemTypes.spellcastingEntry.find((candidate) => candidate.flags?.[MODULE_ID]?.abilityCast === key);
+        if (!entry) {
+            // (Its tradition: the text's, the creature's own innate magic's, or the spell's first.)
+            const tradition = state.tradition ?? actor.itemTypes.spellcastingEntry.find((candidate) => !candidate.flags?.[MODULE_ID]?.abilityCast)?.system?.tradition?.value ?? source.system?.traits?.traditions?.[0] ?? "arcane";
+            [entry] = await actor.createEmbeddedDocuments("Item", [{ name: `${state.ability.name} (ability)`, type: "spellcastingEntry", flags: { [MODULE_ID]: { abilityCast: key } },
+                system: { tradition: { value: tradition }, prepared: { value: "innate" }, spelldc: { dc, value: attack } } }]);
+        } else if (Number(entry.system.spelldc?.dc) !== dc || Number(entry.system.spelldc?.value) !== attack) {
+            await entry.update({ "system.spelldc.dc": dc, "system.spelldc.value": attack });
+        }
+        entry = actor.items.get(entry.id);
+        let spell = actor.itemTypes.spell.find((candidate) => candidate.system?.location?.value === entry.id && candidate.flags?.[MODULE_ID]?.abilityCast === state.spell.uuid);
+        if (!spell) {
+            delete source._id;
+            source.system.location = { value: entry.id, ...(cantrip ? {} : { heightenedLevel: rank }) };
+            foundry.utils.setProperty(source, `flags.${MODULE_ID}.abilityCast`, state.spell.uuid);
+            [spell] = await actor.createEmbeddedDocuments("Item", [source]);
+        } else if (!cantrip && Number(spell.system.location?.heightenedLevel) !== rank) {
+            await spell.update({ "system.location.heightenedLevel": rank });
+        }
+        await entry.cast(actor.items.get(spell.id), { rank, consume: false });
+    }
+    const lines = [`Cast ${state.spell.name} at rank ${rank} (DC ${dc}${state.attack != null ? `, +${attack}` : ""}).`];
+    const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+    const formula = item ? rechargeFormula(item) : null;
+    if (item && formula) lines.push(await startRecharge({ actor: item.actor, item, formula, tokenUuid: state.source.tokenUuid }));
+    const next = { ...state, rank, dc, status: "cast", results: lines };
+    return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+}
+
+async function hazardCast(message, state, { rank, dc }) {
+    const core = game.modules.get(CORE_ID)?.api;
+    const spell = await fromUuid(state.spell.uuid).catch(() => null);
+    const prepared = core && spell ? await core.registry.preparePlan(spell).catch(() => null) : null;
+    const plan = prepared?.plan ? foundry.utils.deepClone(prepared.plan) : null;
+    const check = plan?.resolution?.check;
+    if (!plan || check?.roll !== "save") throw new Error(`a hazard can't cast ${state.spell.name} through PF2e, and it has no save to roll here: resolve it by hand.`);
+    check.against = { dc: "fixed", value: dc };
+    const tokens = [...game.user.targets];
+    if (!tokens.length) throw new Error("Target the creatures first.");
+    const next = createCard({ plan, ability: { name: `${state.ability.name} (${state.spell.name})`, uuid: state.ability.uuid }, source: state.source, targets: tokens.map((token) => targetEntry(token, cardCheck(plan))), warning: state.warning });
+    next.castRank = rank;
+    return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
 }
 
 // A monster's or a hazard's Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each.
@@ -244,7 +337,9 @@ function wireCard(message, html) {
             event.preventDefault();
             button.disabled = true;
             try {
-                await press(message, button.dataset.aarAction, button.dataset.targetId, button.dataset);
+                // (The card's fields: a cast's rank and DC.)
+                const fields = Object.fromEntries([...(button.closest(".pf2e-aar-card")?.querySelectorAll("input[data-aar-field]") ?? [])].map((input) => [input.dataset.aarField, input.value]));
+                await press(message, button.dataset.aarAction, button.dataset.targetId, { ...button.dataset, ...fields });
             } catch (error) {
                 ui.notifications.error(`${state.ability.name}: ${error.message}`);
                 console.error(`${MODULE_ID} |`, error);
@@ -259,6 +354,7 @@ async function press(message, action, targetId, data = {}) {
     if (action === "roll") return rollTarget(message, state.targets.find((target) => target.id === targetId));
     if (!game.user.isGM) throw new Error("Only the GM can use this control.");
     if (action === "mode") return chooseMode(message, state, Number(data.mode));
+    if (action === "cast") return castFromCard(message, state, data);
     // Damage by the number of actions: the count the monster spent.
     if (action === "actions") {
         if (state.status !== "open") return null;
@@ -328,7 +424,8 @@ async function applyCard(message) {
     const wrappers = state.targets.map((target) => ({ id: target.id }));
     // Allies (an effect card's): on the user's side, as the card recorded.
     const allied = (wrapper) => wrapper?.id === "source" || Boolean(state.targets.find((target) => target.id === wrapper?.id)?.allied);
-    const context = { caster, targets: wrappers, id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 10 }), allied, ...(Number.isFinite(state.actions) ? { actions: state.actions } : {}) };
+    // (A spell's rank, for its heightened damage: a hazard's spell.)
+    const context = { caster, targets: wrappers, id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 10 }), allied, ...(Number.isFinite(state.actions) ? { actions: state.actions } : {}), ...(Number.isFinite(state.castRank) ? { castRank: state.castRank } : {}) };
     const rolled = [];
     const io = {
         roll: (_statistic, options) => {
@@ -682,6 +779,11 @@ function injectStyles() {
 .pf2e-aar-card .aar-actions { display: flex; align-items: center; gap: 0.25rem; margin: 0.25rem 0; font-size: 0.9em; }
 .pf2e-aar-card .aar-actions button { flex: 0 0 auto; width: auto; line-height: 1.4; padding: 0 0.6rem; }
 .pf2e-aar-card .aar-actions button.aar-chosen { font-weight: bold; opacity: 1; box-shadow: 0 0 0 2px #b26a00 inset; }
-.pf2e-aar-card .aar-modes { display: flex; flex-wrap: wrap; gap: 0.25rem; }`;
+.pf2e-aar-card .aar-modes { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.pf2e-aar-card .aar-notes { margin: 0.25rem 0; padding-left: 1.1rem; font-size: 0.9em; }
+.pf2e-aar-card .aar-cast { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+.pf2e-aar-card .aar-cast label { display: flex; align-items: center; gap: 0.2rem; flex: 0 0 auto; }
+.pf2e-aar-card .aar-cast input { width: 3.2rem; }
+.pf2e-aar-card .aar-cast button { flex: 1 1 auto; }`;
     document.head.append(style);
 }
