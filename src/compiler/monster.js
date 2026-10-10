@@ -33,6 +33,9 @@ export function glossarySlug(item) {
     // Strike that lists Grab in its damage entry …" → "grab".
     const named = String(item?.name ?? "").trim().toLowerCase().replace(/\s+/g, "-");
     if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push", "pull", "improved-pull"].includes(named) && /last action was a success with a Strike that lists/i.test(item?.system?.description?.value ?? "")) return named;
+    // Reactive Strike under either name ("Attack of Opportunity (Tail Only)"), its trigger written out.
+    const reactive = /^(attack-of-opportunity|reactive-strike)\b/.exec(named)?.[1];
+    if (reactive && /uses a manipulate action or a move action, makes a ranged attack, or leaves a square during a move action/i.test(htmlToPlainText(item?.system?.description?.value ?? ""))) return reactive;
     return own;
 }
 

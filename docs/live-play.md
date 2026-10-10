@@ -406,3 +406,11 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - The glossary's Grab (and Knockdown, Push, Pull) written out with no slug is read as that rider again.
 - **Checked live in pftest** (the scene's PFTEST SIM Megalodon, and a PFTEST SIM Giant Animated Statue deleted afterwards; the PCs restored): Savage on Valeros, "Valeros takes 7 slashing"; Burn Alive on Seelah, 7 fire and 1d8 persistent fire.
 
+## Reactions: Reactive Strike's older name, and concealment (2026-10-10, batch 12)
+
+- **Attack of Opportunity:** the reaction offers knew only Reactive Strike's current slug. A monster whose reaction still has the older one ("attack-of-opportunity": Bestiary 1–3 and other older books, 441 PF2e and 32 Battlezoo) never got an offer; it now does, as Reactive Strike. Eleven more whose glossary text is written out with no slug ("Attack of Opportunity", "Reactive Strike (Tail Only)") are read as it again, as Grab and the other riders were in batch 11.
+- **Concealment against the attack** ("The dragon gains concealment against the triggering attack", "The attacker must succeed at a DC 11 flat check in order to affect the drake, as if the drake were Hidden", "must attempt a DC 11 flat check; on a failure, the attack passes harmlessly through"): offered, as Nimble Dodge is, when an attack hits the monster (a ranged attack only when the trigger says so). Its button rolls the attacker's flat check, DC 5 (concealment) or DC 11 (hidden); a failure is a miss, so the GM ignores its damage. The reaction is used either way.
+- **"If she succeeds at a DC 16 flat check, the attack becomes a normal hit"** (Saving Slash) is a critical-hit flat check, as Resilient Form's.
+- **The simulator** (B41): the reaction's flat check when an attack hits; and any concealed or hidden target makes attackers roll a DC 5 or DC 11 flat check first.
+- **Checked live in pftest** (PFTEST SIM Barghest and Shadow Drake, and a test combat, deleted afterwards; the PCs restored): the Barghest's Attack of Opportunity was offered when Valeros left its reach (Claw, Jaws, Not now); Valeros's critical hit on the Shadow Drake brought the Shadow Evade offer, whose flat check rolled 12 against DC 11 ("The attack still hits"), and the reaction was marked used.
+

@@ -707,3 +707,17 @@ test("results with no roll (2026-10-10, batch 11): damage and conditions on the 
     not("Test Self", "<p>The test swarm takes @Damage[1d6[untyped]] damage as the traps cling on.</p>");
     not("Test Smoke", "<p>All creatures within the cloud become @UUID[Compendium.pf2e.conditionitems.Item.DmAIPqOBomZ7H95W]{Concealed}.</p>");
 });
+
+test("concealment against the triggering attack, Reactive Strike under either name (2026-10-10, batch 12)", () => {
+    const reaction = (name, html, slug = null) => ({ type: "action", name, system: { slug, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const concealment = "@UUID[Compendium.pf2e.conditionitems.Item.DmAIPqOBomZ7H95W]{Concealment}";
+    assert.deepEqual(compileMonsterAbility(reaction("Test Flash", `<p><strong>Trigger</strong> The test dragon is targeted with an attack</p><hr /><p><strong>Effect</strong> The test dragon flashes its scales. It gains ${concealment} against the triggering attack.</p>`)), { builtin: "conceal-reaction", dc: 5, ranged: false, when: "targeted" });
+    assert.deepEqual(compileMonsterAbility(reaction("Test Evade", "<p><strong>Trigger</strong> A creature attacks the test drake while it is in dim light</p><hr /><p><strong>Effect</strong> The attacker must succeed at a @Check[flat|dc:11] check in order to affect the test drake, as if the drake were Hidden for the triggering attack.</p>")).dc, 11);
+    assert.equal(compileMonsterAbility(reaction("Test Dodge", `<p><strong>Trigger</strong> The test dragon is targeted with a ranged Strike or spell attack</p><hr /><p><strong>Effect</strong> The test dragon slows time, gaining ${concealment} against the triggering attack.</p>`)).ranged, true);
+    // "If she succeeds at a DC 16 flat check, the attack becomes a normal hit".
+    assert.deepEqual(compileMonsterAbility(reaction("Test Slash", "<p><strong>Trigger</strong> an opponent critically hits the test duelist with a melee attack</p><p><strong>Effect</strong> If she succeeds at a @Check[flat|dc:16], the attack becomes a normal hit, instead of a critical hit.</p>")), { builtin: "crit-downgrade", dc: 16 });
+    // Reactive Strike written out with no slug, under its older name.
+    const written = "<p><strong>Trigger</strong> A creature within the monster's reach uses a manipulate action or a move action, makes a ranged attack, or leaves a square during a move action it's using.</p><p><strong>Effect</strong> The monster attempts a melee Strike against the triggering creature.</p>";
+    assert.deepEqual(compileMonsterAbility(reaction("Attack of Opportunity", written)), { builtin: "attack-of-opportunity" });
+    assert.deepEqual(compileMonsterAbility(reaction("Reactive Strike (Tail Only)", written)), { builtin: "reactive-strike" });
+});

@@ -27,7 +27,7 @@ import { isActiveGM } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -61,7 +61,9 @@ export function setUpReactions({ compileItem }) {
 // A monster's reactions the live cards play: [{ item, plan }].
 function reactionsOf(actor) {
     // (A free action with a trigger, such as Cushioned Blow, too.)
-    return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: compile(item) })).filter(({ plan, item }) => KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade"));
+    // (Reactive Strike's older name, "Attack of Opportunity", is the same reaction.)
+    const same = (plan) => (plan?.builtin === "attack-of-opportunity" ? { ...plan, builtin: "reactive-strike" } : plan);
+    return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) })).filter(({ plan, item }) => KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade"));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -177,6 +179,12 @@ async function defend(message, context, scene, combat, attacker) {
         }
         if (plan.builtin === "attack-misfortune" && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
         if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc, free: item.system?.actionType?.value === "free" } });
+        // Concealment against the attack (Shadow Evade): offered on a hit, the attacker's flat check; a failure misses (2026-10-10).
+        const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
+        if (plan.builtin === "conceal-reaction" && hit && (!plan.ranged || ranged)) {
+            return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: `${attacker.name} rolls a DC ${plan.dc} flat check (${plan.dc === 11 ? "as if it were Hidden" : "concealment"}); on a failure, the attack misses.`,
+                attack: { messageId: message.id, dc: plan.dc, success: "success. The attack still hits.", failure: "failure. The attack misses: ignore its damage and effects." } });
+        }
     }
 }
 
@@ -309,7 +317,7 @@ async function use(message, action, slug) {
         // The flat check, rolled for all to see; a success turns the critical hit into a normal hit.
         const roll = await new Roll("1d20").evaluate();
         await roll.toMessage({ flavor: `${state.ability.name}: DC ${state.attack.dc} flat check`, speaker: ChatMessage.getSpeaker({ actor, token: monster }) });
-        result = roll.total >= state.attack.dc ? `${roll.total}: success. The critical hit becomes a normal hit; apply the attack's normal damage.` : `${roll.total}: failure. The critical hit stands.`;
+        result = roll.total >= state.attack.dc ? `${roll.total}: ${state.attack.success ?? "success. The critical hit becomes a normal hit; apply the attack's normal damage."}` : `${roll.total}: ${state.attack.failure ?? "failure. The critical hit stands."}`;
         // A free action doesn't use the reaction.
         if (state.attack.free) return settle(message, state, "used", result);
     } else if (state.kind === "ferocity") {
