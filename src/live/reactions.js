@@ -50,6 +50,24 @@ export const blocksReactions = (slugs) => slugs.some((slug) => NO_REACTIONS.has(
 // when its turn is still to come this round, otherwise 1.
 export const reactionRounds = (position, current) => (position > current ? 0 : 1);
 
+// A reaction whose trigger is a hit on the monster (2026-10-10, batch 16: "The dragon is critically hit with a melee
+// attack", "A creature within the thoqqua's reach hits the thoqqua with a melee Strike"): does this attack roll set it off?
+// distance: the attacker's, in feet (null when unknown).
+export function hitSetsOff(trigger, { outcome, ranged = false, unarmed = false, distance = null }) {
+    if (trigger?.event !== "hit-by" || !trigger.reaction || !["success", "criticalSuccess"].includes(outcome)) return false;
+    if (trigger.critical && outcome !== "criticalSuccess") return false;
+    if (trigger.melee && ranged) return false;
+    if (trigger.unarmed && !unarmed) return false;
+    return !(trigger.within && Number.isFinite(distance) && distance > trigger.within);
+}
+
+// What the GM still checks: "Only on piercing or slashing damage."
+export function damageNote(trigger) {
+    const types = (trigger?.damageTypes ?? []).map((type) => (type === "physical" ? "physical (bludgeoning, piercing or slashing)" : type));
+    if (!types.length) return null;
+    return `Only on ${types.length > 1 ? `${types.slice(0, -1).join(", ")} or ${types.at(-1)}` : types[0]} damage.`;
+}
+
 // The offer card. state: { kind, ability, monster, target, trigger, strikes, note, attack, status, result }.
 export function offerHTML(state) {
     const who = state.target ? `${escape(state.target.name)} ${escape(state.trigger)}` : escape(state.trigger);
@@ -59,6 +77,7 @@ export function offerHTML(state) {
         if (state.kind === "ac") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(degreeWords(state.attack.after))}</button>`);
         if (state.kind === "misfortune") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the worse</button>`);
         if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at 1 HP</button>`);
+        if (state.kind === "card") buttons.push(`<button type="button" data-aar-reaction="use">Use it</button>`);
         if (state.kind === "flat") buttons.push(`<button type="button" data-aar-reaction="use">Roll the DC ${escape(state.attack?.dc)} flat check</button>`);
         // Retributive Strike: the ally's resistance, then a Strike at the foe if it's in reach.
         if (state.kind === "retribution") {

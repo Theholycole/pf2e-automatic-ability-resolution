@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { blocksReactions, degreeOf, higherAC, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
 
 test("which Strike a reaction allows", () => {
     assert.equal(onlyStrike("Reactive Strike (Tail Only)"), "tail");
@@ -55,4 +55,19 @@ test("a flat-check offer after a critical hit (Resilient Form)", () => {
     const html = offerHTML({ kind: "flat", ability: { name: "Resilient Form" }, monster: { name: "Dragon" }, target: { name: "Valeros" }, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { dc: 14 }, status: "open", result: null });
     assert.match(html, /data-aar-reaction="use">Roll the DC 14 flat check</);
     assert.match(html, /Valeros critically hit it/);
+});
+
+test("a reaction to a hit on the monster: which attack rolls set it off, and its offer (2026-10-10, batch 16)", () => {
+    const crit = { event: "hit-by", reaction: true, melee: true, critical: true };
+    assert.equal(hitSetsOff(crit, { outcome: "criticalSuccess" }), true);
+    assert.equal(hitSetsOff(crit, { outcome: "success" }), false);
+    assert.equal(hitSetsOff(crit, { outcome: "criticalSuccess", ranged: true }), false);
+    assert.equal(hitSetsOff({ event: "hit-by", reaction: true, melee: true, unarmed: true }, { outcome: "success", unarmed: false }), false);
+    assert.equal(hitSetsOff({ event: "hit-by", reaction: true, melee: false, within: 30 }, { outcome: "success", ranged: true, distance: 25 }), true);
+    assert.equal(hitSetsOff({ event: "hit-by", reaction: true, melee: false, within: 30 }, { outcome: "success", ranged: true, distance: 40 }), false);
+    assert.equal(hitSetsOff({ event: "hit-by", melee: true }, { outcome: "success" }), false, "a passive's isn't a reaction");
+    assert.equal(damageNote({ damageTypes: ["piercing", "slashing"] }), "Only on piercing or slashing damage.");
+    assert.equal(damageNote({}), null);
+    const html = offerHTML({ kind: "card", ability: { name: "Shrapnel Splash" }, monster: { name: "Dragon" }, target: { name: "Valeros" }, trigger: "rolled a critical hit against it", status: "open" });
+    assert.match(html, /data-aar-reaction="use">Use it</);
 });

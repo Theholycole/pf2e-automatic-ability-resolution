@@ -14,6 +14,9 @@
 // - Ferocity: back to 1 HP, wounded +1, when reduced to 0 HP (not at wounded 3).
 // - Resilient Form and the like: after a critical hit on it, a flat check that makes it a normal hit (a free
 //   action's uses aren't counted here: the GM's).
+// - A reaction with a save or other results whose trigger is a hit, a critical hit or damage on it ("The dragon is
+//   critically hit with a melee attack", "The bul-gae takes damage"): after the attack roll, or when PF2e applies damage;
+//   using it posts the ability's card, on the attacker or the creatures around it (2026-10-10).
 // - Retributive Strike (a monster's, the glossary's): when PF2e applies damage to
 //   its ally and the creature whose turn it is (taken as the attacker) is a foe,
 //   both within 15 feet. Using it gives the ally back what its resistance
@@ -21,9 +24,9 @@
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { blocksReactions, degreeWords, higherAC, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
-import { isActiveGM } from "./live.js";
+import { isActiveGM, postCard, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
@@ -63,7 +66,9 @@ function reactionsOf(actor) {
     // (A free action with a trigger, such as Cushioned Blow, too.)
     // (Reactive Strike's older name, "Attack of Opportunity", is the same reaction.)
     const same = (plan) => (plan?.builtin === "attack-of-opportunity" ? { ...plan, builtin: "reactive-strike" } : plan);
-    return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) })).filter(({ plan, item }) => KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade"));
+    // (And a reaction with results of its own whose trigger the module reads: plan.trigger.reaction.)
+    return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) }))
+        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade")) || (item.system?.actionType?.value === "reaction" && plan?.trigger?.reaction && plan.resolution));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -171,7 +176,16 @@ async function defend(message, context, scene, combat, attacker) {
     const roll = message.rolls?.[0];
     const dc = context.dc?.value;
     const hit = ["success", "criticalSuccess"].includes(context.outcome);
+    const options = context.options ?? [];
+    const ranged = options.includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
+    const unarmed = options.includes("item:category:unarmed") || options.includes("item:trait:unarmed");
+    const grid = gridOf(scene);
+    const distance = distanceFeet(box(mine.token, grid.size), box(attacker, grid.size), grid);
     for (const { item, plan } of mine.reactions) {
+        // Shrapnel Splash, Reactive Thrash: its card on Use.
+        if (hitSetsOff(plan.trigger, { outcome: context.outcome, ranged, unarmed, distance })) {
+            return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: damageNote(plan.trigger) });
+        }
         // Only a hit it could undo (turning a miss into a critical miss rarely matters).
         if (plan.builtin === "ac-reaction" && Number.isFinite(dc) && hit) {
             const change = higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, plan.value);
@@ -180,7 +194,6 @@ async function defend(message, context, scene, combat, attacker) {
         if (plan.builtin === "attack-misfortune" && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
         if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc, free: item.system?.actionType?.value === "free" } });
         // Concealment against the attack (Shadow Evade): offered on a hit, the attacker's flat check; a failure misses (2026-10-10).
-        const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
         if (plan.builtin === "conceal-reaction" && hit && (!plan.ranged || ranged)) {
             return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: `${attacker.name} rolls a DC ${plan.dc} flat check (${plan.dc === 11 ? "as if it were Hidden" : "concealment"}); on a failure, the attack misses.`,
                 attack: { messageId: message.id, dc: plan.dc, success: "success. The attack still hits.", failure: "failure. The attack misses: ignore its damage and effects." } });
@@ -214,6 +227,13 @@ async function onDamaged(actor, amount) {
         const combat = scene && runningCombat(scene);
         if (!combat || !inEncounter(combat).has(token.id)) continue;
         const attacker = combat.combatant?.token;
+        // Its own reaction to damage on it (Solar Flare, Caustic Blood): the creature whose turn it is taken as the attacker.
+        const mine = reactors(scene, combat).find((entry) => entry.token.id === token.id);
+        const own = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "damaged");
+        if (own) {
+            const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
+            await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger) });
+        }
         if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
         const grid = gridOf(scene);
         for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
@@ -306,6 +326,16 @@ async function use(message, action, slug) {
         }
         if (action === "strike") lines.push(await rollStrike(state, actor, slug));
         result = lines.join(" ") || "Nothing to resist.";
+    } else if (state.kind === "card") {
+        // Its card: on the attacker, the creatures in its emanation, or the GM's targets.
+        const item = await fromUuid(state.ability.uuid);
+        const plan = item ? compile(item) : null;
+        if (!plan?.resolution) throw new Error("Its results aren't readable any more.");
+        const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
+        const area = plan.targeting?.area;
+        const tokens = plan.targeting?.target === "the attacker" ? (target?.object ? [target.object] : []) : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
+        await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: "reaction" });
+        result = tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;
     } else if (state.kind === "ac") {
         result = `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
     } else if (state.kind === "misfortune") {

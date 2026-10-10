@@ -776,3 +776,34 @@ test("passives that answer a melee hit on the monster, on the attacker (2026-10-
     assert.notEqual(compileMonsterAbility(passive("Test Spines", "<p>A creature that hits the test beast with a metal weapon takes @Damage[2d6[electricity]] damage.</p>"))?.trigger?.event, "hit-by");
     assert.notEqual(compileMonsterAbility(passive("Test Shell", "<p>A creature that hits the test beast with a ranged Strike takes @Damage[2d6[electricity]] damage.</p>"))?.trigger?.event, "hit-by");
 });
+
+test("reactions to a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    const reaction = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    // The trigger's words.
+    assert.deepEqual(readReactionTrigger("The dragon is critically hit with a melee weapon or unarmed attack"), { event: "hit-by", reaction: true, melee: true, critical: true });
+    assert.deepEqual(readReactionTrigger("The dragon is critically hit by an attack"), { event: "hit-by", reaction: true, melee: false, critical: true });
+    assert.deepEqual(readReactionTrigger("A creature within the thoqqua's reach hits the thoqqua with a melee Strike"), { event: "hit-by", reaction: true, melee: true });
+    assert.deepEqual(readReactionTrigger("An adjacent creature deals piercing or slashing damage to the dragon."), { event: "hit-by", reaction: true, melee: true, damageTypes: ["piercing", "slashing"] });
+    assert.deepEqual(readReactionTrigger("A creature within 30 feet damages the oath howler"), { event: "hit-by", reaction: true, melee: false, within: 30 });
+    assert.deepEqual(readReactionTrigger("A creature hits Krankkiss with an unarmed attack."), { event: "hit-by", reaction: true, melee: true, unarmed: true });
+    assert.deepEqual(readReactionTrigger("The bul-gae takes damage"), { event: "damaged", reaction: true });
+    assert.deepEqual(readReactionTrigger("The nyogoth takes piercing or slashing damage"), { event: "damaged", reaction: true, damageTypes: ["piercing", "slashing"] });
+    assert.deepEqual(readReactionTrigger("The hunter wight is reduced to 0 Hit Points"), { event: "death", reaction: true });
+    // Its first trigger of several ("…, or the banshee critically fails their save …").
+    assert.equal(readReactionTrigger("A foe critically hits the banshee, or the banshee critically fails their save against a foe's damaging effect.").critical, true);
+    // Not: an ally's damage, a number of points, an aura, a metal weapon, one of several triggers in a list.
+    for (const text of ["An enemy damages an ally of the archon bastion and both are within 15 feet of the archon bastion", "Ainamuuren takes at least 40 points of physical damage from a single attack", "A creature in Caeto's aura damages him", "A creature hits the test golem with a metal weapon", "A creature damages the door, fails to Force Open the door, or fails a check to realign the stonework", "The unfinished portalrender takes any damage or is moved"]) {
+        assert.equal(readReactionTrigger(text), null, text);
+    }
+    // On the attacker when it names it, or "the creature" first; on the creatures around it.
+    const splash = compileMonsterAbility(reaction("Test Splash", "<p><strong>Trigger</strong> The dragon is critically hit with a melee weapon or unarmed attack</p><hr /><p><strong>Effect</strong> The dragon's blood erupts from the wound. The creature who dealt the triggering damage takes @Damage[7d6[bludgeoning]] damage with a @Check[reflex|dc:32|basic] save.</p>"));
+    assert.deepEqual([splash.trigger.event, splash.trigger.critical, splash.targeting.target], ["hit-by", true, "the attacker"]);
+    const blood = compileMonsterAbility(reaction("Test Blood", "<p><strong>Trigger</strong> An adjacent creature deals piercing or slashing damage to the dragon.</p><hr /><p><strong>Effect</strong> The dragon's blood sprays on the creature, dealing @Damage[2d6[cold]] damage.</p>"));
+    assert.equal(blood.targeting.target, "the attacker");
+    const caustic = compileMonsterAbility(reaction("Test Caustic", "<p><strong>Trigger</strong> The test beast takes piercing or slashing damage</p><hr /><p><strong>Effect</strong> The beast sprays its acidic blood on adjacent creatures, dealing @Damage[6d6[acid]] damage (@Check[reflex|dc:29|basic] save).</p>"));
+    assert.deepEqual([caustic.trigger.event, caustic.targeting.area], ["damaged", { type: "emanation", value: 5 }]);
+    // Any other reaction stays the GM's to use.
+    const other = compileMonsterAbility(reaction("Test Gaze", "<p><strong>Trigger</strong> A creature within 30 feet casts a spell</p><hr /><p><strong>Effect</strong> The test beast glares. The creature takes @Damage[2d6[mental]] damage (@Check[will|dc:20|basic] save).</p>"));
+    assert.equal(other.trigger.reaction, undefined);
+});

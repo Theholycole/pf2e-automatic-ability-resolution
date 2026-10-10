@@ -1263,7 +1263,77 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
     if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? plan;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? reactionTrigger(item, plan) ?? plan;
+}
+
+// A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
+// dragon is critically hit with a melee weapon or unarmed attack", "A creature within the thoqqua's reach hits the thoqqua
+// with a melee Strike", "An adjacent creature deals piercing or slashing damage to the dragon", "The bul-gae takes damage",
+// "The hunter wight is reduced to 0 Hit Points". Its trigger:
+//   { event: "hit-by", reaction: true, melee, unarmed?, critical?, damageTypes?, within? }: an attack that hits it (melee
+//     false: any attack; within: the attacker that close);
+//   { event: "damaged", reaction: true, damageTypes? }: damage on it from anything;
+//   { event: "death", reaction: true }.
+// Its results go on the attacker when it names the attacker ("the triggering creature", "the creature who dealt the
+// triggering damage"), or on its area; otherwise on the GM's targets. Not read: any other trigger, one with a condition of its
+// own ("while", "if", an ally, a size, a spell, a ranged attack), a number of points of damage.
+// (Case-sensitive: a name is capitalized.)
+const SELF = String.raw`(?:[Tt]he [\w' -]+?|it|him|her|them|[A-Z][\w'-]+(?: [A-Z][\w'-]+){0,2})`;
+const DAMAGE_WORDS = /\b(bludgeoning|piercing|slashing|physical|fire|cold|acid|electricity|sonic|poison|mental|force|vitality|void|spirit|bleed)\b/gi;
+const ATTACKER = /\b(?:attacker|assailant|tormentor|triggering|creature (?:who|that) (?:dealt|made|hit|damaged|attacked)|that creature)\b/i;
+
+export function readReactionTrigger(text) {
+    const trigger = String(text ?? "").trim().replace(/[.;]\s*$/, "").replace(/, or\b.*$/i, "");
+    const types = (words) => {
+        const found = [...String(words ?? "").matchAll(DAMAGE_WORDS)].map((match) => match[1].toLowerCase());
+        return found.length ? [...new Set(found)] : null;
+    };
+    const refused = (words) => /\b(?:ranged|spells?|while|if|unless|ally|allies|first time|aura|metal|wooden|silver|cold iron|Tiny|Small|Medium|Large|Huge|Gargantuan|at least|points?|or more)\b|\d+ (?:or more )?(?:Hit Points|damage)/i.test(words);
+    const hit = ({ critical, how, adjacent = false, within = "" }) => {
+        // (Not one of several triggers: "A creature damages the door, fails to Force Open the door, or …".)
+        if (refused(how) || how.includes(",") || refused(within.replace(/\bwithin \d+ feet\b/i, ""))) return null;
+        const melee = adjacent || /\b(?:melee|unarmed|reach)\b/i.test(`${how} ${within}`);
+        const unarmed = /\bunarmed\b/i.test(how) && !/\bmelee (?:weapon|attack|Strike)s?\b|\bweapons?\b/i.test(how.replace(/\bmelee unarmed\b/gi, "unarmed").replace(/\bunarmed melee\b/gi, "unarmed"));
+        const distance = Number(/\bwithin (\d+) feet\b/i.exec(within)?.[1]) || null;
+        const damageTypes = types(/\bdamage\b/i.test(how) ? how : "");
+        return { event: "hit-by", reaction: true, melee, ...(unarmed ? { unarmed: true } : {}), ...(critical ? { critical: true } : {}), ...(damageTypes ? { damageTypes } : {}), ...(distance ? { within: distance } : {}) };
+    };
+    if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
+    let match = new RegExp(String.raw`^${SELF} (?:is (critically )?hit|takes a (critical) hit)\b(.*)$`).exec(trigger);
+    if (match) return hit({ critical: Boolean(match[1] || match[2]), how: match[3] });
+    match = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|foe|enemy)((?: (?:within|in) [^,]+?)?) (?:successfully )?(critically hits|hits|damages|deals ([\w ,]+?) damage to|[Ss]trikes) ${SELF}\b(.*)$`).exec(trigger);
+    if (match) {
+        const found = hit({ critical: /^critically/i.test(match[3]), how: `${match[4] ? `${match[4]} damage ` : ""}${match[5]}`, adjacent: Boolean(match[1]), within: match[2] ?? "" });
+        // ("Damages it" is a hit that deals damage.)
+        return found;
+    }
+    match = new RegExp(String.raw`^${SELF} (?:is damaged|takes (?:any )?([\w ,]*?)\s*damage)\b(.*)$`).exec(trigger);
+    if (match) {
+        if (refused(match[1] ?? "") || /\d/.test(match[1] ?? "")) return null;
+        const rest = match[2].trim();
+        if (/^from (?:a|an) (?:melee )?(?:Strike|attack|weapon)/i.test(rest)) return hit({ critical: false, how: `${match[1] ?? ""} damage ${rest}` });
+        if (rest && !/^from any source$/i.test(rest)) return null;
+        const damageTypes = types(match[1]);
+        return { event: "damaged", reaction: true, ...(damageTypes ? { damageTypes } : {}) };
+    }
+    return null;
+}
+
+function reactionTrigger(item, plan) {
+    if (item.system?.actionType?.value !== "reaction" || !plan?.resolution || plan.builtin || (plan.trigger?.event ?? "use") !== "use") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const text = /\bTrigger\s+(.+?)\s*(?:\bEffect\b|\bRequirements?\b|$)/s.exec(plain)?.[1];
+    const trigger = text ? readReactionTrigger(text) : null;
+    if (!trigger) return null;
+    const effect = plain.split(/\bEffect\b/).slice(1).join(" ");
+    // Its targets: the attacker when it names it, or when "the creature" is the first it names ("The dragon's blood sprays on
+    // the creature"); the creatures around it ("sprays its acidic blood on adjacent creatures", "Any creature within 10 feet of
+    // the speaker"); otherwise the GM's.
+    const first = /\b(?:the|a|an|any|each|all|every|adjacent|random) (?:[\w-]+ )?creatures?\b/i.exec(effect)?.[0] ?? "";
+    const onAttacker = trigger.event !== "death" && !plan.targeting?.area && (ATTACKER.test(effect) || /^the creature$/i.test(first));
+    const around = !plan.targeting?.area && !onAttacker ? (/^(?:all |each )?adjacent creatures\b/i.test(first) || /\b(?:on|to|all|each) adjacent creatures\b/i.test(effect) ? 5 : Number(/(?:\b(?:any|each|every|all) creatures?|(?:^|[.!?]\s+)Creatures) within (\d+) feet\b/i.exec(effect)?.[1]) || null) : null;
+    const targeting = onAttacker ? { target: "the attacker", range: "touch", area: null } : around ? { target: null, range: null, area: { type: "emanation", value: around } } : null;
+    return { ...plan, ...(targeting ? { targeting } : {}), trigger: { ...plan.trigger, ...trigger } };
 }
 
 // A passive that answers a hit on the monster (2026-10-10): "A creature that hits a pukwudgie with an unarmed Strike or a

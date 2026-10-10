@@ -291,7 +291,8 @@ async function cardsForHitBy(message) {
     for (const item of defender.itemTypes.action) {
         const plan = compile(item);
         const trigger = plan?.trigger;
-        if (trigger?.event !== "hit-by" || (trigger.unarmed && !unarmed) || !plan.resolution || !cardCheck(plan)) continue;
+        // (A reaction is offered to the GM instead: scripts/reactions.js.)
+        if (trigger?.event !== "hit-by" || trigger.reaction || (trigger.unarmed && !unarmed) || !plan.resolution || !cardCheck(plan)) continue;
         await postCard({ plan, item, sourceActor: defender, sourceToken: targetToken, tokens: [attacker], cause: `hit by ${attacker.name ?? attacker.actor.name}` });
     }
 }
@@ -309,13 +310,15 @@ async function cardsForDeath(actor) {
     if (!deaths.length) return;
     recentDeaths.set(actor.uuid, Date.now());
     const token = actor.getActiveTokens(true, true)[0] ?? null;
-    const scene = token?.parent ?? canvas.scene;
+    for (const { item, plan } of deaths) await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens: tokensAround(token, Number(plan.targeting?.area?.value) || 0), cause: "as it dies" });
+}
+
+// The creatures (on either side) within radius feet of the token's space, measured as auras are.
+export function tokensAround(token, radius) {
+    const scene = token?.parent;
     const grid = scene ? gridOf(scene) : null;
-    for (const { item, plan } of deaths) {
-        const radius = Number(plan.targeting?.area?.value) || 0;
-        const tokens = token && grid && radius ? scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && distanceFeet(box(token, grid.size), box(other, grid.size), grid) <= radius).map((other) => other.object ?? other) : [];
-        await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: "as it dies" });
-    }
+    if (!grid || !radius) return [];
+    return scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && distanceFeet(box(token, grid.size), box(other, grid.size), grid) <= radius).map((other) => other.object ?? other);
 }
 
 // A Strike activity's results on the creature its Strike hit: the activity's save to roll, or its results by the Strike's own

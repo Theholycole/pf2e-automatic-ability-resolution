@@ -439,3 +439,24 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Valeros' longsword hit on the pukwudgie brought the Defensive Quills card (DC 22 basic Reflex); he succeeded and took 7 of the 15 piercing.
   - On the zombie, his longsword hit brought no card; his unarmed hit brought Short Circuit's (no roll), and Apply dealt 5 electricity.
   - A pukwudgie's thrown hatchet critically hit the other pukwudgie: only its own Pukwudgie Poison card, no Defensive Quills.
+
+## Reactions to a hit or damage on the monster (2026-10-10, batch 16)
+
+- **The gap:** reactions with a save or other results of their own (Shrapnel Splash, Regent's Glower, Freezing Blood, Reactive Thrash, Solar Flare, Self-Destruct) were read, but nothing offered them: the GM had to notice the trigger and use them from the sheet. The simulator never used them.
+- **Their trigger is read now:**
+  - a hit or a critical hit on the monster: "The dragon is critically hit with a melee weapon or unarmed attack", "A creature within the thoqqua's reach hits the thoqqua with a melee Strike", "An adjacent creature deals piercing or slashing damage to the dragon", "A creature within 30 feet damages the oath howler";
+  - damage on it from anything: "The bul-gae takes damage", "The nyogoth takes piercing or slashing damage";
+  - its death: "The juggernaut is reduced to 0 Hit Points".
+  - Not read: any other trigger (a spell cast, a move, a hazard's), one with a condition of its own (an ally, an aura, a size, a metal weapon, "at least 40 points of damage"), or one of several triggers in a list. The first of two ("A foe critically hits the banshee, or the banshee critically fails …") is read; the GM uses it for the other.
+  - 130 in all (115 PF2e, 15 Battlezoo): 78 hits, 23 damage, 14 deaths in PF2e.
+- **Its targets:** the attacker when the text names it ("the triggering creature", "the creature who dealt the triggering damage", or "the creature" as the first it names); the creatures in its emanation ("on adjacent creatures", "Each creature within 10 feet"); otherwise the GM's.
+- **Live play** (in an encounter, when the monster can react):
+  - after an attack roll on it that sets it off (melee or any attack, critical or not, unarmed, within its distance), the GM gets a whispered offer: "Valeros rolled a critical hit against it", with Use it and Not now;
+  - when PF2e applies damage to it: "Valeros hurt it (10 damage, on Valeros's turn)", the creature whose turn it is taken as the attacker;
+  - a damage type it needs is a note on the offer ("Only on piercing or slashing damage."): the GM checks it;
+  - Use it posts the ability's card on the attacker or on the creatures in its emanation (both sides), or with no targets for the GM to target, and marks the monster's reaction used;
+  - its death: the card as it dies, as for death throes (batch 14).
+- **The simulator** (B44): the monster uses it whenever it can react and the ability is ready, on the attacker, or on the creatures in its area when a foe is among them. Over Monster Core 1–2, Bestiary 1–2 and the Lost Omens bestiary (4,521 fights, no errors): Freezing Blood 56, Shrapnel Splash 33, Regent's Glower 33, Boiling Blood 23, Biomineralize 22, Rage of the Divine 21, Hell's Sting 19, Caustic Blood 14 and six more.
+- **Checked live in pftest** (a PFTEST SIM Diabolic Dragon (Young) and Nyogoth in an encounter with Valeros, deleted afterwards; HP restored):
+  - Valeros' miss and his plain hit on the dragon brought no offer; his critical hit brought Hell's Sting's. Not now closed it; a second critical hit brought it again, and Use it posted the card on Valeros (DC 30 basic Will) and gave the dragon "Reaction used". He critically failed and took 42 mental.
+  - 10 damage on the nyogoth during Valeros' turn brought Caustic Blood's offer ("Only on piercing or slashing damage."); Use it posted the card on the six creatures adjacent to it, both sides. Applied: double on a critical failure, full on a failure.
