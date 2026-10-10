@@ -72,7 +72,8 @@ export function readMultiStrike(text) {
 // A Strike with no name ("two unarmed Strikes", "two Strikes") is null: the creature's best melee Strike.
 export function readMultiStrikes(text) {
     // "Frequency once per turn Effect The bruiser makes …": once a turn; a longer frequency or a requirement: not read.
-    let body = text.trim();
+    // (Links as their labels, batch 23: "can attempt to @UUID[…]{Grab} the target" read as "Grab".)
+    let body = String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").trim();
     let oncePerTurn = false;
     const frequency = /^Frequency (.+?) Effect /i.exec(body);
     if (frequency) {
@@ -141,7 +142,7 @@ export function readMultiStrikes(text) {
         }
         // "If either Strike hits, the dragon can attempt to Grab the target with that limb as a free action." (and how many it can
         // hold): Grab after a hit.
-        if (/^If (?:either|any|both|one) (?:of the )?(?:Strikes?|attacks?) hits?, (?:it|they|he|she|the [\w' -]+?) can (?:attempt to )?Grab the (?:target|creature)(?: with (?:that|the) [\w ]+?)? as a free action\.$/i.test(sentence)) {
+        if (/^If (?:either|any|both|one) (?:of the )?(?:Strikes?|attacks?) hits?, (?:it|they|he|she|the [\w' -]+?) (?:can (?:attempt to )?Grab the (?:target|creature)(?: with (?:that|the) [\w ]+?)? as a free action|automatically Grabs the (?:target|creature))\.$/i.test(sentence)) {
             grab = true;
             continue;
         }
@@ -370,7 +371,8 @@ export function compileBuiltin(item, slug) {
         const bonuses = saveBonuses(item);
         if (bonuses.length) return { builtin: "save-bonus", bonuses };
     }
-    const text = htmlToPlainText(item?.system?.description?.value ?? "").replace(/\s+/g, " ").trim();
+    // (Links as their labels for every reading here, batch 23: "@UUID[…]{Grab}" as "Grab".)
+    const text = htmlToPlainText(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\s+/g, " ").trim();
     if (type === "passive") {
         const momentum = slug === "draconic-momentum" || /critical hit with a Strike/i.test(text) ? readMomentum(text) : null;
         if (momentum) return { builtin: "momentum", ...momentum };

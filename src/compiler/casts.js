@@ -25,7 +25,16 @@ const CASTS = [
     new RegExp(String.raw`\b(?:has|have|having|with|gains?|gaining) the (?:same )?effects? of\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bsame effects? as\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bas\s+(?:the|an?)\s+(?:${ORDINAL}\s+)?\u0001 spell\b`, "i"),
-    new RegExp(String.raw`\bas per\s+\u0001`, "i")
+    new RegExp(String.raw`\bas per\s+\u0001`, "i"),
+    // (2026-10-10, batch 23) "is subjected to a 5th-rank Phantasmal Killer spell", "is subjected to the effects of Divine Decree",
+    // "takes the effects of the Charm spell", "suffers the result of a 4th-rank Charm spell", "affects all enemies it can see within
+    // 60 feet with Calm", "affecting them with Wave of Despair (7th level, …)", "targeting the creature with Phantasmal Killer",
+    // "be affected by a Suggestion", "is targeted by Cursed Metamorphosis".
+    new RegExp(String.raw`\bsubjected to (?:the effects? of )?${LEAD}\u0001`, "i"),
+    new RegExp(String.raw`\b(?:takes?|suffers?) the (?:effects?|results?) of\s+${LEAD}\u0001`, "i"),
+    new RegExp(String.raw`\b(?:affects?|affecting|targets?|targeting) [^\u0001.]{1,60}? with\s+${LEAD}\u0001`, "i"),
+    new RegExp(String.raw`\b(?:is |are |be )affected by\s+${LEAD}\u0001`, "i"),
+    new RegExp(String.raw`\b(?:is|are) targeted by\s+${LEAD}\u0001`, "i")
 ];
 const RULE_ON_CASTING = /^\(?(?:When|Whenever|If|Unless|Until|Once|After|Before|While|Casting)\b/;
 // A casting inside a condition ("… the gylou can bring the creature with them when they cast Translocate").
@@ -57,8 +66,10 @@ export function castSpell(item, actor = null) {
     const sentences = sentencesOf(effect.replace(/<strong>\s*(?:Frequency|Requirements?|Trigger|Cost)\s*<\/strong>[^]*?(?=<strong>|$)/gi, "")).flatMap((sentence) => sentence.split(/(?<=[.!?])\s+(?=\()/));
     const index = sentences.findIndex((sentence) => ONE_LINK.test(sentence));
     if (index < 0) return null;
-    // A save before it decides whether the spell happens ("… must succeed at a DC 33 Will save or be transported …").
-    if (sentences.slice(0, index).some((sentence) => SAVE_CHECK.test(sentence))) return null;
+    // A save before it decides whether the spell happens ("… must succeed at a DC 33 Will save or be transported …"); a check or
+    // damage before it that the spell wouldn't bring (batch 23: "… must succeed at an Acrobatics check or take 1d4+7 piercing
+    // damage … Additionally, a creature damaged by it is affected by Command").
+    if (sentences.slice(0, index).some((sentence) => SAVE_CHECK.test(sentence) || /@(?:Check|Damage)\[/.test(sentence))) return null;
     const sentence = sentences[index];
     const label = ONE_LINK.exec(sentence)?.[2] ?? null;
     // The sentence as words, the link a mark (its other inline parts as words).
@@ -92,7 +103,9 @@ export function castSpell(item, actor = null) {
     const attack = counter ? Number(counter[1] ?? counter[2]) : null;
     // On itself: "gains the effects of Blur", "casts Unfettered Movement on himself", "turns into a cloud of vapor, as the Vapor
     // Form spell".
-    const self = /^gain/i.test(cast[0]) || /^\W*on (?:itself|himself|herself|themselves|themself|you)\b/i.test(tail) || /\b(?:turns?|transforms?) into\b[^\u0001]*\u0001/i.test(marked);
+    // (Also "The eloko is affected by a 4th-rank Enlarge spell": the monster itself, not "each creature" or "the target".)
+    const affectedItself = /^(?:The |An? )?(?![\w' -]*\b(?:creatures?|targets?|each|all|every|enem(?:y|ies)|foes?|area)\b)[\w' -]+? (?:is|are) affected by\b/i.test(marked);
+    const self = /^gain/i.test(cast[0]) || affectedItself || /^\W*on (?:itself|himself|herself|themselves|themself|you)\b/i.test(tail) || /\b(?:turns?|transforms?) into\b[^\u0001]*\u0001/i.test(marked);
     const tradition = /\b(arcane|divine|occult|primal) (?:innate )?spell\b/i.exec(marked)?.[1]?.toLowerCase() ?? /\binnate (arcane|divine|occult|primal) spell\b/i.exec(marked)?.[1]?.toLowerCase() ?? null;
     // What the ability changes or adds: its sentence, when it says more than the spell does ("… except the duration is 24
     // hours", "… and is exposed to abyssal plague"), and its other sentences.

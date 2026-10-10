@@ -940,3 +940,25 @@ test("reactions to a creature acting near the monster, as Reactive Strike's trig
     const plan = compileMonsterAbility(reaction);
     assert.deepEqual([plan.trigger.event, plan.targeting.target], ["provoke", "the attacker"]);
 });
+
+test("abilities that cast a spell, in more wordings (2026-10-10, batch 23)", () => {
+    const action = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: 2 }, traits: { value: [] }, description: { value: html } } });
+    const killer = "@UUID[Compendium.pf2e.spells-srd.Item.4gBIw4IDrSfFHik4]{Phantasmal Killer}";
+    const subjected = compileMonsterAbility(action("Test Breath", `<p>Phantasms escape from its maw in a @Template[cone|distance:30]. Each creature in the area is subjected to a 5th-rank ${killer} spell (@Check[will|dc:31] save).</p>`));
+    assert.deepEqual([subjected.builtin, subjected.spell.name, subjected.rank, subjected.dc, subjected.self], ["cast-spell", "Phantasmal Killer", 5, 31, false]);
+    const affecting = compileMonsterAbility(action("Test Cry", `<p>Cries echo off the crystals, affecting all living creatures in the room with ${killer} (7th level, @Check[will|dc:33] save).</p>`, "reaction"));
+    assert.deepEqual([affecting.spell.name, affecting.rank, affecting.dc], ["Phantasmal Killer", 7, 33]);
+    // On itself: "The eloko is affected by a 4th-rank Enlarge spell".
+    const enlarge = compileMonsterAbility(action("Test Size", "<p>The test sprite is affected by a 4th-rank @UUID[Compendium.pf2e.spells-srd.Item.UOKVq2zeHg3yGqv2]{Enlarge} spell.</p>"));
+    assert.deepEqual([enlarge.spell.name, enlarge.self], ["Enlarge", true]);
+    // Not when a check or damage before it brings what the spell wouldn't.
+    assert.equal(compileMonsterAbility(action("Test Spikes", `<p>The creature must succeed at a @Check[acrobatics|dc:27] check or take @Damage[1d6[piercing]] damage. Additionally, a creature damaged by the spikes is affected by ${killer}.</p>`))?.builtin === "cast-spell", false);
+});
+
+test("built-in readings with linked words (2026-10-10, batch 23): Coiling Frenzy's linked Grab", () => {
+    const action = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: html } } });
+    const frenzy = compileMonsterAbility(action("Test Frenzy", "<p>The dragon makes one claw Strike and one tail Strike in either order, each against the same target. If either Strike hits, the dragon can attempt to @UUID[Compendium.pf2e.bestiary-ability-glossary-srd.Item.Tkd8sH4pwFIPzqTr]{Grab} the target with that limb as a free action. The dragon can have up to three creatures @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} or Restrained at a time; one in each of its front claws, and a third with their tail.</p>"));
+    assert.deepEqual([frenzy.builtin, frenzy.strikes, frenzy.grab], ["multi-strike", ["claw", "tail"], true]);
+    const automatic = compileMonsterAbility(action("Test Frenzy 2", "<p>The dragon makes one claw Strike and one tail Strike in either order, each against the same target. If either Strike hits, the dragon automatically Grabs the target.</p>"));
+    assert.equal(automatic.grab, true);
+});
