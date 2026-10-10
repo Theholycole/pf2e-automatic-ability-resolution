@@ -159,6 +159,21 @@ async function cardForAbility(message) {
         await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
     }
+    // It heals itself (Abyssal Healing, Vine Splint; batch 24): PF2e's own healing roll, with its buttons to apply it; its
+    // requirements and its other words in the roll's heading, for the GM.
+    if (plan?.resolution?.kind === "healing" && plan.targeting?.target === "self") {
+        const formula = plan.resolution.native?.healing?.components?.[0]?.formula;
+        if (formula) {
+            const DamageRoll = damageRollClass();
+            const roll = await new DamageRoll(`(${formula})[healing]`).evaluate();
+            const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+            const lines = [plan.requires ? `Only if: ${plan.requires}.` : null, ...(plan.notes ?? [])].filter(Boolean).map(escape);
+            await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flavor: `<strong>${escape(item.name)}</strong>: ${escape(sourceToken?.name ?? item.actor.name)} heals itself${lines.length ? `<br>${lines.join(" ")}` : ""}` });
+        }
+        const recharge = rechargeFormula(item, plan);
+        if (recharge) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula: recharge, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+        return;
+    }
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.

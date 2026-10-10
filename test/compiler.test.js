@@ -962,3 +962,17 @@ test("built-in readings with linked words (2026-10-10, batch 23): Coiling Frenzy
     const automatic = compileMonsterAbility(action("Test Frenzy 2", "<p>The dragon makes one claw Strike and one tail Strike in either order, each against the same target. If either Strike hits, the dragon automatically Grabs the target.</p>"));
     assert.equal(automatic.grab, true);
 });
+
+test("the monster healing itself (2026-10-10, batch 24)", () => {
+    const action = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const quasit = compileMonsterAbility(action("Test Healing", "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test imp restores @Damage[1d6[healing]] HP to itself.</p>"));
+    assert.deepEqual([quasit.targeting.target, quasit.resolution.kind, quasit.resolution.native.healing.components[0].formula, quasit.requires], ["self", "healing", "1d6", undefined]);
+    const splint = compileMonsterAbility(action("Test Splint", "<p>The test tree grows a mesh of vines around its broken branches, repairing the damage and restoring @Damage[40[healing]] HP to itself. The test tree can't use Test Splint again for [[/gmr 1d4 #Recharge Test Splint]]{1d4 rounds}.</p>"));
+    assert.deepEqual([splint.resolution.native.healing.components[0].formula, splint.trigger.recharge.formula], ["40", "1d4"]);
+    // Requirements: kept for the GM (the simulator doesn't use it).
+    const regen = compileMonsterAbility(action("Test Regeneration", "<p><strong>Requirements</strong> The test troll's regeneration is currently active The test troll regains @Damage[20[healing]] HP.</p>"));
+    assert.match(regen.requires, /regeneration is currently active/);
+    // Not healing others, nor some of the time.
+    assert.equal(compileMonsterAbility(action("Test Pulse", "<p>The turtle releases a pulse, restoring @Damage[5d8[healing]] Hit Points to the turtle and each living ally within 10 feet.</p>"))?.resolution?.kind === "healing", false);
+    assert.equal(compileMonsterAbility(action("Test Feed", "<p>The test imp regains @Damage[10[healing]] Hit Points for each enemy within 30 feet that is frightened.</p>"))?.resolution?.kind === "healing", false);
+});

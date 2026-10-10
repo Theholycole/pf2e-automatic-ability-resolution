@@ -1265,7 +1265,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 
@@ -1354,6 +1354,44 @@ export function readReactionTrigger(text) {
         return { event: "damaged", reaction: true, ...(damageTypes ? { damageTypes } : {}) };
     }
     return null;
+}
+
+// The monster healing itself (2026-10-10, batch 24): "Frequency once per round Effect The imp regains 1d6 Hit Points", "The
+// quasit restores 1d6 HP to itself", "The canopy elder grows a mesh of vines …, repairing the damage and restoring 40 HP to
+// itself. The canopy elder can't use Vine Splint again for 1d4 rounds." A plan of the core's healing family on itself:
+// { resolution: { kind: "healing", native: { healing: { components, recipients: "any" } } }, targeting: { target: "self" },
+// requires? } (requires: its requirements, which the simulator can't check). Its other sentences are notes for the GM when
+// they're only words; not one that also heals or harms others, or heals only sometimes ("If …", "for each enemy …").
+const HEALS_ITSELF = /^(?:(?:The |An? )?[\w' -]+?|It|They|He|She)(?:,? [^,.]*?,)? (?:regains?|restores?|heals?)\s+\u0000(?: (?:Hit Points|HP))?(?: to (?:itself|himself|herself|themselves|themself))?(?:,? (?:gaining|with) any excess (?:healing )?as temporary (?:Hit Points|HP)[^.]*)?\.$|,? (?:restoring|regaining) \u0000 (?:Hit Points|HP)(?: to (?:itself|himself|herself|themselves|themself))?\.$/;
+function selfHeal(item) {
+    if (!["action", "free"].includes(item.system?.actionType?.value) || /<strong>\s*Trigger\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return null;
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0])) return null;
+    const plain = htmlToPlainText(html.replace(/@Damage\[[^\]]*\]\]?(?:\{[^}]*\})?/g, "\u0000").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    // (Requirements with no "Effect" label: "Requirements The ravenile's regeneration is currently active The ravenile regains …".)
+    const requires = /^(?:Frequency [^.]*?\s+)?Requirements? (.+?)\s+Effect\s/i.exec(plain)?.[1] ?? (/\bRequirements?\b/.test(plain) ? (/\bRequirements? (.+?)\s+(?:The |It |They )/.exec(plain)?.[1] ?? "its requirements") : null);
+    const effect = plain.replace(/^(?:Frequency .+?\s+)?(?:Requirements? .+?\s+)?Effect\s+/i, "").replace(/^Frequency .+?\s+Effect\s+/i, "").replace(/^(?:Frequency [^.]*?\s+)?Requirements? .+?\s+(?=(?:The |It |They ))/, "");
+    const sentences = effect.split(/(?<=\.)\s+/);
+    const at = sentences.findIndex((sentence) => /\u0000/.test(sentence));
+    if (at < 0 || !HEALS_ITSELF.test(sentences[at]) || /\b(?:to (?:the|an?|each|all|its|their) (?!itself)|allies|ally|each|every|for each|creature|target)\b/i.test(sentences[at].replace(/to (?:itself|himself|herself|themselves|themself)/, ""))) return null;
+    // Its other sentences: words only (no roll, no condition), and no condition of their own.
+    const notes = [];
+    for (const [index, sentence] of sentences.entries()) {
+        if (index === at || /^(?:It|They|He|She|The [\w' -]+?) can(?:'t|not) use [^.]+ again for \d+d\d+ rounds\.$/i.test(sentence)) continue;
+        if (/@|\u0000|\b(?:If|When|Whenever|Unless|While|Until)\b/.test(sentence) || /\b(?:damage|save|Strike|Grabbed|Frightened|Stunned|Slowed|Quickened|bonus|penalty|ally|allies|each|creatures?)\b/i.test(sentence)) return null;
+        notes.push(sentence);
+    }
+    const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
+    const recharge = readRecharge(html);
+    return {
+        ...base(item),
+        targeting: { target: "self", range: null, area: null },
+        trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
+        resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } },
+        ...(requires ? { requires } : {}),
+        ...(notes.length ? { notes } : {})
+    };
 }
 
 // A passive on a creature it holds, as a turn starts or ends (2026-10-10, batch 20): "A creature that starts its turn grabbed by
