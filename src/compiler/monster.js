@@ -1302,6 +1302,30 @@ export function readReactionTrigger(text) {
     // "A creature attempts to target the hundun with a mental effect", "… with a mental effect or spell" (batch 17).
     const targeted = targetedWith(trigger);
     if (targeted) return { ...targeted, reaction: true };
+    // Batch 18. Its own Strike: "The tyrannosaurus critically hits a Large or smaller foe with its foot", "Raskus critically
+    // hits with a beak Strike", "Ingnovim damages a creature with a syringe Strike" (not on only some creatures: "a holy
+    // creature", "an off-guard creature").
+    let own = new RegExp(String.raw`^${SELF} (critically hits|critically succeeds at an attack roll against|hits|damages|deals damage to)(?: (?:an?|the) (?:((?:Tiny|Small|Medium|Large|Huge) or smaller) )?(?:creature|foe|enemy|target))?(?: with (?:its|his|her|their|an?) ([\w' -]+?)(?: Strike)?)?(?: and deals damage)?$`).exec(trigger);
+    if (own) {
+        const critical = /^critically/i.test(own[1]);
+        return { event: "own-strike", reaction: true, on: critical ? ["criticalSuccess"] : ["success", "criticalSuccess"], strike: own[3] ? own[3].toLowerCase() : null, ...(own[2] ? { maxSize: own[2].split(" ")[0].toLowerCase() } : {}) };
+    }
+    // Attacked, before the roll: "A hostile creature targets the jinxer with a melee Strike", "A creature Chafkhem can see makes a
+    // melee Strike against Chafkhem", "Adma is targeted with a Strike by a creature within 30 feet".
+    own = new RegExp(String.raw`^(?:An?|Any) (?:adjacent |hostile )?(?:creature|foe|enemy)(?: within (\d+) feet)?(?: (?:that )?${SELF} can see)? (?:targets ${SELF} with an? (melee |ranged )?(?:Strike|attack)|makes an? (melee |ranged )?(?:Strike|attack) against ${SELF})$`).exec(trigger)
+        ?? new RegExp(String.raw`^${SELF} is targeted (?:with|by) an? (melee |ranged )?(?:Strike|attack)(?: by (?:a creature|an enemy) within (\d+) feet)?$`).exec(trigger);
+    if (own) {
+        const words = own.slice(1).join(" ");
+        const within = Number(/\b(\d+)\b/.exec(own.slice(1).filter((part) => /^\d+$/.test(part ?? "")).join(" "))?.[1]) || null;
+        if (/\branged\b/.test(words)) return null;
+        return { event: "attacked", reaction: true, melee: /\bmelee\b/.test(words) || /^An? adjacent/.test(trigger), ...(within ? { within } : {}) };
+    }
+    // A creature starting its turn near it: "A creature within 30 feet that the basilisk can see starts its turn", "A living
+    // creature within 30 feet that the bodak can perceive with its Lifesense starts its turn".
+    own = new RegExp(String.raw`^(?:An?|Any) (living )?creature within (\d+) feet(?: (?:that )?${SELF} can (?:see|perceive)[^,]*?)? (?:starts|begins) (?:its|their) turn$`).exec(trigger);
+    if (own) return { event: "turn-start", reaction: true, within: Number(own[2]), ...(own[1] ? { living: true } : {}) };
+    // "The egarhowl rolls initiative" (not "… while in water").
+    if (new RegExp(String.raw`^${SELF} rolls (?:for )?initiative$`).test(trigger)) return { event: "initiative", reaction: true };
     let match = new RegExp(String.raw`^${SELF} (?:is (critically )?hit|takes a (critical) hit)\b(.*)$`).exec(trigger);
     if (match) return hit({ critical: Boolean(match[1] || match[2]), how: match[3] });
     match = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|foe|enemy)((?: (?:within|in) [^,]+?)?) (?:successfully )?(critically hits|hits|damages|deals ([\w ,]+?) damage to|[Ss]trikes) ${SELF}\b(.*)$`).exec(trigger);
@@ -1310,6 +1334,9 @@ export function readReactionTrigger(text) {
         // ("Damages it" is a hit that deals damage.)
         return found;
     }
+    // "A creature scores a critical hit on the firehoof minotaur" (batch 18).
+    match = new RegExp(String.raw`^(?:An?|Any) (?:creature|foe|enemy) scores a critical hit (?:on|against) ${SELF}\b(.*)$`).exec(trigger);
+    if (match) return hit({ critical: true, how: match[1] });
     match = new RegExp(String.raw`^${SELF} (?:is damaged|takes (?:any )?([\w ,]*?)\s*damage)\b(.*)$`).exec(trigger);
     if (match) {
         if (refused(match[1] ?? "") || /\d/.test(match[1] ?? "")) return null;
@@ -1344,19 +1371,30 @@ function targetedBy(item, plan) {
 }
 
 function reactionTrigger(item, plan) {
-    if (item.system?.actionType?.value !== "reaction" || !plan?.resolution || plan.builtin || (plan.trigger?.event ?? "use") !== "use") return null;
+    // (A free action with a trigger too: Chilling Cry's "Trigger Losko rolls initiative"; its trigger.free.)
+    const type = item.system?.actionType?.value;
+    if (!["reaction", "free"].includes(type) || !plan?.resolution || plan.builtin || (plan.trigger?.event ?? "use") !== "use") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
-    const text = /\bTrigger\s+(.+?)\s*(?:\bEffect\b|\bRequirements?\b|$)/s.exec(plain)?.[1];
-    const trigger = text ? readReactionTrigger(text) : null;
-    if (!trigger) return null;
+    const text = /\bTrigger\s+(.+?)\s*(?:\bEffect\b|\bRequirements?\b|\bFrequency\b|$)/s.exec(plain)?.[1];
+    const read = text ? readReactionTrigger(text) : null;
+    if (!read) return null;
+    const trigger = type === "free" ? { ...read, reaction: true, free: true } : read;
     const effect = plain.split(/\bEffect\b/).slice(1).join(" ");
+    // Not a lasting area it leaves ("… creating an aura of difficult terrain …; a creature who starts their turn in the area takes …").
+    if (trigger.event !== "turn-start" && /\b(?:starts?|begins?|ends?) (?:its|their|his|her) turn\b/i.test(effect)) return null;
     // Its targets: the attacker when it names it, or when "the creature" is the first it names ("The dragon's blood sprays on
     // the creature"); the creatures around it ("sprays its acidic blood on adjacent creatures", "Any creature within 10 feet of
     // the speaker"); otherwise the GM's.
     const first = /\b(?:the|a|an|any|each|all|every|adjacent|random) (?:[\w-]+ )?creatures?\b/i.exec(effect)?.[0] ?? "";
-    const onAttacker = trigger.event !== "death" && !plan.targeting?.area && (ATTACKER.test(effect) || /^the creature$/i.test(first));
-    const around = !plan.targeting?.area && !onAttacker ? (/^(?:all |each )?adjacent creatures\b/i.test(first) || /\b(?:on|to|all|each) adjacent creatures\b/i.test(effect) ? 5 : Number(/(?:\b(?:any|each|every|all) creatures?|(?:^|[.!?]\s+)Creatures) within (\d+) feet\b/i.exec(effect)?.[1]) || null) : null;
-    const targeting = onAttacker ? { target: "the attacker", range: "touch", area: null } : around ? { target: null, range: null, area: { type: "emanation", value: around } } : null;
+    // (The creature that set it off when it targets one creature: the one attacking it, starting its turn near it.)
+    // (Not "chooses a different creature … and attempts to swap places with that creature".)
+    const other = /\b(?:a different|another) creature\b/i.test(effect);
+    const single = !other && ["attacked", "turn-start"].includes(trigger.event) && plan.targeting?.target === "1 creature";
+    const onAttacker = !other && !["death", "own-strike", "initiative"].includes(trigger.event) && !plan.targeting?.area && (single || ATTACKER.test(effect) || /^the creature$/i.test(first));
+    const around = !plan.targeting?.area && !onAttacker && trigger.event !== "own-strike" ? (/^(?:all |each )?adjacent creatures\b/i.test(first) || /\b(?:on|to|all|each) adjacent creatures\b/i.test(effect) ? 5 : Number(/(?:\b(?:any|each|every|all) (?:[\w-]+ )?creatures?|(?:^|[.!?]\s+)Creatures) within (\d+) feet\b/i.exec(effect)?.[1]) || null) : null;
+    // Its own Strike's: on the creature it hit, or around it ("a blast of lightning in a 10-foot burst centered on the target").
+    const struck = trigger.event === "own-strike" ? (plan.targeting?.area ? { ...plan.targeting, area: { ...plan.targeting.area, around: "target" } } : { target: "the creature the Strike hits", range: "touch", area: null }) : null;
+    const targeting = struck ?? (onAttacker ? { target: "the attacker", range: "touch", area: null } : around ? { target: null, range: null, area: { type: "emanation", value: around } } : null);
     return { ...plan, ...(targeting ? { targeting } : {}), trigger: { ...plan.trigger, ...trigger } };
 }
 

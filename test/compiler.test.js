@@ -841,3 +841,28 @@ test("abilities that answer a mental effect aimed at the monster (2026-10-10, ba
     assert.deepEqual(readReactionTrigger("A creature targets the manipulator with a mental effect or spell"), { event: "targeted-by", traits: ["mental"], spells: true, reaction: true });
     assert.equal(readReactionTrigger("A creature targets the orb with a divination spell that has the mental trait"), null);
 });
+
+test("reactions to its own Strike, to being attacked, to a turn starting near it, and at initiative (2026-10-10, batch 18)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    assert.deepEqual(readReactionTrigger("The tyrannosaurus critically hits a Large or smaller foe with its foot"), { event: "own-strike", reaction: true, on: ["criticalSuccess"], strike: "foot", maxSize: "large" });
+    assert.deepEqual(readReactionTrigger("Ingnovim damages a creature with a syringe Strike"), { event: "own-strike", reaction: true, on: ["success", "criticalSuccess"], strike: "syringe" });
+    assert.equal(readReactionTrigger("The creeping crone critically hits a good creature with her walking stick Strike"), null, "only some creatures");
+    assert.deepEqual(readReactionTrigger("A hostile creature targets the jinxer with a melee Strike"), { event: "attacked", reaction: true, melee: true });
+    assert.deepEqual(readReactionTrigger("Adma is targeted with a Strike by a creature within 30 feet"), { event: "attacked", reaction: true, melee: false, within: 30 });
+    assert.deepEqual(readReactionTrigger("A living creature within 30 feet that the bodak can perceive with its Lifesense starts its turn"), { event: "turn-start", reaction: true, within: 30, living: true });
+    assert.deepEqual(readReactionTrigger("Losko rolls initiative"), { event: "initiative", reaction: true });
+    assert.equal(readReactionTrigger("The coral juggernaut rolls initiative while in water"), null);
+    assert.deepEqual(readReactionTrigger("A creature scores a critical hit on the firehoof minotaur"), { event: "hit-by", reaction: true, melee: false, critical: true });
+    // Targets: the creature its Strike hit, or around it; the creature starting its turn; the creatures around it at initiative.
+    const ability = (name, type, html) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const smite = compileMonsterAbility(ability("Test Smite", "reaction", "<p><strong>Trigger</strong> The test acolyte critically hits with a scimitar Strike</p><hr /><p><strong>Effect</strong> The acolyte releases a blast of lightning in a @Template[burst|distance:10] centered on the target. A creature in the area takes @Damage[1d6[electricity]] damage (@Check[reflex|dc:13|basic] save).</p>"));
+    assert.deepEqual([smite.trigger.event, smite.targeting.area.around], ["own-strike", "target"]);
+    const glance = compileMonsterAbility(ability("Test Glance", "reaction", "<p><strong>Trigger</strong> A creature within 30 feet that the test lizard can see starts its turn.</p><p><strong>Effect</strong> The target must attempt a @Check[fortitude|dc:20] save. If it fails, it's @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} for 1 minute.</p>"));
+    assert.deepEqual([glance.trigger.event, glance.targeting.target], ["turn-start", "the attacker"]);
+    const cry = compileMonsterAbility(ability("Test Cry", "free", "<p><strong>Trigger</strong> Tobin rolls initiative</p><p><strong>Effect</strong> Tobin cries out. Creatures in a @Template[type:emanation|distance:20] must succeed at a @Check[will|dc:22] save or become @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}.</p>"));
+    assert.deepEqual([cry.trigger.event, cry.trigger.free, cry.targeting.area.value], ["initiative", true, 20]);
+    // Not a creature other than the attacker ("chooses a different creature … and attempts to swap places with that creature").
+    const swap = compileMonsterAbility(ability("Test Swap", "reaction", "<p><strong>Trigger</strong> A creature targets the test aberration with a Strike</p><p><strong>Effect</strong> The aberration chooses a different creature within 60 feet and attempts to swap places with that creature. The target must attempt a @Check[will|dc:39] save.</p><hr /><p><strong>Critical Success</strong> The target is unaffected.</p><p><strong>Success</strong> The target is unaffected.</p><p><strong>Failure</strong> The target is @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard} until the end of its next turn.</p>"));
+    assert.equal(swap.trigger.event, "attacked");
+    assert.notEqual(swap.targeting.target, "the attacker");
+});

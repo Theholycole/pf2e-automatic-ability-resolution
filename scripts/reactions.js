@@ -26,6 +26,7 @@
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
 import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
+import { fitsSize, strikeMatches } from "../src/live/activity.js";
 import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
@@ -52,6 +53,13 @@ export function setUpReactions({ compileItem }) {
         // PF2e's damage, with the amount it applied (not its undo).
         if (isActiveGM() && options?.damageTaken > 0 && !options.damageUndo) serially("damaged", () => onDamaged(actor, options.damageTaken));
     });
+    // A creature's turn starting (Petrifying Glance), and the encounter starting (Chilling Cry's "rolls initiative"; batch 18).
+    Hooks.on("updateCombat", (combat, changed) => {
+        if (isActiveGM() && combat.started && ("turn" in changed || "round" in changed)) serially("turn", () => onTurnStart(combat));
+    });
+    Hooks.on("combatStart", (combat) => {
+        if (isActiveGM()) serially("initiative", () => onInitiative(combat));
+    });
     Hooks.on("renderChatMessageHTML", (message, html) => wire(message, html));
     for (const element of document.querySelectorAll("[data-message-id]")) {
         const message = game.messages.get(element.dataset.messageId);
@@ -68,7 +76,7 @@ function reactionsOf(actor) {
     const same = (plan) => (plan?.builtin === "attack-of-opportunity" ? { ...plan, builtin: "reactive-strike" } : plan);
     // (And a reaction with results of its own whose trigger the module reads: plan.trigger.reaction.)
     return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) }))
-        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade")) || (item.system?.actionType?.value === "reaction" && plan?.trigger?.reaction && plan.resolution));
+        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade")) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && plan.resolution));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -147,12 +155,13 @@ async function onMessage(message) {
     if (event) {
         const mine = reactors(scene, combat).find((entry) => entry.token.id === event.defender.id);
         const entry = mine && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.trigger?.reaction && targetedSetsOff(plan.trigger, event)) : null;
-        if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: `aimed ${event.spell ? "a spell" : "an effect"} at it (${event.traits.filter((trait) => entry.plan.trigger.traits?.includes(trait)).join(", ") || "spell"})` });
+        if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: `aimed ${event.spell ? "a spell" : "an effect"} at it (${event.traits.filter((trait) => entry.plan.trigger.traits?.includes(trait)).join(", ") || "spell"})`, free: !!entry.plan.trigger.free });
     }
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
         if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach");
         await defend(message, context, scene, combat, token);
+        await ownStrike(message, context, scene, combat, token);
         return;
     }
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
@@ -189,9 +198,15 @@ async function defend(message, context, scene, combat, attacker) {
     const grid = gridOf(scene);
     const distance = distanceFeet(box(mine.token, grid.size), box(attacker, grid.size), grid);
     for (const { item, plan } of mine.reactions) {
+        // Hypnotic Tattoos, Venom Spit: targeted by the attack (batch 18). PF2e has rolled it already: the GM sets it aside when
+        // the reaction's result stops it.
+        const trigger = plan.trigger;
+        if (trigger?.reaction && trigger.event === "attacked" && (!trigger.melee || !ranged) && !(trigger.within && distance > trigger.within)) {
+            return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "attacked it", free: !!trigger.free, note: "It comes before the attack roll: if its result stops the attack, set the roll aside." });
+        }
         // Shrapnel Splash, Reactive Thrash: its card on Use.
         if (hitSetsOff(plan.trigger, { outcome: context.outcome, ranged, unarmed, distance })) {
-            return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: damageNote(plan.trigger) });
+            return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: damageNote(plan.trigger), free: !!plan.trigger.free });
         }
         // Only a hit it could undo (turning a miss into a critical miss rarely matters).
         // (Only melee or only ranged attacks when the trigger says so; what else it does, a note: "then Strides up to half its Speed".)
@@ -206,6 +221,48 @@ async function defend(message, context, scene, combat, attacker) {
             return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: `${attacker.name} rolls a DC ${plan.dc} flat check (${plan.dc === 11 ? "as if it were Hidden" : "concealment"}); on a failure, the attack misses.`,
                 attack: { messageId: message.id, dc: plan.dc, success: "success. The attack still hits.", failure: "failure. The attack misses: ignore its damage and effects." } });
         }
+    }
+}
+
+// Its own Strike that hits or critically hits (Pin Prey, Storm Smite, Go For the Eyes; batch 18): the Strike its trigger
+// names, a creature no bigger than it says.
+async function ownStrike(message, context, scene, combat, token) {
+    if (!["success", "criticalSuccess"].includes(context.outcome)) return;
+    const mine = reactors(scene, combat).find((entry) => entry.token.id === token.id);
+    if (!mine) return;
+    const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
+    const target = context.target?.token ? await fromUuid(context.target.token) : null;
+    if (!strike || !target?.actor || !isFoe(mine.token, target)) return;
+    for (const { item, plan } of mine.reactions) {
+        const trigger = plan.trigger;
+        if (!trigger?.reaction || trigger.event !== "own-strike" || !trigger.on?.includes(context.outcome)) continue;
+        if (!strikeMatches({ strike: trigger.strike }, strike) || !fitsSize(target.actor.size, trigger.maxSize)) continue;
+        return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target, trigger: `took ${degreeWords(context.outcome)} from ${strike.name}`, free: !!trigger.free });
+    }
+}
+
+// A creature's turn starting within the distance of a monster's reaction to it (Petrifying Glance, Draining Glance).
+async function onTurnStart(combat) {
+    const token = combat.combatant?.token;
+    const scene = token?.parent;
+    if (!token?.actor || !scene) return;
+    const grid = gridOf(scene);
+    const living = !["undead", "construct"].some((trait) => token.actor.traits?.has?.(trait));
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, token)) continue;
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "turn-start" && (!plan.trigger.living || living));
+        if (!entry || distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > entry.plan.trigger.within) continue;
+        await offer({ kind: "card", item: entry.item, monster, actor, target: token, trigger: `starts its turn within ${entry.plan.trigger.within} feet`, free: !!entry.plan.trigger.free });
+    }
+}
+
+// The encounter starting: a monster's reaction to rolling initiative (Chilling Cry, Predestined Defeat).
+async function onInitiative(combat) {
+    const scene = combat.scene ?? game.scenes.get(combat.combatants.contents[0]?.sceneId);
+    if (!scene) return;
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "initiative");
+        if (entry) await offer({ kind: "card", item: entry.item, monster, actor, target: null, trigger: "rolls initiative", free: !!entry.plan.trigger.free });
     }
 }
 
@@ -240,7 +297,7 @@ async function onDamaged(actor, amount) {
         const own = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "damaged");
         if (own) {
             const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
-            await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger) });
+            await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger), free: !!own.plan.trigger.free });
         }
         if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
         const grid = gridOf(scene);
@@ -264,7 +321,7 @@ async function onDamaged(actor, amount) {
 }
 
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, free = false }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -281,6 +338,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         note,
         attack,
         retribution,
+        ...(free ? { free: true } : {}),
         status: "open",
         result: null
     };
@@ -318,7 +376,7 @@ async function use(message, action, slug) {
     const monster = await fromUuid(state.monster.tokenUuid);
     const actor = monster?.actor;
     if (!actor) throw new Error(`${state.monster.name} isn't there any more.`);
-    if (!state.attack?.free && reactionUsed(actor)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
+    if (!state.attack?.free && !state.free && reactionUsed(actor)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
     let result;
     if (state.kind === "strike") {
         result = await rollStrike(state, actor, slug);
@@ -341,9 +399,14 @@ async function use(message, action, slug) {
         if (!plan?.resolution) throw new Error("Its results aren't readable any more.");
         const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
         const area = plan.targeting?.area;
-        const tokens = plan.targeting?.target === "the attacker" ? (target?.object ? [target.object] : []) : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
-        await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: "reaction" });
+        // (Its own Strike's: the creature it hit, or around it: "a 10-foot burst centered on the target".)
+        const tokens = ["the attacker", "the creature the Strike hits"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
+            : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
+            : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
+        await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: state.free ? "free action" : "reaction" });
         result = tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;
+        // (A free action doesn't use the reaction.)
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "ac") {
         result = `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
     } else if (state.kind === "misfortune") {

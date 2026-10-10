@@ -478,3 +478,25 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Valeros' Demoralize at the hound brought the Otherworldly Mind card on him (DC 25 basic Will); he failed and took 7 mental on Apply.
   - The hound's Will saves against Ezren's Daze and Fear each brought the card on Ezren; against Electric Arc (not mental) and Calm (an area), none.
   - In an encounter, Valeros' Demoralize at the hundun brought Entropic Feedback's offer ("Valeros aimed an effect at it (mental)"); Use it posted its DC 40 Will card on him.
+
+## Reactions to its own Strike, to being attacked, to a turn starting near it, and at initiative (2026-10-10, batch 18)
+
+- **Their triggers are read now** (reactions, and free actions with a trigger):
+  - its own Strike that hits or critically hits, the Strike and the size its trigger names: "The tyrannosaurus critically hits a Large or smaller foe with its foot" (Pin Prey), "Raskus critically hits with a beak Strike", "The pachycephalosaurus damages a Medium or smaller foe with its skull Strike". On the creature it hit, or around it ("a blast of lightning in a 10-foot burst centered on the target", Storm Smite). Not one on only some creatures ("a holy creature", "an off-guard creature").
+  - a Strike at it, before the roll: "A hostile creature targets the jinxer with a melee Strike", "Adma is targeted with a Strike by a creature within 30 feet". On the attacker.
+  - a creature starting its turn near it: "A creature within 30 feet that the basilisk can see starts its turn" (Petrifying Glance, Draining Glance). On that creature; "a living creature" not on undead or constructs.
+  - rolling initiative: "Losko rolls initiative" (Chilling Cry, Predestined Defeat, Dramatic Entrance). On the creatures in its area.
+  - also "A creature scores a critical hit on the firehoof minotaur" (batch 16's hits), and batch 16's triggers on free actions.
+  - Not read: one that leaves a lasting area ("…; a creature who starts its turn in the area takes …"), one aimed at a creature other than the one that set it off ("chooses a different creature … and attempts to swap places with that creature"), "rolls initiative while in water".
+  - 41 in all (37 PF2e, 4 Battlezoo).
+- **Live play** (in an encounter): the GM's offer as for batch 16, and Use it posts the card.
+  - its own Strike: after its attack roll hits ("Valeros took a hit from Skull");
+  - attacked: after the attack roll, with a note: the reaction comes before the roll, so when its result stops the attack, the GM sets the roll aside;
+  - a turn starting: when the encounter's turn changes, for each monster that can react within the distance;
+  - initiative: when the encounter starts.
+  - A free action doesn't use the monster's reaction; its card says "free action".
+- **The simulator** (B47): its own hit, after the Strike; a Strike at it, before the roll (one that leaves the attacker unable to act stops the Strike); a turn starting near it, by the bands; initiative, as the fight starts. Over seven bestiaries (5,673 fights, no errors): Petrifying Glance 47, Draining Glance 9, Dramatic Entrance 6, Sudden Shove 3.
+- **Checked live in pftest** (a PFTEST SIM Basilisk, Pachycephalosaurus, Grippli Jinxer and Flamboyant Thief in an encounter with Valeros, deleted afterwards):
+  - Starting the encounter brought Dramatic Entrance's offer (a free action: Use it left the thief's reaction unused; its card, Performance against each Will DC, listed the creatures within 120 feet) and, as Valeros' turn started, Petrifying Glance's (its card: DC 20 Fortitude on Valeros; the basilisk got "Reaction used").
+  - Valeros' Strike at the jinxer (a miss) brought Hypnotic Tattoos' offer with the note; its card was DC 22 Will on Valeros.
+  - The pachycephalosaurus' skull hit on Valeros brought Sudden Shove's offer; its card was Athletics against his Fortitude DC.
