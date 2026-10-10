@@ -168,7 +168,8 @@ function itemsOf(pack, type) {
     return readDocuments(path.join(packsDirectory, pack)).filter((doc) => doc.collection === "items" && (!type || doc.type === type));
 }
 
-const report = { generated: new Date().toISOString(), packsDirectory, sources: {} };
+// The home folder as "~", so the committed report carries no local path.
+const report = { generated: new Date().toISOString(), packsDirectory: process.env.HOME ? packsDirectory.replace(process.env.HOME, "~") : packsDirectory, sources: {} };
 
 // 1. Basic and class actions.
 const actions = itemsOf("actions", "action").map((item) => ({ name: item.name, category: item.system?.category ?? null, ...analyse(item) }));

@@ -3,9 +3,9 @@
 // Run: node tools/spell-compiler-probe.mjs  (2026-10-08 result: impulses 36%,
 // monster abilities 23%, consumables 12%, PC feats 7% compiled into rule plans).
 
-import { readDocuments } from "/home/theholycole/Documents/ChatGPT/PF2e AUTOMATIC ABILITY RESOLUTION/tools/leveldb.mjs";
-const S = "/home/theholycole/Documents/ChatGPT/PF2e AUTOMATIC SPELL RESOLUTION";
-const { compileAbility } = await import(`${S}/src/compiler/index.js`);
+import { readDocuments } from "./leveldb.mjs";
+// The spell module's folder sits beside this module's.
+const { compileAbility } = await import(new URL("../../PF2e AUTOMATIC SPELL RESOLUTION/src/compiler/index.js", import.meta.url).href);
 const P = process.env.HOME + "/.local/share/FoundryVTT/Data/systems/pf2e/packs/";
 const items = (pack) => readDocuments(P + pack).filter((d) => d.collection === "items");
 
