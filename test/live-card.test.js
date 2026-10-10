@@ -141,3 +141,14 @@ test("a cast card: the spell, its rank and DC as fields the GM can change, what 
     assert.doesNotMatch(cardHTML({ ...state, status: "cast", results: ["Cast Possession at rank 7 (DC 23)."] }), /data-aar-action="cast"/);
     assert.equal(createCastCard({ plan: { builtin: "trample" } }), null);
 });
+
+test("a card with no roll: every target affected, Apply at once", () => {
+    const plan = { source: { name: "Test Burn" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, outcomes: {} } };
+    const state = createCard({ plan, ability: { name: "Test Burn" }, source: { actorUuid: "Actor.m", name: "Test Statue" }, targets: [{ actorUuid: "Actor.v", name: "Valeros" }] });
+    assert.deepEqual([state.check.kind, state.targets[0].degree, allRolled(state)], ["automatic", "success", true]);
+    const html = cardHTML(state);
+    assert.match(html, /no roll/);
+    assert.match(html, /Valeros<\/span><span class="aar-result">affected/);
+    assert.doesNotMatch(html, /data-aar-action="roll/);
+    assert.match(html, /data-aar-action="apply" data-gm-only="true">Apply/);
+});

@@ -17,6 +17,8 @@ export function cardCheck(plan) {
     const check = plan?.resolution?.check;
     if (!check) return null;
     if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic };
+    // No roll ("The target takes 3d8 fire damage"): every target is affected (2026-10-10).
+    if (check.roll === "automatic") return { kind: "automatic" };
     if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic };
     return null;
 }
@@ -130,7 +132,7 @@ export function createCard({ plan, ability, source, targets, rider = null, cause
         cause,
         aura,
         warning,
-        targets: targets.map((target, index) => ({ id: `t${index}`, actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name, dc: target.dc ?? null, total: null, natural: null, degree: null })),
+        targets: targets.map((target, index) => ({ id: `t${index}`, actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name, dc: target.dc ?? null, total: null, natural: null, degree: check.kind === "automatic" ? "success" : null })),
         status: "open",
         results: []
     };
@@ -156,6 +158,7 @@ export const allRolled = (state) => state.targets.length > 0 && state.targets.ev
 export function checkLine(state) {
     const check = state.check;
     if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} save`;
+    if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
     return `${statisticLabel(check.statistic)} against each target's ${statisticLabel(check.against)} DC`;
@@ -170,13 +173,14 @@ export function cardHTML(state) {
     const rows = state.targets.map((target) => {
         // A save: the target's roll; a check: the user's roll against the target's DC.
         const roll = state.check.kind === "check" ? `${statisticLabel(state.check.statistic)} ${target.total} vs ${state.check.against === "ac" ? "AC" : "DC"} ${target.dc}` : `${target.total}`;
-        const result = target.degree
+        const result = state.check.kind === "automatic" ? `<span class="aar-result">affected</span>`
+            : target.degree
             ? `<span class="aar-result aar-${escape(target.degree)}">${escape(roll)}: ${escape(DEGREE_LABELS[target.degree])}</span>`
             : state.status === "open" ? `<button type="button" data-aar-action="roll" data-target-id="${escape(target.id)}">Roll ${escape(state.check.kind === "save" ? statisticLabel(state.check.statistic) : statisticLabel(state.check.statistic))}</button>` : "<span class=\"aar-result\">not rolled</span>";
         return `<li class="aar-target" data-target-id="${escape(target.id)}"><span class="aar-name">${escape(target.name)}</span>${result}</li>`;
     }).join("");
     const controls = state.status === "open"
-        ? `<footer class="aar-controls"><button type="button" data-aar-action="targets" data-gm-only="true">Use my targets</button><button type="button" data-aar-action="roll-all" data-gm-only="true"${state.targets.some((target) => !target.degree) ? "" : " disabled"}>Roll the rest</button><button type="button" data-aar-action="apply" data-gm-only="true"${allRolled(state) ? "" : " disabled"}>Apply</button></footer>`
+        ? `<footer class="aar-controls"><button type="button" data-aar-action="targets" data-gm-only="true">Use my targets</button>${state.check.kind === "automatic" ? "" : `<button type="button" data-aar-action="roll-all" data-gm-only="true"${state.targets.some((target) => !target.degree) ? "" : " disabled"}>Roll the rest</button>`}<button type="button" data-aar-action="apply" data-gm-only="true"${allRolled(state) ? "" : " disabled"}>Apply</button></footer>`
         : "";
     const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
     const empty = state.targets.length ? "" : `<p class="aar-hint">No targets: target the creatures, then press Use my targets.</p>`;

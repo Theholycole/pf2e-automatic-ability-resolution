@@ -397,3 +397,12 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Rhinoceros Charge: a horn Strike that critically missed gave no card; the next use's hit gave a DC 21 Reflex save card for Seelah.
   - Crocodile's Death Roll: the jaws hit on Merisiel made her Prone on Apply. After another Death Roll, a Tail hit gave no card and left it waiting; the Jaws hit then got the card.
 
+## Results with no roll (2026-10-10, batch 11)
+
+- **Read:** an ability with no check whose result goes on the creatures it names: "The target takes @Damage damage" (Burn Alive), "The creature the megalodon hit takes 2d12 slashing damage" (Savage), "<it> deals 3d6 persistent bleed damage to the creature" (Serrated Takedown), "Each enemy within 30 feet takes …" (around it), "The target takes … and is Drained 1", "The creature gains Drained 1". A formula with the creature's level ("(@actor.level)[persistent,poison]") gets its level. A follow-up to a hit ("Requirements … last action was a successful jaws Strike") keeps that requirement for the simulator. Its later sentences, and one that says more than it applies ("…, and its resistances … are reduced"), are notes for the GM.
+- **Not read:** a save, check or Strike in it (also one without an inline check: "must attempt a Reflex save"); a choice; some of them only ("Each creature that fails its save", "Every foe … taking persistent fire damage"); a result by a degree ("Frightened 1, or Frightened 2 on a critical hit"); "if", "unless", "instead"; damage per something; damage to itself; off-guard to some attackers only; concealment.
+- **The card** says "no roll" and each target "affected"; Apply deals the damage (persistent damage as PF2e's condition) and the conditions, as a save card's results.
+- **Core:** the check family's `check.roll: "automatic"` rolls nothing and gives every target the success row; the simulator counts it as certain (B40).
+- The glossary's Grab (and Knockdown, Push, Pull) written out with no slug is read as that rider again.
+- **Checked live in pftest** (the scene's PFTEST SIM Megalodon, and a PFTEST SIM Giant Animated Statue deleted afterwards; the PCs restored): Savage on Valeros, "Valeros takes 7 slashing"; Burn Alive on Seelah, 7 fire and 1d8 persistent fire.
+

@@ -680,3 +680,30 @@ test("abilities that cast a spell or have its effects (2026-10-10, batch 9): the
     not("Test Passive", `<p>The test vampire can cast ${dominate} at will as a divine innate spell.</p>`, "passive");
     not("Test Choice", `<p>The test herecite casts ${dominate}, ${spell("AAAAAAAAAAAAAAD8", "Harm")}, or ${spell("AAAAAAAAAAAAAAD3", "Geas")} (DC 31).</p>`);
 });
+
+test("results with no roll (2026-10-10, batch 11): damage and conditions on the creatures it names, for the GM's Apply", () => {
+    const action = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const drained = "@UUID[Compendium.pf2e.conditionitems.Item.4D2KBtexWXa6oUMR]{Drained 1}";
+    const burn = compileMonsterAbility(action("Test Burn", "<p>The test statue grinds a creature it has Grabbed into its coals. The target takes @Damage[3d8[fire],1d8[persistent,fire]] damage.</p>"));
+    assert.deepEqual([burn.resolution.kind, burn.resolution.check.roll, burn.resolution.sharedDamage.components.map((c) => c.formula), burn.resolution.outcomes.success.damage.mode, burn.resolution.outcomes.failure.damage.mode], ["check", "automatic", ["3d8[fire],1d8[persistent,fire]"], "shared", "none"]);
+    const digest = compileMonsterAbility(action("Test Digest", `<p><strong>Requirements</strong> The test star has a target Grabbed</p><hr /><p><strong>Effect</strong> The test star digests its prey. The target takes @Damage[(2d12+6)[acid]] damage and is ${drained}.</p>`));
+    assert.deepEqual(digest.resolution.outcomes.success.effects.map((e) => [e.slug, e.value]), [["drained", 1]]);
+    // "Each enemy within 30 feet": around it; "<it> deals … damage to each creature in …".
+    const surge = compileMonsterAbility(action("Test Surge", "<p>Each enemy within 30 feet of the test squirrel takes @Damage[1d8[slashing]] damage.</p>"));
+    assert.deepEqual(surge.targeting.area, { type: "emanation", value: 30 });
+    // A follow-up to a hit with no roll ("Requirements … last action was a successful jaws Strike").
+    const gnaw = compileMonsterAbility(action("Test Gnaw", "<p><strong>Requirements</strong> The test hare's last action was a successful jaws Strike</p><hr /><p><strong>Effect</strong> The test hare gnaws deeper. The target takes @Damage[(1d8+3)[piercing]] damage.</p>"));
+    assert.deepEqual([gnaw.resolution.check.roll, gnaw.trigger.followUp.strike], ["automatic", "jaws"]);
+    // The creature's level in a formula.
+    const ichor = compileMonsterAbility(action("Test Ichor", "<p><strong>Trigger</strong> The test villager takes slashing damage from a melee Strike</p><hr /><p><strong>Effect</strong> The creature making the triggering Strike takes @Damage[(@actor.level)[persistent,poison]] damage.</p>", "reaction"), { actor: { name: "Test Villager", system: { details: { level: { value: 3 } } } } });
+    assert.deepEqual(ichor.resolution.sharedDamage.components.map((c) => c.formula), ["(3)[persistent,poison]"]);
+    // Not: some of them only, a save in it, a choice, a degree, damage to itself, concealment.
+    const not = (name, html) => assert.notEqual(compileMonsterAbility(action(name, html))?.resolution?.check?.roll, "automatic", name);
+    not("Test Purge", "<p>Each creature that fails its save against the Breath Weapon takes @Damage[4d6[persistent,fire]] damage.</p>");
+    not("Test Flames", "<p>Every foe within 60 feet taking persistent fire damage takes @Damage[5d6[fire]] damage.</p>");
+    not("Test Topple", `<p>All creatures in a @Template[cone|distance:30] must attempt a Reflex save. Critical Success The target is unaffected. Failure The target is ${drained}.</p>`);
+    not("Test Choice", `<p>The foe must choose one: the ally is unharmed, or the enemy is ${drained}.</p>`);
+    not("Test Degree", `<p>The victim becomes ${drained}, or Drained 2 on a critical hit.</p>`);
+    not("Test Self", "<p>The test swarm takes @Damage[1d6[untyped]] damage as the traps cling on.</p>");
+    not("Test Smoke", "<p>All creatures within the cloud become @UUID[Compendium.pf2e.conditionitems.Item.DmAIPqOBomZ7H95W]{Concealed}.</p>");
+});

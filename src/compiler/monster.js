@@ -27,7 +27,13 @@ const condition = (slug, value = null, duration = null) => ({ kind: "condition",
 export function glossarySlug(item) {
     const localized = /@Localize\[PF2E\.NPC\.Abilities\.Glossary\.([A-Za-z]+)\]/.exec(item?.system?.description?.value ?? "")?.[1];
     if (localized) return localized.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
-    return item?.system?.slug ?? null;
+    const own = item?.system?.slug ?? null;
+    if (own) return own;
+    // The glossary's text written out, with no slug (2026-10-10): "Requirements The monster's last action was a success with a
+    // Strike that lists Grab in its damage entry …" → "grab".
+    const named = String(item?.name ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+    if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push", "pull", "improved-pull"].includes(named) && /last action was a success with a Strike that lists/i.test(item?.system?.description?.value ?? "")) return named;
+    return own;
 }
 
 // Rules PF2e's own engine or the simulator already play: no plan needed.
@@ -839,6 +845,86 @@ function inlineSave(item, actor = null) {
     };
 }
 
+// No roll at all (2026-10-10): "The statue grinds a creature it has Grabbed … The target takes 3d8 fire and 1d8 persistent fire
+// damage.", "Each enemy within the aura takes 1d8 slashing damage.", "The creature takes 3d6 piercing damage and is Drained 1." →
+// a check of roll "automatic": its success row for every creature it names (the card's Apply; the simulator's certain result).
+// Its later sentences, for the GM. Not: any check or basic action in it, damage to itself, a choice, "if"/"unless"/"instead" in
+// the result, damage by some count ("per creature"), healing.
+const AUTO_SUBJECT = /^(?:The|That|This) (?:target|creature|grabbed creature|restrained creature|swallowed creature|engulfed creature|triggering creature|victim|foe|enemy|attacker)\b|^(?:Each|Every|All) (?:other )?(?:living )?(?:creatures?|enem(?:y|ies)|foes?)\b/i;
+function automaticEffect(item, actor = null) {
+    if (!["action", "reaction", "free"].includes(item.system?.actionType?.value)) return null;
+    const html = String(item.system?.description?.value ?? "");
+    if (/@Check\[|\[\[\/act |\bhealing\b|\bregains?\b|\bone of the following\b/i.test(html)) return null;
+    const effect = html.split(/<strong>\s*Effect\s*<\/strong>/i).at(-1).replace(/<strong>\s*(?:Frequency|Requirements?|Trigger|Cost)\s*<\/strong>[^]*?(?=<strong>|$)/gi, "");
+    const words = htmlToPlainText(effect);
+    // A save, check or Strike in it (one without an inline check: "must attempt a Reflex save"), a choice, or a next action's.
+    if (/\b(?:saves?|saving throw|checks?)\b|\bchooses?\b|\bchoice\b|\bnext action\b|\b(?:makes?|attempts?|attempting|making) (?:a|an|one|two|three)\b[^.]*\bStrikes?\b|\bStrikes? (?:the|a|an|it|them)\b/i.test(words)) return null;
+    const level = Number((actor ?? item.actor ?? item.parent)?.system?.details?.level?.value);
+    const sentences = sentencesOf(effect);
+    const components = [];
+    const effects = [];
+    const notes = [];
+    let first = -1;
+    for (const [index, sentence] of sentences.entries()) {
+        const plain = htmlToPlainText(sentence.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D")).replace(/\s+/g, " ").trim();
+        // "The target takes …", "Each enemy within 30 feet takes …"; "<it> deals … damage to the target"; "The creature is Drained 1".
+        const takes = AUTO_SUBJECT.test(plain) && /\btakes? @D(?: damage)?\b/i.test(plain);
+        // (Also "… sucks blood from that target, dealing 2d4 damage".)
+        const deals = /\bdeal(?:s|ing)? @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain));
+        const conditions = readConditions(sentence).filter((entry) => entry.recipient !== "self");
+        const is = (AUTO_SUBJECT.test(plain) || deals) && conditions.length > 0;
+        if (!takes && !deals && !is) {
+            // (Not its recharge, which the module keeps.)
+            if (first >= 0 && plain && !/^\(?DC \d+/.test(plain) && !/\bcan(?:'t|not) use [^.]+? again for\b/i.test(plain)) notes.push(readableText(sentence.replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")));
+            continue;
+        }
+        if (/^(?:If|When|Whenever|Unless|Until|While|Once|After)\b/i.test(plain) || /\b(?:if|unless|whenever|instead)\b/i.test(plain)) return null;
+        // Only some of them ("Each creature that fails its save …", "Every foe within 60 feet taking persistent fire damage …").
+        const subject = AUTO_SUBJECT.test(plain) ? (/^(.*?)\b(?:takes?|is|are|becomes?|gains?|falls?)\b/i.exec(plain)?.[1] ?? "").replace(/^(?:The|That|This|Each|Every|All)\s+/i, "") : "";
+        if (/\b(?:that|who|whose|taking|suffering|affected|already|wearing|holding|carrying|with)\b|\bin the water\b/i.test(subject.replace(/^(?:creature|target) (?:it|that it) has (?:Grabbed|Restrained)\b/i, ""))) return null;
+        // Damage by some count, or one of several ("1d6 damage per creature", "@D or @D"); results by a degree ("Frightened 1,
+        // or Frightened 2 on a critical hit"): not one result for everyone.
+        if (/@D(?: damage)? per\b|@D[^.]*?\bor @D/i.test(plain) || /\bcritical(?:ly)? (?:hit|success|failure|fails?|succeeds?)\b|\bon a critical\b/i.test(plain)) return null;
+        // Off-guard to some attackers only, or seen and unseen ("Concealed"): the GM's.
+        if (/\boff-guard (?:against|to)\b/i.test(plain) || conditions.some((entry) => ["concealed", "hidden", "undetected", "invisible", "observed", "unnoticed"].includes(entry.slug))) return null;
+        if (first < 0) first = index;
+        for (const raw of inlineTags(sentence, "Damage")) {
+            if (/\bhealing\b/i.test(raw)) continue;
+            // "(@actor.level)[persistent,poison]": the creature's level.
+            let formula = readDamage(raw);
+            if (/@actor\.level/.test(formula)) {
+                if (!Number.isFinite(level)) return null;
+                formula = formula.replace(/@actor\.level/g, String(level));
+            }
+            if (/@/.test(formula)) return null;
+            components.push({ id: String(components.length), formula, type: null, category: null });
+        }
+        effects.push(...conditions);
+        // More in the same sentence ("…, and its resistances to physical damage are reduced by 5"): the sentence for the GM.
+        if (/\b(?:resistances?|weakness|penalty|bonus|can't|cannot|Speeds?|exposed|immune)\b/i.test(plain)) notes.push(readableText(sentence.replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")));
+    }
+    if (!components.length && !effects.length) return null;
+    const plain = htmlToPlainText(html);
+    const template = inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? null;
+    // "Each enemy within 30 feet", "each creature within the aura": around it.
+    const around = template ? null : /\b(?:Each|Every|All) (?:other )?(?:living )?(?:creatures?|enem(?:y|ies)|foes?) within (\d+) feet\b/i.exec(plain);
+    const area = template ?? (around ? { type: "emanation", value: Number(around[1]) } : null);
+    const range = readRange(plain);
+    const grabbed = /\b(?:grabbed|restrained|swallowed|engulfed) creature\b|\bcreature (?:it|that it) has Grabbed\b|\bhas (?:a|the) creature (?:Grabbed|Restrained)\b/i.test(plain);
+    const success = {
+        damage: components.length ? { mode: "shared", multiplier: 1, sourceComponentIds: components.map((component) => component.id) } : { mode: "none", multiplier: 0, sourceComponentIds: [] },
+        effects: effects.map((entry) => condition(entry.slug, entry.value ?? null, entry.duration ?? null)),
+        ...(notes.length ? { manualInstructions: notes.map((note) => `{target}: ${note}`) } : {})
+    };
+    const recharge = readRecharge(html);
+    return {
+        ...base(item),
+        targeting: { target: area ? null : "1 creature", range: range ? `${range} feet` : area ? null : "touch", area, ...(grabbed ? { grabbed: true } : {}) },
+        trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: components.length ? { rollOnce: true, components } : null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } }
+    };
+}
+
 // The item as the readers see it: one written in older inline syntax (other publishers' monsters)
 // with its text in PF2e's current form; PF2e's own items unchanged.
 function modernItem(item) {
@@ -1066,7 +1152,7 @@ function followUp(item, actor) {
     const own = withDescription(item, effect);
     let plan = null;
     try {
-        plan = inlineSave(own, actor) ?? compileSkillAction(own, { actor }) ?? effectAbility(own);
+        plan = inlineSave(own, actor) ?? compileSkillAction(own, { actor }) ?? effectAbility(own) ?? automaticEffect(own, actor);
     } catch {
         plan = null;
     }
@@ -1145,7 +1231,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item);
+    const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
