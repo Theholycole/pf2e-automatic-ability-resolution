@@ -11,6 +11,7 @@
 
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
+import { activityRider, fitsSize, strikeMatches } from "../src/live/activity.js";
 import { applySwallow } from "./swallow.js";
 import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
@@ -133,6 +134,8 @@ async function cardForAbility(message) {
         await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
     }
+    // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
+    if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
     if (plan?.builtin === "cast-spell") {
         const spell = await fromUuid(plan.spell.uuid).catch(() => null);
@@ -230,17 +233,31 @@ async function hazardCast(message, state, { rank, dc }) {
     return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
 }
 
-// A monster's or a hazard's Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each.
+// A Strike activity used (Intimidating Strike): its results wait for the creature's next Strike, by actor (the active GM's
+// client; a use more than 10 minutes old is dropped).
+const pendingActivities = new Map();
+const ACTIVITY_WAIT = 10 * 60 * 1000;
+
+// A monster's or a hazard's Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each. The Strike of
+// a Strike activity used just before: a card with the activity's results on a hit.
 async function cardsForRiders(message) {
     const context = message.flags?.pf2e?.context;
-    if (context?.type !== "attack-roll" || !["success", "criticalSuccess"].includes(context.outcome)) return;
+    if (context?.type !== "attack-roll") return;
     const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
     const actor = strike?.actor;
-    const effects = strike?.system?.attackEffects?.value ?? [];
-    if (!actor || !["npc", "hazard"].includes(actor.type) || !effects.length) return;
+    if (!actor || !["npc", "hazard"].includes(actor.type)) return;
+    const hit = ["success", "criticalSuccess"].includes(context.outcome);
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const target = targetToken?.object ?? targetToken;
-    if (!target?.actor) return;
+    // (The activity's Strike, hit or miss, uses it up.)
+    const pending = pendingActivities.get(actor.uuid);
+    if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
+    else if (pending && strikeMatches(pending.plan, strike)) {
+        pendingActivities.delete(actor.uuid);
+        if (hit && target?.actor) await activityCard(message, pending, { actor, strike, target, targetToken, context });
+    }
+    const effects = strike?.system?.attackEffects?.value ?? [];
+    if (!hit || !effects.length || !target?.actor) return;
     await ready;
     for (const item of actor.itemTypes.action) {
         const plan = compile(item);
@@ -248,6 +265,30 @@ async function cardsForRiders(message) {
         if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug))) continue;
         await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: trigger.cost ?? "free" } });
     }
+}
+
+// A Strike activity's results on the creature its Strike hit: the activity's save to roll, or its results by the Strike's own
+// degree (recorded, as a skill action's roll is) for the GM's Apply.
+async function activityCard(message, pending, { actor, strike, target, targetToken, context }) {
+    const rider = activityRider(pending.plan);
+    if (!rider) return;
+    const sourceToken = message.token ?? pending.token ?? null;
+    if (rider.save) {
+        if (!fitsSize(target.actor.size, rider.size)) return;
+        await postCard({ plan: rider.save, item: pending.item, sourceActor: actor, sourceToken, tokens: [target], rider: { strikeName: strike.name, cost: "activity" } });
+        return;
+    }
+    const state = createCard({
+        plan: rider.plan,
+        ability: { name: pending.item.name, uuid: pending.item.uuid },
+        source: { actorUuid: actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? actor.name },
+        targets: [{ actorUuid: target.actor.uuid, tokenUuid: targetToken.uuid, name: target.name ?? target.actor.name, dc: context.dc?.value ?? null }],
+        rider: { strikeName: strike.name, cost: "activity" }
+    });
+    if (!state) return;
+    const roll = message.rolls?.[0];
+    const rolled = recordRoll(state, state.targets[0].id, { total: roll?.total ?? null, natural: roll?.dice?.[0]?.total ?? null, degree: context.outcome });
+    await ChatMessage.create({ content: cardHTML(rolled), speaker: ChatMessage.getSpeaker({ actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: rolled } } });
 }
 
 // A skill action PF2e has already rolled (a PC's Demoralize, Trip, Grapple,

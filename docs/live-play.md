@@ -377,3 +377,23 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Culdewen's Swear (Mariner's Curse, DC 25): cast at rank 5; with the fields changed to rank 6 and DC 27, the same entry was updated and the spell heightened.
   - Color Spray Trap's Color Spray: a DC 21 Will save card for Dizzying Colors on Merisiel; a success dazzled her until the trap's next turn.
 
+## Strike activities in live play, and more Strike wordings (2026-10-10, batch 10)
+
+- **A Strike activity's results on a hit:** when the GM uses an activity whose Strike does more on a hit (Intimidating Strike's "If it hits and deals damage, the target is Frightened 1, or Frightened 2 on a critical hit", Death Roll's Prone, Rhinoceros Charge's save, a Strike's extra persistent damage), the module waits for that creature's next Strike: the one the activity names ("a jaws Strike"), or any melee Strike when it names none.
+  - A hit gets a card with the Strike's own roll in it ("Strike 23 vs AC 22: success"): the hit's results, or the critical hit's (the extra damage doubled), for the GM's Apply.
+  - An activity with a save gets that save's card for the creature hit (only one small enough when the text sets a size).
+  - A miss uses the activity up with no card; a Strike with another weapon leaves it waiting; a use more than 10 minutes old is dropped. "…and deals damage" is left to the GM.
+- **More wordings, for the simulator:**
+  - Sudden Charge: "Strides twice. If it ends its movement within melee reach of at least one enemy, it makes a melee Strike against that enemy."
+  - Strikes against different creatures: "makes up to four tentacle Strikes, each against a different target", "tail Strikes against two different creatures", "two Strikes with its claw against two adjacent foes". The simulator Strikes that many enemies in its Melee (any enemies for a ranged Strike); these were played at one target before.
+  - Swipe and Wide Swing: one attack compared to up to two foes' AC, counted as two attacks.
+  - Coiling Frenzy: the dragon's Grab after either Strike hits.
+  - "This Strike ignores their multiple attack penalty and doesn't count toward that penalty" (Wriggling Beard); "Frequency once per round" on a Strike activity.
+  - Death Roll: "+2 circumstance bonus to the attack roll against the grabbed creature. If it hits, it also knocks the creature Prone."
+  - "If they hit and deal damage, …", "(Frightened 2 on a critical hit)" in brackets.
+  - Not read: a condition with a save of its own in the sentence ("Paralyzed … (DC 19 Fortitude negates)").
+- **Checked live in pftest** (PFTEST SIM Jailer, Rhinoceros and Crocodile, deleted afterwards; the PCs restored):
+  - Jailer's Intimidating Strike, then a Club Strike that hit Valeros (30 vs AC 21): the card's Apply made Valeros Frightened 1.
+  - Rhinoceros Charge: a horn Strike that critically missed gave no card; the next use's hit gave a DC 21 Reflex save card for Seelah.
+  - Crocodile's Death Roll: the jaws hit on Merisiel made her Prone on Apply. After another Death Roll, a Tail hit gave no card and left it waiting; the Jaws hit then got the card.
+

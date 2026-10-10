@@ -85,6 +85,7 @@ export function readMultiStrikes(text) {
     const first = sentences.shift() ?? "";
     let sameMap = false;
     let sameTarget = false;
+    let grab = false;
     const strikes = [];
     const count = (word) => NUMBERS[String(word).toLowerCase()] ?? 0;
     // "scimitar or fangs": the first; "melee", "unarmed", "ranged" or none: the best (null).
@@ -97,9 +98,23 @@ export function readMultiStrikes(text) {
     // Who they're against: "against the same target", "all targeting the same creature", "each against a different creature".
     const WHO = String.raw`(?:,? (?:each |all |both )?(?:against|targeting) (?:a|an|one|the|two|different|single) (?:single |same |different |adjacent )?(?:creature|target|foe|enemy|enemies|targets|creatures)s?(?: (?:within|in) (?:(?:its|their|his|her) )?reach)?)?`;
     let match;
-    if ((match = new RegExp(String.raw`^(?:The )?[^.]+? makes (a|an|one|two|three|four) (?:([\w' -]+?) )??Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: with (?:its|their|his|her) ([\w' -]+?))?(?: in (?:any|either) order)?(${WHO})(?:,? one (?:Strike )?(?:with each of (?:its|their|his|her) [\w' -]+|per weapon))?\.$`, "i").exec(first))) {
+    // Against different creatures ("up to four tentacle Strikes, each against a different target", "tail Strikes against two
+    // different creatures within reach"): a Strike at each of that many enemies in its Melee (2026-10-10).
+    let each = false;
+    if ((match = new RegExp(String.raw`^(?:The )?[^.]+? makes (?:up to )?(a|an|one|two|three|four) (?:([\w' -]+?) )??Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: with (?:its|their|his|her) ([\w' -]+?))?(?: in (?:any|either) order)?(${WHO})(?:,? one (?:Strike )?(?:with each of (?:its|their|his|her) [\w' -]+|per weapon))?\.$`, "i").exec(first))) {
         for (const [number, name] of [[match[1], match[2] ?? match[5]], [match[3], match[4]]]) for (let index = 0; index < count(number ?? 0); index++) strikes.push(named(name));
         if (/single|same|one (?:creature|target|foe|enemy)/i.test(match[6] ?? "")) sameTarget = true;
+        if (/different|two (?:creatures|targets|foes|enemies)/i.test(match[6] ?? "")) each = true;
+    } else if ((match = /^(?:The )?[^.]+? makes (?:(two|three|four) )?(?:([\w' -]+?) )??Strikes(?: with (?:its|their|his|her) ([\w' -]+?))? against (two|three|four|up to two|up to three) (?:different |adjacent )?(?:creatures|foes|enemies|targets)(?:,? (?:both|all|each) of (?:whom|which) (?:are|is|must be) (?:within|in) (?:(?:its|their|his|her) )?reach| (?:within|in) (?:(?:its|their|his|her) )?reach)?\.$/i.exec(first))) {
+        // "The emperor bird makes tail Strikes against two different creatures within reach", "makes two Strikes with its claw
+        // against two adjacent foes, both of whom are within its reach".
+        const number = count(match[1] ?? match[4].replace(/^up to /i, ""));
+        for (let index = 0; index < number; index++) strikes.push(named(match[2] ?? match[3]));
+        each = true;
+    } else if ((match = /^(?:The )?[^.]+? makes? one Strike with each of (?:its|their|his|her) (two|three) (?:melee )?weapons(?:, (?:both|all) against the same (?:target|creature))?\.$/i.exec(first))) {
+        // "They make one Strike with each of their two melee weapons, both against the same target": its best melee Strikes.
+        for (let index = 0; index < count(match[1]); index++) strikes.push(null);
+        if (/same (?:target|creature)/i.test(first)) sameTarget = true;
     } else if ((match = /^(?:The )?[^.]+? makes (two) Strikes(?: against the same target)?, one with (?:its|their|his|her) ([\w' -]+?) and (?:one|the other) with (?:its|their|his|her) ([\w' -]+?)\.$/i.exec(first))) {
         strikes.push(named(match[2]), named(match[3]));
         if (/same target/i.test(first)) sameTarget = true;
@@ -124,9 +139,41 @@ export function readMultiStrikes(text) {
             sameTarget = true;
             continue;
         }
+        // "If either Strike hits, the dragon can attempt to Grab the target with that limb as a free action." (and how many it can
+        // hold): Grab after a hit.
+        if (/^If (?:either|any|both|one) (?:of the )?(?:Strikes?|attacks?) hits?, (?:it|they|he|she|the [\w' -]+?) can (?:attempt to )?Grab the (?:target|creature)(?: with (?:that|the) [\w ]+?)? as a free action\.$/i.test(sentence)) {
+            grab = true;
+            continue;
+        }
+        if (grab && /^(?:It|They|He|She|The [\w' -]+?) can have up to (?:two|three|four|\w+) creatures Grabbed\b/i.test(sentence)) continue;
         return null;
     }
-    return { strikes, sameMap, sameTarget, oncePerTurn };
+    // (A Strike at each of several creatures: all with its first Strike.)
+    if (each && new Set(strikes).size > 1) return null;
+    return { strikes, sameMap, sameTarget, oncePerTurn, ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}) };
+}
+
+// One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
+// attack roll result to the AC of up to two foes, each of whom must be within their melee reach and adjacent to each other. Roll
+// damage only once and apply it to each creature hit. A Swipe counts as two attacks for the veteran's multiple attack penalty."
+// → { strike, max }, or null.
+export function readSwipe(text) {
+    const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const match = /^(?:The )?[^.]+? makes an? (?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's) (?:melee )?reach(?: and adjacent to each other)?)?\.$/i.exec(sentences.shift() ?? "");
+    if (!match) return null;
+    for (const sentence of sentences) {
+        if (/^Roll (?:the )?damage only once(?:,)? and apply it to each creature (?:hit|it hits)\.$/i.test(sentence)) continue;
+        if (/^(?:An? |The )?[\w' -]+? counts as (?:two|three) attacks (?:for|when calculating) [^.]*multiple attack penalty\.$/i.test(sentence)) continue;
+        return null;
+    }
+    const strike = match[1] && !/^(?:melee|weapon|unarmed)$/i.test(match[1]) ? match[1].replace(/^(?:melee|ranged)\s+|\s+(?:melee|ranged)$/gi, "").toLowerCase() : null;
+    return { strike, max: NUMBERS[match[2].toLowerCase()] };
+}
+
+// "The guard Strides twice. If it ends its movement within melee reach of at least one enemy, it makes a melee Strike against
+// that enemy." (Sudden Charge; 2026-10-10) → "The guard Strides twice and makes a melee Strike." for the charge readers.
+export function chargeSentences(text) {
+    return String(text).replace(/\b(Strides twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)\.\s+If (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement within (?:melee )?reach of (?:at least one|an?|any) (?:enemy|foe|creature|target), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that|the) (?:enemy|foe|creature|target)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
 }
 
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
@@ -143,7 +190,7 @@ export function readSweep(text) {
         }
         if (/^(?:Each attack|These attacks) counts? toward [^.]*multiple attack penalty(?: as normal)?\.$/i.test(sentence)) continue;
         // "It can Strike up to once with its jaws and any number of times with its body": its Strikes, the best one played.
-        if (/^(?:It|They) can Strike up to once with (?:its|their) [\w' -]+ and any number of times with (?:its|their) [\w' -]+\.$/i.test(sentence)) continue;
+        if (/^(?:It|They) can Strike up to once with (?:its|their) [\w' -]+(?:, up to once with (?:its|their) [\w' -]+)*,? and any number of times with (?:its|their) [\w' -]+\.$/i.test(sentence)) continue;
         if (/^This counts as (?:two|three|four|\w+) attacks for [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.test(sentence)) {
             sameMap = true;
             continue;
@@ -179,14 +226,14 @@ export function moveThenStrike(text) {
 // bonus to its attack roll" → attackBonus; "the Strike's damage is increased
 // to 3d10+20" → damage. Any other sentence: null.
 export function readCharge(text) {
-    const sentences = text.trim().split(/(?<=\.)\s+/);
+    const sentences = chargeSentences(text).trim().split(/(?<=\.)\s+/);
     // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
     if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^The [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
     const match = /^The [^.]+? Strides( twice)? and (?:then )?makes an? (?:([\w' -]+?) )?Strike(?: at the end of that movement)?\.$/i.exec(sentences[0] ?? "");
     // Other moves and wordings (2026-10-10): "Flies up to double its fly Speed and then makes a talon Strike".
     const other = match ? null : moveThenStrike(sentences[0] ?? "");
     if (!match && !other) return null;
-    const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] ? match[2].toLowerCase() : null };
+    const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[2].trim()) ? match[2].toLowerCase() : null };
     const moved = "^(?:If|As long as) (?:it|they|the [\\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, ";
     for (const sentence of sentences.slice(1)) {
         if (/remains? hidden until after/i.test(sentence)) continue;
@@ -263,9 +310,12 @@ export function compileBuiltin(item, slug) {
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
     const multi = readMultiStrikes(text);
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}) };
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}) };
+    // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
+    const swipe = readSwipe(text);
+    if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };
     const charge = readCharge(text);
     if (charge && actions === charge.strides) return { builtin: "charge", actions, ...charge };
     return null;

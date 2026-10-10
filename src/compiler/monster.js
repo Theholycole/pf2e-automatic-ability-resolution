@@ -13,7 +13,7 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
-import { compileBuiltin, moveThenStrike } from "./builtins.js";
+import { chargeSentences, compileBuiltin, moveThenStrike } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 import { castSpell } from "./casts.js";
@@ -574,24 +574,28 @@ function strikeActivity(item, actor) {
         strikeActivityReject.last = text;
         return null;
     };
-    const html = (item.system?.description?.value ?? "").replace(/<p>\s*<strong>\s*(?:Requirements|Frequency)\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/gi, (block) => (/Frequency/i.test(block) && /once per (?:day|hour|minute|10 minutes)/i.test(block) ? "<p>[once]</p>" : /Requirements/i.test(block) ? `<p>[requires ${htmlToPlainText(block).replace(/^Requirements\s*/i, "")}]</p>` : "")).replace(/<strong>\s*Effect\s*<\/strong>/gi, "");
+    // (Sudden Charge's "Strides twice. If it ends its movement within melee reach …, it makes a melee Strike against that enemy.",
+    // as one sentence.)
+    const html = chargeSentences(item.system?.description?.value ?? "").replace(/<p>\s*<strong>\s*(?:Requirements|Frequency)\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/gi, (block) => (/Frequency/i.test(block) && /once per (?:day|hour|minute|10 minutes)/i.test(block) ? "<p>[once]</p>" : /Frequency/i.test(block) && /once per (?:round|turn)/i.test(block) ? "<p>[once a turn]</p>" : /Requirements/i.test(block) ? `<p>[requires ${htmlToPlainText(block).replace(/^Requirements\s*/i, "")}]</p>` : "")).replace(/<strong>\s*Effect\s*<\/strong>/gi, "");
     const sentences = html.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ").split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
     let opened = false;
     let flavorSkipped = false;
-    const hit = "^(?:If|When) (?:it|the (?:Strike|attack|strike)|this (?:Strike|attack)) hits(?: and deals damage)?, ";
+    // "If it hits", "If the Strike hits and deals damage", "If they hit and deal damage", "If Alak hits".
+    const hit = "^(?:If|When) (?:it|he|she|they|the (?:Strike|attack|strike)|this (?:Strike|attack)|the [\\w' -]+?|[A-Z][\\w'-]+) hits?(?: and deals? damage)?, ";
     const conditions = (text) => readConditions(text, { plain: STAGE_CONDITIONS }).map((effect) => ({ slug: effect.slug, value: effect.value, duration: effect.duration }));
     for (const sentence of sentences) {
         // Linked names as words ("@UUID[…]{Grabbed}" → "Grabbed"); @Check and @Damage are read from the sentence itself.
         const text = htmlToPlainText(sentence.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
         let match;
         if (text === "[once]") activity.oncePerFight = true;
+        else if (text === "[once a turn]") activity.oncePerTurn = true;
         else if ((match = /^\[requires (.+)\]$/.exec(text))) {
             // A free hand: not while it holds a creature (the grab uses the hand). Held weapons aren't tracked.
             if (/(?:has|must have) (?:a creature|an enemy|a foe) Grabbed|is grabbing a creature/i.test(match[1])) activity.requires = "grabbed";
             else if (/has a (?:free )?hand(?: free)?/i.test(match[1])) activity.requires = "free-hand";
             else if (!/is wielding|is holding/i.test(match[1])) return reject(text);
-        } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides(?: twice| or Steps)?),? (?:and |then |and then )*)?(?:makes|attempts) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll))?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*)?\.$/i.exec(text)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(text.slice(text.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
+        } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides(?: twice| or Steps)?),? (?:and |then |and then )*)?(?:makes|attempts) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll)(?: against the (?:grabbed|restrained) (?:creature|target))?)?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*)?\.$/i.exec(text)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(text.slice(text.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
             // A move written into the subject ("The worm Burrows at least 10 feet and then attempts a jaws Strike"): read as a move.
             const moving = !match[1] && /\b(?:Flies|Swims|Climbs|Burrows|Leaps|Steps|Strides)\b/.test(text.slice(0, text.search(/\b(?:makes|attempts)\b/i)));
             const moved = moving ? moveThenStrike(text.replace(/(?:,| and)? (?:with|against) [^,.]*$/i, ".")) : null;
@@ -622,17 +626,26 @@ function strikeActivity(item, actor) {
         else if (/^The target is Off-Guard to the Strike\.$/i.test(text)) activity.offGuard = true;
         // "This Strike deals an additional 3d6 precision damage." (only a hit deals it).
         else if ((match = /^(?:This|The) Strike deals an? (?:additional|extra) (.+?) damage\.$/i.exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]));
+        // "This Strike ignores their multiple attack penalty and doesn't count toward that penalty."
+        else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
         else if ((match = /^This counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the [\w' -]+?'s) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
         // "If this Strike hits, he deals an extra die of weapon damage."
         else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (?:weapon )?die of (?:weapon )?(?:\\w+ )?damage\\.$`, "i").test(text)) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
         else if (/remains? hidden until after|^During the Stride/i.test(text)) continue;
+        // Death Roll: "If it hits, it also knocks the creature Prone. If it fails, it releases the creature."
+        else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) (?:also )?knocks? the (?:creature|target) Prone\\.$`, "i").test(text)) activity.onHit.conditions.push({ slug: "prone", value: null, duration: null });
+        else if (/^If (?:it|the Strike|this Strike) (?:fails|misses), (?:it|the [\w' -]+?) releases the (?:creature|target)\.$/i.test(text)) continue;
         else if ((match = /^(?:If|As long as) (?:it|they|the [\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, (?:it gains|they gain) a \+(\d+) circumstance bonus to (?:its|their|this) attack roll\.$/i.exec(text))) activity.attackBonus += Number(match[1]);
         else if (/^(?:If|As long as) (?:it|they|the [\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, the Strike's damage (?:is increased to|increases to) /i.test(text)) activity.damage = inlineTags(sentence, "Damage").map(readDamage)[0] ?? /(?:to) (\d+d\d+(?:\s*[+-]\s*\d+)?)/i.exec(text)?.[1] ?? null;
         else if ((match = new RegExp(`${hit}(?:the [\\w ]+? )?(?:automatically )?push(?:es)? the target (\\d+) feet\\.$`, "i").exec(text)) || (match = new RegExp(`${hit}the target is pushed (\\d+) feet\\.$`, "i").exec(text))) activity.onHit.push = Number(match[1]);
         else if ((match = new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (.+?) damage\\.$`, "i").exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]));
         else if ((match = new RegExp(`${hit}(?:the target|that creature|the creature|the foe) is (.+?)\\.$`, "i").exec(text)) || (match = /^On a hit, (?:the target|the creature) is (.+?)\.$/i.exec(text))) {
-            const [plain, critical] = match[1].split(/, or (?=[^,]+ on a critical hit$)/i);
+            // "Frightened 1, or Frightened 2 on a critical hit", "Frightened 1 (Frightened 2 on a critical hit)". Not with a save of
+            // its own ("Paralyzed … (DC 19 Fortitude negates)").
+            if (/@Check\[/i.test(match[1])) return reject(text);
+            const bracketed = /^(.+?) \(([^()]+) on a critical hit\)$/i.exec(match[1]);
+            const [plain, critical] = bracketed ? [bracketed[1], `${bracketed[2]} on a critical hit`] : match[1].split(/, or (?=[^,]+ on a critical hit$)/i);
             if (/push|Grab/i.test(plain) && !conditions(sentence).length) return reject(text);
             activity.onHit.conditions.push(...conditions(plain));
             if (critical) activity.onHit.critical = conditions(critical.replace(/ on a critical hit$/i, ""));
@@ -653,8 +666,8 @@ function strikeActivity(item, actor) {
         } else return reject(text);
     }
     const rider = activity.onHit;
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice)) return null;
-    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length) return null;
+    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap)) return null;
+    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length) return null;
     return activity;
 }
 

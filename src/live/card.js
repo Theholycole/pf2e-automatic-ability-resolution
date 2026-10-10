@@ -156,6 +156,8 @@ export const allRolled = (state) => state.targets.length > 0 && state.targets.ev
 export function checkLine(state) {
     const check = state.check;
     if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} save`;
+    // (A Strike activity's results: by the Strike already rolled against the target's AC.)
+    if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
     return `${statisticLabel(check.statistic)} against each target's ${statisticLabel(check.against)} DC`;
 }
 
@@ -167,7 +169,7 @@ export function cardHTML(state) {
     if (state.kind === "effect") return effectCardHTML(state);
     const rows = state.targets.map((target) => {
         // A save: the target's roll; a check: the user's roll against the target's DC.
-        const roll = state.check.kind === "check" ? `${statisticLabel(state.check.statistic)} ${target.total} vs DC ${target.dc}` : `${target.total}`;
+        const roll = state.check.kind === "check" ? `${statisticLabel(state.check.statistic)} ${target.total} vs ${state.check.against === "ac" ? "AC" : "DC"} ${target.dc}` : `${target.total}`;
         const result = target.degree
             ? `<span class="aar-result aar-${escape(target.degree)}">${escape(roll)}: ${escape(DEGREE_LABELS[target.degree])}</span>`
             : state.status === "open" ? `<button type="button" data-aar-action="roll" data-target-id="${escape(target.id)}">Roll ${escape(state.check.kind === "save" ? statisticLabel(state.check.statistic) : statisticLabel(state.check.statistic))}</button>` : "<span class=\"aar-result\">not rolled</span>";
