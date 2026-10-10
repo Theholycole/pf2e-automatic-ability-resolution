@@ -893,3 +893,20 @@ test("passives: more death wordings, its own critical hit, damage on it (2026-10
     // Not the first time each round only.
     assert.notEqual(compileMonsterAbility(passive("Test Sludge", "<p>The first time each round that the test sludge takes fire damage, a cloud roils outward, dealing @Damage[2d6[poison]] damage to each creature within 10 feet (@Check[fortitude|dc:20|basic] save).</p>"))?.trigger?.event, "damaged");
 });
+
+test("passives on a creature it holds as a turn starts or ends (2026-10-10, batch 20)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const grabbed = "@UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}";
+    const grasp = compileMonsterAbility(passive("Test Grasp", `<p>The test devil's tentacles leech away thought. A creature that starts its turn grabbed by the test devil must attempt a @Check[will|dc:30] save. On a failure, it's @UUID[Compendium.pf2e.conditionitems.Item.e1XGnhKNSQIm5IXg]{Stupefied 2} for 1 round.</p>`));
+    assert.deepEqual([grasp.trigger.event, grasp.trigger.at, grasp.trigger.whose, grasp.trigger.hold, grasp.targeting.target], ["grab-turn", "start", "held", "grabbed", "the held creature"]);
+    // Not read before: no roll ("… takes 2d6 fire damage").
+    const veins = compileMonsterAbility(passive("Test Veins", `<p>Magma runs through the test elemental's veins. A creature that starts its turn ${grabbed} by the test elemental takes @Damage[2d6[fire]] damage.</p>`));
+    assert.deepEqual([veins.trigger.event, veins.resolution.check.roll], ["grab-turn", "automatic"]);
+    const wine = compileMonsterAbility(passive("Test Wine", "<p>When a creature ends its turn Swallowed Whole by the test vessel, it must succeed at a @Check[fortitude|dc:19] save or become @UUID[Compendium.pf2e.conditionitems.Item.fesd1n5eVhpCSS18]{Sickened 1}.</p>"));
+    assert.deepEqual([wine.trigger.at, wine.trigger.hold], ["end", "swallowed"]);
+    const roots = compileMonsterAbility(passive("Test Roots", `<p>At the end of the test fern's turn, all creatures ${grabbed} by the test fern take @Damage[3d6[void]] damage (@Check[fortitude|dc:29|basic] save).</p>`));
+    assert.deepEqual([roots.trigger.at, roots.trigger.whose], ["end", "own"]);
+    // "Whenever a test husk takes fire damage": the monster itself.
+    const hair = compileMonsterAbility(passive("Test Hair", "<p>Whenever a test husk takes fire damage, all creatures other than the husk in a @Template[type:emanation|distance:10] must attempt a @Check[fortitude|dc:24] save. On a failure, they become @UUID[Compendium.pf2e.conditionitems.Item.fesd1n5eVhpCSS18]{Sickened 1}.</p>"));
+    assert.deepEqual([hair.trigger.event, hair.trigger.damageTypes], ["damaged", ["fire"]]);
+});

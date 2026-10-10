@@ -1265,8 +1265,8 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? reactionTrigger(item, plan) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? plan;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
@@ -1353,6 +1353,49 @@ export function readReactionTrigger(text) {
     return null;
 }
 
+// A passive on a creature it holds, as a turn starts or ends (2026-10-10, batch 20): "A creature that starts its turn grabbed by
+// the baatamidar must attempt a Will save …", "When a creature ends its turn Swallowed Whole by the animated wine vessel, it must
+// …", "At the end of its turn, all creatures it has grabbed take damage …" (a made-up example). Its trigger:
+// { event: "grab-turn", at: "start" | "end", whose: "held" (the held creature's turn) | "own" (the monster's), hold: "grabbed"
+// (grabbed or restrained) | "swallowed", living? }; on the held creature.
+const GRAB_TURN = /^(?:(?:A|Any|Each) (non-[\w-]+ )?(living )?creature (?:that|who) (starts|begins|ends) (?:its|their) turn (?:while )?(grabbed|restrained|swallowed whole)(?: or (?:grabbed|restrained))? by (?:the |an? )?[\w' -]+?|When an? (living )?creature (ends|starts|begins) its turn (swallowed whole|grabbed|restrained) by (?:the |an? )?[\w' -]+?|At the (start|end) of (?:the |its |their )?[\w' -]*?turn, (?:all |each )?(?:creatures?|targets?) (grabbed|restrained) by (?:the |an? |it)?[\w' -]*?)(,? (?:it |they )?)(?=(?:must|takes?|is|are|becomes?|experiences|gains?)\b)/i;
+function grabTurnClause(item) {
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    for (const sentence of plain.split(/(?<=[.!?])\s+/)) {
+        const match = GRAB_TURN.exec(sentence);
+        if (!match) continue;
+        const at = /^(?:start|starts|begin|begins)$/i.test(match[3] ?? match[6] ?? match[8]) ? "start" : "end";
+        const hold = /swallowed/i.test(match[4] ?? match[7] ?? match[9] ?? "") ? "swallowed" : "grabbed";
+        return { trigger: { event: "grab-turn", at, whose: match[8] ? "own" : "held", hold, ...(match[2] || match[5] || match[1] ? { living: true } : {}) }, clause: match[0] };
+    }
+    return null;
+}
+
+function grabTurn(item, plan) {
+    if (item.system?.actionType?.value !== "passive" || plan?.trigger?.event !== "passive" || !plan.resolution) return null;
+    const read = grabTurnClause(item);
+    return read ? { ...plan, targeting: { target: "the held creature", range: "touch", area: null }, trigger: { ...plan.trigger, ...read.trigger } } : null;
+}
+
+// One not read yet ("A creature that starts its turn Grabbed by the doprillu takes 2d6 fire damage"): the held creature as its
+// subject, then its save or its results.
+function grabTurnReading(item, actor) {
+    if (item.system?.actionType?.value !== "passive") return null;
+    const read = grabTurnClause(item);
+    if (!read) return null;
+    const html = String(item.system?.description?.value ?? "").replace(/@UUID\[Compendium\.pf2e\.conditionitems\.[^\]]*\]\{((?:Grabbed|Restrained|grabbed|restrained))\}/g, "$1");
+    const lead = read.clause.split(/\s+/).slice(0, 4).join("\\s+");
+    const rewritten = html.replace(new RegExp(`${lead}[^.<]*?(?:,\\s*(?:it |they )?|\\s+)(?=(?:must|takes?|is|are|becomes?|experiences|gains?)\\b)`, "i"), "The target ").replace(/The target take\b/, "The target takes").replace(/The target are\b/, "The target is");
+    if (rewritten === html) return null;
+    let plan = null;
+    try {
+        plan = inlineSave(withDescription(item, rewritten), actor, { afterHit: true }) ?? automaticEffect(withDescription(item, rewritten), actor, { rider: true });
+    } catch {
+        plan = null;
+    }
+    return plan?.resolution ? { ...plan, targeting: { target: "the held creature", range: "touch", area: null }, trigger: { ...plan.trigger, ...read.trigger } } : null;
+}
+
 // A passive that answers damage on the monster (2026-10-10, batch 19): "When the penanggalan takes slashing damage, their wound
 // spews bile on adjacent creatures, dealing 2d10 poison damage (basic Fortitude)", "Whenever the festrog takes piercing or
 // slashing damage, creatures adjacent to the festrog take …", "Each time an adjacent creature deals slashing or piercing damage
@@ -1368,7 +1411,9 @@ function damagedPassive(item, plan) {
     const lead = /^(?:When(?:ever)?|If|Each time|Any time) (.+?), (?!or\b)/.exec(sentences[at])?.[1];
     if (!lead || /\b(?:first time|other than|while|unless)\b/i.test(lead)) return null;
     // "an adjacent creature deals slashing or piercing damage to the brimorak": its words as a reaction's trigger reads them.
-    const words = lead.replace(/^(an? (?:adjacent )?creature) deals ([\w ,]+?) damage to (.+)$/i, (whole, who, types, self) => `${who} deals ${types} damage to ${self}`)
+    // ("a husk takes fire damage": the monster itself, as "the husk".)
+    const words = lead.replace(/^an? (?!(?:adjacent )?(?:creature|enemy|foe|target)\b)(?=[\w' -]+? (?:takes|is damaged)\b)/i, "the ")
+        .replace(/^(an? (?:adjacent )?creature) deals ([\w ,]+?) damage to (.+)$/i, (whole, who, types, self) => `${who} deals ${types} damage to ${self}`)
         .replace(/ takes damage from an? ([a-z]+) attack$/i, " takes $1 damage from an attack")
         .replace(/ or triggers one of [^,]+$/i, "");
     const trigger = readReactionTrigger(words.charAt(0).toUpperCase() + words.slice(1));

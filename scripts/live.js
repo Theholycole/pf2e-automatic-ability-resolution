@@ -60,6 +60,13 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
         // PF2e's damage on it (not its undo): a passive that answers it (Spewing Bile, Diseased Pustules; batch 19).
         if (isActiveGM() && options?.damageTaken > 0 && !options.damageUndo) cardsForDamaged(actor, options.damageTaken).catch((error) => console.error(`${MODULE_ID} | damaged card`, error));
     });
+    // A creature's turn starting or ending while a monster holds it (Mind-Numbing Grasp, Wine-Soaked; batch 20).
+    Hooks.on("pf2e.startTurn", (combatant) => {
+        if (isActiveGM()) cardsForGrabTurn(combatant, "start").catch((error) => console.error(`${MODULE_ID} | grab-turn card`, error));
+    });
+    Hooks.on("pf2e.endTurn", (combatant) => {
+        if (isActiveGM()) cardsForGrabTurn(combatant, "end").catch((error) => console.error(`${MODULE_ID} | grab-turn card`, error));
+    });
     Hooks.on("renderChatMessageHTML", (message, html) => wireCard(message, html));
     // The chat log draws the messages already there before "ready": wire those too.
     for (const element of document.querySelectorAll("[data-message-id]")) {
@@ -363,6 +370,47 @@ async function cardsForTargeted(message) {
         const plan = compile(item);
         if (plan?.trigger?.reaction || !targetedSetsOff(plan?.trigger, event) || !plan.resolution || !cardCheck(plan)) continue;
         await postCard({ plan, item, sourceActor: defender, sourceToken: event.defender, tokens: [event.attacker.object ?? event.attacker], cause: `targeted by ${event.attacker.name}` });
+    }
+}
+
+// A passive on a creature a monster holds, as a turn starts or ends (2026-10-10, batch 20): on the held creature's turn, its
+// holder's ("A creature that starts its turn grabbed by the baatamidar must …"); on the monster's own turn, each creature it
+// holds ("at the end of its turn, all creatures it has grabbed take …"). Swallowed: the "Swallowed by …" effect
+// names the monster. Grabbed: PF2e's grabbed or restrained, within the monster's reach (PF2e doesn't say who holds it: a note).
+async function cardsForGrabTurn(combatant, at) {
+    const token = combatant?.token;
+    const actor = token?.actor;
+    const scene = token?.parent;
+    if (!actor || !scene) return;
+    await ready;
+    const grid = gridOf(scene);
+    const holding = (holder, other) => {
+        const swallowed = (other.actor?.itemTypes?.effect ?? []).some((effect) => [holder.uuid, holder.actor?.uuid].includes(effect.flags?.[MODULE_ID]?.swallowed?.byToken) || effect.flags?.[MODULE_ID]?.swallowed?.byActor === holder.actor?.uuid);
+        const reach = Math.max(5, Number(holder.actor?.system?.attributes?.reach?.base) || 5);
+        const grabbed = !swallowed && ["grabbed", "restrained"].some((slug) => other.actor?.hasCondition?.(slug)) && distanceFeet(box(holder, grid.size), box(other, grid.size), grid) <= reach;
+        return { swallowed, grabbed };
+    };
+    const living = (other) => !["undead", "construct"].some((trait) => other?.traits?.has?.(trait));
+    const sets = (plan, whose, held, heldActor) => plan?.trigger?.event === "grab-turn" && plan.trigger.at === at && plan.trigger.whose === whose && (plan.trigger.hold === "swallowed" ? held.swallowed : held.grabbed) && (!plan.trigger.living || living(heldActor)) && plan.resolution && cardCheck(plan);
+    const when = at === "start" ? "as its turn starts" : "as its turn ends";
+    // Its turn, held.
+    for (const holder of scene.tokens) {
+        if (holder.id === token.id || !["npc", "hazard"].includes(holder.actor?.type) || holder.actor.isDead) continue;
+        const held = holding(holder, token);
+        if (!held.swallowed && !held.grabbed) continue;
+        for (const item of holder.actor.itemTypes.action) {
+            const plan = compile(item);
+            if (!sets(plan, "held", held, actor)) continue;
+            await postCard({ plan, item, sourceActor: holder.actor, sourceToken: holder, tokens: [token.object ?? token], cause: `${token.name} held, ${when}`, warning: held.grabbed ? `Only if ${holder.name} is the one holding it.` : null });
+        }
+    }
+    // The monster's own turn.
+    if (!["npc", "hazard"].includes(actor.type) || actor.isDead) return;
+    for (const item of actor.itemTypes.action) {
+        const plan = compile(item);
+        if (plan?.trigger?.event !== "grab-turn" || plan.trigger.whose !== "own") continue;
+        const tokens = scene.tokens.filter((other) => other.id !== token.id && other.actor && sets(plan, "own", holding(token, other), other.actor)).map((other) => other.object ?? other);
+        if (tokens.length) await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: when, warning: plan.trigger.hold === "grabbed" ? `Only the creatures ${token.name} is holding.` : null });
     }
 }
 

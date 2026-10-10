@@ -519,3 +519,10 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - 10 damage on the festrog brought Diseased Pustules' card on the six creatures adjacent to it.
   - The gunmarshal's musket critical hit on Valeros brought Firearms Critical Specialization's card on him, "after Flintlock Musket".
   - The flaming skull at 0 HP brought Fiery Explosion's card; at first it missed Valeros next to it (the Tiny token's gap), and after the fix it listed him and the others around its square.
+
+## Passives on a creature it holds, as a turn starts or ends (2026-10-10, batch 20)
+
+- **Read now:** "A creature that starts its turn grabbed by the baatamidar must attempt a Will save …", "When a creature ends its turn Swallowed Whole by the animated wine vessel, it must …", one acting at the end of the monster's own turn on every creature it has grabbed, and one with no roll that wasn't read before ("A creature that starts its turn Grabbed by the doprillu takes 7d6 fire damage"). "A living creature" not on undead or constructs. 9 in all (7 PF2e, 2 Battlezoo, with batch 19's damage reading now also taking a subject such as "Whenever a husk takes fire damage").
+- **Live play:** on PF2e's turn start and end. On the held creature's turn, its holder's card on it; on the monster's own turn, its card on each creature it holds. Swallowed: the "Swallowed by …" effect names the monster. Grabbed: PF2e's grabbed or restrained condition within the monster's reach, as PF2e doesn't say who holds it, so the card says "Only if the doprillu is the one holding it."
+- **The simulator** (B49): at the start and end of each turn, by who holds whom (grabbed or restrained by it and not swallowed; swallowed, inside it).
+- **Checked live in pftest** (a PFTEST SIM Doprillu next to Valeros, Grabbed, in an encounter; deleted afterwards, Valeros restored): his turn starting brought Volcanic Veins' card on him with the note; Apply dealt 24 fire. Without the grabbed condition, his next turn brought none.
