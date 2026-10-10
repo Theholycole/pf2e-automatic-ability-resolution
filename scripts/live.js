@@ -48,6 +48,7 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
         recordResult(message).catch((error) => console.error(`${MODULE_ID} | recording a roll`, error));
         cardForAbility(message).catch((error) => console.error(`${MODULE_ID} | ability card`, error));
         cardsForRiders(message).catch((error) => console.error(`${MODULE_ID} | rider card`, error));
+        cardsForHitBy(message).catch((error) => console.error(`${MODULE_ID} | hit-by card`, error));
         cardForSkillAction(message).catch((error) => console.error(`${MODULE_ID} | skill action card`, error));
         spendOffGuard(message).catch((error) => console.error(`${MODULE_ID} | spending off-guard`, error));
     });
@@ -270,6 +271,28 @@ async function cardsForRiders(message) {
         const trigger = plan?.trigger;
         if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug))) continue;
         await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: trigger.cost ?? "free" } });
+    }
+}
+
+// A melee Strike that hits a monster or a hazard whose passive answers it ("A creature that hits the pukwudgie with an unarmed
+// Strike … takes 3d8 piercing damage"): a card for the attacker (2026-10-10). One for unarmed Strikes only: not for a weapon.
+async function cardsForHitBy(message) {
+    const context = message.flags?.pf2e?.context;
+    if (context?.type !== "attack-roll" || !["success", "criticalSuccess"].includes(context.outcome)) return;
+    const options = context.options ?? [];
+    const domains = context.domains ?? [];
+    if (options.includes("item:ranged") || domains.some((domain) => /^ranged-/.test(domain)) || !(options.includes("item:melee") || domains.some((domain) => /^melee-/.test(domain)))) return;
+    const unarmed = options.includes("item:category:unarmed") || options.includes("item:trait:unarmed");
+    const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
+    const defender = targetToken?.actor;
+    const attacker = message.token?.object ?? message.token ?? null;
+    if (!defender || !["npc", "hazard"].includes(defender.type) || !attacker?.actor) return;
+    await ready;
+    for (const item of defender.itemTypes.action) {
+        const plan = compile(item);
+        const trigger = plan?.trigger;
+        if (trigger?.event !== "hit-by" || (trigger.unarmed && !unarmed) || !plan.resolution || !cardCheck(plan)) continue;
+        await postCard({ plan, item, sourceActor: defender, sourceToken: targetToken, tokens: [attacker], cause: `hit by ${attacker.name ?? attacker.actor.name}` });
     }
 }
 

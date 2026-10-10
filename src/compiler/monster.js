@@ -410,8 +410,9 @@ const TARGET_WORDS = /\b(?:creatures?|targets?|enem(?:y|ies)|foes?|victims?|each
 
 // "X unless it succeeds at a @Check[…] save (Y on a critical failure)" → "becomes X (Y on a critical failure)", or null.
 function unlessClause(sentence) {
-    const match = /\b(?:becomes?|is|are|falls?) (.+?) unless (?:it|they|the (?:creature|target)) succeeds? (?:at|on) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save)(.*)$/i.exec(sentence);
-    return match ? `becomes ${match[1]}${/^\s*\(/.test(match[2]) ? ` ${match[2].trim()}` : ""}` : null;
+    const match = /\b(becomes?|is|are|falls?|takes?) (.+?) unless (?:it|they|the (?:creature|target)) succeeds? (?:at|on) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save)(.*)$/i.exec(sentence);
+    // ("takes 1d6 piercing damage unless it succeeds at a … save": the damage, 2026-10-10.)
+    return match ? `${/^takes?$/i.test(match[1]) ? "takes" : "becomes"} ${match[2]}${/^\s*\(/.test(match[3]) ? ` ${match[3].trim()}` : ""}` : null;
 }
 
 function saveOrOutcomes(html, components, { afterHit = false, riders = false, names = [] } = {}) {
@@ -509,6 +510,9 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, na
     // Not the monster's own healing ("Opkherab regains 3 Hit Points").
     const failDamage = inlineTags(failure, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) }));
     const before = components.length && !failDamage.length;
+    // "takes 1d6 void damage and must succeed at a … save or become Enfeebled 2": the damage comes whatever the save, which
+    // decides only the rest (2026-10-10).
+    const regardless = before && /\bdamage,? and (?:then )?must (?:succeed at|attempt) an?\s*$/i.test(sentences[index].slice(0, checkAt));
     // A critical failure's own damage: in addition when it says "also", otherwise in place of the failure's.
     const critDamage = critical ? inlineTags(critical, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })) : [];
     const extraDamage = extraCritical ? inlineTags(extraCritical, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })) : [];
@@ -557,10 +561,10 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, na
     const pulling = (outcome, critical = false) => (pull && !outcome.forcedMovement ? { ...outcome, forcedMovement: { ...pull, distance: Number((critical && farther?.[1]) || pull.distance) } } : outcome);
     const ending = (outcome) => ({ ...(dies ? { ...outcome, terminal: { kind: "death" } } : outcome), ...(penalties.length ? { modifiers: structuredClone(penalties) } : {}) });
     return {
-        criticalSuccess: row([], [], 0),
-        success: before && !negates ? row(successEffects, [], 0.5) : row(successEffects, [], 0),
+        criticalSuccess: row([], [], regardless ? 1 : 0),
+        success: before && !negates ? row(successEffects, [], regardless ? 1 : 0.5) : row(successEffects, [], 0),
         failure: ending(pulling(pushed(row(failEffects, failDamage, 1)))),
-        criticalFailure: ending(pulling(pushed(row(critEffects, critFormulas, 2), pull ? critShoved?.[1] ?? shoved?.[1] : farther?.[1] ?? critShoved?.[1] ?? shoved?.[1]), true))
+        criticalFailure: ending(pulling(pushed(row(critEffects, critFormulas, regardless ? 1 : 2), pull ? critShoved?.[1] ?? shoved?.[1] : farther?.[1] ?? critShoved?.[1] ?? shoved?.[1]), true))
     };
 }
 
@@ -1258,8 +1262,54 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? plan;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? plan;
+}
+
+// A passive that answers a hit on the monster (2026-10-10): "A creature that hits a pukwudgie with an unarmed Strike or a
+// non-reach melee Strike takes 3d8 piercing damage (basic Reflex)", "A creature that touches the caustic monitor takes …",
+// "Any creature that successfully attacks the dragon with a melee unarmed attack must make a … save". Its trigger: a melee
+// hit on it ({ event: "hit-by", unarmed: true } when only an unarmed attack, or a touch, sets it off), on the attacker.
+const HIT_BY = /^(?:(?:A|Any|Each) (?:adjacent |living )?(?:creature|foe|enemy)(?: (?:that|who))?|Anyone who|(?:When|Whenever|If) (?:a|an|any) (?:adjacent )?creature) (?:successfully )?(?:hits|touches|Strikes|strikes|attacks|grapples)\b([^.]*?)(?=,? (?:takes?|must|is|becomes?|gains?)\b|, (?:that creature|the creature|it|they)\b)/i;
+function hitByTrigger(item) {
+    // (Its sentence that says so, after any that only describe it: "The sparking zombie … crackles with electricity. A creature
+    // that hits the zombie with an unarmed Strike takes 5 electricity damage.")
+    const sentences = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const match = sentences.map((sentence) => HIT_BY.exec(sentence)).find(Boolean);
+    if (!match) return null;
+    const how = match[0];
+    // Only some creatures or weapons ("with a metal weapon", "while it's on fire"), the weapon's own damage, exposure to an
+    // affliction, a ranged attack or a spell, or the monster's body after it dies ("touches Agyra's body within 1 hour of her
+    // death"): not read here.
+    if (/\b(?:metal|wooden|while|first time|slowed|frightened|ranged|thrown|spells?|body|corpse|remains|death|dead)\b/i.test(how)) return null;
+    const unarmed = /\bunarmed\b|\btouches\b|\bgrapples\b/i.test(how) && !/\bmelee (?:attack|Strike|weapon)\b|\bnon-reach\b|\bweapon\b/i.test(how.replace(/\bmelee unarmed\b/i, "unarmed"));
+    return { event: "hit-by", melee: true, ...(unarmed ? { unarmed: true } : {}) };
+}
+
+// A passive already read with its save ("takes 3d8 piercing damage (basic Reflex save)"): set off by the hit on it.
+function hitBy(item, plan) {
+    if (item.system?.actionType?.value !== "passive" || plan?.trigger?.event !== "passive" || !plan.resolution) return null;
+    const trigger = hitByTrigger(item);
+    if (!trigger) return null;
+    return { ...plan, targeting: { target: "the attacker", range: "touch", area: null }, trigger: { ...plan.trigger, ...trigger } };
+}
+
+// One not read yet: the attacker as its subject ("The target takes 5 electricity damage"), then its save or its results.
+function hitByReading(item, actor) {
+    if (item.system?.actionType?.value !== "passive" || !hitByTrigger(item)) return null;
+    // (Actions named in it as words: "including @UUID[…]{Grappling} it".)
+    const html = String(item.system?.description?.value ?? "").replace(/@UUID\[Compendium\.pf2e\.actionspf2e\.[^\]]*\]\{([^}]*)\}/g, "$1");
+    const rewritten = html.replace(/((?:^|<p>|(?<=\.)\s+)\s*)((?:(?:A|Any|Each) (?:adjacent |living )?(?:creature|foe|enemy)(?: (?:that|who))?|Anyone who) (?:successfully )?(?:hits|touches|Strikes|strikes|attacks|grapples)\b[^.<]*?)(,? )?(?=(?:takes?|must|is|becomes?|gains?)\b)/i, (whole, lead) => `${lead}The target `)
+        .replace(/((?:^|<p>|(?<=\.)\s+)\s*)(?:When|Whenever|If) (?:a|an|any) (?:adjacent )?creature (?:successfully )?(?:hits|touches|Strikes|strikes|attacks|grapples)\b[^.<]*?, (?:that creature|the creature|it|they) /i, (whole, lead) => `${lead}The target `);
+    if (rewritten === html) return null;
+    const own = withDescription(item, rewritten);
+    let plan = null;
+    try {
+        plan = inlineSave(own, actor, { afterHit: true }) ?? automaticEffect(own, actor, { rider: true });
+    } catch {
+        plan = null;
+    }
+    return plan?.resolution ? hitBy(item, { ...plan, trigger: { ...plan.trigger, event: "passive" } }) : null;
 }
 
 // A passive that acts as the monster dies, with no roll ("When the flaming skull dies, it explodes, dealing 2d6 fire damage to

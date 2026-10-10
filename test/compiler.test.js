@@ -757,3 +757,22 @@ test("abilities that act as the monster dies (2026-10-10, batch 14)", () => {
     // Not an aura, nor another passive.
     assert.notEqual(compileMonsterAbility(passive("Defensive Quills", "<p>A creature that hits the test pukwudgie with an unarmed Strike takes @Damage[3d8[piercing]] damage (@Check[reflex|dc:28|basic] save).</p>"))?.trigger?.event, "death");
 });
+
+test("passives that answer a melee hit on the monster, on the attacker (2026-10-10, batch 15)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const grabbed = "@UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}";
+    // A save the attacker attempts: any melee Strike, or an unarmed one only.
+    const quills = compileMonsterAbility(passive("Test Quills", "<p>A creature that hits the test hedgehog with an unarmed Strike or a non-reach melee Strike takes @Damage[3d8[piercing]] damage (@Check[reflex|dc:28|basic] save).</p>"));
+    assert.deepEqual([quills.trigger, quills.targeting.target, quills.resolution.check.statistic], [{ event: "hit-by", melee: true }, "the attacker", "reflex"]);
+    const hide = compileMonsterAbility(passive("Test Hide", "<p>A creature that hits the test beast with an unarmed Strike takes @Damage[3d8[piercing]] damage (@Check[reflex|dc:28|basic] save).</p>"));
+    assert.equal(hide.trigger.unarmed, true);
+    // No roll: the damage on the attacker.
+    const heat = compileMonsterAbility(passive("Test Heat", "<p>Any creature that hits the test elemental with a melee Strike takes @Damage[2d6[fire]] damage.</p>"));
+    assert.deepEqual([heat.trigger.event, heat.resolution.check.roll, heat.resolution.outcomes.success.damage.multiplier], ["hit-by", "automatic", 1]);
+    // "becomes Grabbed unless it succeeds at a save": the condition on a failure.
+    const skin = compileMonsterAbility(passive("Test Skin", `<p>A creature that touches the test ooze or hits it with an unarmed attack becomes ${grabbed} unless it succeeds at a @Check[reflex|dc:20] save.</p>`));
+    assert.deepEqual([skin.trigger.unarmed, skin.resolution.outcomes.failure.effects.map((e) => e.slug), skin.resolution.outcomes.success.effects], [true, ["grabbed"], []]);
+    // Not only some weapons, nor a ranged attack.
+    assert.notEqual(compileMonsterAbility(passive("Test Spines", "<p>A creature that hits the test beast with a metal weapon takes @Damage[2d6[electricity]] damage.</p>"))?.trigger?.event, "hit-by");
+    assert.notEqual(compileMonsterAbility(passive("Test Shell", "<p>A creature that hits the test beast with a ranged Strike takes @Damage[2d6[electricity]] damage.</p>"))?.trigger?.event, "hit-by");
+});

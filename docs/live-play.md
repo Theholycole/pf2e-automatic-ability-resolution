@@ -428,3 +428,14 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **The simulator** (B42): as the monster dies, the ability on the creatures in its Melee (10 feet or less), those not far off (more), or everyone (60 feet or more); one with no area isn't played.
 - **Checked live in pftest** (a PFTEST SIM Firewyrm, deleted afterwards; the PCs restored): its HP set to 0 brought the Explosion card ("as it dies", DC 28 basic Reflex) for the 8 creatures within 10 feet of its Huge space. With Valeros and Seelah targeted instead: Valeros critically succeeded, Seelah critically failed and took 30 fire.
 
+
+## Passives that answer a melee hit on the monster (2026-10-10, batch 15)
+
+- **The gap:** "A creature that hits the pukwudgie with an unarmed Strike or a non-reach melee Strike takes 3d8 piercing damage (basic Reflex save)", Short Circuit's 5 electricity on an unarmed hit, Corrosive Flesh, Rotting Flesh: read as passives with a save, or not read at all, and nothing set them off. Their trigger is now a melee hit on the monster ("A creature that hits / touches / Strikes / grapples …", "If a creature hits … with a melee Strike"), on the attacker. One that names only unarmed attacks, touching or grappling is for unarmed Strikes only. Not read: only some weapons ("with a metal weapon"), a ranged attack or a spell, a condition on the attacker, the first hit only, the monster's body after it dies. 33 in all (23 PF2e, 10 Battlezoo).
+- **Live play:** a melee Strike that hits a monster or a hazard with such a passive (PF2e's "item:melee" roll option or a melee domain) posts its card on the attacker, headed "hit by Valeros". Not for a ranged or thrown Strike; for an unarmed-only one, not for a weapon. A Grapple isn't caught: the GM targets the creature and uses the ability from the sheet.
+- **The simulator** (B43): after a melee Strike that hits, the monster's passive acts on the attacker; an unarmed-only one only after an unarmed Strike.
+- **Also fixed:** "takes 1d6 void damage and must succeed at a Reflex save or become Enfeebled 2" halved the damage on a success. The save decides only the rest: the damage now comes at every degree (8 abilities: Final Shake, Soul Bleed, Unusual Bane, Ectoplasmic Secretions, Withering Aura and others).
+- **Checked live in pftest** (PFTEST SIM Pukwudgies and a Sparking Zombie Brute, deleted afterwards; Valeros restored):
+  - Valeros' longsword hit on the pukwudgie brought the Defensive Quills card (DC 22 basic Reflex); he succeeded and took 7 of the 15 piercing.
+  - On the zombie, his longsword hit brought no card; his unarmed hit brought Short Circuit's (no roll), and Apply dealt 5 electricity.
+  - A pukwudgie's thrown hatchet critically hit the other pukwudgie: only its own Pukwudgie Poison card, no Defensive Quills.
