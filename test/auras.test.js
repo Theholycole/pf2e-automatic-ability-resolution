@@ -45,7 +45,7 @@ test("compiled auras: Frightful Presence on entering, Stench also at turn start,
     const miasma = npcs.flatMap((npc) => npc.items.filter((item) => item.name === "Miasma").map((item) => compileMonsterAbility(item, { basicActions, actor: npc })))[0];
     assert.deepEqual([miasma.trigger.when, miasma.trigger.activeAfter], [["end-turn"], { ability: "Poison Breath", rounds: 1 }]);
     // A passive with a save that isn't an aura or a Strike's venom (it acts on its own trigger): not played as an aura.
-    const passive = npcs.flatMap((npc) => npc.items.map((item) => ({ npc, item }))).find(({ item }) => item.type === "action" && item.system.actionType?.value === "passive" && !(item.system.traits?.value ?? []).includes("aura") && !(item.system.rules ?? []).some((rule) => rule.key === "Aura") && compileMonsterAbility(item, { basicActions })?.resolution && compileMonsterAbility(item, { basicActions }).trigger?.event !== "strike");
+    const passive = npcs.flatMap((npc) => npc.items.map((item) => ({ npc, item }))).find(({ npc, item }) => item.type === "action" && item.system.actionType?.value === "passive" && !(item.system.traits?.value ?? []).includes("aura") && !(item.system.rules ?? []).some((rule) => rule.key === "Aura") && compileMonsterAbility(item, { basicActions })?.resolution && compileMonsterAbility(item, { basicActions, actor: npc }).trigger?.event !== "strike");
     assert.equal(compileMonsterAbility(passive.item, { basicActions, actor: passive.npc }).trigger.event, "passive", passive.item.name);
 });
 

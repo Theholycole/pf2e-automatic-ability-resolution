@@ -721,3 +721,27 @@ test("concealment against the triggering attack, Reactive Strike under either na
     assert.deepEqual(compileMonsterAbility(reaction("Attack of Opportunity", written)), { builtin: "attack-of-opportunity" });
     assert.deepEqual(compileMonsterAbility(reaction("Reactive Strike (Tail Only)", written)), { builtin: "reactive-strike" });
 });
+
+test("passives the creature's Strikes list are those Strikes' riders (2026-10-10, batch 13)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const actor = (...effects) => ({ name: "Test Monster", items: [{ type: "melee", name: "Claw", system: { attackEffects: { value: effects } } }] });
+    const paralyzed = "@UUID[Compendium.pf2e.conditionitems.Item.6uEgoh53GbXuHpTF]{Paralyzed}";
+    // A save its Strikes list: on a hit, the creature hit saves.
+    const paralysis = passive("Paralysis", `<p>Any living creature hit by the test ghoul's attack must succeed at a @Check[fortitude|dc:20] save or become ${paralyzed}.</p>`);
+    assert.equal(compileMonsterAbility(paralysis, { actor: actor() }).trigger.event, "passive", "no Strike lists it");
+    const rider = compileMonsterAbility(paralysis, { actor: actor("paralysis") });
+    assert.deepEqual([rider.trigger.event, rider.trigger.attackEffect, rider.trigger.cost, rider.trigger.on, rider.targeting.target], ["strike", "paralysis", "free", ["success", "criticalSuccess"], "the creature the Strike hits"]);
+    // Its trigger clause dropped ("When the devourer damages a living creature with its claw Strike, …"); a critical hit only.
+    const drain = compileMonsterAbility(passive("Drain Life", "<p>When the test wight damages a living creature with its claw Strike, the test wight gains 5 temporary Hit Points and the creature must succeed at a @Check[fortitude|dc:20] save or become @UUID[Compendium.pf2e.conditionitems.Item.4D2KBtexWXa6oUMR]{Drained 1}.</p>"), { actor: actor("drain-life") });
+    assert.deepEqual([drain.trigger.event, drain.resolution.outcomes.failure.effects.map((e) => e.slug)], ["strike", ["drained"]]);
+    const bite = compileMonsterAbility(passive("Bonecrunching Bite", "<p>A creature that is critically hit by the test hyaenodon must succeed at a @Check[fortitude|dc:20] save or become @UUID[Compendium.pf2e.conditionitems.Item.Yl48xTdMh3aeQYL2]{Wounded 1}.</p>"), { actor: actor("bonecrunching-bite") });
+    assert.deepEqual(bite.trigger.on, ["criticalSuccess"]);
+    // No roll: "A creature hit by … is Immobilized"; "If it hits a creature with its tongue, that creature becomes Grabbed".
+    const web = compileMonsterAbility(passive("Web Trap", "<p>A creature hit by the test spider's web Strike is @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized} and stuck to the nearest surface until it [[/act escape dc=25]]{Escapes}.</p>"), { actor: actor("web-trap") });
+    assert.deepEqual([web.resolution.check.roll, web.resolution.outcomes.success.effects.map((e) => e.slug), web.trigger.event], ["automatic", ["immobilized"], "strike"]);
+    const tongue = compileMonsterAbility(passive("Tongue Grab", "<p>If the test boggard hits a creature with its tongue, that creature becomes @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} by the boggard.</p>"), { actor: actor("tongue-grab") });
+    assert.deepEqual(tongue.resolution.outcomes.success.effects.map((e) => e.slug), ["grabbed"]);
+    // Not on only some hits, nor on a miss too.
+    assert.equal(compileMonsterAbility(passive("Static Cling", "<p>If the test gecko hits a Small or smaller creature with its tongue, and the target is made of metal, the tongue latches on. The creature must attempt a @Check[reflex|dc:17] save or become @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}.</p>"), { actor: actor("static-cling") })?.trigger?.event === "strike", false);
+    assert.equal(compileMonsterAbility(passive("Color Splash", "<p>Each creature adjacent to the test elephant when it makes a foot Strike (regardless of whether or not it hit) must succeed at a @Check[will|dc:24] save or become @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard}.</p>"), { actor: actor("color-splash") })?.trigger?.event === "strike", false);
+});

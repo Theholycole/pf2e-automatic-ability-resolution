@@ -745,7 +745,7 @@ function basicSaveDamage(html) {
     return tags ? tags.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null })) : null;
 }
 
-function inlineSave(item, actor = null) {
+function inlineSave(item, actor = null, { afterHit = false } = {}) {
     const html = item.system?.description?.value ?? "";
     const checks = inlineTags(html, "Check").map(readCheck).filter((check) => check.save && check.dc);
     if (!checks.length) return null;
@@ -823,7 +823,7 @@ function inlineSave(item, actor = null) {
             outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects], ...(own.forcedMovement ? { forcedMovement: own.forcedMovement } : {}) };
         }
     } else {
-        outcomes = saveOrOutcomes(html, components, { names: ownNames(actor ?? item.actor ?? item.parent) });
+        outcomes = saveOrOutcomes(html, components, { names: ownNames(actor ?? item.actor ?? item.parent), afterHit });
         if (!outcomes) return null;
     }
     const plain = htmlToPlainText(html);
@@ -853,15 +853,18 @@ function inlineSave(item, actor = null) {
 // a check of roll "automatic": its success row for every creature it names (the card's Apply; the simulator's certain result).
 // Its later sentences, for the GM. Not: any check or basic action in it, damage to itself, a choice, "if"/"unless"/"instead" in
 // the result, damage by some count ("per creature"), healing.
-const AUTO_SUBJECT = /^(?:The|That|This) (?:target|creature|grabbed creature|restrained creature|swallowed creature|engulfed creature|triggering creature|victim|foe|enemy|attacker)\b|^(?:Each|Every|All) (?:other )?(?:living )?(?:creatures?|enem(?:y|ies)|foes?)\b/i;
-function automaticEffect(item, actor = null) {
-    if (!["action", "reaction", "free"].includes(item.system?.actionType?.value)) return null;
+const AUTO_SUBJECT = /^(?:The|That|This) (?:target|creature|grabbed creature|restrained creature|swallowed creature|engulfed creature|triggering creature|victim|foe|enemy|attacker)\b|^(?:Each|Every|All) (?:other )?(?:living )?(?:creatures?|enem(?:y|ies)|foes?)\b|^(?:A|An|Any) (?:(?:Tiny|Small|Medium|Large|Huge) or smaller )?(?:living )?(?:creature|target|foe|enemy) (?:hit|struck|damaged) by\b/i;
+function automaticEffect(item, actor = null, { rider = false } = {}) {
+    // (A passive its Strikes list, as their rider: "A creature hit by the frog's tongue becomes Grabbed".)
+    if (!["action", "reaction", "free", ...(rider ? ["passive"] : [])].includes(item.system?.actionType?.value)) return null;
     const html = String(item.system?.description?.value ?? "");
-    if (/@Check\[|\[\[\/act |\bhealing\b|\bregains?\b|\bone of the following\b/i.test(html)) return null;
+    if (/@Check\[|\bhealing\b|\bregains?\b|\bone of the following\b/i.test(html) || (/\[\[\/act /i.test(html) && !(rider && !/\[\[\/act (?!escape)/i.test(html)))) return null;
     const effect = html.split(/<strong>\s*Effect\s*<\/strong>/i).at(-1).replace(/<strong>\s*(?:Frequency|Requirements?|Trigger|Cost)\s*<\/strong>[^]*?(?=<strong>|$)/gi, "");
     const words = htmlToPlainText(effect);
     // A save, check or Strike in it (one without an inline check: "must attempt a Reflex save"), a choice, or a next action's.
-    if (/\b(?:saves?|saving throw|checks?)\b|\bchooses?\b|\bchoice\b|\bnext action\b|\b(?:makes?|attempts?|attempting|making) (?:a|an|one|two|three)\b[^.]*\bStrikes?\b|\bStrikes? (?:the|a|an|it|them)\b/i.test(words)) return null;
+    if (/\b(?:saves?|saving throw|checks?)\b|\bchooses?\b|\bchoice\b|\bnext action\b/i.test(words)) return null;
+    // (A Strike it makes is a Strike activity's; a rider's text names the Strike that brings it.)
+    if (!rider && /\b(?:makes?|attempts?|attempting|making) (?:a|an|one|two|three)\b[^.]*\bStrikes?\b|\bStrikes? (?:the|a|an|it|them|with)\b/i.test(words)) return null;
     const level = Number((actor ?? item.actor ?? item.parent)?.system?.details?.level?.value);
     const sentences = sentencesOf(effect);
     const components = [];
@@ -877,11 +880,14 @@ function automaticEffect(item, actor = null) {
         const conditions = readConditions(sentence).filter((entry) => entry.recipient !== "self");
         const is = (AUTO_SUBJECT.test(plain) || deals) && conditions.length > 0;
         if (!takes && !deals && !is) {
+            // Damage it doesn't read ("deals 3d6 spirit or 3d6 void damage to the triggering enemy"): not one reading.
+            // (Not a condition's damage, "If the attack misses, … takes …", nor a threshold, "a Strike that deals at least @D damage".)
+            if (/@D/.test(plain) && !/^(?:If|When|Whenever|Unless)\b/i.test(plain) && /\b(?:deals?|dealing|takes?|taking)\b(?! at least)[^.]*?@D/i.test(plain.replace(/\bthat deals at least @D[^.,]*/gi, "")) && inlineTags(sentence, "Damage").some((raw) => !/\bhealing\b/i.test(raw))) return null;
             // (Not its recharge, which the module keeps.)
             if (first >= 0 && plain && !/^\(?DC \d+/.test(plain) && !/\bcan(?:'t|not) use [^.]+? again for\b/i.test(plain)) notes.push(readableText(sentence.replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")));
             continue;
         }
-        if (/^(?:If|When|Whenever|Unless|Until|While|Once|After)\b/i.test(plain) || /\b(?:if|unless|whenever|instead)\b/i.test(plain)) return null;
+        if (/^(?:If|When|Whenever|Unless|Until|While|Once|After)\b/i.test(plain) || /\b(?:if|unless|whenever|instead|must|still)\b/i.test(plain)) return null;
         // Only some of them ("Each creature that fails its save …", "Every foe within 60 feet taking persistent fire damage …").
         const subject = AUTO_SUBJECT.test(plain) ? (/^(.*?)\b(?:takes?|is|are|becomes?|gains?|falls?)\b/i.exec(plain)?.[1] ?? "").replace(/^(?:The|That|This|Each|Every|All)\s+/i, "") : "";
         if (/\b(?:that|who|whose|taking|suffering|affected|already|wearing|holding|carrying|with)\b|\bin the water\b/i.test(subject.replace(/^(?:creature|target) (?:it|that it) has (?:Grabbed|Restrained)\b/i, ""))) return null;
@@ -916,9 +922,12 @@ function automaticEffect(item, actor = null) {
     const grabbed = /\b(?:grabbed|restrained|swallowed|engulfed) creature\b|\bcreature (?:it|that it) has Grabbed\b|\bhas (?:a|the) creature (?:Grabbed|Restrained)\b/i.test(plain);
     const success = {
         damage: components.length ? { mode: "shared", multiplier: 1, sourceComponentIds: components.map((component) => component.id) } : { mode: "none", multiplier: 0, sourceComponentIds: [] },
-        effects: effects.map((entry) => condition(entry.slug, entry.value ?? null, entry.duration ?? null)),
+        effects: [...new Map(effects.map((entry) => [entry.slug, entry])).values()].map((entry) => condition(entry.slug, entry.value ?? null, entry.duration ?? null)),
         ...(notes.length ? { manualInstructions: notes.map((note) => `{target}: ${note}`) } : {})
     };
+    // "A Medium or smaller creature hit by …": the size, for the GM.
+    const size = /\b(?:A|An|Any) ((?:Tiny|Small|Medium|Large|Huge) or smaller) (?:living )?(?:creature|target|foe|enemy) (?:hit|struck|damaged) by\b/i.exec(plain)?.[1];
+    if (size) success.manualInstructions = [`{target}: only a ${size.toLowerCase()} creature.`, ...(success.manualInstructions ?? [])];
     const recharge = readRecharge(html);
     return {
         ...base(item),
@@ -1241,6 +1250,59 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? plan;
-    return plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? plan;
+    return listedRider(item, actor, plan) ?? plan;
+}
+
+// A passive its Strikes list, read as what their hit brings (2026-10-10): its trigger clause dropped ("When the devourer damages
+// a living creature with its claw Strike, the devourer gains 10 temporary Hit Points and the creature must succeed at a …
+// save or become Drained 1"), the Strike it names allowed, then its save or its results with no roll.
+function riderReading(item, actor) {
+    if (item.system?.actionType?.value !== "passive") return null;
+    const html = String(item.system?.description?.value ?? "");
+    // Not on a miss too ("regardless of whether or not it hit"), nor on only some hits ("If the gecko hits a Small or smaller
+    // creature …, and the target is made of metal", "against a creature that's taking persistent bleed damage").
+    if (/\bregardless of whether\b/i.test(htmlToPlainText(html))) return null;
+    // (A hit or damage it deals, as a verb: not "If the creature is already taking persistent fire damage, …".)
+    const CLAUSE = /(^|<p>|(?<=[.!?])\s+)(?:If|When(?:ever)?) (?:the |a |an )?[^,.<]{0,80}?\b(?:hits?|damages|critically hits?|strikes?)\b[^,.<]{0,80}?, ([a-z])/gi;
+    if ([...html.matchAll(CLAUSE)].some((match) => /\b(?:that's|that is|that has|who|which|whose|already|taking|while|holy|unholy|good|evil|made of|wearing|metal|smaller|larger|Tiny|Small|Medium|Large|Huge|and the)\b/i.test(match[0].replace(/^\W*(?:<p>)?\s*(?:If|When(?:ever)?)\b/i, "")))) return null;
+    const trimmed = html.replace(CLAUSE, (whole, lead, letter) => `${lead}${letter.toUpperCase()}`);
+    const own = withDescription(item, trimmed);
+    let plan = null;
+    try {
+        plan = inlineSave(own, actor, { afterHit: true }) ?? automaticEffect(own, actor, { rider: true });
+    } catch {
+        plan = null;
+    }
+    return listedRider(item, actor, plan);
+}
+
+// A passive its Strikes list ("Claw … plus Paralysis"; 2026-10-10): a rider of those Strikes on a hit, whose save or results
+// are the creature's the Strike hits. Before, such passives ("Any living creature hit by a ghoul's attack must succeed at a
+// Fortitude save or become Paralyzed") stayed passive, and no hit brought them. null when no Strike lists it.
+function listedRider(item, actor, plan) {
+    // (An action or free action its Strikes list, "Jaws … plus Drink Blood": after a hit, at its own cost; not a follow-up,
+    // which already waits for the hit.)
+    const type = item.system?.actionType?.value;
+    if (!["passive", "action", "free"].includes(type) || !["passive", "use"].includes(plan?.trigger?.event) || !plan?.resolution || plan.trigger?.followUp) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const slug = item.system?.slug || String(item.name ?? "").toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const listed = [...(owner?.items ?? [])].some((entry) => entry?.type === "melee" && (entry.system?.attackEffects?.value ?? []).includes(slug));
+    if (!listed) return null;
+    return {
+        ...plan,
+        activation: { ...(plan.activation ?? {}), time: type === "action" ? plan.activation?.time ?? "1" : "free" },
+        // (An area of its own around the creature hit stays.)
+        targeting: plan.targeting?.area ? plan.targeting : { target: "the creature the Strike hits", range: "touch", area: null },
+        // ("A creature that is critically hit by a hyaenodon must succeed …": a critical hit only.)
+        trigger: { ...plan.trigger, event: "strike", on: criticalOnly(item) ? ["criticalSuccess"] : ["success", "criticalSuccess"], attackEffect: slug, cost: type === "action" ? "action" : "free", map: false }
+    };
+}
+
+// The rider's trigger is a critical hit ("critically hit by", "scores a critical hit"), with no plain hit beside it.
+function criticalOnly(item) {
+    const words = htmlToPlainText(item.system?.description?.value ?? "");
+    const critical = /\bcritically hit(?:s)? (?:by|with|a|an|the)\b|\bcritically succeeds? (?:at|on|with) (?:a|an|its|the)\b|\b(?:scores?|lands?|gets?|deals?) a critical hit\b|\bon a critical hit\b/i;
+    const plain = /\bhit by\b|\bhits? (?:a|an|the) (?:creature|target|foe)\b|\bdamages? (?:a|an|the) (?:creature|target)\b/i;
+    return critical.test(words) && !plain.test(words.replace(/critically hit(?:s)? (?:by|with|a|an|the)\b/gi, ""));
 }
