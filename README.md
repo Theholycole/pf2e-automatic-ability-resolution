@@ -2,8 +2,18 @@
 
 The `pf2e-automatic-ability-resolution` Foundry module (milestone 3): automation for everything in PF2e that isn't a spell (basic actions, class features, feats, monster abilities, afflictions, non-spell consumables). It compiles them into plans for `pf2e-resolution-core`, which resolves them for live play and the PF2e Combat Simulator, the same way the spell module does.
 
-- Plan and family order: [../PF2e COMBAT SIMULATOR/docs/ability-module-plan.md](../PF2e%20COMBAT%20SIMULATOR/docs/ability-module-plan.md)
+- Plan and family order: [the simulator's docs/ability-module-plan.md](https://github.com/Theholycole/pf2e-combat-simulator/blob/main/docs/ability-module-plan.md)
 - Census of what there is to automate: [docs/census.md](docs/census.md), with raw data in `reports/census.json`
+
+## Install
+
+In Foundry go to **Add-on Modules → Install Module**, paste this manifest URL and click **Install**:
+
+```
+https://github.com/Theholycole/pf2e-automatic-ability-resolution/releases/latest/download/module.json
+```
+
+It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foundry 14 and the PF2e system 8.5 or later. For afflictions it hands the stages to the **Pseudo Afflictions** module when that's active. MIT licensed (see [LICENSE](LICENSE)); the Pathfinder rules text it reads comes from the PF2e system under Paizo's ORC license.
 
 **Status (2026-10-08): first slice, monster abilities.** See [docs/milestone-3.md](docs/milestone-3.md).
 
