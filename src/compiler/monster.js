@@ -12,7 +12,7 @@
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
-import { compileSkillAction, readSkillCheck } from "./checks.js";
+import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
 import { compileBuiltin, moveThenStrike } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
@@ -404,7 +404,7 @@ function unlessClause(sentence) {
     return match ? `becomes ${match[1]}${/^\s*\(/.test(match[2]) ? ` ${match[2].trim()}` : ""}` : null;
 }
 
-function saveOrOutcomes(html, components, { afterHit = false, riders = false } = {}) {
+function saveOrOutcomes(html, components, { afterHit = false, riders = false, names = [] } = {}) {
     // (Line breaks inside a paragraph read as spaces.)
     const sentences = String(html).replace(/<\/?p[^>]*>/gi, " ").replace(/\s+/g, " ").split(/(?<=\.)\s+(?=[A-Z@<])/);
     const index = sentences.findIndex((sentence) => /@Check\[(?:type:)?(?:fortitude|reflex|will)/i.test(sentence));
@@ -503,7 +503,13 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     const critDamage = critical ? inlineTags(critical, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })) : [];
     const extraDamage = extraCritical ? inlineTags(extraCritical, "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })) : [];
     const critFormulas = [...(criticalAdds ? [...failDamage, ...critDamage] : critDamage.length ? critDamage : failDamage), ...extraDamage];
-    if (!failEffects.length && !failDamage.length && !before && !shoved && !(riders && (critDamage.length || extraDamage.length || (critical && (read(critical).length || /\bpush|\bshove/i.test(critical)))))) return null;
+    // "…save or be pulled 10 feet toward the doblagub" (toward the monster); "…save or instantly die", "If it fails, it dies".
+    const pulled = readPush(failure, names);
+    const pull = pulled?.kind === "pull" ? pulled : null;
+    const dies = /^\s*(?:(?:it|they|the (?:creature|target)) )?(?:instantly |immediately )?(?:die|dies|be (?:instantly )?(?:killed|slain))\b/i.test(htmlToPlainText(failure));
+    // "…save or take a –1 status penalty to attack rolls until the end of its next turn".
+    const penalties = /^\s*(?:take|takes|be|suffer)\b/i.test(htmlToPlainText(failure)) ? readPenalties(failure) : [];
+    if (!failEffects.length && !failDamage.length && !before && !shoved && !pull && !dies && !penalties.length && !(riders && (critDamage.length || extraDamage.length || (critical && (read(critical).length || /\bpush|\bshove/i.test(critical)))))) return null;
     const row = (effects, damage, multiplier) => ({
         damage: before ? { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) } : damage.length ? { mode: "formulas", formulas: damage, rollScope: "outcome" } : { mode: "none", multiplier: 0, sourceComponentIds: [] },
         effects
@@ -534,14 +540,17 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false } =
     const successEffects = proseSuccess ? read(proseSuccess) : [];
     // "pushed 15 feet (30 feet on a critical failure)": farther on a critical failure.
     // …or a push the critical failure names itself ("Creatures that critically fail are pushed 10 feet away").
-    const farther = critical && !criticalAdds ? /^(\d+) feet$/i.exec(htmlToPlainText(critical).trim()) : null;
+    const farther = critical && !criticalAdds ? /^(?:up to )?(\d+) feet$/i.exec(htmlToPlainText(critical).trim()) : null;
     const critShoved = critical && !farther ? SHOVE.exec(htmlToPlainText(critical.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"))) : null;
     const pushed = (outcome, distance = shoved?.[1]) => (distance ? { ...outcome, forcedMovement: { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } } : outcome);
+    // A pull toward the monster: farther on a critical failure when its bracket says so ("(15 feet on a critical failure)").
+    const pulling = (outcome, critical = false) => (pull && !outcome.forcedMovement ? { ...outcome, forcedMovement: { ...pull, distance: Number((critical && farther?.[1]) || pull.distance) } } : outcome);
+    const ending = (outcome) => ({ ...(dies ? { ...outcome, terminal: { kind: "death" } } : outcome), ...(penalties.length ? { modifiers: structuredClone(penalties) } : {}) });
     return {
         criticalSuccess: row([], [], 0),
         success: before && !negates ? row(successEffects, [], 0.5) : row(successEffects, [], 0),
-        failure: pushed(row(failEffects, failDamage, 1)),
-        criticalFailure: pushed(row(critEffects, critFormulas, 2), farther?.[1] ?? critShoved?.[1] ?? shoved?.[1])
+        failure: ending(pulling(pushed(row(failEffects, failDamage, 1)))),
+        criticalFailure: ending(pulling(pushed(row(critEffects, critFormulas, 2), pull ? critShoved?.[1] ?? shoved?.[1] : farther?.[1] ?? critShoved?.[1] ?? shoved?.[1]), true))
     };
 }
 
@@ -791,7 +800,7 @@ function inlineSave(item, actor = null) {
             outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects], ...(own.forcedMovement ? { forcedMovement: own.forcedMovement } : {}) };
         }
     } else {
-        outcomes = saveOrOutcomes(html, components);
+        outcomes = saveOrOutcomes(html, components, { names: ownNames(actor ?? item.actor ?? item.parent) });
         if (!outcomes) return null;
     }
     const plain = htmlToPlainText(html);
@@ -1056,6 +1065,30 @@ function followUp(item, actor) {
     };
 }
 
+// The one PF2e effect an ability links, on the rows that apply nothing else: a save's failure and critical failure, a
+// check's success and critical success (2026-10-10). Not when it links more than one, or none.
+function linkedEffect(plan, html) {
+    const links = [...new Map([...String(html).matchAll(EFFECT_LINK)].map((match) => [match[1], match[2] ?? null])).entries()];
+    if (links.length !== 1) return;
+    const [uuid, label] = links[0];
+    const save = plan.resolution.kind === "save";
+    const rows = save ? ["failure", "criticalFailure"] : ["success", "criticalSuccess"];
+    const outcomes = plan.resolution.outcomes;
+    // (Not where it read a penalty: the text's own, which may differ by degree, as Bon Mot's.)
+    const bare = (row) => row && (row.damage?.mode ?? "none") === "none" && !row.effects?.length && !row.forcedMovement && !row.modifiers?.length && !row.terminal && !row.nativeEffects?.length;
+    if (!rows.every((degree) => bare(outcomes[degree]))) return;
+    // A check's success may be the user's own gain ("the raw nerve … gains a +2 circumstance bonus to AC", "the
+    // fleshwarper's melee Strikes deal …"): its subject says whose.
+    let self = false;
+    if (!save) {
+        const plain = htmlToPlainText(String(html).replace(EFFECT_LINK, "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+        const said = /\b(?:On a success|If (?:it|he|she|they|the [\w' -]+?) succeeds?|If successful),? ([^.]+)/i.exec(plain)?.[1] ?? htmlToPlainText(degreeSections(html).success ?? "");
+        const subject = said.split(/\b(?:gains?|takes?|deals?|can|is|are|becomes?|has|have|must|grants?|gives?)\b/i)[0];
+        self = !OTHERS.test(subject) && subject.trim().length > 0;
+    }
+    for (const degree of rows) outcomes[degree].nativeEffects = [{ uuid, label: (label ?? "").replace(/^Effect:\s*/i, "") || null, ...(self ? { recipient: { actor: "source" } } : {}) }];
+}
+
 // A plan for an NPC ability, { builtin } for rules the simulator plays itself,// A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
@@ -1099,6 +1132,9 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
     const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item);
+    // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
+    // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
+    if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     return plan;

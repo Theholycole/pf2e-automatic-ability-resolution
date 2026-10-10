@@ -123,3 +123,7 @@ test("an effect card: who gets the effect, allies marked, Apply", async () => {
     assert.doesNotMatch(cardHTML(self), /Use my targets|disabled/);
     assert.deepEqual(changeLines([{ op: "effect", target: "source", effect: { kind: "native", uuid: "x", label: "Effect: Test Guard" } }], { source: "Chief" }), ["Chief gets Effect: Test Guard"]);
 });
+
+test("a card line for a creature that dies", () => {
+    assert.deepEqual(changeLines([{ op: "death", target: "t0" }, { op: "death", target: "t0", ifReducedTo: 0 }], { t0: "Valeros" }), ["Valeros dies"]);
+});

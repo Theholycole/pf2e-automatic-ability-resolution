@@ -454,7 +454,7 @@ async function applyChange(change, state) {
             if (change.effect?.kind === "swallow") return applySwallow(state, actor, change.effect);
             if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
             if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state);
-            if (change.effect?.kind === "native") return nativeEffect(actor, change.effect, state);
+            if (change.effect?.kind === "native") return nativeEffect(actor, change.effect, state, state.targets.find((entry) => entry.id === change.target)?.degree ?? null);
             return null;
         case "end": {
             // Escape: the user's grabbed or restrained ends (an effect granting it goes with it).
@@ -469,6 +469,13 @@ async function applyChange(change, state) {
         }
         case "affliction":
             return handOffAffliction(state, target, actor, change.data);
+        // "…save or instantly die": at 0 HP and marked dead (the GM pressed Apply on the results).
+        case "death": {
+            if (change.ifReducedTo !== undefined) return null;
+            await actor.update({ "system.attributes.hp.value": 0 });
+            if (!actor.statuses?.has?.("dead")) await actor.toggleStatusEffect?.("dead", { active: true, overlay: true });
+            return null;
+        }
         case "move":
             return forcedMove(state, target, token, change);
         case "note":
@@ -509,11 +516,17 @@ async function timedCondition(actor, slug, value, duration, state) {
 // Will for 1 minute): a PF2e effect with that FlatModifier, for its duration.
 // A PF2e effect item (an effect card's): a copy on the creature, its origin the monster and its ability, so PF2e
 // counts "until the start of its next turn" on the monster's turns.
-async function nativeEffect(actor, effect, state) {
+async function nativeEffect(actor, effect, state, degree = null) {
     const template = await fromUuid(effect.uuid).catch(() => null);
     if (!template) return `${actor.name}: ${effect.label ?? "the effect"} wasn't found; apply it by hand.`;
     const source = template.toObject();
     delete source._id;
+    // A choice of the save's result in the effect (PF2e's "Degree of success" prompt): the target's own, so no prompt.
+    for (const rule of source.system?.rules ?? []) {
+        if (rule?.key !== "ChoiceSet" || rule.selection !== undefined || !Array.isArray(rule.choices) || !degree) continue;
+        const choice = rule.choices.find((entry) => new RegExp(`\\.${degree}$`).test(String(entry?.label ?? "")));
+        if (choice) rule.selection = choice.value;
+    }
     source._stats = { ...(source._stats ?? {}), compendiumSource: effect.uuid };
     source.system.context = { ...(source.system.context ?? {}), origin: { ...(source.system.context?.origin ?? {}), actor: state.source.actorUuid, token: state.source.tokenUuid ?? null, item: state.ability.uuid ?? null } };
     source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true } };

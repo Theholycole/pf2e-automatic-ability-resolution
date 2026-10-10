@@ -622,3 +622,26 @@ test("moves before a Strike and more Strike activities (2026-10-10, batch 7)", (
     const glide = one("Test Tunnel", "The test mole Burrows at least 10 feet and then attempts a claw Strike. If the Strike hits, it deals an additional 1d8 fire damage.", 2);
     assert.deepEqual([glide.strides, glide.strike, glide.onHit.damage], [1, "claw", ["1d8[fire]"]]);
 });
+
+test("save or die, pulls in prose saves, and the PF2e effect a save or check links (2026-10-10, batch 8)", () => {
+    const action = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const effect = (id, label) => `@UUID[Compendium.pf2e.bestiary-effects.Item.${id}]{${label}}`;
+    // "…save or instantly die"; "If it fails, it dies".
+    const devour = compileMonsterAbility(action("Test Devour", "<p>The test daemon consumes the soul of a creature it has Grabbed. The creature must succeed at a @Check[fortitude|dc:35] save or instantly die.</p>"));
+    assert.deepEqual([devour.resolution.outcomes.failure.terminal, devour.resolution.outcomes.criticalFailure.terminal, devour.resolution.outcomes.success.terminal], [{ kind: "death" }, { kind: "death" }, undefined]);
+    const tug = compileMonsterAbility(action("Test Tug", "<p>The test fairy pulls at a dying creature. The target must attempt a @Check[fortitude|dc:20] save. If it fails, it dies, and the test fairy gains 10 temporary Hit Points.</p>"));
+    assert.deepEqual(tug.resolution.outcomes.failure.terminal, { kind: "death" });
+    // "…save or be pulled 10 feet towards the test magnet (15 feet on a critical failure)".
+    const tow = compileMonsterAbility(action("Test Tow", "<p>Each creature in a @Template[emanation|distance:60] must succeed at a @Check[fortitude|dc:28] save or be pulled 10 feet towards the test magnet (15 feet on a critical failure).</p>"), { actor: { name: "Test Magnet" } });
+    assert.deepEqual([tow.resolution.outcomes.failure.forcedMovement.kind, tow.resolution.outcomes.failure.forcedMovement.distance, tow.resolution.outcomes.criticalFailure.forcedMovement.distance], ["pull", 10, 15]);
+    // A save's failure that is a linked effect; a check's success that is the user's own.
+    const gloom = compileMonsterAbility(action("Test Gloom", `<p>Creatures in a @Template[line|distance:15] must succeed at a @Check[will|dc:16] save or take a –1 status penalty to attack rolls until the end of its next turn.</p><p>${effect("AAAAAAAAAAAAAAA9", "Effect: Test Gloom")}</p>`));
+    // (The text's own penalty, read; the linked effect fills only results with nothing else.)
+    assert.deepEqual(gloom.resolution.outcomes.failure.modifiers.map((m) => `${m.selector} ${m.value} ${m.type}`), ["attack-roll -1 status"]);
+    const mark = compileMonsterAbility(action("Test Mark", `<p>The test hunter marks a creature within 60 feet. The target can avoid becoming marked with a successful @Check[reflex|dc:30] save. While marked, it can't hide from the hunter.</p><p>${effect("AAAAAAAAAAAAAAA9", "Effect: Test Mark")}</p>`));
+    assert.ok(!mark || !mark.resolution.outcomes.failure.nativeEffects || mark.resolution.outcomes.failure.nativeEffects[0].uuid.endsWith("AAAAAAAAAAAAAAA9"));
+    const curse = compileMonsterAbility(action("Test Curse", `<p>The test witch curses one creature within 30 feet. The creature must attempt a @Check[will|dc:25] save. On a failure, it is Frightened 1.</p><p>${effect("AAAAAAAAAAAAAAB2", "Effect: Test Curse")}</p>`));
+    assert.equal(curse.resolution.outcomes.failure.nativeEffects, undefined, "a result that applies its own condition keeps it alone");
+    const probe = compileMonsterAbility(action("Test Probe", `<p>The test nerve probes a creature within 100 feet, attempting an @Check[occultism|against:will] check against the creature's Will DC. On a success, the test nerve can Step, and gains a +2 circumstance bonus to AC against that creature until the start of its next turn.</p><p>${effect("AAAAAAAAAAAAAAB1", "Effect: Test Probe")}</p>`));
+    assert.deepEqual(probe.resolution.outcomes.success.nativeEffects, [{ uuid: "Compendium.pf2e.bestiary-effects.Item.AAAAAAAAAAAAAAB1", label: "Test Probe", recipient: { actor: "source" } }]);
+});

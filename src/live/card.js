@@ -210,6 +210,9 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
             case "move":
                 lines.push(`${who} is ${change.kind === "pull" ? "pulled" : "pushed"} ${change.distance} feet`);
                 break;
+            case "death":
+                if (change.ifReducedTo === undefined) lines.push(`${who} dies`);
+                break;
             case "affliction":
                 lines.push(`${who} is afflicted with ${change.data?.name ?? "the affliction"} (stage ${change.data?.stage ?? 1})`);
                 break;
