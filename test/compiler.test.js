@@ -745,3 +745,15 @@ test("passives the creature's Strikes list are those Strikes' riders (2026-10-10
     assert.equal(compileMonsterAbility(passive("Static Cling", "<p>If the test gecko hits a Small or smaller creature with its tongue, and the target is made of metal, the tongue latches on. The creature must attempt a @Check[reflex|dc:17] save or become @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}.</p>"), { actor: actor("static-cling") })?.trigger?.event === "strike", false);
     assert.equal(compileMonsterAbility(passive("Color Splash", "<p>Each creature adjacent to the test elephant when it makes a foot Strike (regardless of whether or not it hit) must succeed at a @Check[will|dc:24] save or become @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard}.</p>"), { actor: actor("color-splash") })?.trigger?.event === "strike", false);
 });
+
+test("abilities that act as the monster dies (2026-10-10, batch 14)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const skeleton = compileMonsterAbility(passive("Explosive Death", "<p>When the test skeleton is destroyed, its bones shatter and explode. Adjacent creatures take @Damage[2d6[slashing]] damage with a @Check[reflex|dc:17|basic] save.</p>"));
+    assert.deepEqual([skeleton.trigger.event, skeleton.targeting.area], ["death", { type: "emanation", value: 5 }]);
+    const sentinel = compileMonsterAbility(passive("Tainted Guts", "<p>When a test sentinel is reduced to 0 Hit Points, it explodes, dealing @Damage[6d6[bludgeoning]] damage to each creature in a @Template[emanation|distance:10] (@Check[reflex|dc:30|basic] save).</p>"));
+    assert.deepEqual([sentinel.trigger.event, sentinel.targeting.area.value], ["death", 10]);
+    const leshy = compileMonsterAbility(passive("Virulent Burst", "<p>When a test leshy dies, it releases a burst of toxic energy. Each living creature within 30 feet takes @Damage[2d6[poison]] damage (@Check[fortitude|dc:20|basic] save).</p>"));
+    assert.deepEqual([leshy.trigger.event, leshy.targeting.area.value], ["death", 30]);
+    // Not an aura, nor another passive.
+    assert.notEqual(compileMonsterAbility(passive("Defensive Quills", "<p>A creature that hits the test pukwudgie with an unarmed Strike takes @Damage[3d8[piercing]] damage (@Check[reflex|dc:28|basic] save).</p>"))?.trigger?.event, "death");
+});

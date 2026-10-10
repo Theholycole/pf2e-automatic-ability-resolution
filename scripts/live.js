@@ -12,6 +12,8 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, strikeMatches } from "../src/live/activity.js";
+import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
+import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
 import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
@@ -48,6 +50,10 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
         cardsForRiders(message).catch((error) => console.error(`${MODULE_ID} | rider card`, error));
         cardForSkillAction(message).catch((error) => console.error(`${MODULE_ID} | skill action card`, error));
         spendOffGuard(message).catch((error) => console.error(`${MODULE_ID} | spending off-guard`, error));
+    });
+    // A monster at 0 HP: the abilities that act as it dies (Death Throes, Explosive Death).
+    Hooks.on("updateActor", (actor, changed) => {
+        if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) cardsForDeath(actor).catch((error) => console.error(`${MODULE_ID} | death card`, error));
     });
     Hooks.on("renderChatMessageHTML", (message, html) => wireCard(message, html));
     // The chat log draws the messages already there before "ready": wire those too.
@@ -264,6 +270,28 @@ async function cardsForRiders(message) {
         const trigger = plan?.trigger;
         if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug))) continue;
         await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: trigger.cost ?? "free" } });
+    }
+}
+
+// A monster's abilities that act as it dies ("When the skeleton is destroyed, … adjacent creatures take 2d6 slashing damage"):
+// a card for the creatures in their area around it, once for each death (2026-10-10). One with no area: a card with no
+// targets, for the GM to target.
+const recentDeaths = new Map();
+async function cardsForDeath(actor) {
+    if (!["npc", "hazard"].includes(actor?.type)) return;
+    const last = recentDeaths.get(actor.uuid);
+    if (last && Date.now() - last < 30 * 1000) return;
+    await ready;
+    const deaths = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).filter(({ plan }) => plan?.trigger?.event === "death" && plan.resolution && cardCheck(plan));
+    if (!deaths.length) return;
+    recentDeaths.set(actor.uuid, Date.now());
+    const token = actor.getActiveTokens(true, true)[0] ?? null;
+    const scene = token?.parent ?? canvas.scene;
+    const grid = scene ? gridOf(scene) : null;
+    for (const { item, plan } of deaths) {
+        const radius = Number(plan.targeting?.area?.value) || 0;
+        const tokens = token && grid && radius ? scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && distanceFeet(box(token, grid.size), box(other, grid.size), grid) <= radius).map((other) => other.object ?? other) : [];
+        await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: "as it dies" });
     }
 }
 
