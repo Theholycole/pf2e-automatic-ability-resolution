@@ -866,3 +866,30 @@ test("reactions to its own Strike, to being attacked, to a turn starting near it
     assert.equal(swap.trigger.event, "attacked");
     assert.notEqual(swap.targeting.target, "the attacker");
 });
+
+test("passives: more death wordings, its own critical hit, damage on it (2026-10-10, batch 19)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    // "When destroyed, …", "When killed, …", "… When it dies, it explodes, …".
+    const skull = compileMonsterAbility(passive("Test Explosion", "<p>When destroyed, a test skull explodes in a blast of fire that deals @Damage[1d6[fire]] damage to each adjacent creature (@Check[reflex|dc:18|basic] save).</p>"));
+    assert.deepEqual([skull.trigger.event, skull.targeting.area], ["death", { type: "emanation", value: 5 }]);
+    const end = compileMonsterAbility(passive("Test End", "<p>The test mutant's death reveals one last surprise. When it dies, it explodes, dealing @Damage[4d6[piercing]] damage to each creature in a @Template[emanation|distance:10], with a @Check[reflex|dc:24|basic] save.</p>"));
+    assert.equal(end.trigger.event, "death");
+    // Not a death that a later sentence mentions ("If the creature dies, …").
+    const wound = compileMonsterAbility(passive("Test Wound", "<p>A creature dealt damage by the test beast's claw Strike must succeed at a @Check[will|dc:30] save or become @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1}. When the creature dies, it rises as a spawn.</p>"));
+    assert.notEqual(wound?.trigger?.event, "death");
+    // Its own critical hit: with a firearm, an unarmed attack, any Strike; "one of its melee Strikes".
+    const spec = compileMonsterAbility(passive("Test Specialization", "<p>When the test gunner makes a critical hit with a firearm, the target must succeed at a @Check[fortitude|dc:25] save or be @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}.</p>"));
+    assert.deepEqual([spec.trigger.event, spec.trigger.on, spec.trigger.weapon, spec.targeting.target], ["own-strike", ["criticalSuccess"], "firearm", "the creature the Strike hits"]);
+    const brawl = compileMonsterAbility(passive("Test Brawl", "<p>When the test monk scores a critical hit with an unarmed attack, the target must succeed at a @Check[fortitude|dc:22] save or be @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} until the end of its next turn.</p>"));
+    assert.equal(brawl.trigger.weapon, "unarmed");
+    const painful = compileMonsterAbility(passive("Test Painful", "<p>The test dragon's body is encrusted with crystals. When a target takes damage from one of the dragon's melee Strikes, it must succeed at a @Check[fortitude|dc:30] save or become @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1}.</p>"));
+    assert.deepEqual([painful.trigger.event, painful.trigger.on, painful.trigger.weapon], ["own-strike", ["success", "criticalSuccess"], "melee"]);
+    assert.notEqual(compileMonsterAbility(passive("Test Blood", "<p>When a creature scores a critical hit against the test beast with a piercing or slashing Strike, each creature within 5 feet takes @Damage[2d6[poison]] damage (@Check[reflex|dc:20|basic] save).</p>"))?.trigger?.event, "own-strike");
+    // Damage on it: on the creatures around it, or on the attacker; its types.
+    const bile = compileMonsterAbility(passive("Test Bile", "<p>When the test head takes slashing damage, their wound spews bile on adjacent creatures, dealing @Damage[2d10[poison]] damage (@Check[fortitude|dc:19|basic] save).</p>"));
+    assert.deepEqual([bile.trigger.event, bile.trigger.damageTypes, bile.targeting.area], ["damaged", ["slashing"], { type: "emanation", value: 5 }]);
+    const boiling = compileMonsterAbility(passive("Test Boiling", "<p>Each time an adjacent creature deals slashing or piercing damage to the test demon, the attacker is sprayed with boiling blood, which deals @Damage[2d4[fire]] damage (@Check[reflex|dc:19|basic] save).</p>"));
+    assert.deepEqual([boiling.trigger.event, boiling.trigger.melee, boiling.trigger.damageTypes, boiling.targeting.target], ["hit-by", true, ["slashing", "piercing"], "the attacker"]);
+    // Not the first time each round only.
+    assert.notEqual(compileMonsterAbility(passive("Test Sludge", "<p>The first time each round that the test sludge takes fire damage, a cloud roils outward, dealing @Damage[2d6[poison]] damage to each creature within 10 feet (@Check[fortitude|dc:20|basic] save).</p>"))?.trigger?.event, "damaged");
+});

@@ -858,7 +858,10 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
 
 // "When the grodair dies, its body explodes …", "When a sodden sentinel is reduced to 0 Hit Points, it explodes", "When the
 // skeleton is destroyed …": a passive that acts as it dies.
-const DIES = /^(?:When|Whenever|As|Upon|If)\b[^.]*?\b(?:dies|is (?:killed|destroyed|slain|reduced to 0 (?:Hit Points|HP))|reaches 0 (?:Hit Points|HP))\b/i;
+// (Also, batch 19: "When killed, the star archon explodes …", "When destroyed, a flaming skull explodes …", the clause opening a
+// later sentence ("The snapdrake's death reveals one last surprise. When it dies, it explodes …"), "Each time … and when
+// they're reduced to 0 Hit Points".)
+const DIES = /^(?:When|Whenever|As|Upon|If|Each time)\b[^.]*?\b(?:dies|is (?:killed|destroyed|slain)|(?:is|are|they're|it's) reduced to 0 (?:Hit Points|HP)|reaches 0 (?:Hit Points|HP))\b|^(?:When|Upon being) (?:killed|destroyed|slain)\b|(?<=[.!?]\s)When (?:it|they) (?:dies|die|is destroyed|are destroyed|is killed|are killed)\b/i;
 
 // No roll at all (2026-10-10): "The statue grinds a creature it has Grabbed … The target takes 3d8 fire and 1d8 persistent fire
 // damage.", "Each enemy within the aura takes 1d8 slashing damage.", "The creature takes 3d6 piercing damage and is Drained 1." →
@@ -1263,7 +1266,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
     if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? reactionTrigger(item, plan) ?? plan;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
@@ -1295,7 +1298,8 @@ export function readReactionTrigger(text) {
         const melee = adjacent || /\b(?:melee|unarmed|reach)\b/i.test(`${how} ${within}`);
         const unarmed = /\bunarmed\b/i.test(how) && !/\bmelee (?:weapon|attack|Strike)s?\b|\bweapons?\b/i.test(how.replace(/\bmelee unarmed\b/gi, "unarmed").replace(/\bunarmed melee\b/gi, "unarmed"));
         const distance = Number(/\bwithin (\d+) feet\b/i.exec(within)?.[1]) || null;
-        const damageTypes = types(/\bdamage\b/i.test(how) ? how : "");
+        // ("… that deals slashing or piercing damage", "with a piercing or slashing Strike".)
+        const damageTypes = types(/\bdamage\b|\b(?:bludgeoning|piercing|slashing)(?: or \w+)? (?:Strike|attack|weapon)/i.test(how) ? how : "");
         return { event: "hit-by", reaction: true, melee, ...(unarmed ? { unarmed: true } : {}), ...(critical ? { critical: true } : {}), ...(damageTypes ? { damageTypes } : {}), ...(distance ? { within: distance } : {}) };
     };
     if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
@@ -1347,6 +1351,62 @@ export function readReactionTrigger(text) {
         return { event: "damaged", reaction: true, ...(damageTypes ? { damageTypes } : {}) };
     }
     return null;
+}
+
+// A passive that answers damage on the monster (2026-10-10, batch 19): "When the penanggalan takes slashing damage, their wound
+// spews bile on adjacent creatures, dealing 2d10 poison damage (basic Fortitude)", "Whenever the festrog takes piercing or
+// slashing damage, creatures adjacent to the festrog take …", "Each time an adjacent creature deals slashing or piercing damage
+// to the brimorak, the attacker is sprayed …", "If the arboreal snag takes damage from a piercing attack, …". As batch 16's
+// reactions read them: { event: "damaged", damageTypes } or { event: "hit-by", melee, damageTypes }, with no reaction. Not the
+// first time each round only, nor damage "from a source other than itself".
+function damagedPassive(item, plan) {
+    if (item.system?.actionType?.value !== "passive" || plan?.trigger?.event !== "passive" || !plan.resolution) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const sentences = plain.split(/(?<=[.!?])\s+/);
+    const at = sentences.findIndex((sentence) => /^(?:When(?:ever)?|If|Each time|Any time) /.test(sentence));
+    if (at < 0) return null;
+    const lead = /^(?:When(?:ever)?|If|Each time|Any time) (.+?), (?!or\b)/.exec(sentences[at])?.[1];
+    if (!lead || /\b(?:first time|other than|while|unless)\b/i.test(lead)) return null;
+    // "an adjacent creature deals slashing or piercing damage to the brimorak": its words as a reaction's trigger reads them.
+    const words = lead.replace(/^(an? (?:adjacent )?creature) deals ([\w ,]+?) damage to (.+)$/i, (whole, who, types, self) => `${who} deals ${types} damage to ${self}`)
+        .replace(/ takes damage from an? ([a-z]+) attack$/i, " takes $1 damage from an attack")
+        .replace(/ or triggers one of [^,]+$/i, "");
+    const trigger = readReactionTrigger(words.charAt(0).toUpperCase() + words.slice(1));
+    if (!trigger || !["damaged", "hit-by"].includes(trigger.event)) return null;
+    const { reaction, ...own } = trigger;
+    const effect = sentences.slice(at).join(" ").slice(lead.length);
+    const first = /\b(?:the|a|an|any|each|all|every|adjacent|random) (?:[\w-]+ )?creatures?\b/i.exec(effect)?.[0] ?? "";
+    const onAttacker = trigger.event === "hit-by" && !plan.targeting?.area && (ATTACKER.test(effect) || /^the creature$/i.test(first) || /^,?\s*(?:it|they) must\b/i.test(effect.trim()));
+    const around = !plan.targeting?.area && !onAttacker ? (/\b(?:on|to|all|each) adjacent creatures\b|\bcreatures? adjacent to\b|^(?:all |each )?adjacent creatures\b/i.test(effect) ? 5 : Number(/(?:\b(?:any|each|every|all) (?:[\w-]+ )?creatures?|(?:^|[.!?]\s+)Creatures) within (\d+) feet\b/i.exec(effect)?.[1]) || null) : null;
+    const targeting = onAttacker ? { target: "the attacker", range: "touch", area: null } : around ? { target: null, range: null, area: { type: "emanation", value: around } } : plan.targeting?.area ? plan.targeting : null;
+    if (!targeting) return null;
+    return { ...plan, targeting, trigger: { ...plan.trigger, ...own } };
+}
+
+// A passive its own Strike sets off, on the creature it hit (2026-10-10, batch 19): "When the gunmarshal makes a critical hit with
+// a firearm, the target must succeed at a … save or be Stunned 1" (critical specializations), "When the kurobozu scores a
+// critical hit with an unarmed attack, …", "When the tough deals damage on a critical hit, …", "When a target takes damage from
+// one of the dragon's melee Strikes, it must …". { event: "own-strike", on, weapon?: "firearm" | "unarmed" | "brawling" | "melee",
+// strike?: a Strike's name }. Not another creature's hit ("When a creature scores a critical hit against the tolokand").
+function ownStrikePassive(item, plan) {
+    if (item.system?.actionType?.value !== "passive" || plan?.trigger?.event !== "passive" || !plan.resolution) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const lead = plain.split(/(?<=[.!?])\s+/).map((sentence) => /^(When(?:ever)?|If) (.+?), /.exec(sentence)).find(Boolean);
+    if (!lead) return null;
+    const clause = lead[2];
+    let match = /^(?!(?:a|an|any) (?:creature|enemy|foe)\b)(?:the )?[\w' -]+? (?:makes|scores|gets|rolls|lands) a critical hit(?: with (?:a |an |its |his |her |their )?([\w' -]+?))?$/i.exec(clause)
+        ?? /^(?!(?:a|an|any) (?:creature|enemy|foe)\b)(?:the )?[\w' -]+? deals damage (?:on|with) a critical hit(?: with (?:a |an |its |his |her |their )?([\w' -]+?))?$/i.exec(clause);
+    let on = ["criticalSuccess"];
+    if (!match) {
+        match = /^a (?:target|creature) takes damage from (?:one of )?(?:the )?[\w' -]+?'s? ((?:melee )?(?:[\w' -]+ )?Strikes?)$/i.exec(clause);
+        on = ["success", "criticalSuccess"];
+    }
+    if (!match) return null;
+    const how = String(match[1] ?? "").toLowerCase();
+    const weapon = /\bfirearm/.test(how) ? "firearm" : /\bunarmed\b/.test(how) ? "unarmed" : /\bbrawling\b/.test(how) ? "brawling" : /^melee strikes?$/.test(how) ? "melee" : null;
+    const strike = !weapon && how ? (/^([\w' -]+?) strikes?$/.exec(how)?.[1] ?? null) : null;
+    if (how && !weapon && !strike) return null;
+    return { ...plan, targeting: { target: "the creature the Strike hits", range: "touch", area: null }, trigger: { ...plan.trigger, event: "own-strike", on, ...(weapon ? { weapon } : {}), ...(strike ? { strike } : {}) } };
 }
 
 // "targets the hound with a mental effect" (2026-10-10, batch 17): { event: "targeted-by", traits, spells? } (spells: any spell

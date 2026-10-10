@@ -12,6 +12,7 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, strikeMatches } from "../src/live/activity.js";
+import { damageNote, hitSetsOff, ownStrikeSetsOff } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
@@ -54,8 +55,10 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
         spendOffGuard(message).catch((error) => console.error(`${MODULE_ID} | spending off-guard`, error));
     });
     // A monster at 0 HP: the abilities that act as it dies (Death Throes, Explosive Death).
-    Hooks.on("updateActor", (actor, changed) => {
+    Hooks.on("updateActor", (actor, changed, options) => {
         if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) cardsForDeath(actor).catch((error) => console.error(`${MODULE_ID} | death card`, error));
+        // PF2e's damage on it (not its undo): a passive that answers it (Spewing Bile, Diseased Pustules; batch 19).
+        if (isActiveGM() && options?.damageTaken > 0 && !options.damageUndo) cardsForDamaged(actor, options.damageTaken).catch((error) => console.error(`${MODULE_ID} | damaged card`, error));
     });
     Hooks.on("renderChatMessageHTML", (message, html) => wireCard(message, html));
     // The chat log draws the messages already there before "ready": wire those too.
@@ -264,6 +267,16 @@ async function cardsForRiders(message) {
         pendingActivities.delete(actor.uuid);
         if (hit && target?.actor) await activityCard(message, pending, { actor, strike, target, targetToken, context });
     }
+    // Its passives its own Strike sets off ("When the gunmarshal makes a critical hit with a firearm, …"; batch 19): on the
+    // creature it hit.
+    if (hit && target?.actor) {
+        await ready;
+        for (const item of actor.itemTypes.action) {
+            const plan = compile(item);
+            if (plan?.trigger?.reaction || !ownStrikeSetsOff(plan?.trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [] }) || !plan.resolution || !cardCheck(plan)) continue;
+            await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: "free" } });
+        }
+    }
     const effects = strike?.system?.attackEffects?.value ?? [];
     if (!hit || !effects.length || !target?.actor) return;
     await ready;
@@ -277,12 +290,14 @@ async function cardsForRiders(message) {
 
 // A melee Strike that hits a monster or a hazard whose passive answers it ("A creature that hits the pukwudgie with an unarmed
 // Strike … takes 3d8 piercing damage"): a card for the attacker (2026-10-10). One for unarmed Strikes only: not for a weapon.
+// (Batch 19: also any attack when it says so, "If the arboreal snag takes damage from a piercing attack"; a critical hit only;
+// the damage types as a note; its area around the monster, "creatures within 10 feet of the snag".)
 async function cardsForHitBy(message) {
     const context = message.flags?.pf2e?.context;
     if (context?.type !== "attack-roll" || !["success", "criticalSuccess"].includes(context.outcome)) return;
     const options = context.options ?? [];
     const domains = context.domains ?? [];
-    if (options.includes("item:ranged") || domains.some((domain) => /^ranged-/.test(domain)) || !(options.includes("item:melee") || domains.some((domain) => /^melee-/.test(domain)))) return;
+    const ranged = options.includes("item:ranged") || domains.some((domain) => /^ranged-/.test(domain)) || !(options.includes("item:melee") || domains.some((domain) => /^melee-/.test(domain)));
     const unarmed = options.includes("item:category:unarmed") || options.includes("item:trait:unarmed");
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const defender = targetToken?.actor;
@@ -293,8 +308,25 @@ async function cardsForHitBy(message) {
         const plan = compile(item);
         const trigger = plan?.trigger;
         // (A reaction is offered to the GM instead: scripts/reactions.js.)
-        if (trigger?.event !== "hit-by" || trigger.reaction || (trigger.unarmed && !unarmed) || !plan.resolution || !cardCheck(plan)) continue;
-        await postCard({ plan, item, sourceActor: defender, sourceToken: targetToken, tokens: [attacker], cause: `hit by ${attacker.name ?? attacker.actor.name}` });
+        if (trigger?.reaction || !hitSetsOff(trigger, { outcome: context.outcome, ranged, unarmed }) || !plan.resolution || !cardCheck(plan)) continue;
+        const tokens = plan.targeting?.target === "the attacker" ? [attacker] : plan.targeting?.area?.type === "emanation" ? tokensAround(targetToken, Number(plan.targeting.area.value) || 0) : [];
+        await postCard({ plan, item, sourceActor: defender, sourceToken: targetToken, tokens, cause: `hit by ${attacker.name ?? attacker.actor.name}`, warning: damageNote(trigger) });
+    }
+}
+
+// Damage on a monster whose passive answers it ("When the penanggalan takes slashing damage, their wound spews bile on adjacent
+// creatures"; batch 19): its card on the creatures around it, or on the creature whose turn it is (taken as the attacker); the
+// damage types as a note for the GM (PF2e doesn't say which it was).
+async function cardsForDamaged(actor, amount) {
+    if (!["npc", "hazard"].includes(actor?.type)) return;
+    await ready;
+    const passives = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).filter(({ plan }) => plan?.trigger?.event === "damaged" && !plan.trigger.reaction && plan.resolution && cardCheck(plan));
+    if (!passives.length) return;
+    const token = actor.getActiveTokens(false, true)[0] ?? null;
+    const attacker = game.combat?.combatant?.token ?? null;
+    for (const { item, plan } of passives) {
+        const tokens = plan.targeting?.target === "the attacker" ? (attacker && attacker.id !== token?.id ? [attacker.object ?? attacker] : []) : plan.targeting?.area?.type === "emanation" ? tokensAround(token, Number(plan.targeting.area.value) || 0) : [];
+        await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: `took ${amount} damage`, warning: damageNote(plan.trigger) });
     }
 }
 

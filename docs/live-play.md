@@ -500,3 +500,22 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Starting the encounter brought Dramatic Entrance's offer (a free action: Use it left the thief's reaction unused; its card, Performance against each Will DC, listed the creatures within 120 feet) and, as Valeros' turn started, Petrifying Glance's (its card: DC 20 Fortitude on Valeros; the basilisk got "Reaction used").
   - Valeros' Strike at the jinxer (a miss) brought Hypnotic Tattoos' offer with the note; its card was DC 22 Will on Valeros.
   - The pachycephalosaurus' skull hit on Valeros brought Sudden Shove's offer; its card was Athletics against his Fortitude DC.
+
+## Passives: more death wordings, its own critical hit, damage on it (2026-10-10, batch 19)
+
+- **The gap:** of the NPC passives with results that nothing set off (176), three groups had triggers the module can follow.
+- **More death wordings** (batch 14's): "When killed, the star archon explodes …", "When destroyed, a flaming skull explodes …", and the clause opening a later sentence with "it" or "they" ("The snapdrake's death reveals one last surprise. When it dies, it explodes …"); "Each time … and when they're reduced to 0 Hit Points". Not a death a later sentence mentions otherwise ("When the creature dies, it rises as a spawn"). 13 more.
+- **Its own Strike:** "When the gunmarshal makes a critical hit with a firearm, the target must succeed at a Fortitude save or be Stunned 1" (critical specializations), "When the kurobozu scores a critical hit with an unarmed attack, …", "When the tough deals damage on a critical hit, …", "When a target takes damage from one of the dragon's melee Strikes, …". The kind of weapon it names (a firearm, an unarmed attack, a brawling weapon, its melee Strikes) or a Strike's name. On the creature it hit. 17 (2 Battlezoo).
+- **Damage on it:** "When the penanggalan takes slashing damage, their wound spews bile on adjacent creatures …", "Whenever the festrog takes piercing or slashing damage, creatures adjacent to the festrog take …", "Each time an adjacent creature deals slashing or piercing damage to the brimorak, the attacker is sprayed …", "If the arboreal snag takes damage from a piercing attack, …", "When the dragon takes a critical hit from any attack that deals physical damage, …". Read as batch 16's reactions are, with no reaction: on the attacker, or the creatures around it. Not the first time each round only, nor damage "from a source other than itself". 16.
+- **Live play:** the card, with no offer (a passive):
+  - its own Strike: after its attack roll hits, headed "after Flintlock Musket";
+  - a hit on it: after the attack roll, as batch 15's (now any attack when it says so, a critical hit only, around the monster);
+  - damage on it: when PF2e applies damage to it, headed "took 10 damage"; on the creatures around it, or on the creature whose turn it is when it names the attacker.
+  - The damage types it needs are a note on the card ("Only on slashing or piercing damage."): the GM checks them.
+- **Also fixed:** a token smaller than a square (a Tiny creature's) now occupies the square it's in when distances are measured (auras, death cards, reactions). A flaming skull's explosion missed the creature next to it: the half-square gap counted as 10 feet.
+- **The simulator** (B48): its own hit, after the Strike; damage on it, as PF2e applies it; a hit on it, with the types dealt. Over seven bestiaries (5,673 fights, no errors): Boiling Blood 37, Sacred Wrappings 31, Shimmering Armor 24, Viviparous Birth 15, Spewing Bile 6, Toxic Blood 6, Diseased Pustules 5 and more.
+- **Checked live in pftest** (a PFTEST SIM Flaming Skull, Festrog, Brimorak and Gunmarshal, deleted afterwards; Valeros restored):
+  - Valeros' longsword critical hit on the brimorak brought Boiling Blood's card on him ("Only on slashing or piercing damage."); he succeeded and took 2 of the 4 fire.
+  - 10 damage on the festrog brought Diseased Pustules' card on the six creatures adjacent to it.
+  - The gunmarshal's musket critical hit on Valeros brought Firearms Critical Specialization's card on him, "after Flintlock Musket".
+  - The flaming skull at 0 HP brought Fiery Explosion's card; at first it missed Valeros next to it (the Tiny token's gap), and after the fix it listed him and the others around its square.

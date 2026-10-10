@@ -113,7 +113,12 @@ export const gridOf = (scene) => ({ size: scene.grid.size, gridFeet: scene.grid.
 
 // A token's space, at a point of a path or where it stands. (Its stored
 // position: while a move animates, Foundry 14's x and y can still show the old one.)
-export const box = (token, size, at = token._source ?? token) => ({ x: at.x, y: at.y, w: Number(at.width ?? token.width ?? 1) * size, h: Number(at.height ?? token.height ?? 1) * size, elevation: Number(at.elevation ?? token.elevation ?? 0) });
+// (A token smaller than a square, a Tiny creature's, occupies the square it's in: 2026-10-10, batch 19.)
+export const box = (token, size, at = token._source ?? token) => {
+    const [w, h] = [Number(at.width ?? token.width ?? 1), Number(at.height ?? token.height ?? 1)];
+    const square = (value, span) => (span < 1 ? Math.floor(Number(value) / size) * size : Number(value));
+    return { x: square(at.x, w), y: square(at.y, h), w: Math.max(1, w) * size, h: Math.max(1, h) * size, elevation: Number(at.elevation ?? token.elevation ?? 0) };
+};
 
 const isFoe = (source, token) => !!token.actor?.isOfType?.("creature") && token.id !== source.token.id && !token.hidden && !token.actor.isDead && token.disposition !== source.token.disposition;
 

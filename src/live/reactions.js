@@ -50,15 +50,31 @@ export const blocksReactions = (slugs) => slugs.some((slug) => NO_REACTIONS.has(
 // when its turn is still to come this round, otherwise 1.
 export const reactionRounds = (position, current) => (position > current ? 0 : 1);
 
-// A reaction whose trigger is a hit on the monster (2026-10-10, batch 16: "The dragon is critically hit with a melee
-// attack", "A creature within the thoqqua's reach hits the thoqqua with a melee Strike"): does this attack roll set it off?
-// distance: the attacker's, in feet (null when unknown).
+// A trigger that's a hit on the monster (2026-10-10, batch 16: "The dragon is critically hit with a melee attack", "A creature
+// within the thoqqua's reach hits the thoqqua with a melee Strike"; a passive's too, batch 19): does this attack roll set it
+// off? distance: the attacker's, in feet (null when unknown).
 export function hitSetsOff(trigger, { outcome, ranged = false, unarmed = false, distance = null }) {
-    if (trigger?.event !== "hit-by" || !trigger.reaction || !["success", "criticalSuccess"].includes(outcome)) return false;
+    if (trigger?.event !== "hit-by" || !["success", "criticalSuccess"].includes(outcome)) return false;
     if (trigger.critical && outcome !== "criticalSuccess") return false;
     if (trigger.melee && ranged) return false;
     if (trigger.unarmed && !unarmed) return false;
     return !(trigger.within && Number.isFinite(distance) && distance > trigger.within);
+}
+
+// Its own Strike that sets off a passive or a reaction (batch 18, 19): the degree, the Strike it names, the kind of weapon
+// ("with a firearm", "with an unarmed attack", "a brawling weapon", "one of its melee Strikes"). options: the attack roll's.
+export function ownStrikeSetsOff(trigger, { outcome, strikeName = "", options = [] }) {
+    if (trigger?.event !== "own-strike" || !(trigger.on ?? []).includes(outcome)) return false;
+    const name = String(strikeName).toLowerCase();
+    if (trigger.strike && !(name.includes(trigger.strike) || trigger.strike.includes(name))) return false;
+    const unarmed = options.includes("item:category:unarmed") || options.includes("item:trait:unarmed");
+    switch (trigger.weapon) {
+        case "firearm": return options.includes("item:group:firearm") || /\b(?:pistol|musket|rifle|arquebus|blunderbuss|pepperbox|firearm|gun)\b/i.test(name);
+        case "unarmed": return unarmed;
+        case "brawling": return unarmed || options.includes("item:group:brawling") || /\b(?:fist|gauntlet|knuckles?|cestus)\b/i.test(name);
+        case "melee": return !options.includes("item:ranged");
+        default: return true;
+    }
 }
 
 // What the GM still checks: "Only on piercing or slashing damage."

@@ -24,9 +24,9 @@
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
-import { fitsSize, strikeMatches } from "../src/live/activity.js";
+import { fitsSize } from "../src/live/activity.js";
 import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
@@ -236,7 +236,7 @@ async function ownStrike(message, context, scene, combat, token) {
     for (const { item, plan } of mine.reactions) {
         const trigger = plan.trigger;
         if (!trigger?.reaction || trigger.event !== "own-strike" || !trigger.on?.includes(context.outcome)) continue;
-        if (!strikeMatches({ strike: trigger.strike }, strike) || !fitsSize(target.actor.size, trigger.maxSize)) continue;
+        if (!ownStrikeSetsOff(trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [] }) || !fitsSize(target.actor.size, trigger.maxSize)) continue;
         return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target, trigger: `took ${degreeWords(context.outcome)} from ${strike.name}`, free: !!trigger.free });
     }
 }
