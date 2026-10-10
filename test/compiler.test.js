@@ -548,3 +548,37 @@ test("abilities whose result is a PF2e effect (2026-10-10, batch 4): on itself, 
     // Not when there's more to it: a Strike, a check, a choice, a trigger, movement.
     for (const html of ["<p>The test knight makes a Strike, then gains a +2 circumstance bonus to AC.</p>", "<p>It attempts an Intimidation check; on a success it gains a +1 status bonus.</p>", "<p>The test knight Strides, then gains a +2 circumstance bonus to AC.</p>"]) assert.equal(compileMonsterAbility(action("Test Busy", `${html}<p>${effect("AAAAAAAAAAAAAAA8", "Effect: Test Busy")}</p>`)), null, html);
 });
+
+test("skill checks whose results are prose (2026-10-10, batch 5): leads, brackets, 'also', doubled damage, the user's own failure", () => {
+    const link = (id, label) => `@UUID[Compendium.pf2e.conditionitems.Item.${id}]{${label}}`;
+    const action = (name, html, { actionType = "action" } = {}) => ({ type: "action", name, system: { slug: null, actionType: { value: actionType }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const rows = (plan) => Object.fromEntries(Object.entries(plan.resolution.outcomes).map(([degree, row]) => [degree, [...row.effects.map((e) => `${e.slug}${e.value ? " " + e.value : ""}${e.recipient === "self" ? " (self)" : ""}${e.scope ? ` (to ${e.scope.attacks}${e.scope.uses ? " once" : ""})` : ""}`), ...(row.forcedMovement ? [`${row.forcedMovement.kind} ${row.forcedMovement.distance}`] : []), ...(row.damage?.formulas ?? []).map((f) => f.formula)].join(", ")]));
+    // "On a success, the target is Confused …"; a critical success is at least that.
+    const insult = compileMonsterAbility(action("Test Insult", `<p>The test sprite taunts a creature within 30 feet and rolls @Check[performance|defense:will] against the target's Will DC. On a success, the target is ${link("yblD8fOR1J8rDwEQ", "Confused")} until the end of their next turn.</p>`));
+    assert.deepEqual([insult.resolution.check.statistic, insult.resolution.check.against.statistic, insult.targeting.range, rows(insult).success, rows(insult).criticalSuccess], ["performance", "will", "30 feet", "confused", "confused"]);
+    // "(Clumsy 2 on a critical success)", in an area.
+    const tricks = compileMonsterAbility(action("Test Tricks", `<p>The test squad trips foes in a @Template[type:emanation|distance:5], attempting a single @Check[thievery|against:reflex] check and comparing the result to each target's Reflex DC. On a success, the target is ${link("i3OJZU2nk64Df3xm", "Clumsy 1")} (${link("i3OJZU2nk64Df3xm", "Clumsy 2")} on a critical success) until they take an Interact action.</p>`));
+    assert.deepEqual([tricks.targeting.area, rows(tricks).success, rows(tricks).criticalSuccess], [{ type: "emanation", value: 5 }, "clumsy 1", "clumsy 2"]);
+    // A trailing lead: "…, pulling it up to 30 feet closer on a success (60 feet on a critical success)".
+    const reel = compileMonsterAbility(action("Test Reel", "<p>If a creature is hooked, the test angler attempts an @Check[athletics|against:fortitude] check against the creature's Fortitude DC, pulling it up to 30 feet closer on a success (60 feet on a critical success).</p>"));
+    assert.deepEqual([rows(reel).success, rows(reel).criticalSuccess], ["pull 30", "pull 60"]);
+    // "On a critical success, the creature also falls Prone"; "On a critical success, the damage is doubled".
+    const chain = compileMonsterAbility(action("Test Chain", `<p>The test skinner attempts an @Check[athletics|defense:reflex] check against the creature's Reflex DC. On a success, it becomes ${link("VcDeM8A5oI6VqhbM", "Restrained")}; on a critical success, the creature also falls ${link("j91X7x0XSomq8d60", "Prone")}.</p>`));
+    assert.deepEqual([rows(chain).success, rows(chain).criticalSuccess], ["restrained", "restrained, prone"]);
+    const smear = compileMonsterAbility(action("Test Smear", "<p>The test giant attempts an Athletics check against the target's Reflex DC. On a success, it smears the creature along the wall, dealing @Damage[(2d8+8)[bludgeoning]] damage. On a critical success, the damage is doubled.</p>"));
+    assert.deepEqual([rows(smear).success, rows(smear).criticalSuccess], ["(2d8+8)[bludgeoning]", "2*(2d8+8)[bludgeoning]"]);
+    // Off-guard only to the user; the user's own critical failure; "the grabbed creature" is no condition.
+    const gambit = compileMonsterAbility(action("Test Gambit", `<p>The test acrobat attempts an @Check[acrobatics|defense:reflex] check against the Reflex DC of one target. On a success, the target is ${link("AJh5ex99aV6VTggg", "Off-Guard")} against the test acrobat's next melee Strike. On a critical failure, the test acrobat is ${link("yblD8fOR1J8rDwEQ", "Confused")} for 1 round.</p>`));
+    assert.deepEqual([rows(gambit).success, rows(gambit).criticalFailure], ["off-guard (to melee once)", "confused (self)"]);
+    const toss = compileMonsterAbility(action("Test Toss", "<p>The test brute attempts an @Check[athletics|defense:fortitude] check against the grabbed creature's Fortitude DC. On a success, it throws the grabbed creature 10 feet and it lands prone.</p>"));
+    assert.equal(rows(toss).success, "prone");
+    // Not: a passive's rider, or a choice of what to try.
+    assert.equal(compileMonsterAbility(action("Test Rider", "<p>When it casts a spell, it attempts an @Check[occultism|against:will] check against the target's Will DC. On a success, the target is Frightened 1.</p>", { actionType: "passive" })), null);
+    assert.equal(compileMonsterAbility(action("Test Either", "<p>The test toad attempts to either pull the target closer or Disarm it, with an @Check[athletics|defense:fortitude] check against the target's Fortitude DC. On a success, it pulls the target 10 feet closer.</p>")), null);
+});
+
+test("Resilient Form and the like: a critical hit on it becomes a normal hit on a flat check (batch 5)", () => {
+    const action = (name, html, actionType = "reaction", frequency = null) => ({ type: "action", name, system: { slug: null, actionType: { value: actionType }, actions: { value: null }, traits: { value: [] }, description: { value: html }, ...(frequency ? { frequency } : {}) } });
+    assert.deepEqual(compileMonsterAbility(action("Test Form", "<p><strong>Trigger</strong> The test dragon is critically hit with a weapon or unarmed attack;</p><hr /><p><strong>Effect</strong> The dragon's scales ward off deadly attacks. The dragon attempts a @Check[flat|dc:14]. On a success, the triggering attack becomes a normal hit.</p>")), { builtin: "crit-downgrade", dc: 14 });
+    assert.deepEqual(compileMonsterAbility(action("Test Blow", "<p><strong>Trigger</strong> It is critically hit with a Strike</p><hr /><p><strong>Effect</strong> It attempts a @Check[flat|dc:11]. On a success, the attack becomes a normal hit instead.</p>", "free", { max: 3, per: "day" })), { builtin: "crit-downgrade", dc: 11, uses: 3 });
+});

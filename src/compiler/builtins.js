@@ -111,6 +111,14 @@ export function readReaction(item, text) {
         return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted" };
     }
     if (/\btargeted by an attack\b/i.test(trigger) && /rolls the triggering attack twice and uses the worse result/i.test(effect)) return { builtin: "attack-misfortune" };
+    // Resilient Form, Cushioned Blow, Extraneous Flesh: when it's critically hit, a flat check makes it a normal hit.
+    //   Trigger The dragon is critically hit with a weapon or unarmed attack; Effect … attempts a @Check[flat|dc:14].
+    //   On a success, the triggering attack becomes a normal hit.
+    const flat = /@Check\[flat\|dc:(\d+)/i.exec(effect)?.[1] ?? /\bDC (\d+) flat check\b/i.exec(effect)?.[1];
+    if (flat && /\bcritically hit\b|\bcritical hit\b/i.test(trigger) && /On a success, (?:the (?:triggering )?attack becomes a normal hit|it doesn't take any extra damage from the critical hit)/i.test(effect)) {
+        const frequency = item?.system?.frequency;
+        return { builtin: "crit-downgrade", dc: Number(flat), ...(item?.system?.actionType?.value === "free" ? { uses: Number(frequency?.max) || 1 } : {}) };
+    }
     const moving = /\buses a move action\b|\bleaves a square during a move action\b/i.test(trigger);
     const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
     if (moving && struck) return { builtin: "reaction-strike", triggers: ["move"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect) };
@@ -142,7 +150,8 @@ export function compileBuiltin(item, slug) {
         if (momentum) return { builtin: "momentum", ...momentum };
         return null;
     }
-    if (type === "reaction") return readReaction(item, text);
+    // Reactions, and free actions with a trigger (Cushioned Blow).
+    if (type === "reaction" || (type === "free" && /\bTrigger\b/.test(text))) return readReaction(item, text);
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
     const strikes = readMultiStrike(text);

@@ -187,7 +187,7 @@ export function readDuration(text) {
     if (fixed) return { mode: "fixed", value: Number(fixed[1]) || NUMBER_WORDS[fixed[1].toLowerCase()], unit: `${fixed[2].toLowerCase()}s`, expiry: "turn-start", anchor: "effect-start" };
     // "Immobilized until it's no longer frightened", when no time is stated ("for 1d4 rounds (or until it's no longer
     // frightened, whichever comes first)" keeps its rounds).
-    const until = /\buntil (?:it|they|the creature|the target)(?:'s|'re| is| are) no longer (frightened|sickened|grabbed|restrained)\b/i.exec(plain);
+    const until = /\buntil (?:(?:it|they|the creature|the target)(?:'s|'re| is| are) )?no longer (frightened|sickened|grabbed|restrained|stupefied|clumsy|enfeebled|fatigued|drained|slowed|immobilized|confused|fascinated|dazzled|blinded|deafened)\b/i.exec(plain);
     if (until) return { mode: "while", condition: until[1].toLowerCase() };
     return null;
 }
@@ -205,7 +205,7 @@ const FRIGHTENED_TIMED = /\bfrightened(?: \d+)? (?:for|until)\b|\b(?:can't|canno
 
 // Sentences that end or lift a condition rather than impose it.
 // ("those conditions on the target end", "it breaks free"; not "until the end of your next turn".)
-const LIFTS = /\b(?:conditions?\b[^.]*\bend\b|(?:it|that|this|the effect|the condition) ends\b|break(?:s)? free|released|fail to|(?<!until (?:it|they|the creature|the target)(?:'s|'re| is| are) )no longer|already had|\bconditions?\b[^.]*?\b(?:is|are) removed\b|\bremoves? (?:the|its|their|any) [\w-]+ conditions?\b|(?<!(?:n't|not|cannot) )reduces? (?:its|the|their) [\w-]+ (?:condition|value)\b)/i;
+const LIFTS = /\b(?:conditions?\b[^.]*\bend\b|(?:it|that|this|the effect|the condition) ends\b|break(?:s)? free|released|fail to|(?<!until (?:(?:it|they|the creature|the target)(?:'s|'re| is| are) )?)no longer|already had|\bconditions?\b[^.]*?\b(?:is|are) removed\b|\bremoves? (?:the|its|their|any) [\w-]+ conditions?\b|(?<!(?:n't|not|cannot) )reduces? (?:its|the|their) [\w-]+ (?:condition|value)\b|\b(?:condition|value) (?:is|are) reduced\b)/i;
 
 // Conditions named in words in an affliction's stages ("2d4 poison damage and enfeebled 1").
 export const STAGE_CONDITIONS = [...PLAIN_CONDITIONS, "enfeebled", "clumsy", "drained", "stupefied", "sickened", "slowed", "stunned", "fatigued", "dazzled", "blinded", "deafened", "confused", "paralyzed", "unconscious", "doomed", "fleeing", "fascinated", "controlled", "wounded", "petrified"];
@@ -345,6 +345,8 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         // "Doomed 1 for as long as it is sickened": the phrase names the duration, not a condition of its own.
         const scan = duration?.mode === "while" ? sentence.replace(/\b(?:(?:for )?as long as (?:it|they|the creature|the target)(?:'s|'re| is| are| remains?| stays?)|until (?:it|they|the creature|the target)(?:'s|'re| is| are) no longer) (?:@UUID\[[^\]]*\]\{[^}]*\}|[a-z]+)/i, "") : sentence;
         for (const match of scan.matchAll(CONDITION_LINK)) {
+            // Not a word describing who ("dragging the {Grabbed} creature along").
+            if (/\b(?:the|a|an|any|each|its|that|this)\s*$/i.test(scan.slice(0, match.index)) && /^\s*(?:creature|foe|target|enemy|ally|victim|opponent)s?\b/i.test(scan.slice(match.index + match[0].length))) continue;
             const slug = match[1].toLowerCase().replace(/\s+/g, "-");
             if (!found.has(slug)) found.set(slug, match[2] ? Number(match[2]) : null);
         }
@@ -352,6 +354,8 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         for (const slug of plainConditions) {
             if (found.has(slug)) continue;
             const named = new RegExp(`\\b${slug}(?: (\\d+))?\\b`, "i").exec(unlinked);
+            // Not a word describing who ("the grabbed creature", "a prone foe").
+            if (named && new RegExp(`\\b(?:the|a|an|any|each|its|that|this) ${slug} (?:creature|foe|target|enemy|ally|victim|opponent)s?\\b`, "i").test(unlinked) && !new RegExp(`\\b${slug}\\b`, "i").test(unlinked.replace(new RegExp(`\\b(?:the|a|an|any|each|its|that|this) ${slug} (?:creature|foe|target|enemy|ally|victim|opponent)s?\\b`, "gi"), ""))) continue;
             if (named) found.set(slug, named[1] ? Number(named[1]) : null);
         }
         // A choice ("Enfeebled 1, Clumsy 1, or Stupefied 1, depending on …", "grabbed or restrained"): the GM's.
@@ -429,8 +433,10 @@ export function readPush(text, names = []) {
     const plain = htmlToPlainText(text);
     const own = names.filter(Boolean).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
     const toward = `(?:closer|nearer)(?! to (?!(?:it|them|the monster|${own || "\\0"})\\b))|(?:closer to |toward |towards )(?:it|them|the monster|itself|(?:the )?(?:[\\w'-]+ ){0,2}(?:${own || "\\0"}))\\b`;
-    const pull = new RegExp(`\\bpull(?:s|ed)? (?:the (?:target|creature) |it |them )?(?:up to )?(\\d+) (?:feet|foot) (?:${toward})`, "i").exec(plain);
+    const pull = new RegExp(`\\b(?:pull(?:s|ed|ing)?|(?:forcibly )?mov(?:es|ed)) (?:the (?:target|creature|foe) |it |them )?(?:up to )?(\\d+) (?:feet|foot) (?:${toward})`, "i").exec(plain);
     if (pull) return { kind: "pull", distance: Number(pull[1]), upTo: /up to/i.test(pull[0]), optional: false, direction: "toward" };
+    // "pulls the creature into an adjacent space": toward the monster until it's adjacent (taken as up to 30 feet).
+    if (/\bpull(?:s|ed|ing)? (?:the (?:target|creature|foe) |it |them )?(?:into|to) (?:an? )?(?:adjacent|free) (?:space|square)(?: adjacent to (?:it|itself|him|her|them))?\b/i.test(plain)) return { kind: "pull", distance: 30, upTo: true, optional: false, direction: "toward" };
     const match = /\bpush(?:es|ed)? (?:your |the )?(?:target|creature|it)?\s*(?:back |up to |away )?(\d+) (?:feet|foot)/i.exec(plain);
     // Only away from the monster, which is how the push is played; "in a random direction", "toward the wall", "along
     // the line" are the GM's to move.

@@ -46,6 +46,7 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - Retributive Strike is offered to the GM when a foe damages the monster's ally; Pull is a rider like Push; Form Up and Catch Rock change nothing in a fight.
   - Since batch 3's commit: 165 abilities apply an effect (27 of them in Monster Core and NPC Core, 9 Battlezoo), 90 more are built in, 19 more get a card.
   - See [docs/live-play.md](docs/live-play.md#effects-retributive-strike-pull-and-other-glossary-abilities-2026-10-10-batch-4).
+- **Checks with prose results** (2026-10-10, batch 5): a monster's check against a creature's DC whose results are sentences ("On a success, the target is Confused …", "Clumsy 1 (Clumsy 2 on a critical success)") gets a card; Resilient Form and the like turn a critical hit into a normal hit on a flat check. Since batch 4's commit: 78 more cards, 13 more built in.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

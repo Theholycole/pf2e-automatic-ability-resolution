@@ -12,6 +12,8 @@
 // - Challenge Fate: after a hit on it, a reroll keeping the worse (PF2e's own reroll).
 // - Death Frenzy: a Strike when reduced to 0 HP (at the GM's target).
 // - Ferocity: back to 1 HP, wounded +1, when reduced to 0 HP (not at wounded 3).
+// - Resilient Form and the like: after a critical hit on it, a flat check that makes it a normal hit (a free
+//   action's uses aren't counted here: the GM's).
 // - Retributive Strike (a monster's, the glossary's): when PF2e applies damage to
 //   its ally and the creature whose turn it is (taken as the attacker) is a foe,
 //   both within 15 feet. Using it gives the ally back what its resistance
@@ -25,7 +27,7 @@ import { isActiveGM } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -58,7 +60,8 @@ export function setUpReactions({ compileItem }) {
 
 // A monster's reactions the live cards play: [{ item, plan }].
 function reactionsOf(actor) {
-    return (actor?.itemTypes?.action ?? []).filter((item) => item.system?.actionType?.value === "reaction").map((item) => ({ item, plan: compile(item) })).filter(({ plan }) => KINDS.has(plan?.builtin));
+    // (A free action with a trigger, such as Cushioned Blow, too.)
+    return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: compile(item) })).filter(({ plan, item }) => KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade"));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -173,6 +176,7 @@ async function defend(message, context, scene, combat, attacker) {
             if (change) return offer({ kind: "ac", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against it`, attack: { messageId: message.id, value: plan.value, ...change } });
         }
         if (plan.builtin === "attack-misfortune" && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
+        if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc, free: item.system?.actionType?.value === "free" } });
     }
 }
 
@@ -278,7 +282,7 @@ async function use(message, action, slug) {
     const monster = await fromUuid(state.monster.tokenUuid);
     const actor = monster?.actor;
     if (!actor) throw new Error(`${state.monster.name} isn't there any more.`);
-    if (reactionUsed(actor)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
+    if (!state.attack?.free && reactionUsed(actor)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
     let result;
     if (state.kind === "strike") {
         result = await rollStrike(state, actor, slug);
@@ -301,6 +305,13 @@ async function use(message, action, slug) {
         if (!attack) throw new Error("The attack roll is gone.");
         await game.pf2e.Check.rerollFromMessage(attack, { keep: "lower" });
         result = `${state.ability.name}: the attack is rerolled, keeping the worse.`;
+    } else if (state.kind === "flat") {
+        // The flat check, rolled for all to see; a success turns the critical hit into a normal hit.
+        const roll = await new Roll("1d20").evaluate();
+        await roll.toMessage({ flavor: `${state.ability.name}: DC ${state.attack.dc} flat check`, speaker: ChatMessage.getSpeaker({ actor, token: monster }) });
+        result = roll.total >= state.attack.dc ? `${roll.total}: success. The critical hit becomes a normal hit; apply the attack's normal damage.` : `${roll.total}: failure. The critical hit stands.`;
+        // A free action doesn't use the reaction.
+        if (state.attack.free) return settle(message, state, "used", result);
     } else if (state.kind === "ferocity") {
         await actor.update({ "system.attributes.hp.value": 1 });
         await actor.increaseCondition("wounded");

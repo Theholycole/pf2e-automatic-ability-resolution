@@ -50,3 +50,9 @@ test("Retributive Strike's offer: resist then Strike, or resist only", () => {
     assert.match(html, /Guard resists 8 of it/);
     assert.doesNotMatch(offerHTML({ ...state, status: "used", result: "Guard resists 8 damage (back to 40 HP)." }), /data-aar-reaction/);
 });
+
+test("a flat-check offer after a critical hit (Resilient Form)", () => {
+    const html = offerHTML({ kind: "flat", ability: { name: "Resilient Form" }, monster: { name: "Dragon" }, target: { name: "Valeros" }, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { dc: 14 }, status: "open", result: null });
+    assert.match(html, /data-aar-reaction="use">Roll the DC 14 flat check</);
+    assert.match(html, /Valeros critically hit it/);
+});
