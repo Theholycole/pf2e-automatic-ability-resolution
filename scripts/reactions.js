@@ -74,6 +74,8 @@ function reactionsOf(actor) {
     // (A free action with a trigger, such as Cushioned Blow, too.)
     // (Reactive Strike's older name, "Attack of Opportunity", is the same reaction.)
     const same = (plan) => (plan?.builtin === "attack-of-opportunity" ? { ...plan, builtin: "reactive-strike" } : plan);
+    // (Not one that can't use reactions: the zombie's Slow; batch 21.)
+    if ((actor?.itemTypes?.action ?? []).some((item) => item.system?.actionType?.value === "passive" && compile(item)?.noReactions)) return [];
     // (And a reaction with results of its own whose trigger the module reads: plan.trigger.reaction.)
     return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) }))
         .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade")) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && plan.resolution));

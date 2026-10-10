@@ -334,6 +334,27 @@ function acDodge(text, trigger, effect) {
     return { builtin: "ac-reaction", value: Number(bonus[1]), when: "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(only ? {} : { notes: [plain] }) };
 }
 
+// A condition the monster always has (2026-10-10, batch 21): "The zombie is permanently Slowed 1 and can't use reactions" (Slow),
+// "Inizra is permanently Quickened. She can use her extra action only to Strike." (Weapon Supremacy), "The irnakurse is
+// permanently Frightened 2, …". { builtin: "permanent-condition", conditions: [{ slug, value }], noReactions?, quickenedFor? }.
+// Not one with a condition of its own ("while", "if", "unless", "when"), nor more than these sentences say.
+const PERMANENT_SLUGS = new Set(["slowed", "quickened", "frightened", "clumsy", "enfeebled", "drained", "stupefied", "blinded", "deafened"]);
+export function readPermanent(text) {
+    const sentences = String(text).replace(/@\w+\[[^\]]*\]\{([^}]*)\}/g, "$1").trim().split(/(?<=\.)\s+/);
+    const match = /^(?:The |An? )?[\w' -]+? (?:is|are) permanently ([A-Za-z]+)(?: (\d+))?(?: and (can't|cannot) use reactions)?(,[^.]*)?\.?$/.exec(sentences[0] ?? "");
+    // (", and it can use the extra action only to Step or Stride": the extra action's limit, read as the next sentence's.)
+    if (match?.[4] && /\bextra action\b/.test(match[4])) sentences.splice(1, 0, `It can use its extra action ${/\bStrike\b/.test(match[4]) ? "only to Strike" : "only to move"}.`);
+    if (!match || /\b(?:while|if|unless|when|until)\b/i.test(sentences.join(" "))) return null;
+    const slug = match[1].toLowerCase();
+    if (!PERMANENT_SLUGS.has(slug)) return null;
+    // "She can use her extra action only to Strike", "It can use this extra action to Stride or Strike" (as a Strike's; not
+    // one only to move or to work a siege weapon). The rest isn't read.
+    const rest = sentences.slice(1);
+    const strikeOnly = rest.length === 1 && /^(?:She|He|It|They) can use (?:her|his|its|their|this) extra action (?:only )?to (?:Stride or )?Strike\.?$/.test(rest[0]);
+    if (rest.length && !strikeOnly) return null;
+    return { builtin: "permanent-condition", conditions: [{ slug, value: match[2] ? Number(match[2]) : (slug === "slowed" ? 1 : null) }], ...(match[3] ? { noReactions: true } : {}), ...(strikeOnly ? { quickenedFor: "strike" } : {}) };
+}
+
 // The builtin for an item, or null.
 export function compileBuiltin(item, slug) {
     const rules = item?.system?.rules ?? [];
@@ -353,7 +374,7 @@ export function compileBuiltin(item, slug) {
     if (type === "passive") {
         const momentum = slug === "draconic-momentum" || /critical hit with a Strike/i.test(text) ? readMomentum(text) : null;
         if (momentum) return { builtin: "momentum", ...momentum };
-        return null;
+        return readPermanent(text);
     }
     // Reactions, and free actions with a trigger (Cushioned Blow).
     if (type === "reaction" || (type === "free" && /\bTrigger\b/.test(text))) return readReaction(item, text);

@@ -910,3 +910,15 @@ test("passives on a creature it holds as a turn starts or ends (2026-10-10, batc
     const hair = compileMonsterAbility(passive("Test Hair", "<p>Whenever a test husk takes fire damage, all creatures other than the husk in a @Template[type:emanation|distance:10] must attempt a @Check[fortitude|dc:24] save. On a failure, they become @UUID[Compendium.pf2e.conditionitems.Item.fesd1n5eVhpCSS18]{Sickened 1}.</p>"));
     assert.deepEqual([hair.trigger.event, hair.trigger.damageTypes], ["damaged", ["fire"]]);
 });
+
+test("a condition the monster always has (2026-10-10, batch 21)", async () => {
+    const { readPermanent } = await import("../src/compiler/builtins.js");
+    assert.deepEqual(readPermanent("A zombie is permanently @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} and can't use reactions."), { builtin: "permanent-condition", conditions: [{ slug: "slowed", value: 1 }], noReactions: true });
+    assert.deepEqual(readPermanent("A zombie leshy is permanently slowed 1 and can't use reactions"), { builtin: "permanent-condition", conditions: [{ slug: "slowed", value: 1 }], noReactions: true });
+    assert.deepEqual(readPermanent("Tobin is permanently Quickened. She can use her extra action only to Strike."), { builtin: "permanent-condition", conditions: [{ slug: "quickened", value: null }], quickenedFor: "strike" });
+    assert.deepEqual(readPermanent("The test cursed is permanently Frightened 2, which lowers its effective level by 1."), { builtin: "permanent-condition", conditions: [{ slug: "frightened", value: 2 }] });
+    // Not an extra action only to move, a choice, or one with a condition of its own.
+    assert.equal(readPermanent("A test golem is permanently Quickened, and it can use the extra action only to Step or Stride."), null);
+    assert.equal(readPermanent("The test monger is permanently Clumsy 1, Drained 1, Enfeebled 1, or Stupefied 1 by a curse. The GM chooses the condition."), null);
+    assert.equal(readPermanent("The test shade is permanently Slowed 1 while it's in sunlight."), null);
+});

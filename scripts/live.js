@@ -63,6 +63,13 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
     // A creature's turn starting or ending while a monster holds it (Mind-Numbing Grasp, Wine-Soaked; batch 20).
     Hooks.on("pf2e.startTurn", (combatant) => {
         if (isActiveGM()) cardsForGrabTurn(combatant, "start").catch((error) => console.error(`${MODULE_ID} | grab-turn card`, error));
+        // (A monster's permanent condition, back if PF2e lowered it: batch 21.)
+        if (isActiveGM() && combatant?.actor) keepPermanent(combatant.actor, false).catch((error) => console.error(`${MODULE_ID} | permanent condition`, error));
+    });
+    // A condition the monster always has (the zombie's Slow: "permanently Slowed 1 and can't use reactions"), as the encounter starts.
+    Hooks.on("combatStart", (combat) => {
+        if (!isActiveGM()) return;
+        for (const combatant of combat.combatants) if (combatant.actor) keepPermanent(combatant.actor, true).catch((error) => console.error(`${MODULE_ID} | permanent condition`, error));
     });
     Hooks.on("pf2e.endTurn", (combatant) => {
         if (isActiveGM()) cardsForGrabTurn(combatant, "end").catch((error) => console.error(`${MODULE_ID} | grab-turn card`, error));
@@ -411,6 +418,26 @@ async function cardsForGrabTurn(combatant, at) {
         if (plan?.trigger?.event !== "grab-turn" || plan.trigger.whose !== "own") continue;
         const tokens = scene.tokens.filter((other) => other.id !== token.id && other.actor && sets(plan, "own", holding(token, other), other.actor)).map((other) => other.object ?? other);
         if (tokens.length) await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: when, warning: plan.trigger.hold === "grabbed" ? `Only the creatures ${token.name} is holding.` : null });
+    }
+}
+
+// A monster's permanent conditions (batch 21): set to at least their value; told to the GM as the encounter starts.
+async function keepPermanent(actor, tell) {
+    if (!["npc", "hazard"].includes(actor?.type)) return;
+    await ready;
+    for (const item of actor.itemTypes.action) {
+        const plan = compile(item);
+        if (plan?.builtin !== "permanent-condition") continue;
+        const lines = [];
+        for (const { slug, value } of plan.conditions ?? []) {
+            const current = actor.getCondition?.(slug);
+            const wanted = Number(value) || null;
+            if (current && (!wanted || (current.value ?? 0) >= wanted)) continue;
+            if (wanted && current) await game.pf2e.ConditionManager.updateConditionValue(current.id, actor, wanted);
+            else await actor.increaseCondition(slug, wanted ? { value: wanted } : {});
+            lines.push(`${slug}${wanted ? ` ${wanted}` : ""}`);
+        }
+        if (tell && lines.length) await ChatMessage.create({ content: `<p><strong>${item.name}</strong>: ${actor.name} is ${lines.join(", ")} for good${plan.noReactions ? " and can't use reactions" : ""}${plan.quickenedFor === "strike" ? " (its extra action only to Strike)" : ""}.</p>`, speaker: ChatMessage.getSpeaker({ actor }), whisper: ChatMessage.getWhisperRecipients("GM").map((user) => user.id) });
     }
 }
 
