@@ -262,11 +262,13 @@ export function readReaction(item, text) {
     // (Linked names as words: "@UUID[…]{Concealment}" → "Concealment".)
     text = text.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
-    if (!trigger || !effect) return null;
+    if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     const ac = (item?.system?.rules ?? []).find((rule) => rule?.key === "FlatModifier" && [].concat(rule.selector).includes("ac") && Number.isFinite(Number(rule.value)));
     if (ac && /\bAC against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
         return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted" };
     }
+    const dodge = acDodge(text, trigger, effect);
+    if (dodge) return dodge;
     if (/\btargeted by an attack\b/i.test(trigger) && /rolls the triggering attack twice and uses the worse result/i.test(effect)) return { builtin: "attack-misfortune" };
     // Resilient Form, Cushioned Blow, Extraneous Flesh: when it's critically hit, a flat check makes it a normal hit.
     //   Trigger The dragon is critically hit with a weapon or unarmed attack; Effect … attempts a @Check[flat|dc:14].
@@ -295,6 +297,41 @@ export function readReaction(item, text) {
         if (last) return { builtin: "death-strike", strike: last[1] ? last[1].toLowerCase() : null };
     }
     return null;
+}
+
+// A circumstance bonus to its own AC against the attack, in other wordings (2026-10-10, batch 17): the value from the text
+// when the item has no rule ("Jellico gains a +2 circumstance bonus to AC against the triggering Strike"), with no "Effect"
+// label ("Trigger Pin is targeted with a melee or ranged attack by an attacker he can see. Pin gains …"), or with more after
+// it ("…, gaining a +2 circumstance bonus to AC, then Strides up to half their Speed after the Strike resolves"), which is a
+// note for the GM. against: "melee" or "ranged" when only those attacks set it off. Not: one that protects another creature
+// (an ally, a rider, a liege), one against a spell, a splash or an area, one that lasts ("until the start of its next turn").
+const SELF = String.raw`(?:the [\w' -]+?|it|him|her|them|you|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)`;
+const KIND = String.raw`(?:physical )?(?:melee |ranged |melee or ranged |melee or a ranged )?`;
+const SELF_ATTACKED = new RegExp(String.raw`\b(?:targets? ${SELF} with an? ${KIND}(?:attack|Strike)|(?:is|are) targeted (?:with|by) an? ${KIND}(?:attack|Strike)|is the target of an? ${KIND}(?:attack|Strike)|(?:makes|attempts) an? ${KIND}(?:attack(?: roll)?|Strike) (?:against|targeting) ${SELF}|attempts to Strike ${SELF})\b`);
+function acDodge(text, trigger, effect) {
+    // No "Effect" label: the trigger's first sentence, then the rest (after any requirements).
+    // (Not with a requirement the simulator can't check; "is not encumbered" it can.)
+    if (/\bRequirements? (?![^.]*?\bnot encumbered\b)/i.test(text)) return null;
+    if (!/ Effect /.test(text)) {
+        const parts = /^Trigger (.+?)\.\s+(?:Requirements? [^.]+\.\s+)?(.+)$/.exec(text.trim());
+        if (!parts) return null;
+        [trigger, effect] = [parts[1], parts[2]];
+    }
+    // "The oath dragon or a bonded companion within 15 feet is targeted": its own part.
+    const own = trigger.replace(/ or (?:a|an|one of its) [\w' -]+? within \d+ feet(?= (?:is|are) targeted)/i, "");
+    const shared = own !== trigger;
+    trigger = own;
+    const bonus = /(?:gains?|gaining|giving (?:it|itself)|providing) a \+(\d+) circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)\b/i.exec(effect);
+    if (!bonus || !SELF_ATTACKED.test(trigger)) return null;
+    // (Shielding Wing protects "itself or the bonded companion": its own part is read.)
+    if (/\b(?:ally|allies|rider|liege|object|spells?|splash|area|bow|until)\b/i.test(`${trigger} ${effect.slice(0, bonus.index + 120)}`) || (!shared && /\bcompanion\b/i.test(effect.slice(0, bonus.index + 120)))) return null;
+    const melee = /\bmelee\b|\badjacent\b/i.test(trigger);
+    const ranged = /\branged\b/i.test(trigger);
+    // Its sentence and any more: a note when it says more than the bonus against the attack.
+    // (Not the PF2e effect it links: "… Effect: Shielding Wing".)
+    const plain = effect.trim().replace(/\s*\bEffect: [^.]+$/, "");
+    const only = /^[^.]*?\+\d+ circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)(?: against (?:the|that) triggering (?:attack|Strike))?\.?$/i.test(plain);
+    return { builtin: "ac-reaction", value: Number(bonus[1]), when: "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(only ? {} : { notes: [plain] }) };
 }
 
 // The builtin for an item, or null.

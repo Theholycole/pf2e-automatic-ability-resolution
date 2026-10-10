@@ -26,7 +26,7 @@
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
 import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
-import { isActiveGM, postCard, tokensAround } from "./live.js";
+import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
@@ -142,6 +142,13 @@ async function onMessage(message) {
     const scene = token?.parent;
     const combat = scene && runningCombat(scene);
     if (!combat || !inEncounter(combat).has(token.id)) return;
+    // A mental effect aimed at it (Entropic Feedback; 2026-10-10, batch 17): its card on the creature that aimed it, on Use.
+    const event = await targetedEvent(message);
+    if (event) {
+        const mine = reactors(scene, combat).find((entry) => entry.token.id === event.defender.id);
+        const entry = mine && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.trigger?.reaction && targetedSetsOff(plan.trigger, event)) : null;
+        if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: `aimed ${event.spell ? "a spell" : "an effect"} at it (${event.traits.filter((trait) => entry.plan.trigger.traits?.includes(trait)).join(", ") || "spell"})` });
+    }
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
         if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach");
@@ -187,9 +194,10 @@ async function defend(message, context, scene, combat, attacker) {
             return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: damageNote(plan.trigger) });
         }
         // Only a hit it could undo (turning a miss into a critical miss rarely matters).
-        if (plan.builtin === "ac-reaction" && Number.isFinite(dc) && hit) {
+        // (Only melee or only ranged attacks when the trigger says so; what else it does, a note: "then Strides up to half its Speed".)
+        if (plan.builtin === "ac-reaction" && Number.isFinite(dc) && hit && (!plan.against || (plan.against === "ranged") === ranged)) {
             const change = higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, plan.value);
-            if (change) return offer({ kind: "ac", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against it`, attack: { messageId: message.id, value: plan.value, ...change } });
+            if (change) return offer({ kind: "ac", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against it`, note: plan.notes?.join(" ") || null, attack: { messageId: message.id, value: plan.value, ...change } });
         }
         if (plan.builtin === "attack-misfortune" && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
         if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc, free: item.system?.actionType?.value === "free" } });

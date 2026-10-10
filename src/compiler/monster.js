@@ -1263,7 +1263,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
     if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? reactionTrigger(item, plan) ?? plan;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
@@ -1299,6 +1299,9 @@ export function readReactionTrigger(text) {
         return { event: "hit-by", reaction: true, melee, ...(unarmed ? { unarmed: true } : {}), ...(critical ? { critical: true } : {}), ...(damageTypes ? { damageTypes } : {}), ...(distance ? { within: distance } : {}) };
     };
     if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
+    // "A creature attempts to target the hundun with a mental effect", "… with a mental effect or spell" (batch 17).
+    const targeted = targetedWith(trigger);
+    if (targeted) return { ...targeted, reaction: true };
     let match = new RegExp(String.raw`^${SELF} (?:is (critically )?hit|takes a (critical) hit)\b(.*)$`).exec(trigger);
     if (match) return hit({ critical: Boolean(match[1] || match[2]), how: match[3] });
     match = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|foe|enemy)((?: (?:within|in) [^,]+?)?) (?:successfully )?(critically hits|hits|damages|deals ([\w ,]+?) damage to|[Ss]trikes) ${SELF}\b(.*)$`).exec(trigger);
@@ -1317,6 +1320,27 @@ export function readReactionTrigger(text) {
         return { event: "damaged", reaction: true, ...(damageTypes ? { damageTypes } : {}) };
     }
     return null;
+}
+
+// "targets the hound with a mental effect" (2026-10-10, batch 17): { event: "targeted-by", traits, spells? } (spells: any spell
+// too, "with a mental effect or spell"); null for anything else ("a divination spell that has the mental trait").
+const TRAIT_WORDS = new Set(["mental", "auditory", "linguistic", "emotion", "fear", "visual", "sonic", "olfactory"]);
+function targetedWith(text) {
+    const match = new RegExp(String.raw`^(?:(?:Whenever|When|If|Each time) )?(?:A|An|Any|a|an|any) (?:creature|foe|enemy) (?:attempts to target|targets) ${SELF} with an? ((?:magical )?\w+(?: or \w+)?) effect( or spell)?$`).exec(String(text).trim().replace(/[.;,]\s*$/, ""));
+    if (!match) return null;
+    const traits = match[1].replace(/^magical /, "").split(" or ");
+    if (!traits.every((trait) => TRAIT_WORDS.has(trait))) return null;
+    return { event: "targeted-by", traits, ...(match[2] ? { spells: true } : {}) };
+}
+
+// A passive that answers a mental effect aimed at it ("Whenever a creature targets the hound with a mental effect, that
+// creature takes 8d6 mental damage (basic Will save)", Otherworldly Mind; batch 17): on the creature that targeted it.
+function targetedBy(item, plan) {
+    if (item.system?.actionType?.value !== "passive" || plan?.trigger?.event !== "passive" || !plan.resolution) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const clause = plain.split(/(?<=[.!?])\s+/).map((sentence) => /^(.+?),? (?:that creature|the creature|it|they) (?:takes?|must|is|becomes?)\b/.exec(sentence)?.[1]).find((lead) => lead && targetedWith(lead));
+    if (!clause) return null;
+    return { ...plan, targeting: { target: "the attacker", range: "touch", area: null }, trigger: { ...plan.trigger, ...targetedWith(clause) } };
 }
 
 function reactionTrigger(item, plan) {

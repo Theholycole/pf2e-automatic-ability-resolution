@@ -807,3 +807,37 @@ test("reactions to a hit, a critical hit or damage on the monster, or its death 
     const other = compileMonsterAbility(reaction("Test Gaze", "<p><strong>Trigger</strong> A creature within 30 feet casts a spell</p><hr /><p><strong>Effect</strong> The test beast glares. The creature takes @Damage[2d6[mental]] damage (@Check[will|dc:20|basic] save).</p>"));
     assert.equal(other.trigger.reaction, undefined);
 });
+
+test("AC reactions in other wordings (2026-10-10, batch 17): no rule, no Effect label, more after the bonus, melee or ranged only", () => {
+    const reaction = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, rules: [], description: { value: html } } });
+    const bob = compileMonsterAbility(reaction("Test Bob", "<p><strong>Trigger</strong> The test jester is the target of a Strike by an attacker he can see</p><hr /><p><strong>Effect</strong> The jester gains a +2 circumstance bonus to AC against the triggering Strike.</p>"));
+    assert.deepEqual(bob, { builtin: "ac-reaction", value: 2, when: "targeted" });
+    // No "Effect" label; "not encumbered" is a requirement it can keep.
+    const dodge = compileMonsterAbility(reaction("Test Dodge", "<p><strong>Trigger</strong> A creature targets Tobin with an attack and he can see the attacker.</p><p><strong>Requirements</strong> Tobin is not Encumbered</p><p>Tobin deftly dodges out of the way, gaining a +2 circumstance bonus to AC against the triggering attack.</p>"));
+    assert.deepEqual(dodge, { builtin: "ac-reaction", value: 2, when: "targeted" });
+    // More after it: a note; melee or ranged only.
+    const evade = compileMonsterAbility(reaction("Test Evade", "<p><strong>Trigger</strong> An adjacent enemy targets the test swarm with a Strike</p><p><strong>Effect</strong> The swarm gains a +1 circumstance bonus to AC against the triggering attack. If the attack misses, the swarm can Stride up to 10 feet.</p>"));
+    assert.deepEqual([evade.value, evade.against, evade.notes.length], [1, "melee", 1]);
+    const slap = compileMonsterAbility(reaction("Test Slap", "<p><strong>Trigger</strong> The test beaver is targeted by a physical ranged Strike from an attacker it can see</p><p><strong>Effect</strong> The beaver swats at the projectile, gaining a +2 circumstance bonus to its AC against the triggering attack.</p>"));
+    assert.equal(slap.against, "ranged");
+    // Its own part of "itself or the bonded companion".
+    const wing = compileMonsterAbility(reaction("Test Wing", "<p><strong>Trigger</strong> The test dragon or a bonded companion within 15 feet is targeted with an attack</p><p><strong>Effect</strong> The dragon raises its wing to protect itself or the bonded companion, providing a +2 circumstance bonus to AC against the triggering attack.</p>"));
+    assert.equal(wing.builtin, "ac-reaction");
+    // Not: an ally's AC, a requirement it can't check, a spell, one that lasts.
+    for (const html of [
+        "<p><strong>Trigger</strong> An ally within the test guard's reach is targeted by an attack</p><p><strong>Effect</strong> The ally gains a +2 circumstance bonus to AC against the triggering attack.</p>",
+        "<p><strong>Trigger</strong> The test archer is targeted by a ranged attack</p><p><strong>Requirements</strong> The archer has a hand free</p><p><strong>Effect</strong> The archer gains a +4 circumstance bonus to AC against the triggering attack.</p>",
+        "<p><strong>Trigger</strong> The test mage killer is targeted by a spell</p><p><strong>Effect</strong> It gains a +2 circumstance bonus to AC and saving throws against the triggering spell.</p>",
+        "<p><strong>Trigger</strong> The test trilobite is targeted by a Strike</p><p><strong>Effect</strong> The trilobite gains a +2 circumstance bonus to AC until the start of its next turn.</p>"
+    ]) assert.notEqual(compileMonsterAbility(reaction("Test", html))?.builtin, "ac-reaction", html);
+});
+
+test("abilities that answer a mental effect aimed at the monster (2026-10-10, batch 17)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const mind = compileMonsterAbility(passive("Test Mind", "<p>Whenever a creature targets the test hound with a mental effect, that creature takes @Damage[4d6[mental]] damage (@Check[will|dc:25|basic] save).</p>"));
+    assert.deepEqual([mind.trigger.event, mind.trigger.traits, mind.targeting.target, mind.resolution.check.statistic], ["targeted-by", ["mental"], "the attacker", "will"]);
+    assert.deepEqual(readReactionTrigger("A creature attempts to target the hundun with a mental effect"), { event: "targeted-by", traits: ["mental"], reaction: true });
+    assert.deepEqual(readReactionTrigger("A creature targets the manipulator with a mental effect or spell"), { event: "targeted-by", traits: ["mental"], spells: true, reaction: true });
+    assert.equal(readReactionTrigger("A creature targets the orb with a divination spell that has the mental trait"), null);
+});

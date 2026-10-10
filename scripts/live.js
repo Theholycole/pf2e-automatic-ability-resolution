@@ -49,6 +49,7 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
         cardForAbility(message).catch((error) => console.error(`${MODULE_ID} | ability card`, error));
         cardsForRiders(message).catch((error) => console.error(`${MODULE_ID} | rider card`, error));
         cardsForHitBy(message).catch((error) => console.error(`${MODULE_ID} | hit-by card`, error));
+        cardsForTargeted(message).catch((error) => console.error(`${MODULE_ID} | targeted card`, error));
         cardForSkillAction(message).catch((error) => console.error(`${MODULE_ID} | skill action card`, error));
         spendOffGuard(message).catch((error) => console.error(`${MODULE_ID} | spending off-guard`, error));
     });
@@ -294,6 +295,42 @@ async function cardsForHitBy(message) {
         // (A reaction is offered to the GM instead: scripts/reactions.js.)
         if (trigger?.event !== "hit-by" || trigger.reaction || (trigger.unarmed && !unarmed) || !plan.resolution || !cardCheck(plan)) continue;
         await postCard({ plan, item, sourceActor: defender, sourceToken: targetToken, tokens: [attacker], cause: `hit by ${attacker.name ?? attacker.actor.name}` });
+    }
+}
+
+// A creature aiming an effect at a monster or a hazard (2026-10-10, batch 17): its skill check or attack roll at it (Demoralize),
+// or the monster's save against a targeted spell or effect (not an area's). { defender, attacker } (token documents), the
+// effect's traits and whether it's a spell; null for any other message.
+export async function targetedEvent(message) {
+    const context = message.flags?.pf2e?.context;
+    if (!context?.type || message.flags?.[MODULE_ID]) return null;
+    const options = context.options ?? [];
+    const traits = [...new Set([...(context.traits ?? []).map((trait) => trait?.name ?? trait), ...options.filter((option) => option.startsWith("item:trait:")).map((option) => option.slice(11))])];
+    const spell = options.includes("item:type:spell");
+    if (["skill-check", "attack-roll", "spell-attack-roll"].includes(context.type)) {
+        const defender = context.target?.token ? await fromUuid(context.target.token) : null;
+        return defender && message.token ? { defender, attacker: message.token, traits, spell } : null;
+    }
+    if (context.type === "saving-throw" && !options.some((option) => /^item:area\b|^area-effect$/.test(option))) {
+        const attacker = context.origin?.token ? await fromUuid(context.origin.token) : null;
+        return attacker && message.token && attacker.id !== message.token.id ? { defender: message.token, attacker, traits, spell } : null;
+    }
+    return null;
+}
+
+// Does the event set off this trigger ("targets the hound with a mental effect", "… or spell")?
+export const targetedSetsOff = (trigger, event) => trigger?.event === "targeted-by" && ((trigger.traits ?? []).some((trait) => event.traits.includes(trait)) || (trigger.spells && event.spell));
+
+// A monster's passive that answers it (Otherworldly Mind): its card on the creature that aimed the effect.
+async function cardsForTargeted(message) {
+    const event = await targetedEvent(message);
+    const defender = event?.defender?.actor;
+    if (!defender || !["npc", "hazard"].includes(defender.type) || !event.attacker.actor || event.attacker.disposition === event.defender.disposition) return;
+    await ready;
+    for (const item of defender.itemTypes.action) {
+        const plan = compile(item);
+        if (plan?.trigger?.reaction || !targetedSetsOff(plan?.trigger, event) || !plan.resolution || !cardCheck(plan)) continue;
+        await postCard({ plan, item, sourceActor: defender, sourceToken: event.defender, tokens: [event.attacker.object ?? event.attacker], cause: `targeted by ${event.attacker.name}` });
     }
 }
 

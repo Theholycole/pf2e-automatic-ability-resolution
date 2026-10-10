@@ -460,3 +460,21 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **Checked live in pftest** (a PFTEST SIM Diabolic Dragon (Young) and Nyogoth in an encounter with Valeros, deleted afterwards; HP restored):
   - Valeros' miss and his plain hit on the dragon brought no offer; his critical hit brought Hell's Sting's. Not now closed it; a second critical hit brought it again, and Use it posted the card on Valeros (DC 30 basic Will) and gave the dragon "Reaction used". He critically failed and took 42 mental.
   - 10 damage on the nyogoth during Valeros' turn brought Caustic Blood's offer ("Only on piercing or slashing damage."); Use it posted the card on the six creatures adjacent to it, both sides. Applied: double on a critical failure, full on a failure.
+
+## More dodges, and answers to a mental effect (2026-10-10, batch 17)
+
+- **AC reactions in other wordings:** Nimble Dodge and the like were read only when the item had PF2e's rule for the bonus and the words "AC against the triggering attack". Now also:
+  - the bonus from the text ("gains a +2 circumstance bonus to AC against the triggering Strike");
+  - no "Effect" label ("Trigger Pin is targeted with a melee or ranged attack by an attacker he can see. Pin gains …");
+  - more after the bonus ("…, then Strides up to half their Speed after the Strike resolves", resistance against the attack), shown as a note on the offer for the GM;
+  - melee or ranged attacks only ("An adjacent enemy targets the swarm with a Strike", "targeted by a physical ranged Strike");
+  - Shielding Wing's own part ("The oath dragon or a bonded companion within 15 feet is targeted").
+  - Not read: a reaction that protects another creature (an ally, a rider, a liege), one with a requirement other than "not encumbered", one against a spell, a splash or an area, one that lasts ("until the start of its next turn").
+  - 27 more (25 PF2e, 2 Battlezoo). The simulator plays them as Nimble Dodge, melee or ranged only where they say so (B45).
+- **A mental effect aimed at the monster:** Otherworldly Mind's "Whenever a creature targets the hound with a mental effect, that creature takes 8d6 mental damage (basic Will save)" (14 monsters, and Destiny Tempest's), Entropic Feedback's and Psychic Superiority's reactions ("A creature attempts to target the hundun with a mental effect", "… with a mental effect or spell").
+  - Live play: a skill check or an attack roll at the monster with the trait (Demoralize), or the monster's save against a targeted spell or effect with it (Daze, Fear; not an area's, such as Calm), sets it off. A passive's card goes on the creature that aimed it ("targeted by Valeros"); a reaction is offered to the GM in an encounter, and Use it posts its card.
+  - The simulator (B46): after a targeted spell or action with the trait (Demoralize too), the passive on its caster; the reaction when the monster can react.
+- **Checked live in pftest** (a PFTEST SIM Hound of Tindalos and Hundun Chaos Mage, deleted afterwards; Valeros restored):
+  - Valeros' Demoralize at the hound brought the Otherworldly Mind card on him (DC 25 basic Will); he failed and took 7 mental on Apply.
+  - The hound's Will saves against Ezren's Daze and Fear each brought the card on Ezren; against Electric Arc (not mental) and Calm (an area), none.
+  - In an encounter, Valeros' Demoralize at the hundun brought Entropic Feedback's offer ("Valeros aimed an effect at it (mental)"); Use it posted its DC 40 Will card on him.
