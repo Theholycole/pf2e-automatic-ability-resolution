@@ -555,3 +555,14 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **Live play:** when the GM uses it, PF2e's own healing roll is posted ("Abyssal Healing: the quasit heals itself", with "Only if: …" for its requirements), with PF2e's button to apply the healing to the selected token; its recharge starts.
 - **The simulator** (B52): one without requirements is an action that heals the monster, which the planner weighs as any healing; one with requirements isn't played.
 - **Checked live in pftest** (a PFTEST SIM Quasit at 5 HP, deleted afterwards): Abyssal Healing posted a 1d6 healing roll, "Abyssal Healing: PFTEST SIM Quasit heals itself", whose card offers "Apply full healing to selected tokens".
+
+## More charges and Strike activities (2026-10-10, batch 25)
+
+- **Read now** (for the simulator, as batch 7's charges and batch 10's Strike activities):
+  - a move and a Strike in more actions than the moves take: Swoop's "The pteranodon Flies up to its Speed and makes one beak Strike at any point during that movement" (2 actions); before, a charge's actions had to equal its moves;
+  - "Grandfather Mantis Strides, then Strikes.", "… Strides twice, then Strikes with their horn", "Strides up to two times";
+  - the 20-foot bonus in more wordings: "As long as he moved at least 20 feet, he gains a +2 circumstance bonus to his attack roll", "… to the attack roll", "If it moved at least 20 feet from its starting position, the Strike's damage is increased to …"; and "During the Stride, it gains a +10-foot circumstance bonus to its Speed" (nothing for the simulation);
+  - "A Medium or smaller creature damaged (or hit) by this attack must succeed at …", as "struck by".
+  - 33 (26 charges, 7 Strike activities with a save), all PF2e.
+- **Live play:** the Strike activities' saves come as batch 10's cards after their Strike hits; charges stay the GM's (PF2e's own Strike).
+- Over seven bestiaries (5,673 fights, no errors): Powerful Charge 6, Swoop 5, Thundering Charge 4, Rush 2, Furious Charge 2.

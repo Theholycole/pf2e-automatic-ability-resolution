@@ -213,10 +213,13 @@ export function readSweep(text) {
 // reach", "against an adjacent creature at the end of its movement".
 const MOVES = String.raw`(?:Strides?|Flies|Fly|Swims?|Climbs?|Burrows?|Leaps?)`;
 export function moveThenStrike(text) {
-    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)))*)\.$`, "i").exec(text);
+    // ("Grandfather Mantis Strides, then Strikes.", "… Strides twice, then Strikes with their horn.", batch 25.)
+    const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES})( twice| up to two times)?, then Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?\.$`, "i").exec(text);
+    if (bare) return { strides: bare[2] ? 2 : 1, strike: bare[3] ? bare[3].toLowerCase() : null };
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)))*)\.$`, "i").exec(text);
     if (!match) return null;
     const how = match[2].trim();
-    const strides = /three times/i.test(how) ? 3 : /twice|double/i.test(how) ? 2 : 1;
+    const strides = /three times/i.test(how) ? 3 : /twice|double|two times/i.test(how) ? 2 : 1;
     const name = match[3] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[3].trim()) ? match[3].trim().replace(/^(?:melee|ranged)\s+/i, "").toLowerCase() : null;
     return { strides, strike: name };
 }
@@ -235,13 +238,15 @@ export function readCharge(text) {
     const other = match ? null : moveThenStrike(sentences[0] ?? "");
     if (!match && !other) return null;
     const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[2].trim()) ? match[2].toLowerCase() : null };
-    const moved = "^(?:If|As long as) (?:it|they|the [\\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, ";
+    const moved = "^(?:If|As long as) (?:it|they|he|she|the [\\w' -]+?|[A-Z][\\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, ";
     for (const sentence of sentences.slice(1)) {
-        if (/remains? hidden until after/i.test(sentence)) continue;
-        const bonus = new RegExp(`${moved}(?:it gains|they gain) a \\+(\\d+) circumstance bonus to (?:its|their|this) attack roll\\.$`, "i").exec(sentence);
+        // (Nothing for the simulation: "During the Stride, it gains a +10-foot circumstance bonus to its Speed.")
+        if (/remains? hidden until after/i.test(sentence) || /^During (?:the|this|that) (?:Stride|movement), (?:it|they|he|she) gains? a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(sentence)) continue;
+        const bonus = new RegExp(`${moved}(?:it gains|they gain|he gains|she gains) a \\+(\\d+) circumstance bonus to (?:its|their|his|her|this|the) attack roll\\.$`, "i").exec(sentence);
         const damage = new RegExp(`${moved}the Strike's damage (?:is increased to|increases to) (.+?)(?: damage)?\\.$`, "i").exec(sentence);
         if (bonus) charge.attackBonus = Number(bonus[1]);
-        else if (damage) charge.damage = damage[1].trim();
+        // (An inline roll as its formula: "@Damage[(3d10+10)[piercing]]" → "(3d10+10)[piercing]".)
+        else if (damage) charge.damage = damage[1].trim().replace(/^@Damage\[(.*)\]$/, "$1");
         else return null;
     }
     return charge;
@@ -390,6 +395,7 @@ export function compileBuiltin(item, slug) {
     const swipe = readSwipe(text);
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };
     const charge = readCharge(text);
-    if (charge && actions === charge.strides) return { builtin: "charge", actions, ...charge };
+    // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
+    if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
     return null;
 }

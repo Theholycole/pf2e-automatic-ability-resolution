@@ -976,3 +976,17 @@ test("the monster healing itself (2026-10-10, batch 24)", () => {
     assert.equal(compileMonsterAbility(action("Test Pulse", "<p>The turtle releases a pulse, restoring @Damage[5d8[healing]] Hit Points to the turtle and each living ally within 10 feet.</p>"))?.resolution?.kind === "healing", false);
     assert.equal(compileMonsterAbility(action("Test Feed", "<p>The test imp regains @Damage[10[healing]] Hit Points for each enemy within 30 feet that is frightened.</p>"))?.resolution?.kind === "healing", false);
 });
+
+test("more charge and Strike-activity wordings (2026-10-10, batch 25)", () => {
+    const action = (name, html, actions = 2) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    // One move and a Strike in 2 actions (Swoop); "Strides, then Strikes" in 1.
+    assert.deepEqual(compileMonsterAbility(action("Test Swoop", "<p>The test reptile Flies up to its Speed and makes one beak Strike at any point during that movement.</p>")), { builtin: "charge", actions: 2, strides: 1, strike: "beak" });
+    assert.deepEqual(compileMonsterAbility(action("Test Pounce", "<p>Tobin Strides, then Strikes.</p>", 1)), { builtin: "charge", actions: 1, strides: 1, strike: null });
+    // "Strides up to two times"; "he gains … his attack roll"; "from its starting position"; an inline roll.
+    assert.equal(compileMonsterAbility(action("Test Boar", "<p>The test boar Strides up to two times and then makes a tusk Strike. As long as it moved at least 20 feet, it gains a +2 circumstance bonus to its attack roll.</p>")).attackBonus, 2);
+    assert.equal(compileMonsterAbility(action("Test Ram", "<p>Tobin Strides twice and then makes a horns Strike. As long as he moved at least 20 feet, he gains a +2 circumstance bonus to his attack roll.</p>")).attackBonus, 2);
+    assert.equal(compileMonsterAbility(action("Test Effigy", "<p>The test effigy Strides twice and then makes a horn Strike. If it moved at least 20 feet from its starting position, the Strike's damage is increased to @Damage[(3d10+10)[piercing]] damage.</p>")).damage, "(3d10+10)[piercing]");
+    // "A Medium or smaller creature damaged by this attack must succeed at …".
+    const moose = compileMonsterAbility(action("Test Moose", "<p>The test moose Strides twice and then makes an antler Strike. A Medium or smaller creature damaged by this attack must succeed at a @Check[fortitude|dc:17] save or be @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}.</p>"));
+    assert.deepEqual([moose.builtin, moose.onHit.size, moose.onHit.save.resolution.check.statistic], ["strike-activity", "medium", "fortitude"]);
+});

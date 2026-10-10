@@ -649,8 +649,9 @@ function strikeActivity(item, actor) {
         // Death Roll: "If it hits, it also knocks the creature Prone. If it fails, it releases the creature."
         else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) (?:also )?knocks? the (?:creature|target) Prone\\.$`, "i").test(text)) activity.onHit.conditions.push({ slug: "prone", value: null, duration: null });
         else if (/^If (?:it|the Strike|this Strike) (?:fails|misses), (?:it|the [\w' -]+?) releases the (?:creature|target)\.$/i.test(text)) continue;
-        else if ((match = /^(?:If|As long as) (?:it|they|the [\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, (?:it gains|they gain) a \+(\d+) circumstance bonus to (?:its|their|this) attack roll\.$/i.exec(text))) activity.attackBonus += Number(match[1]);
-        else if (/^(?:If|As long as) (?:it|they|the [\w' -]+?) moved at least 20 feet(?: away from (?:its|their) starting position)?, the Strike's damage (?:is increased to|increases to) /i.test(text)) activity.damage = inlineTags(sentence, "Damage").map(readDamage)[0] ?? /(?:to) (\d+d\d+(?:\s*[+-]\s*\d+)?)/i.exec(text)?.[1] ?? null;
+        // (Batch 25: "he gains … to his attack roll", "to the attack roll", "from its starting position".)
+        else if ((match = /^(?:If|As long as) (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, (?:it gains|they gain|he gains|she gains) a \+(\d+) circumstance bonus to (?:its|their|his|her|this|the) attack roll\.$/i.exec(text))) activity.attackBonus += Number(match[1]);
+        else if (/^(?:If|As long as) (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, the Strike's damage (?:is increased to|increases to) /i.test(text)) activity.damage = inlineTags(sentence, "Damage").map(readDamage)[0] ?? /(?:to) (\d+d\d+(?:\s*[+-]\s*\d+)?)/i.exec(text)?.[1] ?? null;
         else if ((match = new RegExp(`${hit}(?:the [\\w ]+? )?(?:automatically )?push(?:es)? the target (\\d+) feet\\.$`, "i").exec(text)) || (match = new RegExp(`${hit}the target is pushed (\\d+) feet\\.$`, "i").exec(text))) activity.onHit.push = Number(match[1]);
         else if ((match = new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (.+?) damage\\.$`, "i").exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]));
         else if ((match = new RegExp(`${hit}(?:the target|that creature|the creature|the foe) is (.+?)\\.$`, "i").exec(text)) || (match = /^On a hit, (?:the target|the creature) is (.+?)\.$/i.exec(text))) {
@@ -664,7 +665,7 @@ function strikeActivity(item, actor) {
             if (critical) activity.onHit.critical = conditions(critical.replace(/ on a critical hit$/i, ""));
             if (!activity.onHit.conditions.length) return reject(text);
         } else if ((match = /^On a critical hit, the (?:target|creature) is (.+?)(?: instead)?\.$/i.exec(text))) activity.onHit.critical = conditions(match[1]);
-        else if (new RegExp(`${hit}the target must (?:also )?succeed at`, "i").test(text) || /^On a (?:hit|success), the (?:target|foe) must also succeed at/i.test(text) || (match = /^A (Tiny|Small|Medium|Large|Huge) or smaller creature struck by this attack must succeed at/i.exec(text))) {
+        else if (new RegExp(`${hit}the target must (?:also )?succeed at`, "i").test(text) || /^On a (?:hit|success), the (?:target|foe) must also succeed at/i.test(text) || (match = /^A (Tiny|Small|Medium|Large|Huge) or smaller creature (?:struck|hit|damaged) by this attack must succeed at/i.exec(text))) {
             const raw = inlineTags(sentence, "Check")[0];
             const check = raw ? readCheck(raw) : null;
             const outcomes = check?.save && check.dc ? saveOrOutcomes(sentence, [], { afterHit: true }) : null;
