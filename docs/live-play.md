@@ -713,3 +713,15 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **Checked live in pftest** (a PFTEST SIM Xulgath Leader and Succubus against party-side goblins; deleted afterwards):
   - the leader's critical hit with its claw brought a Weakening Strike card recording "Strike 88 vs AC 16: critical success", whose Apply made the goblin Enfeebled 2; a plain hit's card (23 vs 16: success) made it Enfeebled 1;
   - Passionate Kiss dealt 7 void damage, left the goblin Drained 1, and the succubus regained 7 Hit Points.
+
+## A skill action after a Strike activity's hit, and an automatic Shove (2026-10-10, batch 35)
+
+- **Read now** (11, 1 Battlezoo), batch 27's hit sentences:
+  - a skill action after the hit: "If the Strike hits, it attempts to Demoralize the target" (Terrifying Charge), "it deals damage as normal and the grave spinosaurus makes an Athletics check to Trip the target", "they attempt an Athletics check to Trip the creature they hit", "the vigilante can then Shove the target"; the sentences about its multiple attack penalty are words;
+  - "the guard can automatically Shove the target, with the same benefits as the Shove action (including the critical success effect if the Strike was a critical hit)": pushed 5 feet, 10 on a critical hit; following the target and an object it's pushed into are the GM's;
+  - "until the start of the guard's next turn" read as its own turn; a miss's retreat and Hide ("If the Strike misses, the vigilante can Step up to three times") are the GM's.
+- **Live play:** after the Strike hits, the skill action's card (PF2e's basic action: the monster's Intimidation against the target's Will DC, or Athletics against Reflex) on the creature hit.
+- **The simulator** (B67): the monster's own basic action after the hit (when its skills give it one).
+- **Checked live in pftest** (a PFTEST SIM Skeletal Giant and Promise Guard against party-side goblins; deleted afterwards):
+  - Terrifying Charge's critical hit brought a Demoralize card: Intimidation 20 against Will DC 13, a success, the goblin Frightened 1 (its 10-minute immunity named after Terrifying Charge, the card's ability);
+  - Shield Shove's critical hit: Apply made the goblin Off-Guard and pushed it 10 feet (the scene's edge stopped it after a square).

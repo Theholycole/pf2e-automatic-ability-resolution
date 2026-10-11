@@ -114,3 +114,14 @@ test("a hit's results part by part, and the opening's extras (2026-10-10, batch 
     assert.notEqual(compileMonsterAbility(action("Test Gnash", "<p>The test beast makes a jaws Strike. On a hit, the target is @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} for 1 round if the Strike dealt bludgeoning damage.</p>"))?.builtin, "strike-activity");
     assert.notEqual(compileMonsterAbility(action("Test Qi", "<p>The test monk makes a fist Strike. On a hit, the creature takes @Damage[3d6[persistent,void]] damage and is @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 2} until the persistent damage ends.</p>"))?.builtin, "strike-activity");
 });
+
+test("a skill action after the Strike's hit, and an automatic Shove (2026-10-10, batch 35)", () => {
+    const charge = compileMonsterAbility(action("Test Charge", "<p>The test skeleton Strides and makes a claw Strike with a +4 circumstance bonus to damage. If the Strike hits, it attempts to [[/act demoralize]] the target.</p>", 2));
+    assert.deepEqual([charge.strides, charge.damageBonus, charge.onHit.follow], [1, 4, "demoralize"]);
+    assert.deepEqual(activityRider(charge), { follow: "demoralize" });
+    const pin = compileMonsterAbility(action("Test Pin", "<p>The test dinosaur Strides and makes a Strike at the end of its movement. If the Strike hits, it deals damage as normal and the test dinosaur makes an Athletics check to Trip the target. This check counts toward the test dinosaur's multiple attack penalty, but the multiple attack penalty doesn't increase until after both attacks.</p>", 2));
+    assert.equal(pin.onHit.follow, "trip");
+    // "can automatically Shove the target, with the same benefits as the Shove action …": pushed 5 feet, 10 on a critical hit.
+    const shove = compileMonsterAbility(action("Test Shove", "<p>The test guard makes a longsword Strike. If the Strike hits, the target is @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard} until the start of the test guard's next turn, and the test guard can automatically Shove the target, with the same benefits as the Shove action (including the critical success effect if the Strike was a critical hit). If the test guard moves to follow the target, this movement doesn't trigger reactions.</p>", 2));
+    assert.deepEqual([shove.onHit.push, shove.onHit.criticalPush, shove.onHit.conditions[0].duration?.expiry], [5, 10, "turn-start"]);
+});

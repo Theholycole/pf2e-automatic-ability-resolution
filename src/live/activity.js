@@ -12,7 +12,8 @@ const NONE = { mode: "none", multiplier: 0, sourceComponentIds: [] };
 export function activityRider(activity, { strikeType = null } = {}) {
     const onHit = activity?.builtin === "strike-activity" ? activity.onHit ?? {} : null;
     if (!onHit) return null;
-    const save = onHit.save?.resolution ? { save: onHit.save, size: onHit.size ?? null } : null;
+    // (A skill action after the hit, batch 35: its basic action's card, "demoralize", "trip", "shove".)
+    const save = onHit.save?.resolution || onHit.follow ? { ...(onHit.save?.resolution ? { save: onHit.save, size: onHit.size ?? null } : {}), ...(onHit.follow ? { follow: onHit.follow } : {}) } : null;
     const conditions = (list) => (list ?? []).map((entry) => ({ kind: "condition", slug: entry.slug, value: entry.value ?? null, duration: entry.duration ?? null }));
     const hit = conditions(onHit.conditions);
     const critical = onHit.critical ? conditions(onHit.critical) : hit;

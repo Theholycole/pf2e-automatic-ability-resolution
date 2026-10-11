@@ -742,13 +742,21 @@ function openingParts(text) {
 function hitResults(text, activity, item, conditions) {
     const lead = HIT_LEAD.exec(text);
     if (!lead) return false;
-    const rest = text.slice(lead[0].length).replace(/\.$/, "");
+    // (Batch 35: "[[/act demoralize]]" as "Demoralize"; "can automatically Shove the target, with the same benefits as the Shove
+    // action (including the critical success effect …)": pushed 5 feet, 10 on a critical hit.)
+    let autoShove = false;
+    let rest = text.slice(lead[0].length).replace(/\.$/, "")
+        .replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/(^|-)(\w)/g, (_m, dash, letter) => `${dash ? " " : ""}${letter.toUpperCase()}`))
+        .replace(/,? (?:and )?(?:the [\w' -]+?|it|he|she|they) can automatically Shove the target,? with the same benefits as the Shove action \(including the critical success effect,? if (?:the|its) Strike was a critical (?:hit|success)\)/i, () => {
+            autoShove = true;
+            return "";
+        });
     // The save, with all after it (its own results).
     const saveAt = rest.search(new RegExp(`(?:^|,? and )${HIT_STRUCK} must (?:also )?succeed(?: at| on)? an? @Check\\[`, "i"));
     const head = saveAt < 0 ? rest : rest.slice(0, saveAt);
     if (/\b(?:critical|if|unless|instead|no damage|either|or)\b/i.test(head)) return false;
-    const found = { conditions: [], damage: [], push: null, dice: 0, save: null };
-    const parts = head ? head.split(/,? and (?=(?:the (?:target|creature)|that creature|is|becomes|takes|knocks|deals|it|he|she|they)\b)/i) : [];
+    const found = { conditions: [], damage: [], push: autoShove ? 5 : null, dice: 0, save: null, follow: null };
+    const parts = head ? head.split(/,? and (?=(?:the (?:target|creature)|that creature|is|becomes|takes|knocks|deals|it|he|she|they|the [\w' -]+? (?:makes|attempts|can))\b)/i) : [];
     for (const raw of parts) {
         const part = raw.trim().replace(new RegExp(`^${HIT_STRUCK} `, "i"), "").replace(/^also /i, "");
         let match;
@@ -759,9 +767,15 @@ function hitResults(text, activity, item, conditions) {
             if (extra) found.damage.push(extra);
         } else if ((match = new RegExp(`^(?:${HIT_ACTOR} )?(?:also )?(?:deals?|does|takes?) (?:an? )?(?:additional |extra )?(.+?)(?: damage)?(?: of the same (?:damage )?type)?$`, "i").exec(part)) && hitDamage(match[1])) found.damage.push(hitDamage(match[1]));
         else if ((match = /^(?:is )?pushed (?:back )?(\d+) feet(?: away)?$/i.exec(part))) found.push = Number(match[1]);
+        // A skill action after the hit (batch 35): "it attempts to Demoralize the target", "the grave spinosaurus makes an Athletics
+        // check to Trip the target", "the vigilante can then Shove the target", "can attempt to Trip the target, without
+        // increasing its multiple attack penalty" (made up).
+        else if ((match = new RegExp(`^(?:${HIT_ACTOR} )?(?:also )?(?:can (?:then |also )?)?(?:attempts? to |attempt an? \\w+ check to |makes? an? \\w+ check to |can attempt to )?(Demoralize|Trip|Shove|Grapple|Disarm|Reposition) (?:the (?:target|creature)(?: (?:it|they|he|she) hit)?|it)(?:,? without increasing [^.]+)?$`, "i").exec(part)) && !found.follow) found.follow = match[1].toLowerCase();
+        else if (new RegExp(`^(?:${HIT_ACTOR} )?deals damage as (?:normal|usual)$`, "i").test(part)) continue;
         else if (/^(?:is )?knocked Prone$/i.test(part) || new RegExp(`^(?:${HIT_ACTOR} )?(?:also )?knocks? (?:the (?:creature|target)|it|them) Prone$`, "i").test(part)) found.conditions.push({ slug: "prone", value: null, duration: null });
         else if ((match = /^(?:is|becomes) (.+)$/i.exec(part)) && !/@Check\[|\bpush|\bGrab/i.test(match[1])) {
-            const read = conditions(match[1]);
+            // ("until the start of the guard's next turn": its own turn.)
+            const read = conditions(match[1].replace(/\bof the [\w' -]+?['’]s (next )?turn\b/gi, "of its $1turn"));
             // A duration not read ("until the persistent damage ends"): not this reading.
             if (!read.length || (/\b(?:until|for)\b/i.test(match[1]) && read.some((entry) => !entry.duration))) return false;
             found.conditions.push(...read);
@@ -776,6 +790,8 @@ function hitResults(text, activity, item, conditions) {
     activity.onHit.conditions.push(...found.conditions);
     activity.onHit.damage.push(...found.damage);
     if (found.push) activity.onHit.push = found.push;
+    if (autoShove) activity.onHit.criticalPush = 10;
+    if (found.follow) activity.onHit.follow = found.follow;
     if (found.dice) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + found.dice;
     if (found.save) activity.onHit.save = found.save;
     return true;
@@ -857,6 +873,12 @@ function strikeActivity(item, actor) {
         // "If this Strike hits, he deals an extra die of weapon damage."
         else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (?:weapon )?die of (?:weapon )?(?:\\w+ )?damage\\.$`, "i").test(text)) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
         else if (/remains? hidden until after|^During the Stride/i.test(text)) continue;
+        // (A follow-up's penalty, batch 35: "This check counts toward the grave spinosaurus's multiple attack penalty, but …", "Both
+        // attacks count toward their multiple attack penalty …", "This Shove uses the same multiple attack penalty as the Strike …".)
+        else if (activity.onHit.follow && /^(?:This (?:check|Shove|Trip|Grapple|Disarm|Demoralize) (?:counts toward|uses the same|doesn't count toward)|Both attacks count toward) [^.]*multiple attack penalty\b/i.test(text)) continue;
+        // (A shove's following move, an object it's pushed into, a miss's retreat and Hide: the GM's, batch 35.)
+        else if ((activity.onHit.follow === "shove" || activity.onHit.criticalPush) && /^(?:If (?:the [\w' -]+?|it|he|she|they) moves? to follow the target\b|In addition, if the target has to stop moving because it would hit an object\b)/i.test(text)) continue;
+        else if (/^If the Strike misses, (?:the [\w' -]+?|it|he|she|they) can Step\b[^.]*\.$|^(?:The [\w' -]+?|It|He|She|They) can (?:\[\[\/act hide\]\]|Hide) if\b[^.]*\.$/i.test(text)) continue;
         // "After this Strike, the harmona can Fly up to half their fly Speed." (a move after: the GM's, nothing for the simulation.)
         else if (/^After (?:this|the) Strike, (?:it|he|she|they|the [\w' -]+?) can (?:Fly|Stride|Step|Swim|Burrow|Climb)\b[^.@]*\.$/i.test(text)) continue;
         // "On a critical hit, the target is pushed back 10 feet."
@@ -896,7 +918,7 @@ function strikeActivity(item, actor) {
         } else return reject(text);
     }
     const rider = activity.onHit;
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap)) return null;
+    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length) return null;
     return activity;
 }
