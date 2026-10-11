@@ -218,6 +218,8 @@ async function onMessage(message) {
     }
     // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
     if (context?.type === "saving-throw" && ["failure", "criticalFailure"].includes(context.outcome)) await saveAnswers(message, context, scene, combat, token);
+    // (Batch 65: a failed Escape from a monster that answers it.)
+    if (context?.type === "skill-check" && (context.options ?? []).includes("action:escape")) await escapeAnswers(context, scene, combat, token);
     // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
     if (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("attack")) await strikeAnswers(context, scene, combat, token, { skill: true });
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
@@ -259,6 +261,27 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             if (!strikes.length) continue;
             await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : null });
             break;
+        }
+    }
+}
+
+// A creature a monster holds failing to Escape (batch 65: Savage, Gnashing Bite): the monster's Strike or card at it. The monster: the
+// Escape's target, or else a foe in its reach.
+async function escapeAnswers(context, scene, combat, escaper) {
+    if (!["failure", "criticalFailure"].includes(context.outcome)) return;
+    const critical = context.outcome === "criticalFailure";
+    const holder = context.target?.token ? fromUuidSync(context.target.token) : null;
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, escaper) || (holder && holder.id !== monster.id)) continue;
+        if (!holder && distanceFeet(box(monster, grid.size), box(escaper, grid.size), grid) > provokeRadius(actor)) continue;
+        const why = `${critical ? "critically failed" : "failed"} to Escape`;
+        for (const { item, plan } of reactions) {
+            if (plan.builtin === "reaction-strike" && (plan.triggers?.includes("escape-failed") || (critical && plan.triggers?.includes("escape-critical-failure")))) {
+                const strikes = meleeStrikes(actor, `(${plan.strike} only)`);
+                if (strikes.length) return offer({ kind: "strike", item, monster, actor, target: escaper, strikes, trigger: why });
+            }
+            if (plan.trigger?.reaction && plan.trigger.event === "escape-failed" && (!plan.trigger.critical || critical)) return offer({ kind: "card", item, monster, actor, target: escaper, trigger: why, free: !!plan.trigger.free });
         }
     }
 }
@@ -420,14 +443,19 @@ async function saveAnswers(message, context, scene, combat, saver) {
     for (const { token, actor, reactions } of reactors(scene, combat)) {
         const self = token.id === saver.id;
         for (const { item, plan } of reactions) {
+            // (Batch 65: "must use the new result", keep "new"; a free action's.)
             if (self && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
                 const left = Number(item.system?.frequency?.value);
                 if (Number.isFinite(left) && left <= 0) continue;
-                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id } });
+                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free });
             }
             if (plan.builtin !== "save-boost" || (self ? plan.ally : !plan.ally)) continue;
             if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
-            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: `The save becomes ${better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}` });
+            // (Batch 65: only a critical failure, Reality Twist's; once a day, Stubborn Resolve's.)
+            if (plan.criticalOnly && context.outcome !== "criticalFailure") continue;
+            const left = Number(item.system?.frequency?.value);
+            if (self && plan.uses && Number.isFinite(left) && left <= 0) continue;
+            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: `The save becomes ${better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}`, free: !!plan.free });
         }
     }
 }
@@ -650,14 +678,19 @@ async function use(message, action, slug) {
         // Cat's Luck (batch 53): the save rerolled through PF2e, the better kept; a use of its frequency spent.
         const save = game.messages.get(state.attack.messageId);
         if (!save) throw new Error("The saving throw is gone.");
-        await game.pf2e.Check.rerollFromMessage(save, { keep: "higher" });
+        await game.pf2e.Check.rerollFromMessage(save, { keep: state.attack.keep ?? "higher" });
         const item = await fromUuid(state.ability.uuid);
         const left = Number(item?.system?.frequency?.value);
         if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
-        result = `${state.ability.name}: the save is rerolled, keeping the better.`;
+        result = `${state.ability.name}: the save is rerolled, ${state.attack.keep === "new" ? "the new result taken" : "keeping the better"}.`;
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "boost") {
-        // Golden Luck, Word of Wisdom (batch 53): one degree better, for the GM to apply.
+        // Golden Luck, Word of Wisdom (batch 53): one degree better, for the GM to apply; a use of its frequency spent (batch 65).
+        const item = await fromUuid(state.ability.uuid);
+        const left = Number(item?.system?.frequency?.value);
+        if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
         result = `${state.ability.name}: ${state.note ?? "one degree better."}`;
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "negate") {
         // Shake It Off (batch 49): the condition it was about to be affected by, removed; a use of its frequency spent.
         await actor.items.get(state.negate.itemId)?.delete();

@@ -1180,7 +1180,8 @@ function automaticEffect(item, actor = null, { rider = false } = {}) {
         // "The target takes …", "Each enemy within 30 feet takes …"; "<it> deals … damage to the target"; "The creature is Drained 1".
         const takes = AUTO_SUBJECT.test(plain) && /\btakes? @D(?: damage)?\b/i.test(plain);
         // (Also "… sucks blood from that target, dealing 2d4 damage".)
-        const deals = /\bdeal(?:s|ing)? @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain));
+        // (Batch 65: "The lizard's jaws deal 1d6 piercing damage and 1d6 acid damage to the triggering creature".)
+        const deals = /\bdeal(?:s|ing)? @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim|triggering creature)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain));
         const conditions = readConditions(sentence).filter((entry) => entry.recipient !== "self");
         const is = (AUTO_SUBJECT.test(plain) || deals) && conditions.length > 0;
         if (!takes && !deals && !is) {
@@ -2197,6 +2198,10 @@ export function readReactionTrigger(text) {
     if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
     // Downing a creature itself (batch 52, You're Next): "The prisoner reduces a creature to 0 hit points".
     if (new RegExp(String.raw`^${SELF} reduces (?:a creature|an enemy|a foe) to 0 (?:HP|[Hh]it [Pp]oints)$`).test(trigger)) return { event: "downs", reaction: true };
+    // A creature it holds failing to Escape (batch 65): "A creature Grabbed by the corrosive lizard's jaws fails a check to Escape", "A
+    // creature Grabbed or Restrained by the wyvern critically fails a skill check to Escape".
+    const escaping = new RegExp(String.raw`^An? creature (?:Grabbed|grabbed)(?: or Restrained)? by ${SELF}(?:['’]s [\w' -]+?)? (critically fails|fails) an? (?:skill )?check to Escape$`).exec(trigger);
+    if (escaping) return { event: "escape-failed", reaction: true, ...(/^critically/i.test(escaping[1]) ? { critical: true } : {}) };
     // A foe's mishap near it (batch 57, Jeer at Failure): "A foe within 90 feet becomes Prone or critically fails on a Strike".
     const mishap = /^An? (?:foe|enemy) within (\d+) feet becomes Prone or critically fails on a Strike$/i.exec(trigger);
     if (mishap) return { event: "foe-mishap", reaction: true, within: Number(mishap[1]) };

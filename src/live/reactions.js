@@ -94,7 +94,7 @@ export function offerHTML(state) {
         if (state.kind === "misfortune") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the worse</button>`);
         if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at 1 HP</button>`);
         if (state.kind === "card") buttons.push(`<button type="button" data-aar-reaction="use">Use it</button>`);
-        if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the better</button>`);
+        if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
         if (state.kind === "boost") buttons.push(`<button type="button" data-aar-reaction="use">Use it: one degree better</button>`);
         if (state.kind === "negate") buttons.push(`<button type="button" data-aar-reaction="use">Use it: negate ${escape(state.negate?.name ?? "it")}</button>`);
         // (The attacker's choice, batch 58: a normal hit, or the critical hit and a condition.)

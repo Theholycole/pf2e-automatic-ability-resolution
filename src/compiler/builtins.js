@@ -453,6 +453,12 @@ export function readReaction(item, text) {
     // triggering creature and one against another adjacent creature." → a reaction Strike at it as it's damaged (and a second at another).
     const thrash = /^An? adjacent enemy damages (?:the [\w' -]+?|it|him|her|them)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes one or two ([\w' -]+?) Strikes(?:\s*[-\u2013\u2014]\s*one against the triggering creature and one against another adjacent creature|, each against a different adjacent creature)\.$/i.exec(effect.trim()) : null;
     if (thrash) return { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: thrash[1].toLowerCase(), penalty: 0, disrupts: false, second: true };
+    // Batch 65: a Strike at a creature it holds that fails to Escape, Savage's "Trigger A creature Grabbed by the wyvern critically fails a
+    // skill check to Escape Effect The wyvern makes a stinger Strike against the triggering creature." → triggers ["escape-failed"] or
+    // ["escape-critical-failure"].
+    const held = /^An? creature (?:Grabbed|grabbed)(?: or Restrained)? by (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)(?:['’]s [\w' -]+?)? (critically fails|fails) an? (?:skill )?check to Escape\.?$/.exec(trigger.trim());
+    const heldStrike = held ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the (?:triggering )?creature\.$/i.exec(effect.trim()) : null;
+    if (heldStrike) return { builtin: "reaction-strike", triggers: [/^critically/i.test(held[1]) ? "escape-critical-failure" : "escape-failed"], strike: heldStrike[1].toLowerCase(), penalty: 0, disrupts: false };
     // Batch 61: a Strike as it takes damage of some types — the trolls' Furious Flailing, "Trigger The forest troll takes electricity or
     // fire damage Effect The troll makes a claw Strike against a random creature within its reach. If the troll has persistent fire
     // damage, they attempt a DC 15 flat check to remove it." (Furious Carve's "hatchet or claw", Furious Spit's "within their first range
@@ -509,6 +515,25 @@ export function readReaction(item, text) {
     if (helped) return { builtin: "save-boost", ally: true, within: Number(ally[1]), ...(helped[1] ?? helped[2] ? { recharge: helped[1] ?? helped[2] } : {}) };
     const own = !ally && /^(?:The )?[^.]+? fails a saving throw\.?$/i.test(trigger.trim()) ? new RegExp(String.raw`^(?:The )?[^.]+? ${improves}${again}$`, "i").exec(effect.trim()) : null;
     if (own) return { builtin: "save-boost", ...(own[1] ?? own[2] ? { recharge: own[1] ?? own[2] } : {}) };
+    // Batch 65, more wordings of its own failed save: "fails a save" (any save), "… a skill check or a saving throw" (the save's part),
+    // "… a check" (a save among them), "critically fails a saving throw"; its effect a reroll keeping the better ("rerolls the save and
+    // uses the better result") or the new one ("rerolls the triggering check, but she must use the new result, even if it's worse"), one
+    // degree better ("The result of the saving throw is improved one degree. … can't Fortune's Friend for 1d4 rounds.", "treats a
+    // critical failure as a failure, or a failure as a success"), or only a critical failure made a failure ("The critical failure becomes
+    // a normal failure"). A frequency of once a day, a minute or an hour: one use a fight. A first sentence that only tells it is left out.
+    const ownSave = /^(?:The )?[^.]+? (critically fails|fails or critically fails|fails) (?:a save|a saving throw|a skill check or a saving throw|a check)\.?$/i.exec(trigger.trim().replace(/\s*Frequency once per (?:day|minute|hour)\.?$/i, ""));
+    if (ownSave && !/^An? (?:ally|creature|foe|enemy)\b/i.test(trigger.trim())) {
+        const rolled = effect.trim().replace(/\[\[\/\w+ ([^\]#]+?)(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll);
+        const said = rolled.split(/(?<=\.)\s+(?=[A-Z])/);
+        const plain = said.length > 1 && !/\d|\b(?:save|saving throw|check|reroll\w*|result|failure|success)\b/i.test(said[0]) ? said.slice(1).join(" ") : rolled;
+        const once = /\bFrequency once per (?:day|minute|hour)\b/i.test(text) ? { uses: 1 } : {};
+        const free = item?.system?.actionType?.value === "free" ? { free: true } : {};
+        const wait = /\bcan(?:'t|not) (?:use )?[\w' -]+? (?:again )?for (\d+d\d+) rounds\.$/i.exec(plain)?.[1];
+        if (/^(?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check)(?: and (?:takes|uses) the better result)\.$/i.test(plain) && ownSave[1].toLowerCase() !== "critically fails") return { builtin: "save-reroll", save: null, ...once, ...free };
+        if (/^(?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check)(?:,? but (?:it|they|he|she) must use the new result, even if it's worse|,? and must (?:use|take) the new result)\.$/i.test(plain)) return { builtin: "save-reroll", save: null, keep: "new", ...once, ...free };
+        if (/^The result of the saving throw is improved (?:by )?one degree\.(?: (?:The )?[^.]+? can(?:'t|not) [\w' -]+? for \d+d\d+ rounds\.)?$|^(?:The )?[^.]+? treats a critical failure as a failure,? or a failure as a success\.$/i.test(plain)) return { builtin: "save-boost", ...(wait ? { recharge: wait } : {}), ...once, ...free };
+        if (ownSave[1].toLowerCase() === "critically fails" && /^The critical failure becomes a (?:normal )?failure\.$/i.test(plain)) return { builtin: "save-boost", criticalOnly: true, ...free };
+    }
     const luck = /^(?:The )?[^.]+? fails or critically fails an? (Fortitude|Reflex|Will) saving throw\.?(?: Frequency once per day\.?)?$/i.exec(trigger.trim());
     if (luck && /^(?:(?:The )?[^.]+? rerolls (?:the|that) (?:saving throw|save) and takes the better result|Reroll that saving throw and take the better result)\.$/i.test(effect.trim())) return { builtin: "save-reroll", save: luck[1].toLowerCase() };
     // A trap that summons a creature (batch 50; the user's choice: the GM's): "Effect The trap summons a Cockatrice. The cockatrice rolls
