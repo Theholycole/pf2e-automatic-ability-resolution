@@ -894,6 +894,8 @@ export function compileBuiltin(item, slug) {
     const sweepSkill = readSkillSweep(text);
     if (sweepSkill) return { builtin: "skill-sweep", actions, ...sweepSkill };
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
+    const teleport = readTeleport(text);
+    if (teleport) return { builtin: "safe-move", actions, ...(teleport.recharge ? { recharge: teleport.recharge } : {}) };
     // (Batch 48, Disperse as a move: "Strides or Flies. This movement doesn't trigger reactions. During the movement, … It then coalesces
     // back into its normal form.")
     if (/^(?:The )?[^.]+? Strides or Flies\. This movement (?:doesn't|does not) trigger reactions\. During the movement, [^.]+\. (?:It|They) then coalesces? back into (?:its|their) normal form\.$/i.test(text.trim())) return { builtin: "safe-move", actions };
@@ -1060,8 +1062,28 @@ function readSafeMove(text) {
     if (sentences.length === 3 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strike)\b|\d/.test(sentences[0])) sentences.shift();
     const said = sentences.join(" ");
     if (/\b(?:Strikes?|checks?|saves?|damage|but|if|unless|Grab|Prone|Interacts?)\b|@/i.test(said) || /\b(?:Requirements?|Trigger)\b/.test(said)) return false;
-    const move = String.raw`(?:jumps|moves|Strides|Flies|Flying|Swims|Leaps|Climbs|Burrows)`;
+    // (Batch 59: Scuttle's "crawls on all fours, moving up to half its Speed".)
+    const move = String.raw`(?:jumps|moves|moving|Strides|Flies|Flying|Swims|Leaps|Climbs|Burrows)`;
     return new RegExp(String.raw`^(?:The |An? )?[^.;]+? ${move} (?:up to|once|twice)?[^.;]*?(?:\. This movement (?:doesn't|does not) trigger reactions\.|; this movement (?:doesn't|does not) trigger reactions\.| without triggering reactions\.| and (?:doesn't|does not) trigger reactions during this movement\.)$`, "i").test(said);
+}
+
+// A teleport of its own to a space nearby (2026-10-11, batch 59): Jaunt's "The poracha teleports up to 40 feet to a location it can see.
+// It can't use Jaunt again for 1d4 rounds.", Personal Portal's "Frequency once per round Effect The kerulkagon teleports to an unoccupied
+// space it can see within 30 feet.", Shadow Flitter's "… to a square they can see within 30 feet that isn't in an area of bright light",
+// Monitor Escape's first sentence that only tells it. A move that triggers no reactions: { recharge } (its formula or null), or null.
+function readTeleport(text) {
+    // (Not one with a requirement: Shadow Jump's "Requirement The bright walker's Light Aura is suppressed".)
+    if (/\b(?:Requirements?|Trigger)\b/.test(String(text))) return null;
+    const rolls = String(text).replace(/\[\[\/(?:r|br|gmr) \{?([^\]}#]+?)\}?(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll);
+    const sentences = rolls.replace(/’/g, "'").trim().replace(/^Frequency once per (?:round|turn) Effect /i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    const where = String.raw`(?:up to \d+ feet )?(?:in)?to an? (?:unoccupied |empty |clear )?(?:space|square|location)(?: (?:it|they|he|she) can see)?(?: within \d+ feet)?(?: that (?:it|they|he|she) can see)?(?: that (?:isn't|is not) in an area of bright light)?`;
+    const teleports = new RegExp(String.raw`^(?:The |An? )?[^.]+? (?:instantly )?teleports (?:itself |themselves |themself )?${where}\.$`, "i");
+    const wait = /^(?:It|They|He|She|The [\w' -]+?) can(?:'t|not) use (?:[\w' -]+? )?again for (\d+d\d+) rounds\.$/i;
+    let at = sentences.findIndex((sentence) => teleports.test(sentence));
+    if (at < 0 || at > 1 || (at === 1 && /\d|@|\b(?:damage|Strike|save|check|bonus|penalty|Requirements?|Trigger|Frequency)\b/i.test(sentences[0]))) return null;
+    const rest = sentences.slice(at + 1);
+    if (rest.length > 1 || (rest.length && !wait.test(rest[0]))) return null;
+    return { recharge: rest.length ? wait.exec(rest[0])[1] : null };
 }
 
 // Plane and form shifts (2026-10-11, batch 48; the user's choice: the GM's): Skip Between and Walk the Ethereal Line (the Ethereal

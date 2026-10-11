@@ -865,6 +865,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (match[3]) activity[/damage/i.test(match[4]) ? "damageBonus" : "attackBonus"] = Number(match[3]);
             if (/Grabbed|grabbing|Restrained/i.test(head)) activity.requires = "grabbed";
             else if (/\bProne (?:creature|foe|enemy)\b/i.test(head)) activity.requires = "prone";
+        } else if (!opened && (match = /^(?:The )?[^.]+? (?:draws a weapon|Interacts to (?:draw|reload) (?:its|his|her|their|the) ([\w' -]+?)|uses an Interact action to pick up an improvised weapon within reach),? (?:and )?(?:then )?Strikes with it\.?$/i.exec(head))) {
+            // A weapon drawn (or reloaded, or picked up) as part of it, then a Strike with it (batch 59): Hidden Blade's "The spy draws a
+            // weapon and then Strikes with it", Reloading Trick's "Interacts to reload the repeating hand crossbow and Strikes with it",
+            // Improvised Surprise's "uses an Interact action to pick up an improvised weapon within reach and then Strikes with it".
+            opening();
+            activity.strike = match[1] && !/^(?:weapon|improvised weapon)$/i.test(match[1]) ? match[1].toLowerCase() : null;
         } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides(?: twice| or Steps)?),? (?:and |then )+)?Strikes(?: with (?:its|his|her|their|that) ([\w' -]+?))?\.$/i.exec(head)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three)\b/i.test(head)) {
             // "Viro Strikes with his longsword.", "The skirmisher Strides or Steps, then Strikes."
             opening();
@@ -883,7 +889,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
             continue;
         } else if (!opened) return reject(text);
         // (Batch 26: "The target is Off-Guard against this Strike", "… to this attack".)
-        else if (/^The (?:target|creature) is Off-Guard (?:to|against) (?:the|this) (?:Strike|attack)\.$/i.test(text)) activity.offGuard = true;
+        // (Batch 59: "The target of the Strike is Off-Guard against the attack".)
+        else if (/^The (?:target(?: of the Strike)?|creature) is Off-Guard (?:to|against) (?:the|this) (?:Strike|attack)\.$/i.test(text)) activity.offGuard = true;
+        // (Batch 59, Improvised Surprise: "The drunken brawler has a +2 circumstance bonus to this attack.")
+        else if ((match = /^(?:The )?[^.,]+? (?:has|gains) a \+(\d+) circumstance bonus to (?:this|the) (?:attack|Strike)(?: roll)?\.$/i.exec(text)) && !/^(?:If|When|While|Unless)\b/i.test(text)) activity.attackBonus += Number(match[1]);
         // (Impaling Charge, batch 45: "On a hit, the target becomes impaled on the dragon's horn. The creature is Grabbed while on the horn
         // (and can attempt to Escape as normal). The dragon doesn't need to use additional actions to keep the impaled creature grabbed.
         // If the dragon moves, they bring the grabbed creature along with them.": Grabbed, until it Escapes.)
@@ -953,7 +962,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     const rider = activity.onHit;
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage)) return null;
+    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length) return null;
     return activity;
 }

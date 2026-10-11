@@ -1578,3 +1578,22 @@ test("Breath of Loss's unmarked basic save, Distracting Whisper, Unbidden Though
     assert.deepEqual(compileMonsterAbility(reaction("Distracting Whisper", "The test dragon is targeted with an attack", "A voice whispers in the triggering creature's ear, inflicting a –2 circumstance penalty to the triggering attack. @UUID[Compendium.pf2e.bestiary-effects.Item.qsvSWxRqVQofjDdH]{Effect: Distracting Whisper}")), { builtin: "ac-reaction", value: 2, when: "targeted" });
     assert.deepEqual(compileMonsterAbility(reaction("Unbidden Thoughts", "The test dragon is critically hit with a weapon or unarmed attack", "The attacker sees their worst fears, and they must choose one of the following results: either the triggering attack becomes a normal success, or the critical hit is unaffected but the triggering creature becomes @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 2}.")), { builtin: "crit-downgrade", dc: null, or: { slug: "frightened", value: 2 } });
 });
+
+test("Teleports of its own and Scuttle as moves that trigger no reactions (2026-10-11, batch 59)", () => {
+    const item = (name, html, actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: ["teleportation"] }, description: { value: html } } });
+    for (const [html, actions, recharge] of [
+        ["<p>The test poracha teleports up to 40 feet to a location it can see. It can't use Jaunt again for [[/gmr 1d4 #Recharge Jaunt]]{1d4 rounds}.</p>", 1, "1d4"],
+        ["<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test kerulkagon teleports to an unoccupied space it can see within 30 feet.</p>", 1, null],
+        ["<p>The test wisp teleports to a square they can see within 30 feet that isn't in an area of bright light. The test wisp can't use again for [[/gmr 1d4 #Recharge Shadow Flitter]]{1d4 rounds}.</p>", 1, "1d4"],
+        ["<p>The test soulrider's form blurs as it slips through the multiverse. It teleports to an empty space within 60 feet.</p>", 2, null],
+        ["<p>The test ghoul crawls on all fours, moving up to half its Speed. This movement doesn't trigger reactions.</p>", 1, null]
+    ]) assert.deepEqual(compileMonsterAbility(item("Test Move", html, actions)), { builtin: "safe-move", actions, ...(recharge ? { recharge } : {}) }, html);
+    // Not one with a requirement, nor one that does more.
+    assert.equal(compileMonsterAbility(item("Test Jump", "<p><strong>Requirement</strong> The test walker's Light Aura is suppressed</p><p><strong>Effect</strong> The test walker teleports to a square it can see within 60 feet.</p>"))?.builtin ?? null, null);
+    assert.notDeepEqual(compileMonsterAbility(item("Test Strike", "<p>The test stalker teleports into an occupied space it can see within 50 feet and makes a melee Strike.</p>", 2))?.builtin, "safe-move");    // A weapon drawn (or picked up) as part of it, then a Strike with it: off-guard, or a bonus; not a bonus that depends on something.
+    const blade = compileMonsterAbility({ ...item("Hidden Blade", "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test spy draws a weapon and then Strikes with it. The target of the strike is @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard} against the attack.</p>"), name: "Hidden Blade" });
+    assert.deepEqual([blade?.builtin, blade?.strike, blade?.offGuard, blade?.oncePerTurn], ["strike-activity", null, true, true]);
+    const surprise = compileMonsterAbility(item("Improvised Surprise", "<p>The test brawler uses an Interact action to pick up an improvised weapon within reach and then Strikes with it. The test brawler has a +2 circumstance bonus to this attack.</p>"));
+    assert.deepEqual([surprise?.builtin, surprise?.attackBonus], ["strike-activity", 2]);
+    assert.equal(compileMonsterAbility(item("Test Lunge", "<p>The test centipede draws a weapon and then Strikes with it. If the test centipede moved at least 20 feet this turn, it gains a +2 circumstance bonus to this attack roll.</p>")), null);
+});
