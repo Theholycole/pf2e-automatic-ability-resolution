@@ -645,3 +645,25 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - a hit by 1 on the drow offered Nimble Dodge ("+2 AC against it turns a hit into a miss"); hits by 4 or 5 offered nothing;
   - 6 damage on the Rekhep's ally offered Archon's Protection (resistance 15, then a Strike), and "Resist only" put the goblin back to 6 HP.
   - (PF2e sets an NPC token's disposition from its actor's alliance: a test attacker needs the "party" alliance.)
+
+## Temporary Hit Points, Wrap in Coils, more multi-Strikes (2026-10-10, batch 30)
+
+- **Temporary Hit Points** (12, 3 Battlezoo): "The forest dragon gains 40 temporary Hit Points that last for 1 minute", "The swarm gains 10 temporary Hit Points that last for 1 round", with the triggers the module reads ("The forest dragon is targeted with a water spell or effect", now a targeted-by trigger; "is critically hit by a Strike").
+  - The core's new `temp-hp` effect: a fixed amount or a formula rolled.
+  - **Live play:** the card's Apply gives the higher of the creature's current temporary Hit Points and these (they don't stack), and says how long they last.
+  - **The simulator** (B61): the same; the planner counts them as healing that may go unused.
+- **Wrap in Coils** (9): "The python moves the creature into its coils, freeing its jaws to make attacks, then uses Constrict against the creature": the creature's own Constrict (or Greater Constrict) on the creature it holds, as this action; the coils' room is the GM's note.
+- **More multi-Strikes** (53), for the simulator (batch 7's multi-Strikes):
+  - Flurry of Blows' "If both hit the same creature, combine their damage …" with "As it has the flourish trait, … only once per turn", and its substitutions as words;
+  - Flying Strafe's "Flies up to its fly Speed and makes two talon Strikes at any point during that movement. Each Strike must target a different creature";
+  - Hungry Flurry's and Double Shot's "at a -2 penalty" or "each strike takes a –2 penalty";
+  - Rapid Strikes' "attempts three claw Strikes, each against a different target within reach";
+  - Frenzied Slashes' "The pusk gains the Clumsy 2 condition until the beginning of its next turn";
+  - Maul's "against a creature it has Grabbed";
+  - Claw Frenzy's "; no more than two can be against the same target";
+  - Draconic Frenzy with no final period.
+- **Fixed in the simulator** (B62): a monster's multi-Strike whose penalty "doesn't increase until after all the attacks" gave each Strike after the first −2 (Double Slice's rule); now only Double Slice does.
+- Over seven bestiaries (5,673 fights, no errors): Flurry of Blows 11 → 27, Claw Frenzy 8, Pulverizing Barrage 5, Rapid Strikes 3, Wrap in Coils 6 → 8.
+- **Checked live in pftest** (a party-side PFTEST SIM goblin, a Vibrant Pup Swarm, a Python and a goblin it held; deleted afterwards):
+  - a critical hit on the swarm offered Feel No Pain, whose card's Apply gave it 10 temporary Hit Points ("for 1 round");
+  - Wrap in Coils posted the python's Constrict, a DC 17 basic Fortitude card on the grabbed goblin: a success, 1 bludgeoning.

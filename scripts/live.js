@@ -896,6 +896,13 @@ async function applyChange(change, state) {
             if (gone.length) await actor.deleteEmbeddedDocuments("Item", gone.map((condition) => condition.id));
             return gone.length ? `${target.name} is no longer ${[...new Set(gone.map((condition) => condition.slug))].join(" or ")}` : null;
         }
+        // Temporary Hit Points (batch 30): the higher of its current and these (they don't stack); how long they last, for the GM.
+        case "tempHp": {
+            const current = Number(actor.system?.attributes?.hp?.temp) || 0;
+            if (change.amount > current) await actor.update({ "system.attributes.hp.temp": change.amount });
+            const lasting = change.duration?.mode === "fixed" && change.duration.value ? `, for ${change.duration.value} ${change.duration.value === 1 ? String(change.duration.unit).replace(/s$/, "") : change.duration.unit}` : "";
+            return change.amount > current ? `${target.name} has ${change.amount} temporary Hit Points${lasting}` : `${target.name} keeps its ${current} temporary Hit Points (more than ${change.amount})`;
+        }
         case "affliction":
             return handOffAffliction(state, target, actor, change.data);
         // "…save or instantly die": at 0 HP and marked dead (the GM pressed Apply on the results).

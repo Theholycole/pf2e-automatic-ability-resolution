@@ -116,6 +116,22 @@ function constrict(item, { greater = false } = {}) {
     };
 }
 
+// Wrap in Coils (2026-10-10, batch 30): "The python moves the creature into its coils, freeing its jaws to make attacks, then uses
+// Constrict against the creature" (Prisoner Transfer: "… and then Constricts the creature it moved"): its own (Greater) Constrict
+// on the creature it holds, as this action. Its other words (the coils' room) are the GM's notes.
+function wrapInCoils(item, actor) {
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ");
+    const uses = /\b(?:moves|transfers) the (?:grabbed )?creature (?:into|to) (?:its|their|his|her) (?:coils|manacles)\b[^.]*?,? (?:and )?then (?:uses (Greater )?Constrict against|Constricts) the creature\b/i.exec(plain);
+    if (!uses || item.system?.actionType?.value !== "action") return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const own = [...(owner?.items ?? [])].find((entry) => entry?.type === "action" && /^(?:greater-)?constrict$/.test(glossarySlug(modernItem(entry)) ?? ""));
+    const greater = own ? glossarySlug(modernItem(own)) === "greater-constrict" : false;
+    const plan = own ? constrict(modernItem(own), { greater }) : null;
+    if (!plan) return null;
+    const notes = plain.replace(/^.*?(?:Requirements? .+? )?Effect /i, "").split(/(?<=\.)\s+/).filter((sentence) => !/\bConstrict/i.test(sentence) && sentence.trim());
+    return { ...plan, ...base(item), targeting: plan.targeting, trigger: plan.trigger, resolution: plan.resolution, ...(notes.length ? { notes } : {}) };
+}
+
 function greaterRows(outcomes, greater) {
     if (!greater) return outcomes;
     for (const degree of ["failure", "criticalFailure"]) outcomes[degree].effects = [condition("unconscious")];
@@ -1356,6 +1372,8 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
         return { builtin: "retributive-strike", resistance: Number.isFinite(level) ? 2 + level : null };
     }
     if (slug === "constrict" || slug === "greater-constrict") return constrict(item, { greater: slug === "greater-constrict" });
+    const coils = wrapInCoils(item, actor);
+    if (coils) return coils;
     if (slug === "frightful-presence") return frightfulPresence(item);
     if (slug === "stench") return stench(item);
     if (slug === "swallow-whole") return swallowWhole(item);
@@ -1504,7 +1522,10 @@ function selfCondition(item) {
     // A free action as its own turn begins (Shrieking Frenzy, Sudden Surge); other triggers stay the GM's.
     const trigger = /\bTrigger (.+?) (?:Frequency|Requirements?|Effect)\b/.exec(plain)?.[1] ?? null;
     const ownTurn = trigger && type === "free" && /^(?:The [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)'s? turn begins\.?$/.test(trigger) ? true : null;
-    if (trigger && !ownTurn) return null;
+    // (Batch 30: a reaction's trigger the module reads, for temporary Hit Points on itself: "The forest dragon is targeted with a
+    // water spell or effect".)
+    const reacting = trigger && !ownTurn && type !== "action" ? readReactionTrigger(trigger) : null;
+    if (trigger && !ownTurn && !reacting) return null;
     const requires = /\bRequirements? (.+?) Effect\b/.exec(plain)?.[1] ?? null;
     const effect = plain.includes("Effect ") ? plain.slice(plain.indexOf("Effect ") + 7) : plain;
     const sentences = effect.split(/(?<=\.)\s+/);
@@ -1517,9 +1538,19 @@ function selfCondition(item) {
     // (Batch 26: "Each ally who hears and understands this command", "Allies within 120 feet who hear and understand his order",
     // "All allies within the dragon's heartening aura", "Each other zombie within 10 feet of the dirge piper".)
     const allies = new RegExp(String.raw`^(?:All |Each )?(?:other )?(?:of (?:its|their|his|her) )?(?:allies|ally|zombies?|undead)(?: within (\d+) feet(?: of [^,.]+?)?| within [^,.]+? aura)?(?: who (?:can )?(?:hears?|sees?)(?: (?:or|and) (?:hears?|sees?|understands?))? [^,.]*?)? (?:become|becomes|are|is) \u0001(\w+)\u0002(${DURATION})${EXTRA}\.$`);
+    // Temporary Hit Points on itself (batch 30): "The forest dragon gains 40 temporary Hit Points that last for 1 minute", "gaining 6d8
+    // temporary Hit Points that last for 1 minute", "… gains 3 temporary Hit Points that last until the end of her next turn".
+    const TEMP_LAST = String.raw`(?:,? (?:that|which) lasts? (?:for )?((?:\d+|one) (?:round|minute|hour)s?|until the (?:end|start|beginning) of (?:its|their|his|her) (?:next )?turn)| for ((?:\d+|one) (?:round|minute)s?))?`;
+    const temp = new RegExp(String.raw`^(?:${SUBJECT}(?: [^,.]*?,)? (?:gains?|gaining)|${SUBJECT} [^,.]+?, gaining) (\d+|\d+d\d+(?:\s*\+\s*\d+)?) temporary (?:Hit Points|HP)${TEMP_LAST}\.$`);
     let found = null;
     let at = -1;
     for (const [index, sentence] of sentences.entries()) {
+        const gained = temp.exec(sentence);
+        if (gained) {
+            found = { temp: gained[1].replace(/\s+/g, ""), duration: gained[2] ?? gained[3] ?? "" };
+            at = index;
+            break;
+        }
         const match = self.exec(sentence) ?? going.exec(sentence);
         const group = match ? null : allies.exec(sentence);
         if (!match && !group) continue;
@@ -1527,7 +1558,7 @@ function selfCondition(item) {
         at = index;
         break;
     }
-    if (!found || !SELF_SLUGS.has(found.slug)) return null;
+    if (!found || (!found.temp && !SELF_SLUGS.has(found.slug))) return null;
     // Its other sentences: words only.
     const notes = [];
     for (const [index, sentence] of sentences.entries()) {
@@ -1537,13 +1568,15 @@ function selfCondition(item) {
     }
     // ("until the end of her turn" as "… its turn", which the duration reader knows.)
     const said = found.duration?.trim().replace(/\b(?:their|his|her)\b|\b(?:that|each) ally's\b/g, "its") ?? "";
-    const duration = said ? (/this turn/.test(said) ? readDuration("until the end of its turn") : readDuration(said)) : null;
-    const effects = [{ kind: "condition", slug: found.slug, value: null, duration: duration ?? null }];
+    const spanned = /^(\d+|one) (round|minute|hour)s?$/i.exec(said);
+    const duration = spanned ? { mode: "fixed", value: spanned[1] === "one" ? 1 : Number(spanned[1]), unit: `${spanned[2].toLowerCase()}s`, expiry: null, anchor: "effect-start" } : said ? (/this turn/.test(said) ? readDuration("until the end of its turn") : readDuration(said)) : null;
+    if (said && !duration) return null;
+    const effects = found.temp ? [{ kind: "temp-hp", ...(/^\d+$/.test(found.temp) ? { amount: Number(found.temp) } : { formula: found.temp }), duration: duration ?? null }] : [{ kind: "condition", slug: found.slug, value: null, duration: duration ?? null }];
     const success = { damage: none().damage, effects };
     return {
         ...base(item),
         targeting: found.allies ? { target: found.within ? null : "allies", range: null, area: found.within ? { type: "emanation", value: found.within } : null, allies: true } : { target: "self", range: null, area: null },
-        trigger: { event: ownTurn ? "own-turn-start" : "use", ...(ownTurn ? { reaction: true, free: true } : {}) },
+        trigger: reacting ? { ...reacting, reaction: true, ...(type === "free" ? { free: true } : {}) } : { event: ownTurn ? "own-turn-start" : "use", ...(ownTurn ? { reaction: true, free: true } : {}) },
         resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } },
         ...(requires ? { requires } : {}),
         ...(notes.length ? { notes } : {})
@@ -1733,9 +1766,16 @@ function provokeTrigger(text) {
 
 // "targets the hound with a mental effect" (2026-10-10, batch 17): { event: "targeted-by", traits, spells? } (spells: any spell
 // too, "with a mental effect or spell"); null for anything else ("a divination spell that has the mental trait").
-const TRAIT_WORDS = new Set(["mental", "auditory", "linguistic", "emotion", "fear", "visual", "sonic", "olfactory"]);
+const TRAIT_WORDS = new Set(["mental", "auditory", "linguistic", "emotion", "fear", "visual", "sonic", "olfactory", "water", "earth", "air", "fire", "cold", "electricity", "acid", "plant", "wood", "metal", "vitality", "void"]);
 function targetedWith(text) {
-    const match = new RegExp(String.raw`^(?:(?:Whenever|When|If|Each time) )?(?:A|An|Any|a|an|any) (?:creature|foe|enemy) (?:attempts to target|targets) ${SELF} with an? ((?:magical )?\w+(?: or \w+)?) effect( or spell)?$`).exec(String(text).trim().replace(/[.;,]\s*$/, ""));
+    const said = String(text).trim().replace(/[.;,]\s*$/, "");
+    // (Batch 30: "The forest dragon is targeted with a water spell or effect": its trait's spells and effects.)
+    const passive = new RegExp(String.raw`^${SELF} is targeted (?:with|by) an? (\w+(?: or \w+)?) (?:spell or effect|effect or spell|spell|effect)$`).exec(said);
+    if (passive) {
+        const traits = passive[1].split(" or ");
+        return traits.every((trait) => TRAIT_WORDS.has(trait)) ? { event: "targeted-by", traits } : null;
+    }
+    const match = new RegExp(String.raw`^(?:(?:Whenever|When|If|Each time) )?(?:A|An|Any|a|an|any) (?:creature|foe|enemy) (?:attempts to target|targets) ${SELF} with an? ((?:magical )?\w+(?: or \w+)?) effect( or spell)?$`).exec(said);
     if (!match) return null;
     const traits = match[1].replace(/^magical /, "").split(" or ");
     if (!traits.every((trait) => TRAIT_WORDS.has(trait))) return null;

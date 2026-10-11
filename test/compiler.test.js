@@ -1073,3 +1073,24 @@ test("critical hits made normal hits, resistance against a critical hit, dodges 
     // A champion's reaction in its own words: the glossary Retributive Strike's, with its resistance.
     assert.deepEqual(compileMonsterAbility(reaction("Test Protection", "<p><strong>Trigger</strong> An enemy damages the test archon's ally and both are within 15 feet of the test archon</p><p><strong>Effect</strong> The ally gains resistance 15 to all damage against the triggering damage and the test archon can make a Strike against the enemy.</p>")), { builtin: "retributive-strike", resistance: 15 });
 });
+
+test("more multi-Strike wordings (2026-10-10, batch 30)", () => {
+    const action = (name, html, actions = 2) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const pick = (plan) => ({ strikes: plan.strikes, sameMap: plan.sameMap, sameTarget: plan.sameTarget, each: plan.each, penalty: plan.penalty, requires: plan.requires, after: plan.after, oncePerTurn: plan.oncePerTurn });
+    // Flurry of Blows: damage combined, the penalty as normal, once a turn as a flourish.
+    assert.deepEqual(pick(compileMonsterAbility(action("Flurry of Blows", "<p>The test monk makes two fist Strikes. If both hit the same creature, combine their damage for the purpose of resistances and weaknesses. She applies her multiple attack penalty to the Strikes normally. As it has the flourish trait, the test monk can use Flurry of Blows only once per turn.</p>", 1))), { strikes: ["fist", "fist"], sameMap: undefined, sameTarget: undefined, each: undefined, penalty: undefined, requires: undefined, after: undefined, oncePerTurn: true });
+    // Flying Strafe: a Strike at different creatures during its move.
+    assert.deepEqual(pick(compileMonsterAbility(action("Test Strafe", "<p>The test hawk Flies up to its fly Speed and makes two talon Strikes at any point during that movement. Each Strike must target a different creature. The attacks take the normal multiple attack penalty.</p>"))).each, true);
+    // Hungry Flurry: each at a -2 penalty, at different targets, the penalty not rising.
+    assert.deepEqual(pick(compileMonsterAbility(action("Test Flurry", "<p>The test plant makes four leaf Strikes at a -2 penalty, each against a different target. These attacks count toward the test plant's multiple attack penalty, but the multiple attack penalty doesn't increase until after it makes all its attacks.</p>"))), { strikes: ["leaf", "leaf", "leaf", "leaf"], sameMap: true, sameTarget: undefined, each: true, penalty: 2, requires: undefined, after: undefined, oncePerTurn: undefined });
+    // Frenzied Slashes: the same creature, -2 each, Clumsy 2 after.
+    assert.deepEqual(pick(compileMonsterAbility(action("Test Slashes", "<p>The test imp makes three claw Strikes, each at a -2 penalty, all targeting the same creature. The test imp's multiple attack penalty doesn't increase until after it has made all three attacks. The test imp gains the Clumsy 2 condition until the beginning of its next turn.</p>", 3))).after, [{ slug: "clumsy", value: 2, until: "own-turn-start" }]);
+    // Maul: against the creature it holds.
+    const maul = compileMonsterAbility(action("Test Maul", "<p>The test cat makes two claw Strikes against a creature it has Grabbed. Both count toward its multiple attack penalty, but the penalty increases only after both attacks are made.</p>", 1));
+    assert.deepEqual([maul.requires, maul.sameTarget, maul.sameMap], ["grabbed", true, true]);
+    // Double Shot: the current penalty, -2 each, different creatures in the first range increment.
+    assert.deepEqual(pick(compileMonsterAbility(action("Test Shot", "<p>The test archer makes two shortbow Strikes targeting two different creatures within the shortbow's first range increment. Both Strikes use the test archer's current multiple attack penalty, but each strike takes a –2 penalty.</p>", 1))), { strikes: ["shortbow", "shortbow"], sameMap: true, sameTarget: undefined, each: true, penalty: 2, requires: undefined, after: undefined, oncePerTurn: undefined });
+    // Rapid Strikes ("attempts"), Draconic Frenzy with no final period.
+    assert.equal(compileMonsterAbility(action("Test Rapid", "<p>The test ghoul attempts three claw Strikes, each against a different target within reach. The multiple attack penalty applies to each attack, but increases only after all the attacks have been made.</p>")).sameMap, true);
+    assert.deepEqual(compileMonsterAbility(action("Draconic Frenzy", "<p>The test dragon makes two claw Strikes and one tail Strike in any order</p>")).strikes, ["claw", "claw", "tail"]);
+});
