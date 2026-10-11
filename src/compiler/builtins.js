@@ -367,6 +367,9 @@ export function readCharge(text) {
     // mandibles Strike, gaining …": a move and a Strike, with that bonus.)
     const leap = /^(?:The )?[^.]+? (?:Strides|Leaps) up to \d+ feet(?:, ignoring difficult terrain as (?:it|they|he|she) leaps over obstacles)?\. (?:It|They|He|She) then makes (?:an? ([\w' -]+?) Strike|a Strike with (?:its|their|his|her) ([\w' -]+?)), gaining a \+(\d+) circumstance bonus to (?:its|their|his|her) attack roll\.$/i.exec(String(text).trim());
     if (leap) return { strides: 1, strike: (leap[1] ?? leap[2]).toLowerCase(), attackBonus: Number(leap[3]) };
+    // (Batch 63: a move of up to half its Speed that triggers no reactions, with a Strike at a foe in reach at any point of it, the foe
+    // off-guard, perhaps after a sentence that only tells it → safe, offGuard.)
+    if (/^(?:[^.]+\. )?(?:The )?[^.]+? (?:Strides|Flies|Swims) up to (?:half )?(?:its|their|his|her) Speed; this movement (?:doesn't|does not) trigger reactions\. At any point during this movement, (?:it|they|he|she) can Strike an? (?:foe|creature|enemy) within reach; the (?:foe|creature|enemy|target) is Off-Guard against that attack\.$/i.test(String(text).replace(/’/g, "'").trim())) return { strides: 1, strike: null, offGuard: true, safe: true };
     // ("Frequency once per turn Effect The knight Strides twice. …": its Effect, batch 38.)
     const sentences = chargeSentences(String(text).replace(/^Frequency once per (?:turn|round) Effect /, "")).trim().split(/(?<=\.)\s+/);
     // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
@@ -476,12 +479,17 @@ export function readReaction(item, text) {
         [new RegExp(String.raw`^A creature within (?:the )?reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+?(?: that ${its} can see)? makes a Strike against ${its}$`, "i"), "attacked"],
         [new RegExp(String.raw`^A creature makes a melee Strike against or touches ${its}$`, "i"), "attacked"],
         [new RegExp(String.raw`^A creature (?:within ${reachOf} |adjacent to ${its} )?critically (?:fails an? (?:melee )?Strike against|misses) ${its}(?: with a melee Strike)?$`, "i"), "critical-miss"],
+        // (Batch 63: a creature in its reach failing or critically failing an attack roll against it.)
+        [new RegExp(String.raw`^A creature (?:within ${reachOf} )?fails or critically fails an attack roll against ${its}$`, "i"), "missed"],
         [new RegExp(String.raw`^(?:The )?[^.]+? is damaged by an adjacent creature$`, "i"), "damaged-adjacent"],
         [new RegExp(String.raw`^(?:The )?[^.]+? is targeted by an attack or spell$`, "i"), "targeted"]
     ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
-    // (Superconductor's first sentence only tells it.)
-    const backAt = answered ? /^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) (?:the (?:triggering )?creature|that creature|the attacker)(, regardless of range)?\.$/i.exec((answered === "targeted" ? effect.trim().split(/(?<=\.)\s+/).at(-1) : effect.trim())) : null;
-    if (backAt && (answered === "targeted") === Boolean(backAt[2])) return { builtin: "reaction-strike", triggers: [answered], strike: backAt[1].toLowerCase(), penalty: 0, disrupts: false };
+    // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
+    const told = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const lastOnly = answered === "targeted" || (told.length > 1 && told.slice(0, -1).every((sentence) => !/\d|@|\b(?:damage|save|check|bonus|penalty|Strikes?|Grab\w*|Prone|Hit Points|condition)\b/i.test(sentence)));
+    // (Batch 63: the Strike rolled twice, the better kept, a fortune effect → fortune.)
+    const backAt = answered ? /^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) (?:the (?:triggering )?creature|that creature|the attacker)(, regardless of range)?(, rolling the attack roll twice and taking the better result; this is a fortune effect)?\.$/i.exec(lastOnly ? told.at(-1) : effect.trim()) : null;
+    if (backAt && (answered === "targeted") === Boolean(backAt[2])) return { builtin: "reaction-strike", triggers: [answered], strike: backAt[1].toLowerCase(), penalty: 0, disrupts: false, ...(backAt[3] ? { fortune: true } : {}) };
     // Telekinetic Defense, Wing Rebuff (batch 54): "Trigger A creature approaches within 10 feet of the poltergeist", "A creature moves from
     // beyond the reach of the roc's wing to within the reach of the roc's wing", "A creature moves into the reach of the frost roc's wing";
     // "Effect The poltergeist makes a telekinetic object Strike against the triggering creature." (and "If the roc Pushes the creature, it
@@ -797,7 +805,11 @@ export function readStrikeBuff(item) {
         .replace(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g, (_all, raw) => `\u0001${formulas.push(String(raw).split("|")[0]) - 1}\u0001`)
         .replace(/\[\[\/r ((?:[^[\]]|\[[^\]]*\])+?)(?: #[^\]]*)?\]\](?:\{[^}]*\})?/g, (_all, raw) => `\u0001${formulas.push(raw.trim()) - 1}\u0001`)
         .replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
-    const text = htmlToPlainText(marked).replace(/\s+/g, " ").trim();
+    // (Batch 63: three or more of its Strikes named in a list that each gain a property rune's effects and extra damage until its next
+    // turn: read as its melee Strikes, the rune a note.)
+    const text = htmlToPlainText(marked).replace(/\s+/g, " ").trim()
+        .replace(/\bUntil the beginning of /g, "Until the start of ")
+        .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
     if (/^(?:Trigger|Requirements?)\b|\b(?:Trigger|Requirements?) [A-Z]/.test(text)) return null;
     const body = text.replace(/^Frequency [^.]*?(?=\s+Effect\b)\s+Effect\s+/, "").replace(/^Effect\s+/, "");
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -992,8 +1004,9 @@ export function readSelfGuard(item) {
     }
     const rest = (found[5] ?? "").replace(/^, (?:and |or )?/, "").trim();
     if (rest) notes.unshift(rest[0].toUpperCase() + rest.slice(1) + ".");
-    // (More than its AC in the other sentences, a Strike or a move: not this reading.)
-    if (notes.some((note) => /\b(?:Strikes?|Strides?|Steps?|Flies|Swims)\b/.test(note))) return null;
+    // (More than its AC in the other sentences, a Strike or a move: not this reading. Batch 63: a sentence that only bars one of its own
+    // Strikes while it flies, a note.)
+    if (notes.some((note) => /\b(?:Strikes?|Strides?|Steps?|Flies|Swims)\b/.test(note) && !/^(?:They|It|He|She) can(?:'t|not) use (?:their|its|his|her) [\w' -]+? Strikes? while in flight for the same duration\.$/i.test(note))) return null;
     return {
         builtin: "self-effect",
         actions: Number(item.system?.actions?.value) || 1,

@@ -116,10 +116,12 @@ const isFoe = (monster, token) => !!token.actor?.isOfType?.("creature") && token
 
 // Its melee Strikes a reaction may use, with their reach: [{ slug, label, reach }].
 function meleeStrikes(actor, name) {
+    // (A "melee Strike" with no name, batch 63's and Stand Still's: any of them.)
     const only = onlyStrike(name);
+    const any = !only || /^(?:null|melee|weapon|melee weapon)$/.test(only);
     return (actor.system.actions ?? [])
         .filter((action) => action.type === "strike" && action.item?.isMelee !== false && !action.item?.isRanged)
-        .filter((action) => !only || action.label.toLowerCase().includes(only))
+        .filter((action) => any || action.label.toLowerCase().includes(only))
         .map((action) => ({ slug: action.slug, label: action.label, reach: Number(actor.getReach?.({ action: "attack", weapon: action.item })) || 5 }));
 }
 
@@ -245,12 +247,14 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
                 : !skill && triggers.includes("critical-hit") && onIt && context.outcome === "criticalSuccess" ? "critically hit it"
                 // (Batch 57: Cutting Rebuke, Bite Back; Opportune Bite, Gnawing Retort.)
                 : !skill && triggers.includes("attacked") && onIt ? "made a Strike against it"
-                : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it" : null;
+                : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it"
+                // (Batch 63: a failed or critically failed one.)
+                : !skill && triggers.includes("missed") && onIt && ["failure", "criticalFailure"].includes(context.outcome) ? `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it` : null;
             if (!why) continue;
             const distance = distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid);
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
             if (!strikes.length) continue;
-            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : null });
+            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : null });
             break;
         }
     }

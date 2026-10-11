@@ -1641,3 +1641,16 @@ test("Form shifts of its own as the GM's (the user's choice), not one with a sav
     // Not without the polymorph trait.
     assert.equal(compileMonsterAbility(item("<p>The test fiend can take on the appearance of any Small or Medium humanoid.</p>", ["concentrate"])), null);
 });
+
+test("A wing raised for AC, Strikes wreathed in force, a charge that triggers no reactions, a Strike back at a failed attack (2026-10-11, batch 63)", () => {
+    const item = (name, html, type = "action", actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    // (Made-up wordings in the shapes these readers take.)
+    const parry = compileMonsterAbility(item("Test Parry", "<p>The test drake hunches behind its shell. It gains a +2 circumstance bonus to AC until the start of its next turn. It cannot use its tail Strike while in flight for the same duration.</p>"));
+    assert.deepEqual([parry?.builtin, parry?.model?.modifiers, parry?.duration?.expiry, parry?.notes?.[0]], ["self-effect", [{ on: "ac", type: "circumstance", value: 2 }], "turn-start", "It cannot use its tail Strike while in flight for the same duration."]);
+    const wreath = compileMonsterAbility(item("Test Wreath", "<p>Until the beginning of its next turn, each of the test drake's horn, hoof, and tail Strikes gains the effects of a returning property rune and deals an additional 2d4 cold damage.</p>"));
+    assert.deepEqual([wreath?.builtin, wreath?.damage, wreath?.melee, wreath?.strike, wreath?.duration?.expiry, wreath?.notes], ["self-effect", ["2d4[cold]"], true, null, "turn-start", ["The Strikes gain the effects of a returning property rune."]]);
+    assert.deepEqual(compileMonsterAbility(item("Test Assault", "<p>The test eel coils and lunges. The test eel Swims up to half its Speed; this movement doesn't trigger reactions. At any point during this movement, it can Strike an enemy within reach; the enemy is Off-Guard against that attack.</p>", "action", 2)), { builtin: "charge", actions: 2, strides: 1, strike: null, offGuard: true, safe: true });
+    const back = (effect) => compileMonsterAbility(item("Test Counter", `<p><strong>Trigger</strong> A creature within the test drake's reach fails or critically fails an attack roll against the test drake</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction"));
+    assert.deepEqual(back("Seeing the opening it expected, the test drake answers at once. The test drake makes a melee Strike against the triggering creature."), { builtin: "reaction-strike", triggers: ["missed"], strike: "melee", penalty: 0, disrupts: false });
+    assert.deepEqual(back("The test drake makes a melee Strike against the triggering creature, rolling the attack roll twice and taking the better result; this is a fortune effect."), { builtin: "reaction-strike", triggers: ["missed"], strike: "melee", penalty: 0, disrupts: false, fortune: true });
+});
