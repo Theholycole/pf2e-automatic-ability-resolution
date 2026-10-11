@@ -323,6 +323,11 @@ async function cardsForRiders(message) {
         if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug) || (trigger.strikes ?? []).includes(strikeName))) continue;
         // (A critical hit's only, "A creature critically hit by …": not on a plain hit; batch 28.)
         if (!(trigger.on ?? ["success", "criticalSuccess"]).includes(context.outcome)) continue;
+        // (Its results by the Strike's degree, "Enfeebled 1 (or Enfeebled 2 on a critical hit)"; batch 34.)
+        if (plan.resolution?.check?.statistic === "strike") {
+            await degreeCard(message, item, plan, { actor, strike, target, targetToken, context, sourceToken: message.token ?? null, cost: trigger.cost ?? "free" });
+            continue;
+        }
         await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: trigger.cost ?? "free" } });
     }
 }
@@ -569,12 +574,18 @@ async function activityCard(message, pending, { actor, strike, target, targetTok
 
 // Its results by the Strike's own degree, recorded as a skill action's roll is, for the GM's Apply.
 async function activityResults(message, pending, rider, { actor, strike, target, targetToken, context, sourceToken }) {
+    return degreeCard(message, pending.item, rider.plan, { actor, strike, target, targetToken, context, sourceToken, cost: "activity" });
+}
+
+// A card whose results go by the Strike's own degree (a Strike activity's, or a rider's with a critical hit's alternative, batch
+// 34): the Strike's roll recorded on it, as a skill action's is.
+async function degreeCard(message, item, plan, { actor, strike, target, targetToken, context, sourceToken, cost }) {
     const state = createCard({
-        plan: rider.plan,
-        ability: { name: pending.item.name, uuid: pending.item.uuid },
+        plan,
+        ability: { name: item.name, uuid: item.uuid },
         source: { actorUuid: actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? actor.name },
         targets: [{ actorUuid: target.actor.uuid, tokenUuid: targetToken.uuid, name: target.name ?? target.actor.name, dc: context.dc?.value ?? null }],
-        rider: { strikeName: strike.name, cost: "activity" }
+        rider: { strikeName: strike.name, cost }
     });
     if (!state) return;
     const roll = message.rolls?.[0];

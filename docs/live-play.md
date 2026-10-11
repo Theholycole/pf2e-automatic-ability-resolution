@@ -701,3 +701,15 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Not one that also attacks its allies ("continue to attack bystanders and allies afterward"), or that confuses it.
 - **Live play:** unchanged (PF2e's linked Rage effect, the GM's when the trigger comes).
 - **The simulator** (B65): when the trigger comes, once a fight, the reaction spent when it's one. Blood Frenzy needs bleed the simulation sees: a Strike's own bleed damage (the sea devils' and bunyip's come from a passive or the text, so it's rarely set off).
+
+## Riders by the Strike's degree, and Passionate Kiss (2026-10-10, batch 34)
+
+- **A rider with a critical hit's alternative** (3, 1 Battlezoo): "A creature hit by a xulgath leader's jaws or claw Strike is Enfeebled 1 (or Enfeebled 2 on a critical hit) for 1 round", "that creature becomes Dazzled (or Blinded on a critical hit)", a longer time on a critical hit ("for 2 rounds, or for 4 rounds on a critical hit", a made-up example). The hit's words and the critical hit's are each read: the check is the Strike itself, the hit's results on a success, the critical hit's on a critical success.
+  - **Live play:** the rider's card records the Strike's own roll and degree (as batch 10's Strike activities), so Apply gives the right row.
+  - **The simulator** (B66): the Strike's degree is passed to the rider; the planner counts it as mostly a hit, sometimes a critical hit.
+  - Not one on only some creatures: "a creature that qualifies as their favored game", "an attack that deals persistent fire damage" are refused now (they'd have applied on every hit).
+- **Passionate Kiss** (5): batch 31's Blood Drain for "engages a creature they have Grabbed or Restrained … to drain its vital essence": 3d6 void damage, Drained 1, and the succubus regains Hit Points equal to the damage dealt. "… or increases its drained value by 1" and the Will save against a Suggestion are the GM's reminders.
+- 8 in all.
+- **Checked live in pftest** (a PFTEST SIM Xulgath Leader and Succubus against party-side goblins; deleted afterwards):
+  - the leader's critical hit with its claw brought a Weakening Strike card recording "Strike 88 vs AC 16: critical success", whose Apply made the goblin Enfeebled 2; a plain hit's card (23 vs 16: success) made it Enfeebled 1;
+  - Passionate Kiss dealt 7 void damage, left the goblin Drained 1, and the succubus regained 7 Hit Points.

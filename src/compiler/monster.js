@@ -356,19 +356,32 @@ function bloodDrain(item) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
     const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
-    if (!/^Requirements? (?:The|A|An) [^.]*?\bhas a creature Grabbed\b/i.test(plain)) return null;
+    // (Batch 34, Passionate Kiss: "The succubus engages a creature they have Grabbed or Restrained … to drain its vital essence".)
     const effect = plain.replace(/^.*?\bEffect\s+/i, "");
+    if (!/^Requirements? (?:The|A|An) [^.]*?\bhas a creature Grabbed\b/i.test(plain) && !/\ba creature (?:it|they|he|she) (?:has|have) Grabbed\b/i.test(effect)) return null;
     const sentences = effect.split(/(?<=\.)\s+/);
     const formulas = inlineTags(html, "Damage").map(readDamage);
     const damage = formulas.filter((formula) => !/healing/i.test(formula));
-    if (damage.length !== 1 || !/\bdrains? (?:blood|blood or ichor|vitality)\b|\bdrink its blood\b/i.test(effect)) return null;
-    const drained = /\bis Drained (\d+) until it receives(?: any kind or amount of)? healing\b/i.exec(effect);
+    if (damage.length !== 1 || !/\bdrains? (?:blood|blood or ichor|vitality)\b|\bdrink its blood\b|\bdrain its vital essence\b/i.test(effect)) return null;
+    const untilHealed = /\bis Drained (\d+) until it receives(?: any kind or amount of)? healing\b/i.exec(effect);
+    const drained = untilHealed ?? /\bmakes the creature Drained (\d+) or increases its drained (?:value|condition) by 1\b/i.exec(effect);
     let temp = false;
     const reminders = [];
     let heal = null;
     for (const sentence of sentences) {
-        if (/@Damage\[[^\]]*(?:untyped|piercing|bludgeoning|slashing|void|bleed)/i.test(sentence) && /\b(?:deals?|dealing)\b/i.test(sentence)) {
+        // ("… Drained 1 or increases its drained value by 1, to a maximum of 4": the increase the GM's.)
+        if (/\bmakes the creature Drained \d+ or increases its drained (?:value|condition) by 1\b/i.test(sentence)) {
+            reminders.push("If {target} was already drained, its drained value goes up by 1 instead (to a maximum of 4).");
+            continue;
+        }
+        // (A save after it, "… or be affected by a Suggestion to submit …": the GM's.)
+        if (/^The target must succeed at an? @Check\[[^\]]*\] save or be affected by [^.]+\.$/i.test(sentence)) {
+            reminders.push(sentence.replace(/@Check\[(\w+)\|dc:(\d+)[^\]]*\]/i, (_all, statistic, dc) => `DC ${dc} ${statistic[0].toUpperCase()}${statistic.slice(1)}`).replace(/^The target/, "{target}"));
+            continue;
+        }
+        if (/@Damage\[[^\]]*(?:untyped|piercing|bludgeoning|slashing|void|bleed)/i.test(sentence) && /\b(?:deals?|dealing|takes)\b/i.test(sentence)) {
             if (/\bgains? temporary Hit Points equal to the damage dealt\b/i.test(sentence)) temp = true;
+            if (/\bregains Hit Points equal to the damage dealt\b/i.test(sentence)) heal = { kind: "heal", fromDamage: true, recipient: "self" };
             const regains = /\bregains @Damage\[([^\]]*\[healing\])\]/i.exec(sentence);
             if (regains) heal = { kind: "heal", amount: Number(readDamage(regains[1]).replace(/\[healing\]/i, "")) || null, excessAsTemp: /\bgaining any excess\b/i.test(sentence), recipient: "self" };
             continue;
@@ -378,10 +391,10 @@ function bloodDrain(item) {
             continue;
         }
         if (/\bis Drained \d+ until it receives\b/i.test(sentence)) continue;
-        if (/^(?:The|A|An) [\w' -]+? (?:drains|drives|sinks) [^.@]+\.$/i.test(sentence)) continue;
+        if (/^(?:The|A|An) [\w' -]+? (?:drains|drives|sinks|engages) [^.@]+\.$/i.test(sentence)) continue;
         return null;
     }
-    if (heal && !Number.isFinite(heal.amount)) return null;
+    if (heal && !heal.fromDamage && !Number.isFinite(heal.amount)) return null;
     const effects = [...(drained ? [condition("drained", Number(drained[1]))] : []), ...(temp ? [{ kind: "temp-hp", fromDamage: true, recipient: "self" }] : []), ...(heal ? [heal] : [])];
     const success = { damage: { mode: "formulas", formulas: [{ formula: damage[0] }], rollScope: "outcome" }, effects };
     return {
@@ -393,7 +406,7 @@ function bloodDrain(item) {
             check: { roll: "automatic", statistic: "automatic" },
             sharedDamage: null,
             outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() },
-            reminders: [...(drained ? [`{target}'s drained lasts until it receives healing of any kind or amount.`] : []), ...reminders]
+            reminders: [...(untilHealed ? [`{target}'s drained lasts until it receives healing of any kind or amount.`] : []), ...reminders]
         }
     };
 }
@@ -1996,20 +2009,43 @@ function riderReading(item, actor) {
     if (/\bregardless of whether\b/i.test(htmlToPlainText(html))) return null;
     // (A hit or damage it deals, as a verb: not "If the creature is already taking persistent fire damage, …".)
     const CLAUSE = /(^|<p>|(?<=[.!?])\s+)(?:If|When(?:ever)?) (?:the |a |an )?[^,.<]{0,80}?\b(?:hits?|damages|critically hits?|strikes?)\b[^,.<]{0,80}?, ([a-z])/gi;
-    if ([...html.matchAll(CLAUSE)].some((match) => /\b(?:that's|that is|that has|who|which|whose|already|taking|while|holy|unholy|good|evil|made of|wearing|metal|smaller|larger|Tiny|Small|Medium|Large|Huge|and the)\b/i.test(match[0].replace(/^\W*(?:<p>)?\s*(?:If|When(?:ever)?)\b/i, "")))) return null;
+    if ([...html.matchAll(CLAUSE)].some((match) => /\b(?:that's|that is|that has|that qualifies|that deals|who|which|whose|already|taking|while|holy|unholy|good|evil|made of|wearing|metal|smaller|larger|Tiny|Small|Medium|Large|Huge|and the)\b/i.test(match[0].replace(/^\W*(?:<p>)?\s*(?:If|When(?:ever)?)\b/i, "")))) return null;
     // (Batch 28: "A creature hit by the voidworm's tail Strike is …", "Any creature damaged by the wraith's claw Strike must …":
     // the creature hit as the subject.)
     // ("critically hit by" only when the whole passive is a critical hit's: Slimy Guts' second sentence isn't the hit's.)
     const SUBJECT = new RegExp(`(^|<p>|(?<=[.!?])\\s+)(?:(?:A|Any|Each) (?:living )?creature|(?:All )?Creatures) (?:that (?:is|are) |who (?:is|are) )?${criticalOnly(item) ? "(?:critically )?" : ""}(?:hit|damaged|struck)(?: and damaged)? by (?:the |a |an )?[\\w' -]+?['’]s? [\\w -]+? (?:Strike|attack)s?\\s+(is|are|becomes?|must|takes?)\\b`, "gi");
     const trimmed = html.replace(CLAUSE, (whole, lead, letter) => `${lead}${letter.toUpperCase()}`).replace(SUBJECT, (whole, lead, verb) => `${lead}The target ${{ are: "is", become: "becomes", take: "takes" }[verb.toLowerCase()] ?? verb}`);
+    // (Batch 34: a critical hit's alternative, "Enfeebled 1 (or Enfeebled 2 on a critical hit)", "Dazzled (or Blinded on a critical
+    // hit)", "Dazzled for 2 rounds, or for 4 rounds on a critical hit" (made up): the hit's words and the critical hit's, each read.)
+    const variants = criticalVariants(trimmed);
     const own = withDescription(item, trimmed);
     let plan = null;
     try {
-        plan = inlineSave(own, actor, { afterHit: true }) ?? automaticEffect(own, actor, { rider: true });
+        const both = variants ? byStrikeDegree(automaticEffect(withDescription(item, variants.hit), actor, { rider: true }), automaticEffect(withDescription(item, variants.critical), actor, { rider: true })) : null;
+        plan = both ?? inlineSave(own, actor, { afterHit: true }) ?? automaticEffect(own, actor, { rider: true });
     } catch {
         plan = null;
     }
     return listedRider(item, actor, plan);
+}
+
+// The hit's and the critical hit's words of a rider with a critical hit's alternative (batch 34), or null.
+const CONDITION_WORD = String.raw`(?:@UUID\[[^\]]*\]\{[^}]*\}|[A-Z][a-z]+(?: \d+)?)`;
+function criticalVariants(html) {
+    const text = String(html);
+    const bracket = new RegExp(String.raw`(${CONDITION_WORD})(\s+for [^(.]+?)?\s*\((?:or )?(${CONDITION_WORD}) on a critical hit\)`).exec(text);
+    if (bracket) return { hit: text.replace(bracket[0], `${bracket[1]}${bracket[2] ?? ""}`), critical: text.replace(bracket[0], `${bracket[3]}${bracket[2] ?? ""}`) };
+    const longer = /( for )(\d+ (?:round|minute)s?), or for (\d+ (?:round|minute)s?) on a critical hit/.exec(text);
+    if (longer) return { hit: text.replace(longer[0], `${longer[1]}${longer[2]}`), critical: text.replace(longer[0], `${longer[1]}${longer[3]}`) };
+    return null;
+}
+
+// A rider read twice (batch 34): the hit's results on a success, the critical hit's on a critical success, by the Strike's own
+// degree (the check is the Strike: its degree recorded on the card, passed in the simulator). Only for results with no roll.
+function byStrikeDegree(hit, critical) {
+    if (hit?.resolution?.check?.roll !== "automatic" || critical?.resolution?.check?.roll !== "automatic") return null;
+    const outcomes = hit.resolution.outcomes;
+    return { ...hit, resolution: { ...hit.resolution, check: { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } }, outcomes: { ...outcomes, criticalSuccess: structuredClone(critical.resolution.outcomes.success) } } };
 }
 
 // A passive its Strikes list ("Claw … plus Paralysis"; 2026-10-10): a rider of those Strikes on a hit, whose save or results

@@ -1139,3 +1139,20 @@ test("triggered rages and frenzies (2026-10-10, batch 33)", () => {
     // Not one that also attacks its allies, nor another trigger.
     assert.equal(compileMonsterAbility(item("Test Rage", "<p><strong>Trigger</strong> The test dragon is 200 Hit Points or below and takes damage.</p><p><strong>Effect</strong> The test dragon becomes enraged. It gains 35 temporary Hit Points. It attacks bystanders and allies afterward.</p>", "free"))?.builtin, undefined);
 });
+
+test("a rider with a critical hit's alternative, by the Strike's degree (2026-10-10, batch 34)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const actor = { items: [{ type: "melee", name: "Jaws", system: { attackEffects: { value: ["test-weakening"] } } }] };
+    const plan = compileMonsterAbility(passive("Test Weakening", "<p>A creature hit by a test lizard's jaws Strike is @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (or @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 2} on a critical hit) for 1 round.</p>"), { actor });
+    const values = (row) => plan.resolution.outcomes[row].effects.map((effect) => [effect.slug, effect.value, effect.duration?.value]);
+    assert.deepEqual([plan.trigger.event, plan.resolution.check.statistic, values("success"), values("criticalSuccess")], ["strike", "strike", [["enfeebled", 1, 1]], [["enfeebled", 2, 1]]]);
+    // "for 2 rounds, or for 4 rounds on a critical hit" (a made-up example).
+    const longer = compileMonsterAbility(passive("Test Spit", "<p>A creature hit by a test lizard's jaws Strike is @UUID[Compendium.pf2e.conditionitems.Item.TkIyaNPgTZFBCCuh]{Dazzled} for 2 rounds, or for 4 rounds on a critical hit.</p>"), { actor: { items: [{ type: "melee", name: "Jaws", system: { attackEffects: { value: ["test-spit"] } } }] } });
+    assert.deepEqual([longer.resolution.outcomes.success.effects[0].duration.value, longer.resolution.outcomes.criticalSuccess.effects[0].duration.value], [2, 4]);
+    // Passionate Kiss: on the creature it holds, healing equal to the damage dealt; the increase and the save the GM's.
+    const kiss = compileMonsterAbility({ type: "action", name: "Passionate Kiss", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test fiend engages a creature they have Grabbed or Restrained in an embrace to drain its vital essence. The kiss makes the creature Drained 1 or increases its drained value by 1, to a maximum of 4. The creature takes @Damage[3d6[void]] damage and the test fiend regains Hit Points equal to the damage dealt. The target must succeed at a @Check[will|dc:28] save or be affected by a Suggestion to submit.</p>" } } });
+    assert.deepEqual([kiss.targeting.grabbed, kiss.resolution.outcomes.success.effects.map((effect) => effect.kind), kiss.resolution.reminders.length], [true, ["condition", "heal"], 2]);
+    assert.match(kiss.resolution.reminders[1], /DC 28 Will save or be affected by a Suggestion/);
+    // Not one on only some creatures ("a creature that qualifies as their favored game").
+    assert.equal(compileMonsterAbility(passive("Test Fear", "<p>When the test hunter hits a creature that qualifies as their favored game, that creature is @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1} (or Frightened 2 on a critical hit).</p>"), { actor: { items: [{ type: "melee", name: "Spear", system: { attackEffects: { value: ["test-fear"] } } }] } })?.trigger?.event, undefined);
+});
