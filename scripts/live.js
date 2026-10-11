@@ -215,6 +215,16 @@ async function cardForAbility(message) {
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its prey` : "its prey is the creature it named"}. The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`]);
         return;
     }
+    // Knocking Sweep (batch 45): the basic action's card at each creature the GM targets (separate checks, each at the multiple attack
+    // penalty it started with); a note when none is targeted.
+    if (plan?.builtin === "skill-sweep") {
+        const basic = basics()?.[plan.action];
+        const tokens = [...game.user.targets];
+        const penalty = plan.sameMap ? ", each at the multiple attack penalty it started with" : "";
+        if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: `Separate checks${penalty}.` });
+        else await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: it attempts to ${plan.action.replace(/^\w/, (letter) => letter.toUpperCase())} each creature within its reach (separate checks${penalty}). Target them before using it for their card.`]);
+        return;
+    }
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.

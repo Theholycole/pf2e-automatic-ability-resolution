@@ -1395,3 +1395,16 @@ test("Snagging Strike, Unnerving Prowess, Leaping Charge, Feign Death as a react
     // Feign Death as a reaction: the GM's.
     assert.deepEqual(compileMonsterAbility(item("Feign Death", "<p><strong>Trigger</strong> The test possum is reduced below 15 HP</p><hr /><p><strong>Effect</strong> The test possum collapses. It is Off-Guard and can use actions that require only its mind, but any other action ends the ruse. A successful @Check[perception|dc:16] check to Seek is required to determine that the animal is not, in fact, dead.</p>", "reaction")), { builtin: "no-effect" });
 });
+
+test("Capsize and Drench with their rolls, Impaling Charge, Knocking Sweep (2026-10-11, batch 45)", () => {
+    const item = (name, html, actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    // Nothing for a fight's numbers.
+    assert.deepEqual(compileMonsterAbility(item("Capsize", "<p>The test turtle tries to capsize an adjacent aquatic vessel of its size or smaller. The test turtle must succeed at a @Check[athletics|dc:30] check (reduced by 5 for each size smaller the vessel is than the turtle) or the pilot's Sailing Lore DC, whichever is higher.</p>")), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("Drench", "<p>The test mephit puts out all fires in a @Template[emanation|distance:5]. The mephit extinguishes all non-magical fires automatically and attempts to counteract magical fires ([[/r 1d20+7 #Drench]]{+7} counteract modifier).</p>")), { builtin: "no-effect" });
+    // Impaling Charge: a Stride, a horn Strike, Grabbed on a hit (not while it holds a creature).
+    const impale = compileMonsterAbility(item("Impaling Charge", "<p><strong>Requirements</strong> The test dragon doesn't have a creature impaled on their horn</p><hr /><p><strong>Effect</strong> The test dragon attempts to gore a foe. They Stride, then attempt a horn Strike. On a hit, the target becomes impaled on the test dragon's horn. The creature is @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} while on the horn (and can attempt to Escape as normal). The test dragon doesn't need to use additional actions to keep the impaled creature grabbed. If the test dragon moves, they bring the grabbed creature along with them.</p>", 2));
+    assert.deepEqual([impale?.builtin, impale?.strides, impale?.strike, impale?.requires, impale?.onHit?.conditions], ["strike-activity", 1, "horn", "free-hand", [{ slug: "grabbed", value: null, duration: null }]]);
+    // Knocking Sweep: a Trip at each creature in reach, at one multiple attack penalty.
+    assert.deepEqual(compileMonsterAbility(item("Knocking Sweep", "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test adept swings their weapon with a sweeping spin. They attempt separate Athletics checks to [[/act trip]] any number of creatures within their reach. Each attempt counts toward the test adept's multiple attack penalty, but the multiple attack penalty doesn't increase until after they make all the attacks.</p>", 2)),
+        { builtin: "skill-sweep", actions: 2, action: "trip", sameMap: true, oncePerTurn: true });
+});

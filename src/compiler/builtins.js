@@ -792,6 +792,8 @@ export function compileBuiltin(item, slug) {
     // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
     if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
     if (readStrikeOnly(text)) return { builtin: "no-effect", strikeOnly: true };
+    const sweepSkill = readSkillSweep(text);
+    if (sweepSkill) return { builtin: "skill-sweep", actions, ...sweepSkill };
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
     // (Batch 41: the user's choices, 2026-10-11.)
     const mythic = readMythic(text);
@@ -958,6 +960,10 @@ function readSafeMove(text) {
 // Strides with a bonus to its Speed (Gallop). true or false.
 function readNoCombatEffect(text) {
     const said = String(text).replace(/’/g, "'").trim();
+    // (Batch 45: capsizing a vessel with its check, "must succeed at a @Check[athletics|dc:35] check … or the pilot's Sailing Lore DC,
+    // whichever is higher"; Drench, "puts out all fires in a @Template[emanation|distance:5]. … attempts to counteract magical fires".)
+    if (/^(?:The )?[^.]+? (?:tries|attempts) to capsize an (?:adjacent )?(?:aquatic )?vessel\b/i.test(said) && /\bthe pilot's Sailing Lore DC, whichever is higher\.$/i.test(said)) return true;
+    if (/\bputs? out all (?:non-magical )?fires\b/i.test(said) && !/\b(?:damage|saves?|Strikes?|Hit Points|conditions?|Grabbed|Prone)\b/i.test(said)) return true;
     // (Batch 42: a statue or a corpse until it acts — "Until the next time it acts, the gargoyle appears to be a statue. It has an
     // automatic result of 32 on Deception checks and DCs to pass as a statue." — not with more for it, such as fast healing while it
     // stays still; a web line it descends on; a move and a reload, which the simulation does with its own Interact.)
@@ -980,6 +986,29 @@ function readNoCombatEffect(text) {
     // (A weapon of its own that appears in its hand, batch 40: the simulation has its Strikes ready.)
     if (/^Requirements (?:The )?[^.]+? (?:isn't|is not) holding (?:a|an|its|their|his|her) [\w' -]+? Effect (?:The )?[^.]+? causes (?:its|their|his|her) [^.]*?(?:polearm|weapon|blade|sword)[^.]* to appear in one of (?:its|their|his|her) hands\b/i.test(said)) return true;
     return /^(?:The )?[^.]+? Strides twice\. (?:It|They|He|She) (?:has|have) a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed during these Strides\.$/i.test(said);
+}
+
+// A basic action at each creature in its reach (2026-10-11, batch 45, Knocking Sweep): "The ki adept swings their weapon with a
+// sweeping spin. They attempt separate Athletics checks to Trip any number of creatures within their reach. Each attempt counts toward
+// the ki adept's multiple attack penalty, but the multiple attack penalty doesn't increase until after they make all the attacks." →
+// { action: "trip", sameMap, oncePerTurn? }, or null.
+function readSkillSweep(text) {
+    let said = String(text).replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase())).trim();
+    let oncePerTurn = false;
+    said = said.replace(/^Frequency once per (?:turn|round) Effect /i, () => {
+        oncePerTurn = true;
+        return "";
+    });
+    const sentences = said.split(/(?<=\.)\s+(?=[A-Z])/);
+    if (sentences.length > 1 && !/\b(?:Strikes?|checks?|damage|save|DC|\d)\b/i.test(sentences[0])) sentences.shift();
+    const match = /^(?:The [\w' -]+?|[A-Z][\w'-]+|They|It|He|She) attempts? separate Athletics checks? to (Trip|Shove|Disarm|Grapple) any number of creatures within (?:their|its|his|her) reach\.$/i.exec(sentences.shift() ?? "");
+    if (!match) return null;
+    let sameMap = false;
+    for (const sentence of sentences) {
+        if (/^Each attempt counts toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after (?:they|it|he|she) makes? all the (?:attacks|attempts)\.$/i.test(sentence)) sameMap = true;
+        else return null;
+    }
+    return { action: match[1].toLowerCase(), ...(sameMap ? { sameMap } : {}), ...(oncePerTurn ? { oncePerTurn } : {}) };
 }
 
 // Only a Strike, with what comes with it the simulation doesn't play (2026-10-10, batch 37): "Calmont draws his weapon and attacks

@@ -846,8 +846,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (/(?:has|must have) (?:a creature|an enemy|a foe) Grabbed|is grabbing a creature/i.test(match[1])) activity.requires = "grabbed";
             // (Batch 44, Snagging Strike: "has one hand free, and its target is within reach of that hand".)
             else if (/has (?:a|one) (?:free )?hand(?: free)?/i.test(match[1])) activity.requires = "free-hand";
+            // (Batch 45, Impaling Charge: "doesn't have a creature impaled on their horn": not while it holds one.)
+            else if (/(?:doesn't|does not) have a creature impaled on (?:its|their|his|her) horn/i.test(match[1])) activity.requires = "free-hand";
             else if (!/is wielding|is holding/i.test(match[1])) return reject(text);
-        } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides(?: twice| or Steps)?),? (?:and |then |and then )*)?(?:makes|attempts) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll)(?: against the (?:grabbed|restrained) (?:creature|target))?)?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*| while keeping one hand free)?\.$/i.exec(head)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(head.slice(head.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
+        } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides?(?: twice| or Steps?)?),? (?:and |then |and then )*)?(?:makes?|attempts?) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll)(?: against the (?:grabbed|restrained) (?:creature|target))?)?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*| while keeping one hand free)?\.$/i.exec(head)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(head.slice(head.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
             // A move written into the subject ("The worm Burrows at least 10 feet and then attempts a jaws Strike"): read as a move.
             const moving = !match[1] && /\b(?:Flies|Swims|Climbs|Burrows|Leaps|Steps|Strides)\b/.test(head.slice(0, head.search(/\b(?:makes|attempts)\b/i)));
             const moved = moving ? moveThenStrike(head.replace(/(?:,| and)? (?:with|against) [^,.]*$/i, ".")) : null;
@@ -877,6 +879,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
         } else if (!opened) return reject(text);
         // (Batch 26: "The target is Off-Guard against this Strike", "… to this attack".)
         else if (/^The (?:target|creature) is Off-Guard (?:to|against) (?:the|this) (?:Strike|attack)\.$/i.test(text)) activity.offGuard = true;
+        // (Impaling Charge, batch 45: "On a hit, the target becomes impaled on the dragon's horn. The creature is Grabbed while on the horn
+        // (and can attempt to Escape as normal). The dragon doesn't need to use additional actions to keep the impaled creature grabbed.
+        // If the dragon moves, they bring the grabbed creature along with them.": Grabbed, until it Escapes.)
+        else if (/^On a hit, the target becomes impaled on (?:the [\w' -]+?'s|[A-Z][\w'-]+'s|its|their|his|her) horn\.$/i.test(text)) continue;
+        else if (/^The creature is Grabbed while on the horn(?: \(and can (?:attempt to )?Escape as normal\))?\.$/i.test(text)) activity.onHit.conditions.push({ slug: "grabbed", value: null, duration: null });
+        else if (/^(?:The [\w' -]+?|[A-Z][\w'-]+|It|They|He|She) (?:doesn't|does not) need to use additional actions to keep the (?:impaled|grabbed) creature grabbed\.$|^If (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) moves?, (?:it|they|he|she) brings? the grabbed creature along with (?:it|them|him|her)\.$/i.test(text) && activity.onHit.conditions.some((entry) => entry.slug === "grabbed")) continue;
         else if (hitResults(text, activity, item, conditions)) continue;
         // "The extra damage and frightened value are doubled on a critical hit." (the damage is, as any.)
         else if ((match = /^The (?:extra|additional) damage and (\w+) value are doubled on a critical hit\.$/i.exec(text)) && activity.onHit.conditions.some((entry) => entry.slug === match[1].toLowerCase() && Number.isFinite(entry.value))) activity.onHit.critical = activity.onHit.conditions.map((entry) => (entry.slug === match[1].toLowerCase() && Number.isFinite(entry.value) ? { ...entry, value: entry.value * 2 } : entry));
