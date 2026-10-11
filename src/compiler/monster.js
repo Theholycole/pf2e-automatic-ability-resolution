@@ -828,7 +828,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 44, Snagging Strike: "… until the start of the ruffian's next turn or until it leaves the ruffian's reach, whichever comes
         // first": its time; leaving the reach is the GM's.)
         const text = htmlToPlainText(sentence.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim()
-            .replace(/ or until (?:it|the target|the creature) (?:leaves (?:the [\w' -]+?'s|its|their|his|her) reach|is no longer within the reach of (?:the [\w' -]+?'s|its|their|his|her) hand), whichever comes first(?=\.$)/i, "");
+            .replace(/ or until (?:it|the target|the creature) (?:leaves (?:the [\w' -]+?'s|its|their|his|her) reach|is no longer within the reach of (?:the [\w' -]+?'s|its|their|his|her) hand), whichever comes first(?=\.$)/i, "")
+            // (Batch 47, Power Attack: "makes a melee Strike that counts as two attacks when calculating their multiple attack penalty".)
+            .replace(/ that counts as (two|three) attacks when calculating (?:its|their|his|her|the) multiple attack penalty(?=\.$)/i, (_all, number) => {
+                activity.countsAs = { two: 2, three: 3 }[number.toLowerCase()];
+                return "";
+            });
         let match;
         const lead = opened ? null : openingParts(text);
         const head = lead?.plain ?? text;
@@ -896,9 +901,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // "This Strike ignores their multiple attack penalty and doesn't count toward that penalty."
         else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
-        else if ((match = /^This counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the [\w' -]+?'s) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
+        else if ((match = /^This counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the(?: [\w' -]+?'s)?) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
         // "If this Strike hits, he deals an extra die of weapon damage."
-        else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (?:weapon )?die of (?:weapon )?(?:\\w+ )?damage\\.$`, "i").test(text)) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
+        // (Batch 47: "deals an extra a die of weapon damage", as printed.)
+        else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (?:an? )?(?:weapon )?die of (?:weapon )?(?:\\w+ )?damage\\.$`, "i").test(text)) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
         else if (/remains? hidden until after|^During the Stride/i.test(text)) continue;
         // (A follow-up's penalty, batch 35: "This check counts toward the grave spinosaurus's multiple attack penalty, but …", "Both
         // attacks count toward their multiple attack penalty …", "This Shove uses the same multiple attack penalty as the Strike …".)

@@ -863,3 +863,14 @@ Compiler readings into what live play and the simulator already do.
   - **Live play:** as a condition item leaves a creature on the scene, a monster in the encounter within the distance gets its reaction offer ("Ezren is no longer frightened"), then the card.
 - **Checked live in pftest** (PFTEST SIM B46 Despair Dragon (Young) from Monster Core 2 in an encounter with Ezren; deleted afterwards): Ezren Frightened 1, then not: the offer; Use it, then Apply: the dragon has 26 temporary Hit Points (4d8) for 1 minute.
 
+## Power Attack, Lunge, Quick Bomber, Thrash, Recharge Spell, Phase Jump, Spurred by Death (2026-10-11, batch 47)
+
+Compiler readings into what already exists; nothing new in live play or the simulator.
+
+- **Power Attack** (2): "makes a melee Strike that counts as two attacks when calculating their multiple attack penalty. If this strike hits, it deals an extra die of weapon damage" (and "This counts as two attacks when calculating the multiple attack penalty", "an extra a die" as printed) → a Strike activity, counted as two attacks, an extra weapon die on a hit. Not the one written only as PF2e's glossary reference.
+- **Only a Strike** (16): Lunge, "makes a Strike with a melee weapon, increasing the reach of the Strike by 5 feet", "… with their rotcarver scythe, increasing their reach by 5 feet for that Strike" (a following "can choose to Trip … instead", "If the weapon has the disarm, shove, or trip trait, … the corresponding action instead of a Strike": the GM's); Quick Bomber, "can use Interact to draw a bomb and then Strike with it" (no final period too); Quick Draw, "Interacts to take out their machete or shortbow, then Strikes with the weapon", "then Strikes with the weapon they just drew".
+- **Thrash** (6): "Strikes once with its jaws and once with its tail, each targeting a different creature" (a different Strike at each, batch 43's), "attempts individual Strikes against each creature in its reach. It can attempt up to one jaws Strike and any number of leg Strikes", "Strikes once against each creature in its reach. It can make one of these Strikes with each of its maws, … Each attack takes a –2 circumstance penalty …" (its best Strike at each, at −2).
+- **Recharge Spell** (6): "Cost 1 Mythic Point Effect Pteios regains one spell", "… gains an additional use of any of their innate spells", "… an additional casting of any of his innate primal spells that he has already cast" (also with no "Effect" label) → batch 41's Mythic Recharge.
+- **Phase Jump** (8): "Frequency once per round Effect The dragon teleports up to 120 feet. If they are airborne, they maintain their momentum, …" → batch 38's move that triggers no reactions.
+- **Spurred by Death** (5): "Trigger An ally within 30 feet reduces a creature to 0 HP Effect The burnbearer Steps or Strides." → nothing for the fight's numbers. Not the ones that also Strike, Drink Blood or Hunt Prey.
+

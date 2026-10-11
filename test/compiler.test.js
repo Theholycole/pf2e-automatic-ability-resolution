@@ -1415,3 +1415,20 @@ test("Consume Fear: temporary Hit Points as a creature near it loses the Frighte
     assert.deepEqual(plan?.trigger, { event: "condition-lost", reaction: true, condition: "frightened", within: 60 });
     assert.deepEqual([plan?.targeting?.target, plan?.resolution?.outcomes?.success?.effects?.[0]?.kind, plan?.resolution?.outcomes?.success?.effects?.[0]?.formula], ["self", "temp-hp", "6d8"]);
 });
+
+test("Power Attack, Lunge, Quick Bomber, Thrash, Recharge Spell, Phase Jump, Spurred by Death in more wordings (2026-10-11, batch 47)", () => {
+    const item = (name, html, actions = 1, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const compile = (name, html, actions, type) => compileMonsterAbility(item(name, html, actions, type));
+    const power = compile("Power Attack", "<p>The test veteran makes a melee Strike that counts as two attacks when calculating their multiple attack penalty. If this strike hits, it deals an extra die of weapon damage.</p>", 2);
+    assert.deepEqual([power?.builtin, power?.countsAs, power?.extraWeaponDice], ["strike-activity", 2, 1]);
+    assert.deepEqual(compile("Lunge", "<p>The test bandit makes a Strike with the spiked chain, increasing their reach by 5 feet for that Strike. The bandit can Disarm or Trip instead of a Strike.</p>"), { builtin: "no-effect", strikeOnly: true });
+    assert.deepEqual(compile("Quick Bomber", "<p>Test Alchemist can use Interact to draw a bomb, then Strike with it</p>"), { builtin: "no-effect", strikeOnly: true });
+    assert.deepEqual(compile("Quick Draw", "<p>The test scout draws a weapon with an Interact action, then Strikes with the weapon they just drew.</p>"), { builtin: "no-effect", strikeOnly: true });
+    assert.deepEqual(compile("Thrash", "<p>The test worm Strikes once with its jaws and once with its tail, each targeting a different creature. Each attack counts toward the test worm's multiple attack penalty, but the multiple attack penalty doesn't increase until after all the attacks have been made.</p>", 2),
+        { builtin: "multi-strike", actions: 2, strikes: ["jaws", "tail"], sameMap: true, each: true, max: 2 });
+    assert.deepEqual(compile("Thrash", "<p>The test centipede Strikes once against each creature in its reach. It can make one of these Strikes with each of its maws, one with its tail lash, and the rest with its legs. Each attack takes a –2 circumstance penalty and counts toward the test centipede's multiple attack penalty, but the multiple attack penalty doesn't increase until after all the attacks are made.</p>", 2),
+        { builtin: "multi-strike", actions: 2, strikes: [null], each: true, sameMap: true, penalty: 2 });
+    assert.deepEqual(compile("Recharge Spell", "<p><strong>Cost</strong> 1 Mythic Point</p><p>The test lich regains one spell.</p>"), { builtin: "mythic", kind: "recharge", actions: 1 });
+    assert.deepEqual(compile("Phase Jump", "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test dragon teleports up to 120 feet. If they are airborne, they maintain their momentum, and do not fall at the end of their turn.</p>"), { builtin: "safe-move", actions: 1 });
+    assert.deepEqual(compile("Spurred by Death", "<p><strong>Trigger</strong> An ally within 30 feet reduces a creature to 0 HP</p><hr /><p><strong>Effect</strong> The test raider Steps or Strides.</p>", null, "reaction"), { builtin: "no-effect" });
+});

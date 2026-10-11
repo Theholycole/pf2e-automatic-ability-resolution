@@ -166,6 +166,10 @@ export function readMultiStrikes(text) {
         // Strike twice.)
         strikes.push(null, null);
         sameTarget = true;
+    } else if ((match = /^(?:The )?[^.]+? Strikes once with (?:its|their|his|her) ([\w' -]+?) and once with (?:its|their|his|her) ([\w' -]+?), each targeting a different creature\.$/i.exec(first))) {
+        // (Thrash, batch 47: "The remorhaz Strikes once with its jaws and once with its tail, each targeting a different creature.")
+        strikes.push(named(match[1]), named(match[2]));
+        each = true;
     } else if ((match = /^(?:(?:The )?[^.]+? makes?|Make) two Strikes against (?:(?:its|their|his|her|your) (?:hunted prey|target)|a creature|[^.]+?'s hunted prey), one with each of the required weapons\.$/i.exec(first))) {
         // (Twin Takedown, batch 42: "They make two Strikes against their hunted prey, one with each of the required weapons": its best
         // melee Strikes, at one creature.)
@@ -282,10 +286,23 @@ export function chargeSentences(text) {
 // Its multiple attack penalty increases only after all the attacks." → { strike, sameMap }, or null.
 export function readSweep(text) {
     const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
-    const match = /^(?:The )?[^.]+? (?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike (?:once )?against each (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i.exec(sentences.shift() ?? "");
+    // (Batch 47, Thrash: "attempts individual Strikes against each creature in its reach", "Strikes once against each creature in its reach".)
+    const match = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike (?:once )?|attempts individual Strikes |Strikes once )against each (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i.exec(sentences.shift() ?? "");
     if (!match) return null;
     let sameMap = false;
+    let penalty = 0;
     for (const sentence of sentences) {
+        // (Which Strikes: "It can attempt up to one jaws Strike and any number of leg Strikes", "It can make one of these Strikes with
+        // each of its maws, one with its tail lash, and the rest with its legs": its best one played.)
+        if (/^(?:It|They) can (?:attempt|make) up to one [\w' -]+? Strike(?:, up to one [\w' -]+? Strike)*,? and any number of [\w' -]+? Strikes\.$|^(?:It|They) can make one of these Strikes with each of (?:its|their) [\w' -]+?, one with (?:its|their) [\w' -]+?, and the rest with (?:its|their) [\w' -]+?\.$|^(?:It|They|The [\w' -]+?) can Strike up to once with each [\w' -]+?, once with (?:its|their) [\w' -]+?, and any number of times with (?:its|their) [\w' -]+?\.$/i.test(sentence)) continue;
+        // ("Each attack takes a –2 circumstance penalty and counts toward the mukradi's multiple attack penalty, but the multiple attack
+        // penalty doesn't increase until after all the attacks are made.")
+        const taken = /^Each attack takes an? [-\u2013\u2212](\d+) circumstance penalty and counts toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after all the attacks (?:are|have been) made\.$/i.exec(sentence);
+        if (taken) {
+            penalty = Number(taken[1]);
+            sameMap = true;
+            continue;
+        }
         if (/\b(?:multiple attack )?penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\b(?:multiple attack )?penalty increases only after\b/i.test(sentence)) {
             sameMap = true;
             continue;
@@ -304,7 +321,7 @@ export function readSweep(text) {
         return null;
     }
     const name = match[1] && !/^(?:melee|melee weapon|weapon|unarmed)$/i.test(match[1].trim()) ? match[1].trim().replace(/^(?:melee|ranged)\s+/i, "").toLowerCase() : null;
-    return { strike: name, sameMap };
+    return { strike: name, sameMap, ...(penalty ? { penalty } : {}) };
 }
 
 // "X Flies up to double its fly Speed and then makes a talon Strike." and other moves before one Strike (2026-10-10):
@@ -404,6 +421,9 @@ export function readReaction(item, text) {
     if (bite) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: bite[2].toLowerCase(), penalty: 0, disrupts: false };
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
+    // Spurred by Death (batch 47): "Trigger An ally within 30 feet reduces a creature to 0 HP Effect The burnbearer Steps or Strides.": a
+    // move, nothing for the fight's numbers.
+    if (/^An? ally within \d+ feet reduces a creature to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Steps or Strides\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // Feign Death (batch 44; the GM's, as other ruses): "Trigger The opossum is reduced below 15 HP Effect The opossum collapses. It is
     // Off-Guard and can use actions that require only its mind, but any other action ends the ruse. A successful … check to Seek or …
     // to Recall Knowledge is required to determine that the animal is not, in fact, dead."
@@ -784,7 +804,7 @@ export function compileBuiltin(item, slug) {
     const multi = readMultiStrikes(text);
     if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}) };
     const sweep = readSweep(text);
-    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}) };
+    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
     const swipe = readSwipe(text);
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };
@@ -795,6 +815,9 @@ export function compileBuiltin(item, slug) {
     const sweepSkill = readSkillSweep(text);
     if (sweepSkill) return { builtin: "skill-sweep", actions, ...sweepSkill };
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
+    // (Batch 47, Phase Jump: "Frequency once per round Effect The dragon teleports up to 120 feet. If they are airborne, they maintain
+    // their momentum, …": a move that triggers no reactions.)
+    if (/^(?:Frequency once per (?:turn|round) Effect )?(?:The )?[^.]+? teleports up to \d+ feet\.(?: If (?:it|they|he|she) (?:is|are) airborne, (?:it|they|he|she) maintains? (?:its|their|his|her) momentum[^.]*\.)?$/i.test(text.trim())) return { builtin: "safe-move", actions };
     // (Batch 41: the user's choices, 2026-10-11.)
     const mythic = readMythic(text);
     if (mythic) return { ...mythic, actions };
@@ -888,10 +911,14 @@ function readHuntPrey(text) {
 // play): "Cost 1 Mythic Point Effect The creature ends one condition affecting it." (remove-condition), "Cost 1 Mythic Point Effect The
 // risen runelord regains an expended spell slot or can use Quickened Casting again." (recharge). null otherwise.
 function readMythic(text) {
-    const said = String(text).trim();
+    // (Batch 47: no "Effect" label, "Cost 1 Mythic Point The mythic lich regains one spell.")
+    const said = String(text).trim().replace(/^Cost 1 Mythic Point (?!Effect )/i, "Cost 1 Mythic Point Effect ");
     if (!/^Cost 1 Mythic Point Effect /i.test(said)) return null;
     if (/^Cost 1 Mythic Point Effect (?:The )?[^.]+? (?:ends|removes) (?:any )?one condition (?:currently )?affecting (?:it|itself|them|themselves|themself|him|himself|her|herself)\.$/i.test(said)) return { builtin: "mythic", kind: "remove-condition" };
-    const recharge = /^Cost 1 Mythic Point Effect (?:The )?[^.]+? regains (?:an expended|a previously cast) spell(?: slot)?( or can use Quickened Casting again)?\.$/i.exec(said);
+    const recharge = /^Cost 1 Mythic Point Effect (?:The )?[^.]+? regains (?:an expended|a previously cast|one) spell(?: slot)?( or can use Quickened Casting again)?\.$/i.exec(said)
+        // ("gains an additional use of any of their innate spells", "… an additional casting of any of his innate primal spells that he
+        // has already cast", batch 47.)
+        ?? /^Cost 1 Mythic Point Effect (?:The )?[^.]+? gains an additional (?:use|casting) of any of (?:its|their|his|her) innate (?:\w+ )?spells(?: that (?:it|they|he|she) (?:has|have) already cast)?\.$/i.exec(said);
     if (recharge) return { builtin: "mythic", kind: "recharge", ...(recharge[1] ? { quickened: true } : {}) };
     // ("gains one additional use of a spell or ability that is normally only available a limited number of times", "… of Breathe Energy".)
     return /^Cost 1 Mythic Point Effect (?:The )?[^.]+? gains one additional use of\b/i.test(said) ? { builtin: "mythic", kind: "recharge", abilities: true } : null;
@@ -1017,16 +1044,24 @@ function readSkillSweep(text) {
 // Strike, after which the boomerang returns to its hand", "makes a Strike with his fist and increases his reach by 5 feet for this
 // Strike". Live play: the Strike from the sheet; nothing more to apply. true or false.
 function readStrikeOnly(text) {
-    const sentences = String(text).trim().replace(/^Frequency once per (?:turn|round) Effect /i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 47: no final period, "Iloise can use Interact to draw a bomb, then Strike with it"; Lunge's other choices, "They can choose to
+    // Trip their opponent instead of making a Strike", "If the weapon has the disarm, shove, or trip trait, the guard can use the
+    // corresponding action instead of a Strike": the GM's.)
+    const sentences = String(text).trim().replace(/^Frequency once per (?:turn|round) Effect /i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/)
+        .filter((sentence, index) => index === 0 || !/^(?:(?:The [\w' -]+?|They|It|He|She) can (?:choose to )?(?:Trip|Disarm|Shove)(?: or (?:Trip|Disarm|Shove))?(?: (?:their|its|his|her) opponent)? instead of (?:making )?a Strike|If the weapon has the [\w, ]+ trait, (?:the [\w' -]+?|it|they|he|she) can use the corresponding action instead of a Strike)\.$/i.test(sentence));
     // (A first sentence that only tells what it does; batch 42: "The hunter's feet and weapons move in tandem.")
     if (sentences.length === 2 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Grab|Prone)\b|\d/.test(sentences[0])) sentences.shift();
     if (sentences.length !== 1) return false;
     const [sentence] = sentences;
     const who = String.raw`^(?:The |An? )?[^.]+?`;
-    const draw = new RegExp(String.raw`${who} (?:Interacts? to draw|draws?) (?:a|an|his|her|its|their) [^,.]+?(?: using the Interact action| with an Interact action)?,? (?:and |then |and then )+(?:Strikes with (?:it|that weapon|the weapon)|throws it as a ranged Strike|makes an? (?:[\w' -]+? )?Strike with it)(?:,? or [^.]+)?\.$`, "i");
+    // (Batch 47: "can use Interact to draw a bomb and then Strike with it", "Interacts to take out their machete or shortbow, then Strikes
+    // with the weapon", "then Strikes with the weapon they just drew".)
+    const draw = new RegExp(String.raw`${who} (?:(?:can )?(?:use )?Interacts? to (?:draw|take out)|draws?) (?:a|an|his|her|its|their|your) [^,.]+?(?: using the Interact action| with an Interact action)?,? (?:and |then |and then )+(?:Strikes? with (?:it|that weapon|the weapon(?: (?:they|he|she|it) just drew)?)|throws it as a ranged Strike|makes? an? (?:[\w' -]+? )?Strike with it)(?:,? or [^.]+)?\.$`, "i");
     const reload = new RegExp(String.raw`${who} reloads (?:its|his|her|their) [\w' -]+? and makes an? (?:[\w' -]+? )?Strike\.$`, "i");
     const returning = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike, after which the [\w' -]+? returns to (?:its|his|her|their|the [\w' -]+?'s) hand\.$`, "i");
-    const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet)\.$`, "i");
+    // (Batch 47, Lunge: "makes a Strike with a melee weapon, increasing the reach of the Strike by 5 feet", "… with their rotcarver
+    // scythe, increasing their reach by 5 feet for that Strike", "extending their reach by 5 feet for that Strike".)
+    const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet|makes a Strike with (?:a melee weapon|(?:his|her|its|their|the) [\w' -]+?), (?:increasing|extending) (?:the reach of the Strike|(?:his|her|its|their) reach) by \d+ feet(?: for (?:that|this|the) Strike)?)\.$`, "i");
     // (Batch 42, Skirmish Strike: "The hunter can Step and then Strike, or Strike and then Step.")
     const skirmish = new RegExp(String.raw`${who} (?:can )?(?:either )?Steps? and then Strikes?,? or Strikes? and then Steps?\.$`, "i");
     return [draw, reload, returning, reach, skirmish].some((pattern) => pattern.test(sentence));
