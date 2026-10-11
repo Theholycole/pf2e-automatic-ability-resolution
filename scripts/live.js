@@ -209,7 +209,7 @@ async function cardForAbility(message) {
     }
     if (plan?.builtin === "poison-weapon") {
         pendingPoisons.set(item.actor.uuid, { name: plan.poison.name, plan: plan.poison.plan, item, at: Date.now() });
-        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.poison.name} on its weapon. Its card comes with the next weapon Strike that hits (apply it if the Strike deals damage; a critical miss wastes it). Take a dose from its inventory.`]);
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.poison.name} on its weapon. Its card comes with the next weapon Strike that hits (apply it if the Strike deals damage; a critical miss wastes it).${plan.own ? "" : " Take a dose from its inventory."}`]);
         return;
     }
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".

@@ -944,3 +944,14 @@ The user's choice (2026-10-11): a GM button for each way; the simulator picks th
 - **Not read:** Clawed Feet (only while it's flying).
 - **Checked live in pftest** (PFTEST SIM B54 Giant Bat and Poltergeist from Monster Core, two dummies on the party's side, in an encounter; deleted afterwards): damage on the bat on an adjacent dummy's turn: Wing Thrash's offer with its second-Strike note; a dummy walking within 10 feet of the poltergeist: Telekinetic Defense's offer, its ranged Strike rolled from it.
 
+## Breach, glides, Envenom Weapon, Reactive Tail, Biting Snakes (2026-10-11, batch 55)
+
+- **Breach** (7): "The shark Swims up to its swim Speed, then Leaps vertically out of the water up to 25 feet high, making a Strike against a creature at any point during the jump (…). After the Strike, the shark splashes back down into the water." → a charge with two moves; "Leaps and makes a Strike at any point along its movement" → one. Not the megalodon's, whose data gives it one action.
+- **Nothing for a fight's numbers** (37, 2 Battlezoo): glides ("glides gently through the air, moving 5 feet toward the ground and up to 25 feet forward", the mammoth land star's hover and two Strides), Reel In's pull of a creature it holds (a free action too), a troop's "uses Change Formation", Shadow Stride (a Stride in dim light), Corrupt Water ("permanently befouls 10 cubic feet of liquid"), Adamantine Claws (against objects).
+- **Envenom Weapon** (7): "The seugathi applies their seugathi venom to one weapon they wield" → batch 41's Poison Weapon with the creature's own Seugathi Venom ability (its affliction), no doses to count; live play's note leaves out taking a dose.
+- **Reactive Tail** (8): "Trigger A creature within reach of the dragon's tail uses a manipulate action or a move action, makes a ranged attack, or leaves a square … Effect The dragon attempts an Athletics check to Trip the triggering creature. This check doesn't count toward the dragon's multiple attack penalty, …" → PF2e's Trip (without its attack trait) at the provoking creature, on batch 22's provoke trigger (the simulator: 37 uses in the bestiary run; live play: the provoke offer's card).
+- **Biting Snakes** (8): "Trigger A creature ends its turn adjacent to the medusa. Effect The medusa makes a snake fangs Strike against the creature." → a reaction Strike, { triggers: ["turn-end-adjacent"] }.
+  - **The simulator** (B82): as a creature's turn ends in its Melee, its Strike at it.
+  - **Live play:** as the turn passes, the Strike offer at the creature that ended its turn within 5 feet of it.
+- **Checked live in pftest** (PFTEST SIM B55 Medusa from Monster Core and a dummy on the party's side; deleted afterwards): the medusa's own turn ending: nothing; the dummy's ending beside it: "ended its turn beside it", Snake Fangs.
+

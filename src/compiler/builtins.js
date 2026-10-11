@@ -337,7 +337,7 @@ export function moveThenStrike(said) {
     // (Batch 37: "Strides or Steps, then Strikes with his hand crossbow", "Burrows and then Strikes", "Strides twice and Strikes with its bayonet".)
     const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or (?:${MOVES}|Steps?))?)( twice| up to two times)?(?:, then| and(?: then)?) Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?\.$`, "i").exec(text);
     if (bare) return { strides: bare[2] ? 2 : 1, strike: bare[3] ? bare[3].toLowerCase() : null };
-    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way|along (?:its|the) movement)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
     if (!match) return null;
     const how = match[2].trim();
     const strides = /three times/i.test(how) ? 3 : /twice|double|two times/i.test(how) ? 2 : 1;
@@ -351,6 +351,10 @@ export function moveThenStrike(said) {
 // bonus to its attack roll" → attackBonus; "the Strike's damage is increased
 // to 3d10+20" → damage. Any other sentence: null.
 export function readCharge(text) {
+    // (Batch 55, Breach: "The megalodon Swims up to its swim Speed, then Leaps vertically out of the water up to 25 feet high, making a
+    // Strike against a creature at any point during the jump (this lets it attack …). After the Strike, the megalodon splashes back down
+    // into the water.": two moves and a Strike; "It can use Improved Grab on this Strike and follow it up with Fast Swallow" (its own).)
+    if (/^(?:The )?[^.]+? Swims up to (?:its|their) swim Speed, then Leaps? vertically out of the water up to \d+ (?:feet high|feet in the air|feet), making a Strike against a creature (?:at any point during the jump|at the apex of the jump) \([^)]*\)\. After the Strike, (?:the [\w' -]+?|it) splashes back down(?: into the water)?\.(?: It can use Improved Grab on this Strike and follow it up with Fast Swallow\.)?$/i.test(String(text).trim())) return { strides: 2, strike: null };
     // (Batch 44, Leaping Charge: "The velociraptor Strides up to 10 feet, ignoring difficult terrain as it leaps over obstacles. It then
     // makes a Strike with its talons, gaining a +1 circumstance bonus to its attack roll.", "… Leaps up to 20 feet. It then makes a
     // mandibles Strike, gaining …": a move and a Strike, with that bonus.)
@@ -422,6 +426,10 @@ export function readReaction(item, text) {
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
+    // Biting Snakes (batch 55): "Trigger A creature ends its turn adjacent to the medusa. Effect The medusa makes a snake fangs Strike against
+    // the creature." → a reaction Strike as a creature ends its turn beside it.
+    const ending = /^An? creature ends its turn adjacent to (?:the [\w' -]+?|[A-Z][\w'-]+|it)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the (?:triggering )?creature\.$/i.exec(effect.trim()) : null;
+    if (ending) return { builtin: "reaction-strike", triggers: ["turn-end-adjacent"], strike: ending[1].toLowerCase(), penalty: 0, disrupts: false };
     // Wing Thrash (batch 54): "Trigger An adjacent enemy damages the giant bat Effect The bat makes one or two wing Strikes—one against the
     // triggering creature and one against another adjacent creature." → a reaction Strike at it as it's damaged (and a second at another).
     const thrash = /^An? adjacent enemy damages (?:the [\w' -]+?|it|him|her|them)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes one or two ([\w' -]+?) Strikes(?:\s*[-\u2013\u2014]\s*one against the triggering creature and one against another adjacent creature|, each against a different adjacent creature)\.$/i.exec(effect.trim()) : null;
@@ -838,7 +846,8 @@ export function compileBuiltin(item, slug) {
     if (type === "free") {
         const quickened = readQuickenedCasting(text);
         if (quickened) return quickened;
-        return readGmSpellcasting(text) ? { builtin: "no-effect" } : null;
+        // (Batch 55: a free action with nothing for the fight's numbers, Reel In's pull.)
+        return readGmSpellcasting(text) || readNoCombatEffect(text) ? { builtin: "no-effect" } : null;
     }
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
@@ -1046,6 +1055,14 @@ function readPlaneShift(text) {
 // Strides with a bonus to its Speed (Gallop). true or false.
 function readNoCombatEffect(text) {
     const said = String(text).replace(/’/g, "'").trim();
+    // (Batch 55: gliding; moving a creature it holds closer; a troop's Change Formation; a Stride in dim light; befouling water; adamantine
+    // claws against objects.)
+    if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
+    if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
+    if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
+    if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    if (/^(?:Frequency one per hour Effect |Frequency once per hour Effect )?(?:The )?[^.]+? infuses (?:their|its) body with adamantine\. For the next minute, (?:their|its) melee Strikes are treated as adamantine and ignore half the Hardness of any object hit\.$/i.test(said)) return true;
     // (Batch 45: capsizing a vessel with its check, "must succeed at a @Check[athletics|dc:35] check … or the pilot's Sailing Lore DC,
     // whichever is higher"; Drench, "puts out all fires in a @Template[emanation|distance:5]. … attempts to counteract magical fires".)
     if (/^(?:The )?[^.]+? (?:tries|attempts) to capsize an (?:adjacent )?(?:aquatic )?vessel\b/i.test(said) && /\bthe pilot's Sailing Lore DC, whichever is higher\.$/i.test(said)) return true;

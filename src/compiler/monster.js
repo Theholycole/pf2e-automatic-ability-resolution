@@ -1642,6 +1642,21 @@ function followUpStrikeText(html) {
 // a piercing or slashing weapon and has a free hand Effect The assassin applies a poison to the weapon." → { builtin: "poison-weapon",
 // actions, poison: { name, uuid, plan } (the injury poison it carries, its affliction compiled; the highest-level one), doses }. null
 // when it carries none that reads.
+// Its own venom on its weapon (batch 55, Envenom Weapon): the ability with that name and stages, as Poison Weapon's poison, with no doses
+// to count (own: true).
+function ownVenom(item, actor, name) {
+    const owner = actor ?? item.actor ?? item.parent;
+    const source = (owner?.items?.contents ?? owner?.items ?? []).find((other) => other !== item && String(other.name ?? "").toLowerCase() === name.toLowerCase() && /<strong>\s*Stage\s+1\s*<\/strong>/i.test(other.system?.description?.value ?? ""));
+    if (!source) return null;
+    let plan = null;
+    try {
+        plan = compileAffliction(source, base(source));
+    } catch {
+        plan = null;
+    }
+    return plan?.resolution ? { builtin: "poison-weapon", actions: Number(item.system?.actions?.value) || 1, poison: { name: source.name, uuid: source.uuid ?? null, plan }, doses: 99, own: true } : null;
+}
+
 function poisonWeapon(item, actor) {
     if (item.system?.actionType?.value !== "action") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
@@ -1649,6 +1664,10 @@ function poisonWeapon(item, actor) {
     const [first, ...rest] = said.split(/(?<=\.)\s+(?=[A-Z])/);
     // ("applies a poison to the weapon", "applies one of their black adder venom poisons to their wielded weapon", "draws a poison and
     // applies it to a weapon", "Interacts to draw an injury poison and applies the poison to the required weapon".)
+    // (Batch 55, Envenom Weapon: "The seugathi applies their seugathi venom to one weapon they wield", "applies their innate seugathi venom
+    // to their longsword": its own venom, the ability by that name.)
+    const venom = /^(?:The )?[^.]+? applies (?:its|their|his|her) (?:innate )?([\w' -]+? venom) to (?:one weapon (?:it|they|he|she) wields?|(?:its|their|his|her) [\w' -]+?)\.$/i.exec(first ?? "");
+    if (venom && !rest.length) return ownVenom(item, actor, venom[1]);
     if (!/^(?:The )?[^.]+? (?:appl(?:y|ies|ied) (?:a |the |one of [^.]*? )?poisons? to|draws a poison and applies it to|Interacts to draw an injury poison and applies the poison to) (?:the|a|its|their|his|her) (?:piercing or slashing |required |wielded )?(?:weapon|dagger)(?: of (?:its|their|his|her) choice)?\.$/i.test(first ?? "")) return null;
     // (Its other words: the next hit that deals damage, drawing it with a free hand, a critical failure wasting it.)
     if (rest.some((sentence) => !/^If (?:(?:its|their|his|her) next attack with that weapon(?: before the end of (?:its|their|his|her) next turn)? hits and deals damage, (?:the target is afflicted with the poison|it applies the effects? of the poison)|(?:it|they|he|she) has a free hand, (?:it|they|he|she) can Interact to draw a poison as part of the action|(?:it|they|he|she) critically fails? the attack roll, the poison is wasted)\.$/i.test(sentence))) return null;
@@ -1870,6 +1889,23 @@ export function followUpSkill(item, html, basicActions) {
     return { ...plan, ...base(item, { traits }), targeting: { ...plan.targeting, target: "the creature the Strike hits" }, trigger: { event: "use" } };
 }
 
+// A skill action as its reaction to a provoking creature (2026-10-11, batch 55, Reactive Tail): "Trigger A creature within reach of the
+// dragon's tail uses a manipulate action or a move action, makes a ranged attack, or leaves a square during a move action it's using Effect
+// The dragon attempts an Athletics check to Trip the triggering creature. This check doesn't count toward the dragon's multiple attack
+// penalty, and its multiple attack penalty doesn't apply to this check." → PF2e's Trip (or Shove, Grapple) at the provoking creature.
+function provokedSkill(item, basicActions) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
+    const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain);
+    const trigger = parts ? readReactionTrigger(parts[1]) : null;
+    if (trigger?.event !== "provoke") return null;
+    const match = /^(?:The )?[^.]+? attempts an Athletics check to (Trip|Shove|Grapple) the triggering creature\.(?: This check (?:doesn't|does not) count toward (?:the [\w' -]+?'s|its|their) multiple attack penalty, and (?:its|their) multiple attack penalty (?:doesn't|does not) apply to this check\.)?$/i.exec(parts[2]);
+    const basic = match ? basicActions[match[1].toLowerCase()] : null;
+    if (!basic?.resolution) return null;
+    const plan = structuredClone(basic);
+    return { ...plan, ...base(item, { traits: (plan.traits ?? []).filter((trait) => trait !== "attack") }), targeting: { ...plan.targeting, target: "the attacker" }, trigger };
+}
+
 // You're Next (2026-10-11, batch 52): "Trigger The prisoner reduces a creature to 0 hit points. Effect The prisoner attempts an
 // Intimidation check with a +2 circumstance bonus to Demoralize a single creature it can see and that can see them." (also "attempts to
 // Demoralize a single creature he can see. He gains a +2 circumstance bonus to this check", "… a creature within 60 feet, with a +2
@@ -2050,7 +2086,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

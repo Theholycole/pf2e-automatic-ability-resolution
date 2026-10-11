@@ -58,6 +58,8 @@ export function setUpReactions({ compileItem }) {
     // A creature's turn starting (Petrifying Glance), and the encounter starting (Chilling Cry's "rolls initiative"; batch 18).
     Hooks.on("updateCombat", (combat, changed) => {
         if (isActiveGM() && combat.started && ("turn" in changed || "round" in changed)) serially("turn", () => onTurnStart(combat));
+        // (A creature ending its turn beside a monster, Biting Snakes; batch 55.)
+        if (isActiveGM() && combat.started && ("turn" in changed || "round" in changed)) serially("turn-end", () => onTurnEnd(combat));
     });
     Hooks.on("combatStart", (combat) => {
         if (isActiveGM()) serially("initiative", () => onInitiative(combat));
@@ -334,6 +336,21 @@ async function ownStrike(message, context, scene, combat, token) {
         if (!trigger?.reaction || trigger.event !== "own-strike" || !trigger.on?.includes(context.outcome)) continue;
         if (!ownStrikeSetsOff(trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [] }) || !fitsSize(target.actor.size, trigger.maxSize)) continue;
         return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target, trigger: `took ${degreeWords(context.outcome)} from ${strike.name}`, free: !!trigger.free });
+    }
+}
+
+// A creature ending its turn adjacent to a monster (Biting Snakes, batch 55): its Strike offer at that creature.
+async function onTurnEnd(combat) {
+    const token = combat.previous?.tokenId ? combat.scene?.tokens?.get(combat.previous.tokenId) ?? game.scenes.get(combat.previous.sceneId ?? "")?.tokens?.get(combat.previous.tokenId) : null;
+    const scene = token?.parent;
+    if (!token?.actor || !scene) return;
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (monster.id === token.id || !isFoe(monster, token)) continue;
+        const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("turn-end-adjacent"));
+        if (!entry || distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > 5) continue;
+        const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`);
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, penalty: entry.plan.penalty ?? 0, trigger: "ended its turn beside it" });
     }
 }
 
