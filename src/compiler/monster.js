@@ -1499,6 +1499,35 @@ function followUpStrikeText(html) {
     return { html: text, previousMap };
 }
 
+// Poison Weapon (2026-10-11, batch 41; the user's choice: its poison on the next Strike that hits): "Requirements The assassin is wielding
+// a piercing or slashing weapon and has a free hand Effect The assassin applies a poison to the weapon." → { builtin: "poison-weapon",
+// actions, poison: { name, uuid, plan } (the injury poison it carries, its affliction compiled; the highest-level one), doses }. null
+// when it carries none that reads.
+function poisonWeapon(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const said = plain.replace(/^Requirements? (?:The )?[^.]+? is (?:wielding|holding) a piercing or slashing weapon(?: and has a free hand)?\.? Effect /i, "");
+    const [first, ...rest] = said.split(/(?<=\.)\s+(?=[A-Z])/);
+    // ("applies a poison to the weapon", "applies one of their black adder venom poisons to their wielded weapon", "draws a poison and
+    // applies it to a weapon", "Interacts to draw an injury poison and applies the poison to the required weapon".)
+    if (!/^(?:The )?[^.]+? (?:appl(?:y|ies|ied) (?:a |the |one of [^.]*? )?poisons? to|draws a poison and applies it to|Interacts to draw an injury poison and applies the poison to) (?:the|a|its|their|his|her) (?:piercing or slashing |required |wielded )?(?:weapon|dagger)(?: of (?:its|their|his|her) choice)?\.$/i.test(first ?? "")) return null;
+    // (Its other words: the next hit that deals damage, drawing it with a free hand, a critical failure wasting it.)
+    if (rest.some((sentence) => !/^If (?:(?:its|their|his|her) next attack with that weapon(?: before the end of (?:its|their|his|her) next turn)? hits and deals damage, (?:the target is afflicted with the poison|it applies the effects? of the poison)|(?:it|they|he|she) has a free hand, (?:it|they|he|she) can Interact to draw a poison as part of the action|(?:it|they|he|she) critically fails? the attack roll, the poison is wasted)\.$/i.test(sentence))) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const carried = (owner?.items?.contents ?? owner?.items ?? []).filter((other) => other.type === "consumable" && (other.system?.traits?.value ?? []).includes("poison") && /<strong>\s*Stage\s+1\s*<\/strong>/i.test(other.system?.description?.value ?? ""));
+    const injury = carried.filter((other) => (other.system?.traits?.value ?? []).includes("injury"));
+    const best = [...(injury.length ? injury : carried)].sort((a, b) => (Number(b.system?.level?.value) || 0) - (Number(a.system?.level?.value) || 0))[0];
+    if (!best) return null;
+    let plan = null;
+    try {
+        plan = compileAffliction(best, base(best));
+    } catch {
+        plan = null;
+    }
+    if (!plan?.resolution) return null;
+    return { builtin: "poison-weapon", actions: Number(item.system?.actions?.value) || 1, poison: { name: best.name, uuid: best.uuid ?? null, plan }, doses: Number(best.system?.quantity) || 1 };
+}
+
 // Focus Gaze (2026-10-10, batch 39): "The medusa fixes their glare at a creature they can see within 30 feet. The target must
 // immediately attempt a … save against the medusa's petrifying gaze. If the creature was already Slowed …, a failed save causes it to
 // be Petrified permanently. After attempting its save, the creature is then temporarily immune …": the gaze it names (its own
@@ -1786,7 +1815,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 

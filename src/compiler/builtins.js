@@ -330,6 +330,14 @@ export function readMomentum(text) {
 export function readReaction(item, text) {
     // (Linked names as words: "@UUID[…]{Concealment}" → "Concealment".)
     text = text.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
+    // Undying Myth (batch 41): "Cost all the creature's Mythic Points Trigger The creature would die and has at least 1 Mythic Point Effect
+    // The creature remains standing and conscious, and recovers 50% of its maximum Hit Points."
+    const undying = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious, and recovers (\d+)% of (?:its|their|his|her) maximum Hit Points\.?$/i.exec(text.trim());
+    if (undying && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", fraction: Number(undying[1]) / 100 };
+    const undyingHp = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious,? and recovers (\d+) Hit Points\.?$/i.exec(text.trim().replace(/@Damage\[(\d+)\[healing\]\](?:\{[^}]*\})?/g, "$1"));
+    if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
+    // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
+    if (readGmSpellcasting(text)) return { builtin: "no-effect" };
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a
     // jaws Strike against that creature".)
@@ -703,6 +711,12 @@ export function compileBuiltin(item, slug) {
     }
     // Reactions, and free actions with a trigger (Cushioned Blow).
     if (type === "reaction" || (type === "free" && /\bTrigger\b/.test(text))) return readReaction(item, text);
+    // (Free actions with no trigger, batch 41: Quickened Casting, Drain Bonded Item.)
+    if (type === "free") {
+        const quickened = readQuickenedCasting(text);
+        if (quickened) return quickened;
+        return readGmSpellcasting(text) ? { builtin: "no-effect" } : null;
+    }
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
     const multi = readMultiStrikes(text);
@@ -716,7 +730,19 @@ export function compileBuiltin(item, slug) {
     // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
     if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
     if (readStrikeOnly(text)) return { builtin: "no-effect", strikeOnly: true };
-    if (readSafeMove(text)) return { builtin: "safe-move", actions };
+    if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
+    // (Batch 41: the user's choices, 2026-10-11.)
+    const mythic = readMythic(text);
+    if (mythic) return { ...mythic, actions };
+    const quickened = readQuickenedCasting(text);
+    if (quickened) return quickened;
+    if (readSpellstrike(item, text)) return { builtin: "spellstrike", actions };
+    // Speed Surge (batch 41; the user's choice: a one-action double move, three a fight): "Frequency three times per day Effect The drake
+    // Strides or Flies twice", "… moves up to twice its Speed. It can do this three times per day."
+    const moves = String.raw`(?:Strides|Flies|Swims|Burrows|Climbs|moves)(?: or (?:Strides|Flies|Swims|Burrows|Climbs))?`;
+    const surge = new RegExp(String.raw`^(?:Frequency (\w+) times per day[;.]? Effect )?(?:The )?[^.]+? ${moves} (?:twice|up to twice (?:its|their|his|her) Speed)\.?(?: (?:It|They|He|She) can do this (\w+) times per day\.)?$`, "i").exec(text.trim());
+    if (surge && (surge[1] || surge[2])) return { builtin: "speed-surge", actions, uses: Number(surge[1] ?? surge[2]) || { two: 2, three: 3 }[(surge[1] ?? surge[2]).toLowerCase()] || 3 };
+    if (readGmSpellcasting(text)) return { builtin: "no-effect" };
     const prey = readHuntPrey(text);
     if (prey) return prey;
     if (readNoCombatEffect(text)) return { builtin: "no-effect" };
@@ -786,6 +812,64 @@ function readHuntPrey(text) {
     // (Its other words: the Seek and Track bonuses, the range increment, how long it lasts.)
     const rest = text.split(/(?<=\.)\s+(?=[A-Z])/).filter((sentence) => !/\bdesignates?\b|\bcircumstance bonus to (?:Perception|Survival)\b|\bsecond range increment\b|\b(?:These effects|This effect|The effects?) lasts? until\b|\bcan have only one (?:creature|prey) designated\b|\bmust be able to see or hear the prey\b/i.test(sentence));
     return rest.length ? null : { builtin: "no-effect" };
+}
+
+// Mythic abilities (2026-10-11, batch 41; the user's choice: three Mythic Points a fight in the simulator, a note for the GM in live
+// play): "Cost 1 Mythic Point Effect The creature ends one condition affecting it." (remove-condition), "Cost 1 Mythic Point Effect The
+// risen runelord regains an expended spell slot or can use Quickened Casting again." (recharge). null otherwise.
+function readMythic(text) {
+    const said = String(text).trim();
+    if (!/^Cost 1 Mythic Point Effect /i.test(said)) return null;
+    if (/^Cost 1 Mythic Point Effect (?:The )?[^.]+? (?:ends|removes) (?:any )?one condition (?:currently )?affecting (?:it|itself|them|themselves|themself|him|himself|her|herself)\.$/i.test(said)) return { builtin: "mythic", kind: "remove-condition" };
+    const recharge = /^Cost 1 Mythic Point Effect (?:The )?[^.]+? regains (?:an expended|a previously cast) spell(?: slot)?( or can use Quickened Casting again)?\.$/i.exec(said);
+    if (recharge) return { builtin: "mythic", kind: "recharge", ...(recharge[1] ? { quickened: true } : {}) };
+    // ("gains one additional use of a spell or ability that is normally only available a limited number of times", "… of Breathe Energy".)
+    return /^Cost 1 Mythic Point Effect (?:The )?[^.]+? gains one additional use of\b/i.test(said) ? { builtin: "mythic", kind: "recharge", abilities: true } : null;
+}
+
+// Quickened Casting (2026-10-11, batch 41): "Frequency once per day Effect If the risen runelord's next action is to cast a cantrip or
+// spell that's 4th-rank or lower, reduce the number of actions to cast it by 1 (minimum 1 action)." → { builtin: "quickened-casting",
+// maxRank } (null: any rank). The tradition it names ("a sorcerer spell", "an occult spell") is the GM's.
+function readQuickenedCasting(text) {
+    const said = String(text).trim();
+    // (Not with a requirement the simulation can't check: "is possessing a host using Mind Worm".)
+    if (/\bRequirements?\b/.test(said) && !/\bRequirements? (?:The )?[^.]+? hasn't used Quickened Casting since\b/i.test(said)) return null;
+    if (!/^(?:Frequency [^.;]+?[.;]?\s*(?:Requirements? [^.]+? )?(?:Effect )?)?(?:If|When) (?:the [\w' -]+?['’]s|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?['’]s|its|their|his|her) next action is to cast [^.]*?\breduces? the number of actions to cast it by 1 \(minimum 1 action\)\.$|^(?:Frequency [^.;]+?[.;]?\s*(?:Effect )?)?When (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?) casts a spell [^.]*?\breduce the number of actions to cast it by 1 \(minimum 1 action\)\.$/i.test(said)) return null;
+    const rank = /\b(\d+)(?:st|nd|rd|th)(?:-| )(?:or lower )?(?:rank|level)\b/i.exec(said)?.[1];
+    return { builtin: "quickened-casting", maxRank: rank ? Number(rank) : null };
+}
+
+// A monster's Spellstrike (2026-10-11, batch 41): "… Casts a Spell that takes 1 or 2 actions to cast and requires a spell attack roll
+// … makes a melee Strike …", "channels a spell … into a claw or greatsword Strike": a magus's Spellstrike (the simulator's C20).
+function readSpellstrike(item, text) {
+    return (/^Spellstrike$/i.test(String(item?.name ?? "").trim()) || /\bchannels a spell\b/i.test(text)) && (/\bspell attack roll\b/i.test(text) || /\bchannels a spell into\b/i.test(text)) && /\bStrike\b/.test(text);
+}
+
+// Spellcasting the simulation doesn't play, and the harrowkin's initiative tricks (2026-10-11, batch 41; the user's choice: the GM's):
+// Drain Bonded Item ("cast one prepared spell … already cast … without spending a spell slot"), Reach Spell ("increase that spell's
+// range by 30 feet"), Counterspell ("expends a prepared spell to counter the triggering creature's casting of that same spell"), Shuffle
+// the Deck (rerolled initiative), Read the Cards (a suit's effects as it rolls initiative).
+function readGmSpellcasting(text) {
+    const said = String(text).trim();
+    return /\bcast one prepared spell (?:that )?(?:they|he|she|it) (?:had )?(?:already )?(?:previously )?(?:prepared today and already )?cast\b[^.]*\bwithout spending a spell slot\b/i.test(said)
+        || /\bcan cast one prepared spell (?:she|he|they|it) has already cast\b/i.test(said)
+        || /\bcast one (?:prepared )?spell (?:you|they|he|she|it) prepared today and already cast\b/i.test(said)
+        || /\bregains the ability to cast one spell (?:she|he|they|it) has already cast\b/i.test(said)
+        || /\bexpends (?:one of (?:its|their|his|her) spell slots|a prepared spell),? (?:to counter|losing the spell slot)\b/i.test(said)
+        || /\bIf the next action (?:[\w' -]+? |you )?(?:takes|uses|use) is to Cast a Spell that has a range, increase that spell's range by 30 feet\b/i.test(said)
+        || /\bexpends a prepared spell to counter the triggering creature's casting of (?:that|the) same spell\b/i.test(said)
+        || /\ball creatures currently in initiative reroll their initiative\b/i.test(said)
+        || /^Trigger (?:The )?[^.]+? is about to roll initiative Effect (?:The )?[^.]+? attempts to rewrite destiny\b/i.test(said);
+}
+
+// A retreat with a bonus to its AC against the reactions it triggers (2026-10-11, batch 41; the user's choice: a move that doesn't
+// trigger reactions): "Requirements The kobold warrior is adjacent to at least one enemy. Effect The kobold warrior Strides up to its
+// Speed plus 5 feet and gains a +2 circumstance bonus to AC against reactions triggered by this movement. It must end this movement in a
+// space that's not adjacent to any enemy." (Hurried Retreat, Scamper; also "If the kobold is adjacent to at least one enemy, …").
+function readRetreat(text) {
+    const said = String(text).replace(/’/g, "'").trim().replace(/^Requirements? (?:The )?[^.]+? is adjacent to at least one enemy\.? Effect /i, "").replace(/^If (?:the )?[^,]+? is adjacent to at least one enemy, /i, "");
+    return /^(?:The )?[^.]+? Strides up to (?:its|their|his|her) (?:s|S)peed(?: plus 5 feet)?|^(?:The )?[^.]+? Strides up to \d+ feet/i.test(said)
+        && /\band gains? a \+2 circumstance bonus to AC against reactions triggered by this movement\.(?: (?:It|They|He|She|The [\w' -]+?) must end this movement in a space that's not adjacent to any enemy\.)?$/i.test(said);
 }
 
 // A move that doesn't trigger reactions (2026-10-10, batch 38): "The cultist jumps up to half its Speed. This movement doesn't

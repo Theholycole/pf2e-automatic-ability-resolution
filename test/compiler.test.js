@@ -1301,3 +1301,30 @@ test("Mist Escape, a weapon that appears in its hand, Goblin Scuttle and Avengin
     assert.deepEqual(compileMonsterAbility(item("Goblin Scuttle", "<p><strong>Trigger</strong> An ally ends a move action adjacent to the test goblin</p><hr /><p><strong>Effect</strong> The test goblin Steps.</p>", "reaction")), { builtin: "no-effect" });
     assert.deepEqual(compileMonsterAbility(item("Avenging Bite", "<p>When a creature within the reach of the test wolf's bite attacks one of its allies, the test wolf can spend its reaction to make a jaws Strike against that creature.</p>", "reaction")), { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: "jaws", penalty: 0, disrupts: false });
 });
+
+test("mythic abilities, Quickened Casting, Spellstrike, Speed Surge, retreats, spellcasting the GM keeps, Poison Weapon (2026-10-11, batch 41)", () => {
+    const item = (name, html, type = "action", actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const compile = (name, html, type, actions) => compileMonsterAbility(item(name, html, type, actions));
+    // Mythic: three Mythic Points a fight in the simulator; notes for the GM.
+    assert.deepEqual(compile("Remove a Condition", "<p><strong>Cost</strong> 1 Mythic Point</p><p><strong>Effect</strong> The test lord ends one condition affecting it.</p>"), { builtin: "mythic", kind: "remove-condition", actions: 1 });
+    assert.deepEqual(compile("Recharge", "<p><strong>Cost</strong> 1 Mythic Point</p><p><strong>Effect</strong> The test lord regains an expended spell slot or can use Quickened Casting again.</p>"), { builtin: "mythic", kind: "recharge", quickened: true, actions: 1 });
+    assert.deepEqual(compile("Recharge", "<p><strong>Cost</strong> 1 Mythic Point</p><p><strong>Effect</strong> The test wyrm gains one additional use of Test Breath.</p>"), { builtin: "mythic", kind: "recharge", abilities: true, actions: 1 });
+    assert.deepEqual(compile("Undying Myth", "<p><strong>Cost</strong> all the creature's Mythic Points</p><p><strong>Trigger</strong> The creature would die and has at least 1 Mythic Point</p><p><strong>Effect</strong> The creature remains standing and conscious, and recovers 50% of its maximum Hit Points.</p>", "free"), { builtin: "mythic", kind: "undying", fraction: 0.5 });
+    // Quickened Casting (a free action), Spellstrike, Speed Surge.
+    assert.deepEqual(compile("Quickened Casting", "<p><strong>Frequency</strong> once per day</p><p><strong>Effect</strong> If the test mage's next action is to cast a cantrip or spell that's 4th-rank or lower, reduce the number of actions to cast it by 1 (minimum 1 action).</p>", "free"), { builtin: "quickened-casting", maxRank: 4 });
+    assert.deepEqual(compile("Spellstrike", "<p>The test magus Casts a Spell that takes 1 or 2 actions to cast and requires a spell attack roll. The effects of the spell don't occur immediately but are imbued into its attack instead. It makes a melee Strike.</p>", "action", 2), { builtin: "spellstrike", actions: 2 });
+    assert.deepEqual(compile("Speed Surge", "<p><strong>Frequency</strong> three times per day</p><p><strong>Effect</strong> The test drake Strides or Flies twice.</p>"), { builtin: "speed-surge", actions: 1, uses: 3 });
+    assert.deepEqual(compile("Speed Surge", "<p>The test drake moves up to twice its Speed. It can do this three times per day.</p>"), { builtin: "speed-surge", actions: 1, uses: 3 });
+    // A retreat with +2 AC against reactions: a move that doesn't trigger them.
+    assert.deepEqual(compile("Test Retreat", "<p><strong>Requirements</strong> The test kobold is adjacent to at least one enemy.</p><p><strong>Effect</strong> The test kobold Strides up to its Speed plus 5 feet and gains a +2 circumstance bonus to AC against reactions triggered by this movement. It must end this movement in a space that's not adjacent to any enemy.</p>"), { builtin: "safe-move", actions: 1 });
+    // The GM's: Drain Bonded Item, Reach Spell, Counterspell, the harrowkin's initiative.
+    assert.deepEqual(compile("Drain Bonded Item", "<p><strong>Frequency</strong> once per day</p><p><strong>Requirements</strong> The test wizard hasn't acted yet on this turn</p><p><strong>Effect</strong> The test wizard can cast one prepared spell he has already cast today without spending a spell slot.</p>", "free"), { builtin: "no-effect" });
+    assert.deepEqual(compile("Reach Spell", "<p>If the next action the test sorcerer uses is to Cast a Spell that has a range, increase that spell's range by 30 feet.</p>"), { builtin: "no-effect" });
+    assert.deepEqual(compile("Counterspell", "<p><strong>Trigger</strong> A creature casts a spell the test lich has prepared.</p><p><strong>Effect</strong> The test lich expends a prepared spell to counter the triggering creature's casting of that same spell.</p>", "reaction"), { builtin: "no-effect" });
+    // Poison Weapon: the injury poison it carries.
+    const venom = { type: "consumable", name: "Test Venom", system: { traits: { value: ["consumable", "injury", "poison"] }, level: { value: 3 }, quantity: 2, description: { value: "<p><strong>Saving Throw</strong> @Check[fortitude|dc:20]</p><p><strong>Maximum Duration</strong> 4 rounds</p><p><strong>Stage 1</strong> @Damage[1d6[poison]] damage (1 round)</p><p><strong>Stage 2</strong> @Damage[2d6[poison]] damage (1 round)</p>" } } };
+    const poisoner = item("Poison Weapon", "<p><strong>Requirements</strong> The test assassin is wielding a piercing or slashing weapon and has a free hand</p><p><strong>Effect</strong> The test assassin applies a poison to the weapon.</p>");
+    const plan = compileMonsterAbility(poisoner, { actor: { items: [poisoner, venom] } });
+    assert.deepEqual([plan?.builtin, plan?.poison?.name, plan?.doses, plan?.poison?.plan?.resolution?.check?.statistic], ["poison-weapon", "Test Venom", 2, "fortitude"]);
+    assert.equal(compileMonsterAbility(poisoner, { actor: { items: [poisoner] } })?.builtin, undefined, "not with no poison to apply");
+});

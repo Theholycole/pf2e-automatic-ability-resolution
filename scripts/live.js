@@ -194,6 +194,21 @@ async function cardForAbility(message) {
         if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
         return;
     }
+    // Batch 41 (the user's choices, 2026-10-11): Mythic abilities and Quickened Casting as notes for the GM; Poison Weapon's poison
+    // with its next weapon Strike that hits.
+    if (plan?.builtin === "mythic" && plan.kind !== "undying") {
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: it spends 1 Mythic Point and ${plan.kind === "remove-condition" ? "ends one condition affecting it (remove it from its sheet)" : "regains an expended spell, or another use of what it names"}.`]);
+        return;
+    }
+    if (plan?.builtin === "quickened-casting") {
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: its next spell${plan.maxRank ? ` (rank ${plan.maxRank} or lower)` : ""} takes one action fewer (minimum 1).`]);
+        return;
+    }
+    if (plan?.builtin === "poison-weapon") {
+        pendingPoisons.set(item.actor.uuid, { name: plan.poison.name, plan: plan.poison.plan, item, at: Date.now() });
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.poison.name} on its weapon. Its card comes with the next weapon Strike that hits (apply it if the Strike deals damage; a critical miss wastes it). Take a dose from its inventory.`]);
+        return;
+    }
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".
     if (plan?.builtin === "hunt-prey") {
         const prey = [...game.user.targets][0];
@@ -319,6 +334,8 @@ async function hazardCast(message, state, { rank, dc }) {
 // client; a use more than 10 minutes old is dropped).
 const pendingActivities = new Map();
 const ACTIVITY_WAIT = 10 * 60 * 1000;
+// A poisoned weapon's poison (batch 41), until its next weapon Strike that hits.
+const pendingPoisons = new Map();
 // Each monster's last Strike, hit or miss (batch 36): the creature a follow-up acts on, and the Strike's degree.
 const lastStrikes = new Map();
 
@@ -349,6 +366,14 @@ async function cardsForRiders(message) {
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const target = targetToken?.object ?? targetToken;
     if (target?.actor) lastStrikes.set(actor.uuid, { message, actor, strike, target, targetToken, context, sourceToken: message.token ?? null, at: Date.now() });
+    // (A poisoned weapon, batch 41: a weapon Strike, not an unarmed attack; it hits, or a critical miss wastes the poison.)
+    const poisoned = pendingPoisons.get(actor.uuid);
+    if (poisoned && Date.now() - poisoned.at <= ACTIVITY_WAIT && !(strike.system?.traits?.value ?? []).includes("unarmed")) {
+        if (hit && target?.actor) {
+            pendingPoisons.delete(actor.uuid);
+            await postCard({ plan: poisoned.plan, item: { name: poisoned.name, uuid: poisoned.item.uuid }, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: "free" }, warning: "Only if the Strike dealt damage." });
+        } else if (context.outcome === "criticalFailure") pendingPoisons.delete(actor.uuid);
+    }
     // (The activity's Strike, hit or miss, uses it up.)
     const pending = pendingActivities.get(actor.uuid);
     if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
@@ -581,6 +606,13 @@ async function cardsForDeath(actor) {
     const last = recentDeaths.get(actor.uuid);
     if (last && Date.now() - last < 30 * 1000) return;
     await ready;
+    // Undying Myth (batch 41): a note for the GM, who keeps its Mythic Points.
+    const undying = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).find(({ plan }) => plan?.builtin === "mythic" && plan.kind === "undying");
+    if (undying) {
+        recentDeaths.set(actor.uuid, Date.now());
+        const hp = undying.plan.amount ?? Math.floor((actor.system?.attributes?.hp?.max ?? 0) * (undying.plan.fraction ?? 0.5));
+        await noteToGM(actor, actor.getActiveTokens(true, true)[0]?.document ?? null, [`<strong>${undying.item.name}</strong>: if it has a Mythic Point left, it spends them all and stays standing and conscious with ${hp} Hit Points.`]);
+    }
     const deaths = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).filter(({ plan }) => plan?.trigger?.event === "death" && plan.resolution && (cardCheck(plan) || plan.resolution.kind === "healing"));
     if (!deaths.length) return;
     recentDeaths.set(actor.uuid, Date.now());

@@ -793,3 +793,22 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **Avenging Bite** (2): "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a jaws Strike against that creature" and "within the reach of": batch 38's reaction Strike to an attack on an ally.
 - Compiler only: the plays and cards are batch 38's; no live check needed.
 
+## Mythic abilities, Quickened Casting, Speed Surge, Poison Weapon (2026-10-11, batch 41)
+
+The user's choices of 2026-10-11 for the larger groups left.
+
+- **Mythic abilities** (92): "Cost 1 Mythic Point Effect The creature ends one condition affecting it" (Remove a Condition), "… regains an expended spell slot or can use Quickened Casting again", "… gains one additional use of …" (Recharge), "Cost all the creature's Mythic Points Trigger The creature would die … Effect … remains standing and conscious, and recovers 50% of its maximum Hit Points" (Undying Myth, or the Hit Points it names).
+  - **Live play:** notes for the GM, who keeps its Mythic Points: on use, "it spends 1 Mythic Point and ends one condition affecting it"; as it drops to 0 Hit Points, "if it has a Mythic Point left, it spends them all and stays standing and conscious with 270 Hit Points".
+  - **The simulator** (B72): three Mythic Points a fight: an action to end its worst condition; an action to regain a spent spell, a recharging ability or Quickened Casting; Undying Myth at 0 Hit Points.
+- **Quickened Casting** (37): "If the risen runelord's next action is to cast a cantrip or spell that's 4th-rank or lower, reduce the number of actions to cast it by 1 (minimum 1 action)" (the tradition it names is the GM's; not with a requirement the simulation can't check). Live play: a note for the GM. The simulator: a spell of that rank or lower one action fewer, once a fight.
+- **A monster's Spellstrike** (12): the simulator's magus Spellstrike (C20), with the spells it has. Live play: PF2e's own.
+- **Speed Surge** (28, 2 Battlezoo): "Frequency three times per day Effect The drake Strides or Flies twice", "moves up to twice its Speed. It can do this three times per day". The simulator: a foe two Strides away engaged for one action, three times a fight. Live play: the GM moves the token.
+- **Hurried Retreat, Scamper** (30): "Strides up to its Speed plus 5 feet and gains a +2 circumstance bonus to AC against reactions triggered by this movement": batch 38's move that doesn't trigger reactions.
+- **Poison Weapon** (12): "applies a poison to the weapon", "applies one of their black adder venom poisons to their wielded weapon", "draws a poison and applies it to a weapon": the injury poison it carries (its highest-level one with stages), its affliction compiled.
+  - **Live play:** a note for the GM ("Shadow Essence on its weapon … Take a dose from its inventory"); its next weapon Strike that hits (not an unarmed attack) brings the poison's save card on the creature hit, "Only if the Strike dealt damage"; a critical miss wastes it.
+  - **The simulator:** an Interact (it provokes) while it has doses, then the poison with the next weapon Strike that hits and deals damage; a critical miss wastes it.
+- **The GM's** (98, 1 Battlezoo): Drain Bonded Item ("cast one prepared spell … already cast … without spending a spell slot"), Reach Spell, Counterspell, the harrowkin's Shuffle the Deck and Read the Cards: nothing to apply.
+- **Checked live in pftest** (PFTEST SIM B41 Gray Gardener Assassin, Amnerion and Risen Runelord Aethusa II with an Ezren token; deleted afterwards):
+  - Poison Weapon: the GM's note, then the kukri's critical hit brought a "Shadow Essence after Kukri, DC 29 Fortitude save" card on Ezren with "Only if the Strike dealt damage";
+  - Remove a Condition and Quickened Casting: their notes to the GM; Amnerion at 0 Hit Points: Undying Myth's note, 270 Hit Points.
+
