@@ -1703,3 +1703,25 @@ test("Kept standing at 0 HP in its own words, Ferocity's kin (2026-10-11, batch 
         [card("Test Champion's Hit Points are reduced to 0 for the first time that day", "Test Champion refuses to fall. He remains standing with @Damage[25[healing]] Hit Points."), "free", { hp: 25, wounded: false, uses: 1, free: true }]
     ]) assert.deepEqual(compileMonsterAbility(reaction(html, type)), { builtin: "ferocity", ...expected }, html);
 });
+
+test("Reactive Strike's kin in its own words: a Strike, a Trip or a Grapple at a creature that moves (or acts) in its reach (2026-10-11, batch 68)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const reaction = (trigger, effect) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } });
+    const strike = (triggers, name, extra = {}) => ({ builtin: "reaction-strike", triggers, strike: name, penalty: 0, disrupts: false, ...extra });
+    for (const [trigger, effect, expected] of [
+        ["A creature within reach of Test Drake's tail uses a move action or leaves a square during a move action it's using.", "Test Drake makes a tail Strike at the creature with a -2 penalty. If it hits, she disrupts the creature's action.", strike(["move"], "tail", { penalty: 2, disrupts: true })],
+        ["A creature in the test grick's reach uses a move action or leaves a square during a move action it's using", "The test grick makes a tentacle Strike against the target. If the attack is a critical hit and the trigger was a move action, the test grick disrupts that action.", strike(["move"], "tentacle", { disrupts: "critical" })],
+        ["A creature within the test guard's reach uses a move action or leaves a square during a move action it's using", "The test guard strikes out when a foe tries to flee. The test guard makes a melee Strike against the triggering creature. If the attack is a critical hit and the trigger was a move action, they disrupt that action.", strike(["move"], "melee", { disrupts: "critical" })],
+        ["A creature within reach of the test drake's stinger uses a move action or leaves a square during a move action it's using", "The test drake Strikes the target with its stinger. If it hits, the test drake disrupts the creature's action.", strike(["move"], "stinger", { disrupts: true })],
+        ["A creature within 30 feet of Test Soldier uses a move action, makes a ranged attack, or leaves a square during a move action it's using", "Test Soldier attempts a spike launcher Strike against the triggering creature. This Strike doesn't contribute to his multiple attack penalty, and his multiple attack penalty doesn't apply to this Strike.", strike(["move", "ranged"], "spike launcher", { within: 30 })]
+    ]) assert.deepEqual(compileMonsterAbility(reaction(trigger, effect), { basicActions }), expected, trigger);
+    for (const [trigger, effect, skill] of [
+        ["A creature within Test Ogre's reach uses a move action or leaves a square during a move action it's using", "Test Ogre lashes out with his tail in an attempt to trip the creature up. Test Ogre attempts to Trip the triggering creature.", "athletics"],
+        ["A creature uses a move action to leave a square adjacent to the test wight", "The test wight attempts an Athletics check to Grapple the target.", "athletics"],
+        ["A creature within a test sentry's reach uses a manipulate action or a move action, makes a ranged attack, or leaves a square during a move action it's using", "The test sentry makes an Athletics check to Grapple the triggering creature.", "athletics"],
+        ["A creature within 10 feet uses an action with the move trait or leaves a space within the test constable's reach during its move", "The test constable attempts to Trip the triggering creature. On a success, the triggering action is disrupted.", "athletics"]
+    ]) {
+        const plan = compileMonsterAbility(reaction(trigger, effect), { basicActions });
+        assert.deepEqual([plan?.trigger?.event, plan?.resolution?.check?.statistic, plan?.targeting?.target], ["provoke", skill, "the attacker"], trigger);
+    }
+});

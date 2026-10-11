@@ -1915,14 +1915,61 @@ export function followUpSkill(item, html, basicActions) {
 function provokedSkill(item, basicActions) {
     if (item.system?.actionType?.value !== "reaction") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
-    const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain);
+    const parts = /^(?:Requirements? .+? )?Trigger (.+?)\.? (?:Requirements? .+? )?Effect (.+)$/.exec(plain);
     const trigger = parts ? readReactionTrigger(parts[1]) : null;
     if (trigger?.event !== "provoke") return null;
-    const match = /^(?:The )?[^.]+? attempts an Athletics check to (Trip|Shove|Grapple) the triggering creature\.(?: This check (?:doesn't|does not) count toward (?:the [\w' -]+?'s|its|their) multiple attack penalty, and (?:its|their) multiple attack penalty (?:doesn't|does not) apply to this check\.)?$/i.exec(parts[2]);
+    // (Batch 68, more wordings: "attempts to Trip the triggering creature", "uses its tail to attempt to Trip …", "makes an Athletics check
+    // to Grapple the triggering creature", "… to Trip the creature"; "This attempt neither applies nor counts toward its multiple attack
+    // penalty", "On a success, the triggering movement is disrupted (and the creature is Tripped as normal)" — a Trip that lands stops a
+    // move anyway; a first sentence that only tells it.)
+    const told = parts[2].split(/(?<=\.)\s+(?=[A-Z])/);
+    const effect = (told.length > 1 && !/\b(?:Trip|Shove|Grapple|Strike)\b/.test(told[0]) && !/\b(?:check|damage|save)\b/i.test(told[0]) ? told.slice(1) : told)
+        .filter((sentence) => !/^(?:This (?:check|attempt) (?:neither applies nor counts|doesn't count|does not count) toward (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.|On a success, the triggering (?:action|movement) is disrupted(?: and the creature is Tripped as normal)?\.)$/i.test(sentence)).join(" ");
+    const match = /^(?:The )?[^.]+? attempts an Athletics check to (Trip|Shove|Grapple) the triggering creature\.(?: This check (?:doesn't|does not) count toward (?:the [\w' -]+?'s|its|their) multiple attack penalty, and (?:its|their) multiple attack penalty (?:doesn't|does not) apply to this check\.)?$/i.exec(effect)
+        ?? /^(?:The )?[^.]+? (?:attempts|makes) an Athletics check to (Trip|Shove|Grapple) the (?:triggering creature|target|creature)\.$|^(?:The )?[^.]+? (?:attempts to|uses (?:its|their|his|her) [\w' -]+? to attempt to|extends an? [\w' -]+? and attempts to) (Trip|Grapple) the (?:triggering )?creature\.$/i.exec(effect);
+    if (match && !match[1]) match[1] = match[2];
     const basic = match ? basicActions[match[1].toLowerCase()] : null;
     if (!basic?.resolution) return null;
     const plan = structuredClone(basic);
     return { ...plan, ...base(item, { traits: (plan.traits ?? []).filter((trait) => trait !== "attack") }), targeting: { ...plan.targeting, target: "the attacker" }, trigger };
+}
+
+// A Strike at a creature that moves (or acts) in its reach, Reactive Strike's kin in its own words (2026-10-11, batch 68): "Trigger A
+// creature within reach of Racharak's tail uses a move action or leaves a square during a move action it's using. Effect Racharak makes a
+// tail Strike at the creature with a -2 penalty. If it hits, she disrupts the creature's action.", Gripping Tentacle's "… against the
+// target. If the attack is a critical hit and the trigger was a move action, the grick disrupts that action.", Twisting Tail's "Strikes
+// the target with its stinger", Lash Out's "… against the attacker", Snap Shot's "This Strike doesn't contribute to his multiple attack
+// penalty, …" → { builtin: "reaction-strike", triggers (the provoke trigger's: move, ranged, manipulate, concentrate; "leave" a move,
+// "enter" an approach), strike, penalty, disrupts (true on a hit, "critical" on a critical hit) }. A first sentence that only tells it.
+function provokedStrike(item) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const parts = /^(?:Requirements? .+? )?Trigger (.+?)\.? (?:Requirements? .+? )?Effect (.+)$/.exec(plain);
+    const trigger = parts ? readReactionTrigger(parts[1]) : null;
+    if (trigger?.event !== "provoke") return null;
+    const told = parts[2].split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Its capitalised words: "strikes out when the foe tries to flee" only tells it.)
+    const sentences = told.length > 1 && !/\b(?:Strikes?|Trip|Grapple)\b/.test(told[0]) && !/\b(?:check|damage|save|disrupt\w*)\b/i.test(told[0]) ? told.slice(1) : told;
+    const who = String.raw`(?:the (?:triggering )?creature|the target|the attacker|it|that creature)`;
+    const first = sentences[0] ?? "";
+    const struck = new RegExp(String.raw`^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) ${who}(?: with an? [–-](\d+) penalty)?\.$`, "i").exec(first)
+        ?? new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who} with (?:its|their|his|her) ([\w' -]+?)\.$`, "i").exec(first)
+        ?? (new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who}\.$`, "i").test(first) ? [first, "melee"] : null);
+    if (!struck) return null;
+    let disrupts = false;
+    for (const sentence of sentences.slice(1)) {
+        if (/^If (?:it|the Strike|the attack|this attack|the Strike) hits, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts (?:the (?:creature's|triggering) action|that action|the action)\.$|^On a success the target's action is interrupted;/i.test(sentence)) disrupts = true;
+        else if (/^If (?:the attack|this attack|the Strike|it) is a critical hit(?: and the trigger was a move action)?, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts? (?:that|the triggering|the) action\.$/i.test(sentence)) disrupts ||= "critical";
+        else if (/^This Strike (?:doesn't|does not) contribute to (?:his|her|its|their) multiple attack penalty, and (?:his|her|its|their) multiple attack penalty (?:doesn't|does not) apply to this Strike\.$/i.test(sentence)) continue;
+        // (Root In Place's "If the creature was Flying when its action was disrupted, it falls.": the GM's.)
+        else if (/^If the creature was Flying when its action was disrupted, it falls\.$/i.test(sentence)) continue;
+        else return null;
+    }
+    const kinds = { leave: "move", enter: "approach" };
+    const triggers = [...new Set((trigger.triggers ?? []).map((kind) => kinds[kind] ?? kind))];
+    if (!triggers.length) return null;
+    // (A distance in feet, Snap Shot's "within 30 feet": live play's, for a ranged Strike.)
+    return { builtin: "reaction-strike", triggers, strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts, ...(typeof trigger.within === "number" ? { within: trigger.within } : {}) };
 }
 
 // You're Next (2026-10-11, batch 52): "Trigger The prisoner reduces a creature to 0 hit points. Effect The prisoner attempts an
@@ -2148,7 +2195,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
@@ -2509,8 +2556,10 @@ function ownStrikePassive(item, plan) {
 // { event: "provoke", reaction: true, triggers: ["move", "leave", "enter", "manipulate", "ranged", "concentrate"], within: feet |
 // "reach" }. Not one in a place ("in area A7", "in the bridge's area", an aura it leaves).
 function provokeTrigger(text) {
-    const trigger = String(text).replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action");
-    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: within (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|${SELF}'s? reach|reach|(${SELF}))(?: of ${SELF})?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves)\b.*)$`).exec(trigger);
+    // (Batch 68: a closing aside in brackets, "(move actions using only a fly Speed don't trigger this)", left out.)
+    const trigger = String(text).replace(/\s*\([^)]*\)$/, "").replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action");
+    // (Batch 68: "in the grick's reach", "within a clockwork sentry's reach", "within reach of Racharak's tail".)
+    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: (?:within|in) (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|(?:${SELF}|an? [\w' -]+?)'s? reach|reach|(${SELF}))(?: of ${SELF}(?:['’]s [\w' -]+?)?)?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves)\b.*)$`).exec(trigger);
     if (!subject) return null;
     const rest = subject[6];
     const triggers = new Set();
@@ -2524,6 +2573,16 @@ function provokeTrigger(text) {
         }
         else if (/^(?:uses? )?(?:a |an )?(manipulate|move|concentrate) action$/i.test(part)) triggers.add(/manipulate/i.test(part) ? "manipulate" : /concentrate/i.test(part) ? "concentrate" : "move");
         else if (/^(?:uses? )?an action (?:with|that has) the (manipulate|move|concentrate) trait$/i.test(part)) triggers.add(/manipulate/.test(part) ? "manipulate" : /concentrate/.test(part) ? "concentrate" : "move");
+        // (Batch 68: "uses an action with the move trait to leave a square", "uses a move action to leave a square adjacent to the
+        // ragewight", "leaves a space within the constable's reach during its move".)
+        else if (/^uses? an action with the move trait to leave a (?:square|space)$/i.test(part)) triggers.add("move");
+        else if (new RegExp(String.raw`^uses? a move action to leave a (?:square|space) adjacent to ${SELF}$`).test(part)) {
+            triggers.add("move");
+            within = 5;
+        } else if (new RegExp(String.raw`^leaves? a (?:square|space) within ${SELF}'s? reach during (?:its|their|his|her) move(?: action)?$`).test(part)) {
+            triggers.add("leave");
+            within ??= "reach";
+        }
         else if (/^makes? a ranged attack$/i.test(part)) triggers.add("ranged");
         else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during a move action)?$/i.test(part)) triggers.add("leave");
         else if (/^Strides$/.test(part)) triggers.add("move");

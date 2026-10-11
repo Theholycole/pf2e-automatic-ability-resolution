@@ -169,7 +169,10 @@ async function onMove(token, movement) {
         for (const { item, plan } of reactions) {
             const movesTrigger = plan.builtin === "reactive-strike" || (plan.builtin === "reaction-strike" && plan.triggers?.includes("move"));
             if (!movesTrigger) continue;
-            const strikes = meleeStrikes(actor, plan.builtin === "reaction-strike" ? `(${plan.strike} only)` : item.name);
+            // (Batch 68, Snap Shot: a distance in feet, its Strike by name, ranged too.)
+            const strikes = plan.within && plan.builtin === "reaction-strike"
+                ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: plan.within }))
+                : meleeStrikes(actor, plan.builtin === "reaction-strike" ? `(${plan.strike} only)` : item.name);
             if (!strikes.length) continue;
             const reach = Math.max(...strikes.map((strike) => strike.reach));
             const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= reach);
@@ -179,7 +182,7 @@ async function onMove(token, movement) {
             await offer({
                 kind: "strike", item, monster, actor, target: token, strikes, penalty: plan.penalty ?? 0,
                 trigger: plan.builtin === "reactive-strike" ? "left a square in its reach" : "moved in its reach",
-                note: [squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null].filter(Boolean).join(" ") || null
+                note: [squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null].filter(Boolean).join(" ") || null
             });
             break;
         }
@@ -314,7 +317,10 @@ async function reachTrigger(scene, combat, token, trigger, kind = null) {
         const entry = reactions.find(({ plan }) => plan.builtin === "reactive-strike" || (kind && plan.builtin === "reaction-strike" && plan.triggers?.includes(kind)));
         if (!entry) continue;
         const distance = distanceFeet(box(monster, grid.size), box(token, grid.size), grid);
-        const strikes = meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name).filter((strike) => distance <= strike.reach);
+        // (Batch 68: a distance in feet, Snap Shot's, its Strike by name, ranged too.)
+        const strikes = (entry.plan.within && entry.plan.builtin === "reaction-strike"
+            ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(entry.plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: entry.plan.within }))
+            : meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name)).filter((strike) => distance <= strike.reach);
         if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: entry.plan.criticalTrip ? CRITICAL_TRIP : null });
     }
 }
