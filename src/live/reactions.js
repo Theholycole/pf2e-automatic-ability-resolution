@@ -106,5 +106,5 @@ export function offerHTML(state) {
     const note = state.note ? `<p class="aar-hint">${escape(state.note)}</p>` : "";
     const result = state.result ? `<ul class="aar-applied"><li>${escape(state.result)}</li></ul>` : "";
     const controls = buttons.length ? `<footer class="aar-controls">${buttons.join("")}</footer>` : "";
-    return `<section class="pf2e-aar-card pf2e-aar-reaction" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong> <span class="aar-rider">${escape(state.monster.name)}'s reaction</span><span class="aar-check">${who}</span></header>${detail}${note}${result}${controls}</section>`;
+    return `<section class="pf2e-aar-card pf2e-aar-reaction" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong> <span class="aar-rider">${escape(state.monster.name)}'s ${state.free ? "free action" : "reaction"}</span><span class="aar-check">${who}</span></header>${detail}${note}${result}${controls}</section>`;
 }

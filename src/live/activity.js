@@ -5,27 +5,31 @@
 const SIZES = ["tiny", "small", "medium", "large", "huge", "gargantuan"];
 const NONE = { mode: "none", multiplier: 0, sourceComponentIds: [] };
 
-// The activity's on-hit results as a card's plan: { save, size } (a save the creature hit attempts; size: the largest it
-// works on), { plan } (results by the Strike's degree: a hit is the check's success, a critical hit its critical success),
-// or null when a hit adds nothing.
-export function activityRider(activity) {
+// The activity's on-hit results as cards' plans: { plan } (results by the Strike's degree: a hit is the check's success, a
+// critical hit its critical success), { save, size } (a save the creature hit attempts; size: the largest it works on), both
+// (batch 27: "deals an additional 2d6 mental damage, and the target must succeed at a … save"), or null when a hit adds
+// nothing. Extra dice of the Strike's own type ("2d8[strike]") take strikeType, the type of the Strike that hit.
+export function activityRider(activity, { strikeType = null } = {}) {
     const onHit = activity?.builtin === "strike-activity" ? activity.onHit ?? {} : null;
     if (!onHit) return null;
-    if (onHit.save?.resolution) return { save: onHit.save, size: onHit.size ?? null };
+    const save = onHit.save?.resolution ? { save: onHit.save, size: onHit.size ?? null } : null;
     const conditions = (list) => (list ?? []).map((entry) => ({ kind: "condition", slug: entry.slug, value: entry.value ?? null, duration: entry.duration ?? null }));
     const hit = conditions(onHit.conditions);
     const critical = onHit.critical ? conditions(onHit.critical) : hit;
-    const formulas = (onHit.damage ?? []).filter(Boolean);
-    const push = Number(onHit.push) > 0 ? { kind: "push", distance: Number(onHit.push), upTo: false, optional: false, direction: "away" } : null;
-    if (!hit.length && !critical.length && !formulas.length && !push) return null;
+    const formulas = (onHit.damage ?? []).filter(Boolean).map((formula) => String(formula).replace(/\[strike\]/g, `[${strikeType ?? "untyped"}]`));
+    const pushOf = (distance) => (Number(distance) > 0 ? { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } : null);
+    const push = pushOf(onHit.push);
+    const criticalPush = pushOf(onHit.criticalPush) ?? push;
+    if (!hit.length && !critical.length && !formulas.length && !push && !criticalPush) return save;
     // (A critical hit doubles the Strike's damage, its extra dice too.)
-    const row = (effects, double) => ({
+    const row = (effects, double, moved = push) => ({
         damage: formulas.length ? { mode: "formulas", formulas: formulas.map((formula) => ({ formula: double ? doubled(formula) : formula })), rollScope: "outcome" } : { ...NONE },
         effects,
-        ...(push ? { forcedMovement: { ...push } } : {})
+        ...(moved ? { forcedMovement: { ...moved } } : {})
     });
     const source = activity.source ?? { name: "Strike activity" };
     return {
+        ...(save ?? {}),
         plan: {
             modelVersion: activity.modelVersion ?? 13,
             source,
@@ -39,7 +43,7 @@ export function activityRider(activity) {
                 kind: "check",
                 check: { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } },
                 sharedDamage: null,
-                outcomes: { criticalSuccess: row(critical, true), success: row(hit, false), failure: row([], false), criticalFailure: row([], false) }
+                outcomes: { criticalSuccess: row(critical, true, criticalPush), success: row(hit, false), failure: row([], false, null), criticalFailure: row([], false, null) }
             }
         }
     };

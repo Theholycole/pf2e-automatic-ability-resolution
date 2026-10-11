@@ -990,3 +990,21 @@ test("more charge and Strike-activity wordings (2026-10-10, batch 25)", () => {
     const moose = compileMonsterAbility(action("Test Moose", "<p>The test moose Strides twice and then makes an antler Strike. A Medium or smaller creature damaged by this attack must succeed at a @Check[fortitude|dc:17] save or be @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}.</p>"));
     assert.deepEqual([moose.builtin, moose.onHit.size, moose.onHit.save.resolution.check.statistic], ["strike-activity", "medium", "fortitude"]);
 });
+
+test("a condition the monster gives itself or its allies (2026-10-10, batch 26)", () => {
+    const ability = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const invisible = "@UUID[Compendium.pf2e.conditionitems.Item.zJxUflt9np0q4yML]{Invisible}";
+    const quickened = "@UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened}";
+    const dark = compileMonsterAbility(ability("Test Dark", `<p>The test wisp extinguishes its glow, becoming ${invisible}. It can end this effect with another use of this action.</p>`));
+    assert.deepEqual([dark.targeting.target, dark.resolution.check.roll, dark.resolution.outcomes.success.effects[0].slug, dark.notes.length], ["self", "automatic", "invisible", 1]);
+    // As its turn begins, a free action: quickened until the end of her turn.
+    const frenzy = compileMonsterAbility(ability("Test Frenzy", `<p><strong>Trigger</strong> Tobin's turn begins.</p><p><strong>Frequency</strong> once per hour</p><p><strong>Effect</strong> Tobin is ${quickened} until the end of her turn, and can use the extra action to Stride or Strike.</p>`, "free"));
+    assert.deepEqual([frenzy.trigger.event, frenzy.trigger.free, frenzy.resolution.outcomes.success.effects[0].duration.expiry], ["own-turn-start", true, "turn-end"]);
+    // Allies: "All allies who hear or see him are Quickened for 1 round".
+    const command = compileMonsterAbility(ability("Test Command", `<p>Tobin commands his allies. All allies who hear or see him are ${quickened} for 1 round and can use this extra action to Step, Stride, or make a Strike.</p>`));
+    assert.deepEqual([command.targeting.target, command.targeting.allies], ["allies", true]);
+    const royal = compileMonsterAbility(ability("Test Royal", `<p>Tobin issues an order. Each ally who hears and understands this command becomes ${quickened} until the end of that ally's next turn but can use the extra action only to Strike.</p>`));
+    assert.deepEqual([royal.targeting.allies, royal.resolution.outcomes.success.effects[0].duration.expiry], [true, "turn-end"]);
+    // Not another creature ("The animal … becomes Quickened").
+    assert.equal(compileMonsterAbility(ability("Test Lead", `<p>The test gnome inspires a willing animal. The animal becomes ${quickened} for 1 round.</p>`))?.targeting?.target === "self", false);
+});

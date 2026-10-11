@@ -131,7 +131,12 @@ async function cardForAbility(message) {
     // Used again while it recharges: the card says so (the GM decides).
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;
     if (plan?.resolution && (plan.trigger?.event ?? "use") === "use" && cardCheck(plan)) {
-        await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens: [...game.user.targets], warning });
+        // On itself (Go Dark, batch 26): its own token; on its allies around it: those in its emanation; otherwise the GM's targets.
+        const area = plan.targeting?.allies && plan.targeting.area?.type === "emanation" ? Number(plan.targeting.area.value) || 0 : 0;
+        const tokens = plan.targeting?.target === "self" ? (sourceToken ? [sourceToken.object ?? sourceToken] : [])
+            : area && sourceToken ? tokensAround(sourceToken, area).filter((token) => (token.document ?? token).disposition === sourceToken.disposition)
+            : [...game.user.targets];
+        await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens, warning });
         return;
     }
     // A PF2e effect on itself, its allies or a target (Battle Cry, Fiery Rhetoric): the card applies it. Not its own
@@ -483,14 +488,17 @@ export function tokensAround(token, radius) {
 // A Strike activity's results on the creature its Strike hit: the activity's save to roll, or its results by the Strike's own
 // degree (recorded, as a skill action's roll is) for the GM's Apply.
 async function activityCard(message, pending, { actor, strike, target, targetToken, context }) {
-    const rider = activityRider(pending.plan);
+    // (Extra dice of the Strike's own type: the type of the Strike that hit, batch 27.)
+    const strikeType = Object.values(strike.system?.damageRolls ?? {})[0]?.damageType ?? null;
+    const rider = activityRider(pending.plan, { strikeType });
     if (!rider) return;
     const sourceToken = message.token ?? pending.token ?? null;
-    if (rider.save) {
-        if (!fitsSize(target.actor.size, rider.size)) return;
-        await postCard({ plan: rider.save, item: pending.item, sourceActor: actor, sourceToken, tokens: [target], rider: { strikeName: strike.name, cost: "activity" } });
-        return;
-    }
+    if (rider.plan) await activityResults(message, pending, rider, { actor, strike, target, targetToken, context, sourceToken });
+    if (rider.save && fitsSize(target.actor.size, rider.size)) await postCard({ plan: rider.save, item: pending.item, sourceActor: actor, sourceToken, tokens: [target], rider: { strikeName: strike.name, cost: "activity" } });
+}
+
+// Its results by the Strike's own degree, recorded as a skill action's roll is, for the GM's Apply.
+async function activityResults(message, pending, rider, { actor, strike, target, targetToken, context, sourceToken }) {
     const state = createCard({
         plan: rider.plan,
         ability: { name: pending.item.name, uuid: pending.item.uuid },

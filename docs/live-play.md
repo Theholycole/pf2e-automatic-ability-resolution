@@ -566,3 +566,33 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - 33 (26 charges, 7 Strike activities with a save), all PF2e.
 - **Live play:** the Strike activities' saves come as batch 10's cards after their Strike hits; charges stay the GM's (PF2e's own Strike).
 - Over seven bestiaries (5,673 fights, no errors): Powerful Charge 6, Swoop 5, Thundering Charge 4, Rush 2, Furious Charge 2.
+
+## A condition the monster gives itself or its allies (2026-10-10, batch 26)
+
+- **Read now:** an action whose only result is a helpful condition on the monster itself or on its allies, with no roll:
+  - on itself: "The dread wisp extinguishes their Dread Flickering, becoming Invisible", "The peng is Concealed until the end of their next turn";
+  - at the start of its own turn, as a free action: "Trigger The charau-ka's turn begins. … Effect The charau-ka is Quickened until the end of its turn" (offered to the GM as that turn starts);
+  - on its allies: "Each ally who hears and understands this command becomes Quickened until the end of that ally's next turn", "All allies within the dragon's heartening aura become Quickened for 1 round", "Each other zombie within 10 feet of the dirge piper is Quickened for 1 round". "Their/that ally's next turn" is each one's own turn.
+  - Not one on "the animal", "the target" or another creature, and not one whose other sentences roll or deal damage.
+  - 52 (47 PF2e, 5 Battlezoo): 31 on itself, 9 at its turn start, 12 on its allies. Quickened 30, Invisible 12, Concealed 5.
+- **Live play:** when the GM uses it, its card applies the condition to the monster's own token, or to its allies (the tokens of its disposition within the emanation, or the GM's targets for "each ally"). The start-of-turn ones are offered as the monster's turn starts, as a free action (the reaction stays unused).
+- **The simulator** (B53): Quickened gives an extra action (at once, when the monster gives it to itself on its turn); Concealed and Invisible make it harder to hit; the planner weighs them as any helpful condition. Commands to allies go to its allies only, so they're used only when it has some.
+- Over seven bestiaries (5,673 fights, no errors): Go Dark 18, Shrieking Frenzy 18. With a second copy of each monster (four packs, 2,550 fights, no errors): Royal Command 10, Korog's Command 10, Inspiring Word 7, Advancing Orders 1.
+- **Checked live in pftest** (a PFTEST SIM will-o'-wisp and charau-ka, deleted afterwards): Go Dark's card went on the wisp itself, and Apply made it Invisible; Shrieking Frenzy was offered as the charau-ka's turn started, and its card made it Quickened with a timed effect.
+
+## More results of a Strike activity's hit (2026-10-10, batch 27)
+
+- **Read now** (batch 10's Strike activities, part by part):
+  - extra damage and a condition in one sentence: "If this Strike hits, it deals an additional 2d8 damage, and the target is knocked Prone", "If this Strike hits, the babau deals an additional 2d6 damage of the same damage type, and the creature struck is Frightened 2", "On a hit, the target takes an additional 2d4 electricity damage and is pushed back 5 feet";
+  - damage the target takes: "On a hit, the target takes 5d6 persistent acid damage, and is Sickened 3 …", "If they succeed, the target takes 1d6 bleed";
+  - extra damage and a save: "If the Strike hits, it deals an additional 2d6 mental damage, and the target must succeed at a DC 20 Will save … or become Confused for 1 round"; "succeed on a … save" too;
+  - weapon dice: "they deal two extra dice of weapon damage", "an additional die of weapon damage and 1d4 persistent bleed damage";
+  - the opening's extras: "makes a melee Strike with its gaff" (the gaff Strike), "making a Strike with a -2 circumstance penalty to the attack roll", ", dealing an extra 2d6 bleed on a hit (4d6 bleed on a critical hit)", "Strikes with their rapier, and they gain a +1 circumstance bonus to the attack roll";
+  - "On a critical hit, the target is pushed back 10 feet"; "The extra damage and frightened value are doubled on a critical hit"; "After this Strike, the harmona can Fly up to half their fly Speed" (the GM's move).
+  - Extra dice with no type ("an additional 2d8 damage") are the Strike's own type.
+  - Not one whose result depends on something else ("Slowed 1 … if the Strike dealt bludgeoning damage"), or whose duration isn't read ("until the persistent damage ends").
+  - 35 (33 PF2e, 2 Battlezoo): Skewer, Vicious Swing, Grievous Strike, Rearing Thrust, Shock Mind, Concussive Blow, Calculated Blow, Foxfire Blast, Kick Back, Wall Slam and the like.
+- **Live play:** as batch 10, when the Strike hits after the GM uses the activity: a card with the damage and conditions by the Strike's degree, its untyped dice taking the type of the Strike that hit (doubled on a critical hit, a farther push then), and the save's card after it when there's one.
+- **The simulator** (B54): the same, the untyped dice of the Strike's damage type.
+- Over seven bestiaries (5,673 fights, no errors): Skewer 18, Calculated Blow 7, Grievous Strike 6, Kick Back 2, Shock Mind 2, Fiendish Lunge 1.
+- **Checked live in pftest** (a PFTEST SIM Grioth Cultist, Babau and Goblin Warrior, deleted afterwards): Shock Mind's hit posted the damage card ("Strike 18 vs AC 16: success") and the DC 20 Will save card; Apply dealt 9 mental damage. Grievous Strike's critical hit with the Claw posted 2×(2d6) slashing; Apply dealt 18 slashing and made the goblin Frightened 2.

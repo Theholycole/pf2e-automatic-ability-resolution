@@ -73,3 +73,44 @@ test("an activity's card reads as the Strike against the target's AC", async () 
     assert.match(html, /Strike against the target(?:'|&#39;)s AC/);
     assert.match(html, /Strike 30 vs AC 21: success/);
 });
+
+test("a hit's results part by part, and the opening's extras (2026-10-10, batch 27)", () => {
+    const prone = "@UUID[Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60]{Prone}";
+    // Extra dice with no type are the Strike's own; a condition after them.
+    const thrust = compileMonsterAbility(action("Test Thrust", `<p>The test horse Strides and makes a horn Strike. If this Strike hits, it deals an additional 2d8 damage, and the target is knocked ${prone}.</p>`, 2));
+    assert.deepEqual([thrust.builtin, thrust.strides, thrust.strike, thrust.onHit.damage, thrust.onHit.conditions.map((entry) => entry.slug)], ["strike-activity", 1, "horn", ["2d8[strike]"], ["prone"]]);
+    // Its card: the type of the Strike that hit.
+    assert.deepEqual(activityRider(thrust, { strikeType: "piercing" }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "2d8[piercing]" }]);
+    // Damage taken, then a condition: "On a successful attack, the target takes … damage, and is Sickened 3 from …".
+    const bite = compileMonsterAbility(action("Test Bite", "<p>The test wyrm makes a jaws Strike. On a successful attack, the target takes @Damage[5d6[persistent,acid]] damage, and is @UUID[Compendium.pf2e.conditionitems.Item.fesd1n5eVhpCSS18]{Sickened 3} from the sting of the brine.</p>", 2));
+    assert.deepEqual([bite.onHit.damage, bite.onHit.conditions.map((entry) => [entry.slug, entry.value])], [["5d6[persistent,acid]"], [["sickened", 3]]]);
+    // Damage, then a save: both cards.
+    const shock = compileMonsterAbility(action("Test Shock", "<p>The test cultist makes a Strike with a glass weapon. If the Strike hits, it deals an additional @Damage[2d6[mental]] damage, and the target must succeed at a @Check[will|dc:20] save or become @UUID[Compendium.pf2e.conditionitems.Item.TpZdFbFXNnYbLeYE]{Confused} for 1 round.</p>", 2));
+    const rider = activityRider(shock);
+    assert.deepEqual([shock.onHit.damage, rider.plan.resolution.outcomes.success.damage.formulas, rider.save.resolution.check.statistic], [["2d6[mental]"], [{ formula: "2d6[mental]" }], "will"]);
+    // "succeed on a … save"; a move after the Strike is the GM's.
+    const blow = compileMonsterAbility(action("Test Blow", "<p>The test bird makes a beak Strike. On a hit, the target must succeed on a @Check[fortitude|dc:30] save or become @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}. After this Strike, the test bird can Fly up to half its fly Speed.</p>", 2));
+    assert.equal(blow.onHit.save.resolution.check.statistic, "fortitude");
+    // Two extra dice of weapon damage; a die of weapon damage and persistent bleed.
+    const swing = compileMonsterAbility(action("Test Swing", "<p>The test guard makes a melee Strike. This counts as two attacks for the test guard's multiple attack penalty. If this Strike hits, they deal two extra dice of weapon damage.</p>", 2));
+    assert.deepEqual([swing.extraWeaponDice, swing.countsAs], [2, 2]);
+    const cut = compileMonsterAbility(action("Test Cut", "<p>The test knight makes a longsword Strike. If the Strike hits, it deals an additional die of weapon damage and 1d4 persistent bleed damage.</p>", 2));
+    assert.deepEqual([cut.extraWeaponDice, cut.onHit.damage], [1, ["1d4[persistent,bleed]"]]);
+    // The opening's extras: "with its gaff", a penalty, "dealing an extra … on a hit (… on a critical hit)", a bonus.
+    const kick = compileMonsterAbility(action("Test Kick", "<p>The test elk bucks, making a Strike with a -2 circumstance penalty to the attack roll. If it hits, it deals an extra @Damage[1d8[bludgeoning]] damage.</p>"));
+    assert.deepEqual([kick.attackBonus, kick.onHit.damage], [-2, ["1d8[bludgeoning]"]]);
+    const skewer = compileMonsterAbility(action("Test Skewer", "<p>The test triton makes a trident Strike, dealing an extra @Damage[2d6[bleed]] on a hit (@Damage[4d6[bleed]] on a critical hit).</p>"));
+    assert.deepEqual([skewer.strike, skewer.onHit.damage], ["trident", ["2d6[bleed]"]]);
+    const lunge = compileMonsterAbility(action("Test Lunge", "<p>The test duelist Strikes with their rapier, and they gain a +1 circumstance bonus to the attack roll. If they succeed, the target takes @Damage[1d6[bleed]].</p>"));
+    assert.deepEqual([lunge.strike, lunge.attackBonus, lunge.onHit.damage], ["rapier", 1, ["1d6[bleed]"]]);
+    // A push on a hit, a farther one on a critical hit.
+    const shove = compileMonsterAbility(action("Test Shove", "<p>The test brute makes a melee Strike. On a hit, the target is pushed back 5 feet. On a critical hit, the target is pushed back 10 feet</p>"));
+    const pushes = activityRider(shove).plan.resolution.outcomes;
+    assert.deepEqual([pushes.success.forcedMovement.distance, pushes.criticalSuccess.forcedMovement.distance], [5, 10]);
+    // "The extra damage and frightened value are doubled on a critical hit."
+    const smite = compileMonsterAbility(action("Test Smite", `<p>The test zealot makes a melee Strike. On a hit, the target takes an additional 2d8 mental damage and is ${frightened(2)}. The extra damage and frightened value are doubled on a critical hit.</p>`));
+    assert.deepEqual([smite.onHit.damage, smite.onHit.critical.map((entry) => entry.value)], [["2d8[mental]"], [4]]);
+    // Not: a result on a condition ("if the Strike dealt bludgeoning damage"), a duration not read.
+    assert.notEqual(compileMonsterAbility(action("Test Gnash", "<p>The test beast makes a jaws Strike. On a hit, the target is @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} for 1 round if the Strike dealt bludgeoning damage.</p>"))?.builtin, "strike-activity");
+    assert.notEqual(compileMonsterAbility(action("Test Qi", "<p>The test monk makes a fist Strike. On a hit, the creature takes @Damage[3d6[persistent,void]] damage and is @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 2} until the persistent damage ends.</p>"))?.builtin, "strike-activity");
+});

@@ -284,6 +284,10 @@ async function onTurnStart(combat) {
     const token = combat.combatant?.token;
     const scene = token?.parent;
     if (!token?.actor || !scene) return;
+    // Its own free action as its turn begins (Shrieking Frenzy, Sudden Surge; batch 26).
+    const self = reactors(scene, combat).find((entry) => entry.token.id === token.id);
+    const own = self?.reactions.find(({ plan }) => plan.trigger?.event === "own-turn-start");
+    if (own) await offer({ kind: "card", item: own.item, monster: token, actor: token.actor, target: null, trigger: "its turn begins", free: true });
     const grid = gridOf(scene);
     const living = !["undead", "construct"].some((trait) => token.actor.traits?.has?.(trait));
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
@@ -438,7 +442,8 @@ async function use(message, action, slug) {
         const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
         const area = plan.targeting?.area;
         // (Its own Strike's: the creature it hit, or around it: "a 10-foot burst centered on the target".)
-        const tokens = ["the attacker", "the creature the Strike hits"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
+        const tokens = plan.targeting?.target === "self" ? [monster.object ?? monster]
+            : ["the attacker", "the creature the Strike hits"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
             : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
         await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: state.free ? "free action" : "reaction" });
