@@ -421,6 +421,7 @@ export function readReaction(item, text) {
     if (bite) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: bite[2].toLowerCase(), penalty: 0, disrupts: false };
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
+    if (readPlaneShift(text)) return { builtin: "no-effect" };
     // Spurred by Death (batch 47): "Trigger An ally within 30 feet reduces a creature to 0 HP Effect The burnbearer Steps or Strides.": a
     // move, nothing for the fight's numbers.
     if (/^An? ally within \d+ feet reduces a creature to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Steps or Strides\.$/i.test(effect.trim())) return { builtin: "no-effect" };
@@ -815,6 +816,9 @@ export function compileBuiltin(item, slug) {
     const sweepSkill = readSkillSweep(text);
     if (sweepSkill) return { builtin: "skill-sweep", actions, ...sweepSkill };
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
+    // (Batch 48, Disperse as a move: "Strides or Flies. This movement doesn't trigger reactions. During the movement, … It then coalesces
+    // back into its normal form.")
+    if (/^(?:The )?[^.]+? Strides or Flies\. This movement (?:doesn't|does not) trigger reactions\. During the movement, [^.]+\. (?:It|They) then coalesces? back into (?:its|their) normal form\.$/i.test(text.trim())) return { builtin: "safe-move", actions };
     // (Batch 47, Phase Jump: "Frequency once per round Effect The dragon teleports up to 120 feet. If they are airborne, they maintain
     // their momentum, …": a move that triggers no reactions.)
     if (/^(?:Frequency once per (?:turn|round) Effect )?(?:The )?[^.]+? teleports up to \d+ feet\.(?: If (?:it|they|he|she) (?:is|are) airborne, (?:it|they|he|she) maintains? (?:its|their|his|her) momentum[^.]*\.)?$/i.test(text.trim())) return { builtin: "safe-move", actions };
@@ -832,7 +836,7 @@ export function compileBuiltin(item, slug) {
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
     const prey = readHuntPrey(text);
     if (prey) return prey;
-    if (readNoCombatEffect(text)) return { builtin: "no-effect" };
+    if (readNoCombatEffect(text) || readPlaneShift(text)) return { builtin: "no-effect" };
     return null;
 }
 
@@ -980,6 +984,21 @@ function readSafeMove(text) {
     if (/\b(?:Strikes?|checks?|saves?|damage|but|if|unless|Grab|Prone|Interacts?)\b|@/i.test(said) || /\b(?:Requirements?|Trigger)\b/.test(said)) return false;
     const move = String.raw`(?:jumps|moves|Strides|Flies|Flying|Swims|Leaps|Climbs|Burrows)`;
     return new RegExp(String.raw`^(?:The |An? )?[^.;]+? ${move} (?:up to|once|twice)?[^.;]*?(?:\. This movement (?:doesn't|does not) trigger reactions\.|; this movement (?:doesn't|does not) trigger reactions\.| without triggering reactions\.| and (?:doesn't|does not) trigger reactions during this movement\.)$`, "i").test(said);
+}
+
+// Plane and form shifts (2026-10-11, batch 48; the user's choice: the GM's): Skip Between and Walk the Ethereal Line (the Ethereal
+// Plane), Swarm Shape, Shadow Form, Reef Meld, Bramble Jump's teleport through undergrowth, Disperse's reaction to damage
+// ("disperses. Until the end of the current turn, it can't be attacked or targeted, …"). true or false.
+function readPlaneShift(text) {
+    const said = String(text).replace(/’/g, "'").trim();
+    return /\bmoves? (?:itself )?(?:from the Universe to the Ethereal Plane|between the Ethereal Plane and the Material Plane)\b/i.test(said)
+        || /\bcan move itself between the Ethereal Plane and the Material Plane\b/i.test(said)
+        || /\bwalks? the thin line between the Ethereal(?: Plane)? and (?:the )?Universe\b/i.test(said)
+        || /\b(?:collapses|disperses) into a shapeless swarm\b[^]*\bcoalesce\b/i.test(said)
+        || /\breverts to pure shadow\b/i.test(said)
+        || /\bmerges with the reef and vanishes\b/i.test(said)
+        || /\binstantly teleports? to a (?:different )?square of (?:the forest's )?undergrowth within \d+ feet\b/i.test(said)
+        || /^Trigger (?:The )?[^.;]+? takes damage from a hostile action[.;]? Effect (?:The )?[^.]+? disperses\. Until the end of the current turn, (?:it|they) can't be attacked or targeted\b/i.test(said);
 }
 
 // No change to a fight's numbers, in its own words (2026-10-10, batch 38): a disguise that "doesn't change its Speed or its attack

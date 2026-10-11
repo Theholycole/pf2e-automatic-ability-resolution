@@ -874,3 +874,16 @@ Compiler readings into what already exists; nothing new in live play or the simu
 - **Phase Jump** (8): "Frequency once per round Effect The dragon teleports up to 120 feet. If they are airborne, they maintain their momentum, …" → batch 38's move that triggers no reactions.
 - **Spurred by Death** (5): "Trigger An ally within 30 feet reduces a creature to 0 HP Effect The burnbearer Steps or Strides." → nothing for the fight's numbers. Not the ones that also Strike, Drink Blood or Hunt Prey.
 
+## Plane and form shifts (2026-10-11, batch 48)
+
+The user's choice (2026-10-11): the GM's. Counted as covered, nothing to apply; the simulator doesn't use them.
+
+- **Skip Between** (10): "moves from the Universe to the Ethereal Plane or vice-versa", "can move itself between the Ethereal Plane and the Material Plane, as Ethereal Jaunt".
+- **Walk the Ethereal Line** (10, 1 Battlezoo): "walks the thin line between the Ethereal Plane and the Universe".
+- **Swarm Shape** and its kin (10): "collapses into a shapeless swarm of worms. … It can use the same action to coalesce back into its normal form."
+- **Shadow Form** (9): "reverts to pure shadow and absorbs its body and its gear into the darkness".
+- **Reef Meld** (8): "physically merges with the reef and vanishes".
+- **Bramble Jump** (8): "instantly teleports to a square of undergrowth within 60 feet" (where the undergrowth is, the GM knows).
+- **Disperse as a reaction** (4): "Trigger The storm lord takes damage from a hostile action. Effect The storm lord disperses. Until the end of the current turn, it can't be attacked or targeted, …".
+- **Disperse as a move** (1): "Strides or Flies. This movement doesn't trigger reactions. … It then coalesces back into its normal form." → batch 38's move that triggers no reactions.
+

@@ -1432,3 +1432,16 @@ test("Power Attack, Lunge, Quick Bomber, Thrash, Recharge Spell, Phase Jump, Spu
     assert.deepEqual(compile("Phase Jump", "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test dragon teleports up to 120 feet. If they are airborne, they maintain their momentum, and do not fall at the end of their turn.</p>"), { builtin: "safe-move", actions: 1 });
     assert.deepEqual(compile("Spurred by Death", "<p><strong>Trigger</strong> An ally within 30 feet reduces a creature to 0 HP</p><hr /><p><strong>Effect</strong> The test raider Steps or Strides.</p>", null, "reaction"), { builtin: "no-effect" });
 });
+
+test("plane and form shifts are the GM's (2026-10-11, batch 48; the user's choice)", () => {
+    const item = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    for (const [name, html, type] of [
+        ["Skip Between", "<p>The test sahkil moves from the Universe to the Ethereal Plane or vice-versa. While in the Ethereal Plane, they're unable to affect anything in the Universe.</p>"],
+        ["Walk the Ethereal Line", "<p>The test phantom walks the thin line between the Ethereal Plane and the Universe in order to exist on both planes simultaneously.</p>"],
+        ["Swarm Shape", "<p>The test worm collapses into a shapeless swarm of worms. It drops all held, worn, and carried items. It can use the same action to coalesce back into its normal form.</p>"],
+        ["Shadow Form", "<p>The test strigoi reverts to pure shadow and absorbs its body and its gear into the darkness, or it shifts back to its physical form.</p>"],
+        ["Bramble Jump", "<p><strong>Requirements</strong> The test twigjack is in undergrowth</p><p><strong>Effect</strong> The test twigjack scrambles into the undergrowth and instantly teleports to a square of undergrowth within 60 feet. This movement doesn't trigger reactions.</p>"],
+        ["Disperse", "<p><strong>Trigger</strong> The test whirlwind takes damage from a hostile action</p><hr /><p><strong>Effect</strong> The test whirlwind disperses. Until the end of the current turn, it can't be attacked or targeted, doesn't take up space, and its aura is suppressed.</p>", "reaction"]
+    ]) assert.deepEqual(compileMonsterAbility(item(name, html, type)), { builtin: "no-effect" }, name);
+    assert.deepEqual(compileMonsterAbility(item("Disperse", "<p>The test engerra Strides or Flies. This movement doesn't trigger reactions. During the movement, the test engerra can move through occupied spaces. It then coalesces back into its normal form.</p>")), { builtin: "safe-move", actions: 1 });
+});
