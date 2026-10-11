@@ -31,7 +31,7 @@ import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } fr
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -59,6 +59,10 @@ export function setUpReactions({ compileItem }) {
     });
     Hooks.on("combatStart", (combat) => {
         if (isActiveGM()) serially("initiative", () => onInitiative(combat));
+    });
+    // A condition landing on a monster that can negate it (Shake It Off; batch 49).
+    Hooks.on("createItem", (item) => {
+        if (isActiveGM() && item.type === "condition" && item.actor?.type === "npc") serially("negate", () => onConditionGained(item));
     });
     // A condition ending on a creature (Consume Fear's "A creature within 60 feet loses the Frightened condition"; batch 46).
     Hooks.on("deleteItem", (item) => {
@@ -336,6 +340,23 @@ async function onTurnStart(combat) {
     }
 }
 
+// A condition landing on a monster that negates it (Shake It Off, Slough Skin; batch 49, the user's choice): the offer to remove it,
+// while it has a use left (its frequency). Not for a condition that helps it, nor off-guard.
+const NOT_HARMFUL = new Set(["off-guard", "quickened", "concealed", "hidden", "invisible", "undetected", "unnoticed"]);
+async function onConditionGained(item) {
+    const slug = item.slug ?? item.system?.slug;
+    if (!slug || NOT_HARMFUL.has(slug)) return;
+    const token = item.actor?.token ?? item.actor?.getActiveTokens?.(false, true)?.[0] ?? null;
+    const scene = token?.parent;
+    if (!scene) return;
+    const mine = reactors(scene, game.combat).find((entry) => entry.token.id === token.id);
+    const entry = mine?.reactions.find(({ plan }) => plan.builtin === "negate-condition" && (!plan.conditions || plan.conditions.includes(slug)));
+    if (!entry) return;
+    const left = Number(entry.item.system?.frequency?.value);
+    if (Number.isFinite(left) && left <= 0) return;
+    await offer({ kind: "negate", item: entry.item, monster: token, actor: mine.actor, target: null, trigger: `it would be ${item.name}`, negate: { itemId: item.id, name: item.name } });
+}
+
 // A creature losing a condition within a monster's distance (Consume Fear, batch 46): the monster's reaction, on itself.
 async function onConditionLost(item) {
     const slug = item.slug ?? item.system?.slug;
@@ -416,7 +437,7 @@ async function onDamaged(actor, amount) {
 }
 
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, free = false }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, free = false }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -433,6 +454,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         note,
         attack,
         retribution,
+        ...(negate ? { negate } : {}),
         ...(free ? { free: true } : {}),
         status: "open",
         result: null
@@ -503,6 +525,13 @@ async function use(message, action, slug) {
         result = tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;
         // (A free action doesn't use the reaction.)
         if (state.free) return settle(message, state, "used", result);
+    } else if (state.kind === "negate") {
+        // Shake It Off (batch 49): the condition it was about to be affected by, removed; a use of its frequency spent.
+        await actor.items.get(state.negate.itemId)?.delete();
+        const item = await fromUuid(state.ability.uuid);
+        const left = Number(item?.system?.frequency?.value);
+        if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
+        result = `${state.ability.name}: ${state.negate.name} is negated.`;
     } else if (state.kind === "ac") {
         result = `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
     } else if (state.kind === "misfortune") {

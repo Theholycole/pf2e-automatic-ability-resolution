@@ -1445,3 +1445,9 @@ test("plane and form shifts are the GM's (2026-10-11, batch 48; the user's choic
     ]) assert.deepEqual(compileMonsterAbility(item(name, html, type)), { builtin: "no-effect" }, name);
     assert.deepEqual(compileMonsterAbility(item("Disperse", "<p>The test engerra Strides or Flies. This movement doesn't trigger reactions. During the movement, the test engerra can move through occupied spaces. It then coalesces back into its normal form.</p>")), { builtin: "safe-move", actions: 1 });
 });
+
+test("Shake It Off and Slough Skin negate a condition (2026-10-11, batch 49; the user's choice)", () => {
+    const item = (html) => ({ type: "action", name: "Shake It Off", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> The test worm would be affected by a condition or adverse effect (such as Cursed Metamorphosis)</p><hr /><p><strong>Effect</strong> The test worm negates the triggering condition or effect by sloughing an outer layer of its skin. Effects from artifacts, deities, or a similarly powerful source can't be avoided in this way.</p>")), { builtin: "negate-condition" });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Frequency</strong> once per minute</p><p><strong>Trigger</strong> The test beast would be affected by the Immobilized, Paralyzed, Slowed, or Stunned conditions, or by an effect that would give it a penalty to its Speeds, from a source of 14th level or less</p><hr /><p><strong>Effect</strong> The test beast negates the triggering condition or effect.</p>")), { builtin: "negate-condition", conditions: ["immobilized", "paralyzed", "slowed", "stunned"] });
+});

@@ -94,6 +94,7 @@ export function offerHTML(state) {
         if (state.kind === "misfortune") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the worse</button>`);
         if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at 1 HP</button>`);
         if (state.kind === "card") buttons.push(`<button type="button" data-aar-reaction="use">Use it</button>`);
+        if (state.kind === "negate") buttons.push(`<button type="button" data-aar-reaction="use">Use it: negate ${escape(state.negate?.name ?? "it")}</button>`);
         if (state.kind === "flat") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.dc == null ? "Use it" : `Roll the DC ${escape(state.attack?.dc)} flat check`}</button>`);
         // Retributive Strike: the ally's resistance, then a Strike at the foe if it's in reach.
         if (state.kind === "retribution") {

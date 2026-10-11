@@ -887,3 +887,12 @@ The user's choice (2026-10-11): the GM's. Counted as covered, nothing to apply; 
 - **Disperse as a reaction** (4): "Trigger The storm lord takes damage from a hostile action. Effect The storm lord disperses. Until the end of the current turn, it can't be attacked or targeted, …".
 - **Disperse as a move** (1): "Strides or Flies. This movement doesn't trigger reactions. … It then coalesces back into its normal form." → batch 38's move that triggers no reactions.
 
+## Shake It Off and Slough Skin (2026-10-11, batch 49)
+
+The user's choice (2026-10-11): the simulator negates the first harmful condition; live play offers the reaction as a condition lands.
+
+- **The text** (18): "Frequency once per day Trigger The purple worm would be affected by a condition or adverse effect (such as Cursed Metamorphosis) Effect The purple worm negates the triggering condition or effect. Effects from artifacts, deities, or a similarly powerful source can't be avoided in this way." (Shake It Off; the Monster Core cave worms' Slough Skin, "… by sloughing an outer layer of its skin") → { builtin: "negate-condition" }; Dogged Persistence's "would be affected by the Immobilized, Paralyzed, Slowed, or Stunned conditions, or by an effect that would give it a penalty to its Speeds, …" → those conditions only. (Its labels are found by their capital letter: "adverse effect (such as …)" isn't its Effect.)
+- **The simulator** (B77): the first condition an enemy gives it that harms it (not off-guard, quickened, concealed, hidden or invisible), negated with its reaction, once a fight.
+- **Live play:** as a condition item lands on the monster in an encounter (not off-guard or one that helps it), the offer "it would be Frightened 1 — Use it: negate Frightened 1"; using it deletes that condition and spends a use of the ability's frequency; with none left, no offer.
+- **Checked live in pftest** (PFTEST SIM B49 Cave Worm from Monster Core in an encounter with Ezren; deleted afterwards): Frightened 1 on it: the offer; Use it: the condition gone, Slough Skin's uses today 1 → 0; Sickened 1 after that: no offer.
+
