@@ -112,6 +112,9 @@ function reactors(scene, combat, { atZero = false } = {}) {
     return found;
 }
 
+// (Batch 64, Tail Smash: what a critical hit may add.)
+const CRITICAL_TRIP = "On a critical hit, it can also attempt an Athletics check to Trip the creature.";
+
 const isFoe = (monster, token) => !!token.actor?.isOfType?.("creature") && token.id !== monster.id && !token.hidden && token.disposition !== monster.disposition;
 
 // Its melee Strikes a reaction may use, with their reach: [{ slug, label, reach }].
@@ -176,7 +179,7 @@ async function onMove(token, movement) {
             await offer({
                 kind: "strike", item, monster, actor, target: token, strikes, penalty: plan.penalty ?? 0,
                 trigger: plan.builtin === "reactive-strike" ? "left a square in its reach" : "moved in its reach",
-                note: [squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts ? "If the Strike hits, the action is disrupted." : null].filter(Boolean).join(" ") || null
+                note: [squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null].filter(Boolean).join(" ") || null
             });
             break;
         }
@@ -205,7 +208,7 @@ async function onMessage(message) {
     }
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
-        if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach");
+        if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach", "ranged");
         if (ranged) await provokeTrigger(scene, combat, token, "ranged", "made a ranged attack");
         await defend(message, context, scene, combat, token);
         await ownStrike(message, context, scene, combat, token);
@@ -220,7 +223,7 @@ async function onMessage(message) {
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
     const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
     if (castTraits?.includes("manipulate")) {
-        await reachTrigger(scene, combat, token, "cast a manipulate spell in its reach");
+        await reachTrigger(scene, combat, token, "cast a manipulate spell in its reach", "manipulate");
         await provokeTrigger(scene, combat, token, "manipulate", "cast a manipulate spell");
     }
     // A concentrate action: a spell with the trait, or a check with it (Demoralize; batch 22).
@@ -277,15 +280,16 @@ async function provokeTrigger(scene, combat, token, kind, words) {
 }
 
 // Reactive Strike against a creature in reach that made a ranged attack or cast a manipulate spell.
-async function reachTrigger(scene, combat, token, trigger) {
+async function reachTrigger(scene, combat, token, trigger, kind = null) {
     const grid = gridOf(scene);
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
-        const entry = reactions.find(({ plan }) => plan.builtin === "reactive-strike");
+        // (Batch 64: a reaction Strike its trigger sets off on a ranged attack in its reach, Tail Smash's; the GM checks it was at it.)
+        const entry = reactions.find(({ plan }) => plan.builtin === "reactive-strike" || (kind && plan.builtin === "reaction-strike" && plan.triggers?.includes(kind)));
         if (!entry) continue;
         const distance = distanceFeet(box(monster, grid.size), box(token, grid.size), grid);
-        const strikes = meleeStrikes(actor, entry.item.name).filter((strike) => distance <= strike.reach);
-        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger });
+        const strikes = meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name).filter((strike) => distance <= strike.reach);
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: entry.plan.criticalTrip ? CRITICAL_TRIP : null });
     }
 }
 

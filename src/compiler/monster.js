@@ -1750,7 +1750,10 @@ export function followUpNeed(need) {
     const name = (melee, raw) => ({ melee: /^melee$/i.test(melee ?? ""), strike: raw && !/^(?:melee|ranged|weapon|unarmed)$/i.test(raw.trim()) ? raw.trim().toLowerCase() : null });
     // ("…, and the target is adjacent to …", "or a Draconic Frenzy that included …": more it needs. Another way to qualify, "a
     // successful bite Strike or Test Lunge" (made up), leaves the Strike's.)
-    const text = need.replace(/[.;]\s*$/, "").trim().replace(/( Strike) or (?!an?\b)[A-Z][\w' -]*$/, "$1");
+    const text = need.replace(/[.;]\s*$/, "").trim().replace(/( Strike) or (?!an?\b)[A-Z][\w' -]*$/, "$1")
+        // (Batch 64: "a successful Strike with a melee unarmed attack or a Draconic Frenzy that included one": the single Strike's.)
+        .replace(/ or a Draconic Frenzy that included a successful Strike with a melee unarmed attack$/i, "")
+        .replace(/\ba successful Strike with a melee unarmed attack$/i, "a successful melee Strike");
     if (/,|\bor (?:a|an)\b|\b(?:of size|larger|smaller|Tiny|Small|Medium|Large|Huge|Gargantuan|weapon that)\b/i.test(text)) return null;
     let match = new RegExp(String.raw`^(?:The |the )?[^,]*? ${LAST_ACTION} was (.+)$`, "i").exec(text);
     if (match) {

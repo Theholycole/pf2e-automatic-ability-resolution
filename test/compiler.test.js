@@ -1654,3 +1654,12 @@ test("A wing raised for AC, Strikes wreathed in force, a charge that triggers no
     assert.deepEqual(back("Seeing the opening it expected, the test drake answers at once. The test drake makes a melee Strike against the triggering creature."), { builtin: "reaction-strike", triggers: ["missed"], strike: "melee", penalty: 0, disrupts: false });
     assert.deepEqual(back("The test drake makes a melee Strike against the triggering creature, rolling the attack roll twice and taking the better result; this is a fortune effect."), { builtin: "reaction-strike", triggers: ["missed"], strike: "melee", penalty: 0, disrupts: false, fortune: true });
 });
+
+test("A follow-up save after an unarmed hit, a Strike at a creature that shoots at it or moves away (2026-10-11, batch 64)", () => {
+    const item = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    // (Made-up wordings in the shapes these readers take.)
+    const sap = compileMonsterAbility(item("Test Sap", "<p><strong>Requirements</strong> The test drake's last action was a successful Strike with a melee unarmed attack or a Draconic Frenzy that included a successful Strike with a melee unarmed attack</p><hr /><p><strong>Effect</strong> The target must succeed at a @Check[fortitude|dc:25] saving throw or be @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} for 1 minute (@UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 2} for 1 minute on a critical failure).</p>"));
+    assert.deepEqual([sap?.trigger?.followUp?.melee, sap?.resolution?.check?.statistic, sap?.resolution?.outcomes?.failure?.effects?.[0]?.slug, sap?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], [true, "fortitude", "enfeebled", 2]);
+    const whip = compileMonsterAbility(item("Test Whip", "<p><strong>Trigger</strong> A creature within reach of the test drake's tail targets the test drake with a ranged attack or attempts to move away from the test drake during a move action it's using</p><hr /><p><strong>Effect</strong> The test drake makes a tail Strike against the triggering creature. On a critical success, the test drake can also attempt an Athletics check to Trip the triggering creature.</p>", "reaction"));
+    assert.deepEqual(whip, { builtin: "reaction-strike", triggers: ["move", "ranged"], strike: "tail", penalty: 0, disrupts: false, criticalTrip: true });
+});
