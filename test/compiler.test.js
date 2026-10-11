@@ -440,8 +440,9 @@ test("more save wordings (2026-10-10, batch 2): unless, attempt … or, Buck, Dr
     // Buck: the rider's Reflex save, Prone; 1d6 bludgeoning more on a critical failure.
     const buck = compileMonsterAbility(action("Buck", "<p>@Check[reflex|dc:20]</p><p>@Localize[PF2E.NPC.Abilities.Glossary.Buck]</p>", { actionType: "reaction", slug: "buck" }));
     assert.deepEqual([rows(buck).failure, rows(buck).criticalFailure, buck.resolution.outcomes.criticalFailure.damage.formulas[0].formula], ["prone", "prone", "1d6[bludgeoning]"]);
-    // Drink Blood: Athletics against Fortitude; a success drains; the healing is a note for the GM.
-    const drink = compileMonsterAbility(action("Drink Blood", "<p>The test vampire sinks its fangs into that creature to drink its blood. This requires an @Check[athletics|defense:fortitude] check against the victim's Fortitude DC if the victim is grabbed and is automatic for any of the other conditions. The victim is Drained 1 and the vampire regains @Damage[12[healing]] HP.</p>", { slug: "drink-blood" }));
+    // Drink Blood: Athletics against Fortitude; a success drains; the healing is a note for the GM when it depends on the victim
+    // ("from a creature that's already drained doesn't restore any Hit Points"; batch 31: otherwise on the card).
+    const drink = compileMonsterAbility(action("Drink Blood", "<p>The test vampire sinks its fangs into that creature to drink its blood. This requires an @Check[athletics|defense:fortitude] check against the victim's Fortitude DC if the victim is grabbed and is automatic for any of the other conditions. The victim is Drained 1 and the vampire regains @Damage[12[healing]] HP. Drinking Blood from a creature that's already drained doesn't restore any HP to the vampire.</p>", { slug: "drink-blood" }));
     assert.deepEqual([drink.resolution.kind, rows(drink).success, rows(drink).failure], ["check", "drained 1", ""]);
     assert.match(drink.resolution.reminders[0], /regains 12 Hit Points/);
     // Trample with its damage written in place of a Strike, and its riders.
@@ -1093,4 +1094,23 @@ test("more multi-Strike wordings (2026-10-10, batch 30)", () => {
     // Rapid Strikes ("attempts"), Draconic Frenzy with no final period.
     assert.equal(compileMonsterAbility(action("Test Rapid", "<p>The test ghoul attempts three claw Strikes, each against a different target within reach. The multiple attack penalty applies to each attack, but increases only after all the attacks have been made.</p>")).sameMap, true);
     assert.deepEqual(compileMonsterAbility(action("Draconic Frenzy", "<p>The test dragon makes two claw Strikes and one tail Strike in any order</p>")).strikes, ["claw", "claw", "tail"]);
+});
+
+test("Blood Drain and the Drink Blood family (2026-10-10, batch 31)", () => {
+    const action = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const grabbed = "@UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}";
+    const drained = (value) => `@UUID[Compendium.pf2e.conditionitems.Item.4D2KBtexWXa6oUMR]{Drained ${value}}`;
+    // Blood Drain: damage on the creature it holds, Drained until healed, temporary Hit Points equal to the damage.
+    const drain = compileMonsterAbility(action("Blood Drain", `<p><strong>Requirements</strong> The test leech has a creature ${grabbed}</p><p><strong>Effect</strong> The test leech drives its mouth into the grabbed creature to drink its blood. This deals @Damage[4d6[untyped]] damage, and the test leech gains temporary Hit Points equal to the damage dealt. A creature whose blood is drained by the test leech is ${drained(1)} until it receives healing (of any kind or amount).</p>`));
+    assert.deepEqual([drain.targeting.grabbed, drain.resolution.check.roll, drain.resolution.outcomes.success.damage.formulas, drain.resolution.outcomes.success.effects], [true, "automatic", [{ formula: "4d6[untyped]" }], [{ kind: "condition", slug: "drained", value: 1, duration: null }, { kind: "temp-hp", fromDamage: true, recipient: "self" }]]);
+    // Only for some creatures: the GM's.
+    const plant = compileMonsterAbility(action("Vitality Drain", `<p><strong>Requirements</strong> The test vine has a creature ${grabbed}</p><p><strong>Effect</strong> The test vine drains blood or ichor from the creature it has grabbed, dealing @Damage[2d6[untyped]] damage. If the creature has the plant trait, the test vine gains temporary Hit Points equal to the damage dealt. A creature that has its vitality drained by the test vine is ${drained(1)} until it receives healing of any kind or amount.</p>`));
+    assert.match(plant.resolution.reminders[1], /^If \{target\} has the plant trait, \{source\} gains temporary Hit Points/);
+    // Slurp Blood: Athletics against Fortitude, damage, and its healing on the card (any excess as temporary Hit Points).
+    const slurp = compileMonsterAbility(action("Slurp Blood", "<p><strong>Requirements</strong> A Grabbed, Paralyzed, Restrained, Unconscious, or willing creature is within the test ghoul's reach</p><p><strong>Effect</strong> The test ghoul bites the creature, slurping its blood. This requires an Athletics check against the target's Fortitude DC if the victim is grabbed and is automatic for any of the other conditions. The victim takes @Damage[(1d6+1)[piercing]] damage and the test ghoul regains @Damage[3[healing]] Hit Points, gaining any excess HP as temporary HP.</p>"));
+    assert.deepEqual([slurp.resolution.check.statistic, slurp.resolution.outcomes.success.effects], ["athletics", [{ kind: "heal", amount: 3, excessAsTemp: true, recipient: "self" }]]);
+    // Drain Thoughts: its own condition, more on a critical success; healing left to the GM when it depends on the victim.
+    const thoughts = compileMonsterAbility(action("Drain Thoughts", "<p><strong>Requirements</strong> A Grabbed, Paralyzed, Restrained, Unconscious, or willing creature is within the test vampire's reach</p><p><strong>Effect</strong> The test vampire seizes a creature and consumes its memories. This requires an @Check[athletics|defense:fortitude] check against the victim's Fortitude DC if the victim is grabbed and is automatic for any of the other conditions. The victim is Stupefied 1 (Stupefied 2 if the test vampire's Athletics check is a critical success), and the test vampire regains @Damage[18[healing]] Hit Points, gaining any excess as temporary Hit Points. Draining Thoughts from a creature that is already stupefied doesn't restore any HP to the test vampire.</p>"));
+    assert.deepEqual([thoughts.resolution.outcomes.success.effects[0].value, thoughts.resolution.outcomes.criticalSuccess.effects[0].value], [1, 2]);
+    assert.match(thoughts.resolution.reminders[0], /regains 18 Hit Points \(any excess as temporary Hit Points\), unless \{target\} was already stupefied/);
 });

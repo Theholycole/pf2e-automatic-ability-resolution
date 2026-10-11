@@ -667,3 +667,19 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **Checked live in pftest** (a party-side PFTEST SIM goblin, a Vibrant Pup Swarm, a Python and a goblin it held; deleted afterwards):
   - a critical hit on the swarm offered Feel No Pain, whose card's Apply gave it 10 temporary Hit Points ("for 1 round");
   - Wrap in Coils posted the python's Constrict, a DC 17 basic Fortitude card on the grabbed goblin: a success, 1 bludgeoning.
+
+## Blood Drain and the Drink Blood family (2026-10-10, batch 31)
+
+- **Blood Drain** (9): "Requirements The manananggal has a creature Grabbed. Effect The manananggal drives their tongue into the grabbed creature to drink its blood. This deals 4d6 damage, and the manananggal gains temporary Hit Points equal to the damage dealt. A creature whose blood is drained by a manananggal is Drained 1 until it receives healing (of any kind or amount)."
+  - Damage with no roll on the creature it holds, Drained (until healed, a reminder), temporary Hit Points equal to the damage, or its healing ("regains 8 Hit Points, gaining any excess as temporary Hit Points").
+  - Temporary Hit Points for some creatures only ("If the creature is a demon, fey, or sorcerer, …") are the GM's reminder.
+  - The core's `temp-hp` and new `heal` effects take `fromDamage`: the row's damage on that target.
+- **The Drink Blood family** (14): Drain Qi's "drains the victim's life energy", Drain Thoughts' "consumes its memories", Slurp Blood's "slurping its blood", Drain Blood: an Athletics check against the victim's Fortitude DC, the victim's condition (Drained, or Stupefied with more on a critical success) or damage.
+  - Its healing goes on the card, any excess as temporary Hit Points, unless it depends on the victim ("Drinking Blood from a creature that's already drained doesn't restore any Hit Points"): then it stays the GM's reminder, as before.
+  - One with more than one condition on the victim isn't read this way.
+- **Live play:** the card's Apply heals the monster (any excess as temporary Hit Points, the higher of those and its current ones) and gives it temporary Hit Points equal to the damage.
+- **The simulator** (B63): the same, against the creature it holds.
+- 23, all PF2e.
+- **Checked live in pftest** (a PFTEST SIM Manananggal and Puddles Ghoul, each holding a party-side goblin; deleted afterwards):
+  - Blood Drain dealt 14 untyped damage, left the goblin Drained 1, and gave the manananggal 14 temporary Hit Points;
+  - Slurp Blood's Athletics 20 against DC 15 dealt 4 piercing, and the ghoul, 1 HP below its maximum, regained 1 HP and gained 2 temporary Hit Points.

@@ -896,6 +896,18 @@ async function applyChange(change, state) {
             if (gone.length) await actor.deleteEmbeddedDocuments("Item", gone.map((condition) => condition.id));
             return gone.length ? `${target.name} is no longer ${[...new Set(gone.map((condition) => condition.slug))].join(" or ")}` : null;
         }
+        // Healing on the creature (batch 31: Drink Blood's "regains 10 Hit Points, gaining any excess as temporary Hit Points").
+        case "heal": {
+            const hp = actor.system?.attributes?.hp ?? {};
+            const value = Number(hp.value) || 0;
+            const max = Number(hp.max) || value;
+            const healed = Math.min(change.amount, Math.max(0, max - value));
+            const excess = change.excessAsTemp ? change.amount - healed : 0;
+            const update = { "system.attributes.hp.value": value + healed };
+            if (excess > (Number(hp.temp) || 0)) update["system.attributes.hp.temp"] = excess;
+            await actor.update(update);
+            return `${target.name} regains ${healed} Hit Points${excess > 0 ? ` and has ${Math.max(excess, Number(hp.temp) || 0)} temporary Hit Points` : ""}`;
+        }
         // Temporary Hit Points (batch 30): the higher of its current and these (they don't stack); how long they last, for the GM.
         case "tempHp": {
             const current = Number(actor.system?.attributes?.hp?.temp) || 0;

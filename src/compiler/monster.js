@@ -304,16 +304,31 @@ function withRiders(outcomes, html, components) {
 function drinkBlood(item) {
     const html = item.system?.description?.value ?? "";
     const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
-    if (!/\b(?:sinks? (?:its|their|his|her) fangs|drinks? (?:its|the) blood|Drink (?:Blood|Essence))\b/i.test(`${item.name} ${plain}`)) return null;
-    const check = readSkillCheck(html);
-    const drained = /\b(?:victim|creature|target) (?:is|becomes) Drained (\d+)\b/i.exec(plain);
+    // (Batch 31: Drain Qi's "drains the victim's life energy", Drain Thoughts' "consumes its memories", Slurp Blood's "slurping its
+    // blood", besides Drink Blood's "sinks its fangs".)
+    if (!/\b(?:sinks? (?:its|their|his|her) fangs|drinks? (?:its|the|their) blood|drink its blood|Drink (?:Blood|Essence)|drains the (?:victim|creature)'s life energy|consumes its memories|slurping its blood)\b/i.test(`${item.name} ${plain}`)) return null;
+    const check = readSkillCheck(html) ?? (/\ban Athletics check against the (?:victim|target|creature)'s Fortitude DC\b/i.test(plain) ? { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "fortitude" } } : null);
+    // The victim's condition ("is Drained 1", "is Stupefied 1 (Stupefied 2 if Taviah's Athletics check is a critical success)") and
+    // damage ("The victim takes 1d6+1 piercing damage").
+    const struck = /\b(?:victim|creature|target) (?:is|becomes) (Drained|Stupefied|Enfeebled|Clumsy) (\d+)(?: \((?:\w+) (\d+) if [^)]*?critical success\))?/i.exec(plain);
+    const formulas = inlineTags(html, "Damage").map(readDamage);
+    const damage = formulas.filter((formula) => !/healing/i.test(formula));
     // When no check is needed: "…and is automatic for any of the other conditions", "If the victim is grabbed, this is automatic".
     const automatic = /\bif the (?:victim|creature) is grabbed,? this is automatic\b/i.test(plain) ? "No check is needed against a grabbed victim: count it as a success."
         : /\bautomatic for any of the other conditions\b/i.test(plain) ? "No check is needed against a paralyzed, restrained, unconscious or willing victim: count it as a success." : null;
-    if (!check || check.statistic !== "athletics" || !drained) return null;
-    const healing = inlineTags(html, "Damage").map(readDamage).find((formula) => /healing/i.test(formula));
-    const amount = healing ? healing.replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1") : null;
-    const drain = { ...none(), effects: [condition("drained", Number(drained[1]))] };
+    if (!check || check.statistic !== "athletics" || (!struck && !damage.length) || damage.length > 1) return null;
+    // Its healing: "regains 15 Hit Points", "regains 12 HP, gaining any excess as temporary HP".
+    const healing = formulas.find((formula) => /healing/i.test(formula));
+    const amount = healing ? healing.replace(/\[healing(?:,[a-z]+)?\]/i, "").replace(/^\((.*)\)$/, "$1") : /\bregains (\d+) (?:HP|Hit Points)\b/i.exec(plain)?.[1] ?? null;
+    const excess = /\bgaining any excess(?: HP)? as temporary (?:HP|Hit Points)\b/i.test(plain);
+    // "Drinking Blood from a creature that's already drained doesn't restore any Hit Points": the GM's, as a reminder.
+    const already = /\balready (?:drained|stupefied)\b/i.test(plain);
+    const slug = struck?.[1].toLowerCase();
+    const heal = amount && !already ? [{ kind: "heal", ...(/^\d+$/.test(amount) ? { amount: Number(amount) } : { formula: amount }), ...(excess ? { excessAsTemp: true } : {}), recipient: "self" }] : [];
+    const row = (value) => ({
+        damage: damage.length ? { mode: "formulas", formulas: [{ formula: damage[0] }], rollScope: "outcome" } : none().damage,
+        effects: [...(slug ? [condition(slug, value)] : []), ...heal]
+    });
     return {
         ...base(item),
         targeting: { target: "the victim", range: "touch", area: null },
@@ -322,11 +337,63 @@ function drinkBlood(item) {
             kind: "check",
             check,
             sharedDamage: null,
-            outcomes: { criticalSuccess: drain, success: structuredClone(drain), failure: none(), criticalFailure: none() },
+            outcomes: { criticalSuccess: row(Number(struck?.[3] ?? struck?.[2])), success: row(Number(struck?.[2])), failure: none(), criticalFailure: none() },
             reminders: [
-                ...(amount ? [`{source} regains ${amount} Hit Points (any excess as temporary Hit Points), unless {target} was already drained; then {target}'s drained value goes up by 1 instead.`] : []),
+                ...(amount && already ? [`{source} regains ${amount} Hit Points${excess ? " (any excess as temporary Hit Points)" : ""}, unless {target} was already ${slug}; then {target}'s ${slug} value goes up by 1 instead.`] : []),
                 ...(automatic ? [automatic] : [])
             ]
+        }
+    };
+}
+
+// Blood Drain (2026-10-10, batch 31): "Requirements The manananggal has a creature Grabbed Effect The manananggal drives their tongue
+// into the grabbed creature to drink its blood. This deals 4d6 damage, and the manananggal gains temporary Hit Points equal to the
+// damage dealt. A creature whose blood is drained by a manananggal is Drained 1 until it receives healing (of any kind or amount)."
+// Damage with no roll on the creature it holds, Drained until healed, temporary Hit Points equal to the damage (or its healing,
+// "regains 8 Hit Points, gaining any excess as temporary Hit Points"). Temporary Hit Points only for some creatures ("If the
+// creature is a demon, fey, or sorcerer, …") are the GM's.
+function bloodDrain(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    if (!/^Requirements? (?:The|A|An) [^.]*?\bhas a creature Grabbed\b/i.test(plain)) return null;
+    const effect = plain.replace(/^.*?\bEffect\s+/i, "");
+    const sentences = effect.split(/(?<=\.)\s+/);
+    const formulas = inlineTags(html, "Damage").map(readDamage);
+    const damage = formulas.filter((formula) => !/healing/i.test(formula));
+    if (damage.length !== 1 || !/\bdrains? (?:blood|blood or ichor|vitality)\b|\bdrink its blood\b/i.test(effect)) return null;
+    const drained = /\bis Drained (\d+) until it receives(?: any kind or amount of)? healing\b/i.exec(effect);
+    let temp = false;
+    const reminders = [];
+    let heal = null;
+    for (const sentence of sentences) {
+        if (/@Damage\[[^\]]*(?:untyped|piercing|bludgeoning|slashing|void|bleed)/i.test(sentence) && /\b(?:deals?|dealing)\b/i.test(sentence)) {
+            if (/\bgains? temporary Hit Points equal to the damage dealt\b/i.test(sentence)) temp = true;
+            const regains = /\bregains @Damage\[([^\]]*\[healing\])\]/i.exec(sentence);
+            if (regains) heal = { kind: "heal", amount: Number(readDamage(regains[1]).replace(/\[healing\]/i, "")) || null, excessAsTemp: /\bgaining any excess\b/i.test(sentence), recipient: "self" };
+            continue;
+        }
+        if (/^If the creature (?:is|has) [^.]+?, (?:the [\w' -]+?|it) gains temporary Hit Points equal to the damage dealt\.$/i.test(sentence)) {
+            reminders.push(sentence.replace(/^If the creature/i, "If {target}").replace(/, (?:the [\w' -]+?|it) gains/i, ", {source} gains"));
+            continue;
+        }
+        if (/\bis Drained \d+ until it receives\b/i.test(sentence)) continue;
+        if (/^(?:The|A|An) [\w' -]+? (?:drains|drives|sinks) [^.@]+\.$/i.test(sentence)) continue;
+        return null;
+    }
+    if (heal && !Number.isFinite(heal.amount)) return null;
+    const effects = [...(drained ? [condition("drained", Number(drained[1]))] : []), ...(temp ? [{ kind: "temp-hp", fromDamage: true, recipient: "self" }] : []), ...(heal ? [heal] : [])];
+    const success = { damage: { mode: "formulas", formulas: [{ formula: damage[0] }], rollScope: "outcome" }, effects };
+    return {
+        ...base(item),
+        targeting: { target: "the creature it holds", range: "touch", area: null, grabbed: true },
+        trigger: { event: "use" },
+        resolution: {
+            kind: "check",
+            check: { roll: "automatic", statistic: "automatic" },
+            sharedDamage: null,
+            outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() },
+            reminders: [...(drained ? [`{target}'s drained lasts until it receives healing of any kind or amount.`] : []), ...reminders]
         }
     };
 }
@@ -1381,6 +1448,12 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (slug === "buck") return buck(item);
     if (/drink-blood|drink-essence/.test(slug ?? "") || /^Drink (?:Blood|Essence)$/i.test(item.name ?? "")) {
         const plan = drinkBlood(item);
+        if (plan) return plan;
+    }
+    // (Batch 31: Drain Qi, Drain Thoughts, Slurp Blood by their words, with one condition on the victim; Blood Drain.)
+    if (item.system?.actionType?.value === "action") {
+        const named = new Set([...htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/^[\s\S]*?\bEffect\b/, "").matchAll(/(?<!already )\b(Drained|Stupefied|Enfeebled|Clumsy|Frightened|Sickened|Slowed|Stunned|Paralyzed|Fatigued|Confused)\b/g)].map((match) => match[1].toLowerCase()));
+        const plan = (named.size <= 1 ? drinkBlood(item) : null) ?? bloodDrain(item);
         if (plan) return plan;
     }
     if (slug === "engulf") return engulf(item, actor);
