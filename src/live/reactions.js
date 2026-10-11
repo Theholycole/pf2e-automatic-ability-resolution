@@ -105,6 +105,8 @@ export function offerHTML(state) {
         // (The attacker's choice, batch 58: a normal hit, or the critical hit and a condition.)
         if (state.kind === "flat" && state.attack?.or) buttons.push(`<button type="button" data-aar-reaction="use">A normal hit</button>`, `<button type="button" data-aar-reaction="keep">The critical hit, ${escape(state.attack.or.label)}</button>`);
         else if (state.kind === "flat") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.dc == null ? "Use it" : `Roll the DC ${escape(state.attack?.dc)} flat check`}</button>`);
+        // (Batch 71, Liquefy: the resistance against the damage it took, as Hit Points back.)
+        if (state.kind === "resist") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.retribution?.restore ?? 0)} HP back</button>`);
         // Retributive Strike: the ally's resistance, then a Strike at the foe if it's in reach.
         if (state.kind === "retribution") {
             for (const strike of state.strikes ?? []) buttons.push(`<button type="button" data-aar-reaction="strike" data-slug="${escape(strike.slug)}">Resist, then ${escape(strike.label)}</button>`);

@@ -27,11 +27,12 @@ import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/mode
 import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { fitsSize } from "../src/live/activity.js";
+import { resistEffects } from "../src/live/buff.js";
 import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -572,6 +573,14 @@ async function onDown(actor) {
 }
 
 // Damage on a monster's ally: Retributive Strike, against the creature whose turn it is when that's a foe.
+// The damage just applied, by type (batch 71): the latest damage roll's instances (within 15 seconds), [{ type, total }]; null when
+// there's no damage roll to go by.
+function lastDamageTypes() {
+    const message = game.messages.contents.slice(-10).reverse().find((entry) => entry.flags?.pf2e?.context?.type === "damage-roll" && Date.now() - (entry.timestamp ?? 0) < 15000);
+    const instances = message?.rolls?.[0]?.instances ?? [];
+    return instances.length ? instances.map((instance) => ({ type: instance.type, total: Number(instance.total) || 0 })) : null;
+}
+
 async function onDamaged(actor, amount) {
     for (const token of actor.getActiveTokens(false, true)) {
         const scene = token.parent;
@@ -584,6 +593,24 @@ async function onDamaged(actor, amount) {
         if (own) {
             const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
             await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger), free: !!own.plan.trigger.free });
+        }
+        // Liquefy, Chipping Scales (batch 71): its resistance against that damage, given back as Hit Points (the GM checks the type);
+        // an enemy's damage only when it says so; while it has a use left.
+        // (The damage's types from its damage roll when there is one: no offer when none of them sets it off; the resistance off each type.)
+        // (Not while its resistance from before still lasts: they don't stack.)
+        const resist = mine?.reactions.find(({ plan }) => plan.builtin === "resist-damage");
+        const usesLeft = Number(resist?.item.system?.frequency?.value);
+        const lasting = resist && actor.itemTypes.effect.some((effect) => effect.flags?.[MODULE_ID]?.resist && effect.name === resist.item.name && !effect.isExpired);
+        if (resist && !lasting && !(Number.isFinite(usesLeft) && usesLeft <= 0)) {
+            const plan = resist.plan;
+            const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
+            const kinds = lastDamageTypes();
+            const fits = (type, types) => !types || types.includes(type) || (types.includes("physical") && ["bludgeoning", "piercing", "slashing"].includes(type));
+            if ((!plan.foe || foe) && (!kinds || kinds.some(({ type }) => fits(type, plan.on)))) {
+                const restore = Math.min(amount, kinds ? kinds.filter(({ type }) => fits(type, plan.types)).reduce((sum, { total }) => sum + Math.min(plan.value, total), 0) : plan.value);
+                const note = [kinds ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? "It keeps the resistance until the end of its next turn." : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null].filter(Boolean).join(" ");
+                await offer({ kind: "resist", item: resist.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: note || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore } });
+            }
         }
         // Furious Flailing, Splinter (batch 61): damage of its types (the GM checks the type), its Strike at a random creature in its
         // reach (the GM's target), or at the attacker beside it; the trolls' flat check against persistent fire, a note.
@@ -685,6 +712,25 @@ async function use(message, action, slug) {
     let result;
     if (state.kind === "strike") {
         result = await rollStrike(state, actor, slug);
+    } else if (state.kind === "resist") {
+        // Liquefy, Chipping Scales (batch 71): the damage it resisted back as Hit Points; what lasts as PF2e effects; a use spent.
+        const hp = actor.system?.attributes?.hp;
+        const lines = [];
+        if (hp && state.retribution.restore > 0) {
+            const value = Math.min(hp.max, hp.value + state.retribution.restore);
+            await actor.update({ "system.attributes.hp.value": value });
+            lines.push(`${state.monster.name} resists ${state.retribution.restore} damage (back to ${value} HP).`);
+        }
+        const item = await fromUuid(state.ability.uuid);
+        const plan = item ? compile(item) : null;
+        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null });
+        if (effects.length) {
+            await actor.createEmbeddedDocuments("Item", effects);
+            lines.push(effects.map((effect) => effect.name).join(", ") + " on it.");
+        }
+        const left = Number(item?.system?.frequency?.value);
+        if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
+        result = lines.join(" ") || "Nothing to resist.";
     } else if (state.kind === "retribution") {
         // The resistance after the fact: the damage it would have kept off, back as Hit Points.
         const ally = await fromUuid(state.retribution.ally.actorUuid);

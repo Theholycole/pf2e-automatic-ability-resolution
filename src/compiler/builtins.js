@@ -466,6 +466,68 @@ export function readCharge(text) {
     return charge;
 }
 
+// Resistance against the damage that sets it off (2026-10-11, batch 71): "Trigger The dragon takes fire damage Effect … They gain fire
+// resistance 20, including against the triggering effect, until the end of their next turn." (Liquefy), "Trigger The poppet would take
+// piercing damage Effect …, gaining resistance 5 against the triggering piercing damage", "Trigger The granitescale is about to take
+// piercing or slashing damage Effect … gains resistance 15 to the damage, but their AC is reduced by 2 for 1 day", "Trigger An enemy is
+// about to damage the cavern seer with bludgeoning damage or with a spell that has the earth trait" → { builtin: "resist-damage", value,
+// on (the damage types that set it off, or null for any), types (those it resists, or null for all the triggering damage), attack? (an
+// attack's damage only), foe? (an enemy's), lasts? (rounds: until the end of its next turn), acPenalty? (for a day), uses? (a day) }.
+// Not for an ally, nor with a requirement, a move, a Strike or more damage of its own.
+const DAMAGE_WORDS = "acid|bludgeoning|cold|electricity|fire|force|mental|piercing|poison|slashing|sonic|spirit|void|vitality|physical";
+function damageTypesIn(phrase) {
+    const words = String(phrase ?? "").toLowerCase().replace(/\b(?:or|and)\b|,/g, " ").trim().split(/\s+/).filter(Boolean);
+    return words.length && words.every((word) => new RegExp(`^(?:${DAMAGE_WORDS})$`).test(word)) ? words : null;
+}
+function readResistDamage(text, trigger, effect) {
+    if (/\bRequirements?\b/.test(text)) return null;
+    const said = trigger.trim().replace(/\.$/, "").replace(/,? or with a spell that has the [\w ,]+? traits?$/i, "");
+    const self = String.raw`(?!An? |Any |One )(?:The )?[^.]+?`;
+    let on = null;
+    let attack = false;
+    let foe = false;
+    let match = new RegExp(String.raw`^${self} (?:takes|would take|is about to take) ([a-z, ]*?)\s*damage(?: from (an attack|a Strike|a physical attack|a creature|an enemy|a hostile source|a Strike or spell effect))?$`).exec(said);
+    if (match) {
+        on = match[1].trim() ? damageTypesIn(match[1]) : null;
+        if (match[1].trim() && !on) return null;
+        attack = /attack|Strike$/.test(match[2] ?? "") && !/spell/.test(match[2] ?? "");
+        if (/physical/.test(match[2] ?? "")) on = ["physical"];
+        foe = /creature|enemy|hostile/.test(match[2] ?? "");
+    } else if ((match = new RegExp(String.raw`^${self} is (?:hit|damaged) (?:by|with) an? (?:melee |ranged )?(?:Strike|attack)(?: that deals| dealing) ([a-z, ]+?) damage$`).exec(said))) {
+        on = damageTypesIn(match[1]);
+        if (!on) return null;
+        attack = true;
+    } else if ((match = /^An? (?:enemy|foe|creature)(?: within \d+ feet)? (?:is about to damage|would deal ([a-z, ]+? )?damage to) (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*)(?: with ([a-z, ]+?)(?: damage)?)?$/.exec(said))) {
+        const phrase = match[1] ?? match[2] ?? "";
+        on = phrase.trim() ? damageTypesIn(phrase) : null;
+        if (phrase.trim() && !on) return null;
+        foe = true;
+    } else return null;
+    // Its effect: the resistance, perhaps after a sentence that only tells it; an AC that drops for a day ("cannot be reduced below 16").
+    const T = DAMAGE_WORDS;
+    const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?\.?$`, "i");
+    const at = sentences.findIndex((sentence) => resist.test(sentence));
+    if (at < 0) return null;
+    const told = (sentence) => !/\d|\b(?:damage|resistance|Strikes?|Steps?|Strides?|teleports?|Fl(?:y|ies)|attack rolls?|saves?|checks?|penalty|bonus)\b/i.test(sentence);
+    if (!sentences.slice(0, at).every(told)) return null;
+    if (!sentences.slice(at + 1).every((sentence) => /^(?:The [\w' -]+?['’]s|Its|Their) AC can(?:not|'t) be reduced below \d+ in this way\.$/i.test(sentence))) return null;
+    const read = resist.exec(sentences[at]);
+    const named = read[1] ?? read[3] ?? read[4] ?? read[5] ?? null;
+    const frequency = /\bFrequency (once|twice) per day\b/i.exec(text)?.[1];
+    return {
+        builtin: "resist-damage",
+        value: Number(read[2]),
+        on,
+        types: named ? [named.toLowerCase()] : null,
+        ...(attack ? { attack: true } : {}),
+        ...(foe ? { foe: true } : {}),
+        ...(/until the end of (?:its|their|his|her) next turn/i.test(read[0]) ? { lasts: 1 } : {}),
+        ...(read[6] ? { acPenalty: Number(read[6]) } : {}),
+        ...(frequency ? { uses: frequency.toLowerCase() === "twice" ? 2 : 1 } : {})
+    };
+}
+
 // "The dragon recharges their Poison Breath whenever they score a critical hit with a Strike." → ["Poison Breath"].
 export function readMomentum(text) {
     if (!/critical hit/i.test(text) || !/recharges?/i.test(text)) return null;
@@ -682,6 +744,8 @@ export function readReaction(item, text) {
     if (champion && /^An? (?:enemy|foe) damages (?:the [\w' -]+?['’]s|one of [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) ally\b/i.test(trigger) && /\b(?:makes? a (?:melee )?Strike against (?:it|them|the (?:enemy|foe))|can make a Strike against the (?:enemy|foe))\b/i.test(effect) && !/\b(?:grabs|restrains|chooses?)\b/i.test(`${trigger} ${effect}`)) {
         return { builtin: "retributive-strike", resistance: Number(champion[1]) };
     }
+    const resisting = readResistDamage(text, trigger, effect);
+    if (resisting) return resisting;
     // A critical hit on it answered with resistance against that attack (2026-10-10, batch 29): "Trigger The dragon is critically hit
     // by an attack; Effect … gaining resistance 20 to all damage against the triggering attack" (Wished Away, Withhold Death).
     const resist = /\b(?:gains?|gaining) resistance (\d+) to all damage against the triggering attack\b/i.exec(effect);

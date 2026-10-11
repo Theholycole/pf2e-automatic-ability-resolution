@@ -1790,3 +1790,19 @@ test("charges in their own words: the Strike in a sentence of its own, off-guard
     assert.equal(charge("Requirements It's the first round of combat Effect The test elk Strides twice and makes a hoof Strike at the end of either Stride."), null);
     assert.notEqual(charge("The test elk Strides twice and makes a hoof Strike after either Stride. If the Strike hits, the test elk deals an additional @Damage[2d4[bludgeoning]] damage.")?.builtin, "charge");
 });
+
+test("a reaction's resistance against the damage that sets it off (2026-10-11, batch 71)", () => {
+    const reaction = (description) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: description } } });
+    const read = (trigger, effect, frequency = "") => compileMonsterAbility(reaction(`${frequency ? `<p><strong>Frequency</strong> ${frequency}</p>` : ""}<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`), { basicActions: {} });
+    for (const [trigger, effect, frequency, expected] of [
+        ["The test dragon takes fire damage", "The test dragon turns to water for a moment. They gain fire resistance 20, including against the triggering effect, until the end of their next turn.", "", { value: 20, on: ["fire"], types: ["fire"], lasts: 1 }],
+        ["The test poppet would take piercing damage", "The test poppet turns the blade aside, gaining resistance 5 against the triggering piercing damage.", "", { value: 5, on: ["piercing"], types: ["piercing"] }],
+        ["The test scale is about to take piercing or slashing damage", "The test scale sheds its hardest scales. The test scale gains resistance 15 to the damage, but their AC is reduced by 2 for 1 day, when the shed scales regrow.", "once per day", { value: 15, on: ["piercing", "slashing"], types: null, acPenalty: 2, uses: 1 }],
+        ["An enemy is about to damage the test seer with bludgeoning damage or with a spell that has the earth trait", "The test seer gains resistance 10 against the triggering damage.", "", { value: 10, on: ["bludgeoning"], types: null, foe: true }],
+        ["The test scrap is damaged by an attack dealing physical damage", "The test scrap takes the blow on its scraps and gains resistance 15 against the triggering attack, but its AC is lowered by 2 for 24 hours. The test scrap's AC cannot be reduced below 16 in this way.", "", { value: 15, on: ["physical"], types: null, attack: true, acPenalty: 2 }]
+    ]) assert.deepEqual(read(trigger, effect, frequency), { builtin: "resist-damage", ...expected }, trigger);
+    // Not for an ally, nor with more of its own (a move, damage back).
+    assert.notEqual(read("An enemy damages one of the test knight's allies", "The ally gains resistance 10 against the triggering damage.")?.builtin, "resist-damage");
+    assert.notEqual(read("The test bard would take damage", "The test bard gains resistance 2 to the triggering damage and teleports to an adjacent space.")?.builtin, "resist-damage");
+    assert.notEqual(read("The test devil takes fire damage", "The test devil gains resistance 8 to fire against the triggering attack. If this damage came from an unarmed attack, the creature who caused the damage takes @Damage[8[fire]] damage.")?.builtin, "resist-damage");
+});

@@ -105,3 +105,9 @@ test("its own hit sets off a reaction only on a creature with the condition it n
     assert.equal(ownStrikeSetsOff(melee, { outcome: "success", strikeName: "Longbow", options: ["item:ranged"] }), false);
     assert.equal(ownStrikeSetsOff(melee, { outcome: "success", strikeName: "Glaive", options: [] }), true);
 });
+
+test("a resistance reaction's offer gives back what it resisted (2026-10-11, batch 71)", () => {
+    const html = offerHTML({ kind: "resist", ability: { name: "Liquefy" }, monster: { name: "Sea Dragon" }, target: null, trigger: "It took 31 damage", note: "Only against fire damage.", retribution: { restore: 20 }, status: "open" });
+    assert.match(html, /Use it: 20 HP back/);
+    assert.match(html, /Not now/);
+});

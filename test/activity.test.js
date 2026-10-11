@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
-import { strikeBuffEffect } from "../src/live/buff.js";
+import { resistEffects, strikeBuffEffect } from "../src/live/buff.js";
 import { CORE_FAMILIES, createRegistry, validateChanges } from "../../pf2e-resolution-core/src/index.js";
 
 const registry = createRegistry();
@@ -161,4 +161,12 @@ test("more damage on its own Strikes: a PF2e effect with DamageDice and FlatModi
     assert.deepEqual(strikeBuffEffect(plan({ model: { name: "Test Parry", rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 1 }] } }), { name: "Test Parry", strikes, toggles: [{ domain: "ac", option: "test-parry" }] }).system.rules, [{ key: "RollOption", domain: "ac", option: "test-parry" }]);
     // No such Strike: none (the GM's note instead).
     assert.equal(strikeBuffEffect(plan({ damage: ["1d6[fire]"], strike: "tail" }), { name: "x", strikes }), null);
+});
+
+test("what a resistance reaction leaves on the monster: the resistance for a while, its AC lower for a day (2026-10-11, batch 71)", () => {
+    const [lasting] = resistEffects({ builtin: "resist-damage", value: 20, on: ["fire"], types: ["fire"], lasts: 1 }, { name: "Liquefy" });
+    assert.deepEqual([lasting.system.rules, lasting.system.duration], [[{ key: "Resistance", type: "fire", value: 20 }], { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }]);
+    const [ac] = resistEffects({ builtin: "resist-damage", value: 15, on: ["piercing", "slashing"], types: null, acPenalty: 2 }, { name: "Chipping Scales" });
+    assert.deepEqual([ac.name, ac.system.rules, ac.system.duration.unit], ["Chipping Scales (AC)", [{ key: "FlatModifier", selector: "ac", type: "untyped", value: -2, label: "Chipping Scales" }], "days"]);
+    assert.deepEqual(resistEffects({ builtin: "resist-damage", value: 5, on: ["piercing"], types: ["piercing"] }, { name: "Pincushion" }), []);
 });
