@@ -947,7 +947,7 @@ export function compileBuiltin(item, slug) {
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
     const prey = readHuntPrey(text);
     if (prey) return prey;
-    if (readNoCombatEffect(text) || readPlaneShift(text)) return { builtin: "no-effect" };
+    if (readNoCombatEffect(text) || readPlaneShift(text) || readFormShift(item, text)) return { builtin: "no-effect" };
     return null;
 }
 
@@ -1130,6 +1130,19 @@ function readPlaneShift(text) {
         || /\bmerges with the reef and vanishes\b/i.test(said)
         || /\binstantly teleports? to a (?:different )?square of (?:the forest's )?undergrowth within \d+ feet\b/i.test(said)
         || /^Trigger (?:The )?[^.;]+? takes damage from a hostile action[.;]? Effect (?:The )?[^.]+? disperses\. Until the end of the current turn, (?:it|they) can't be attacked or targeted\b/i.test(said);
+}
+
+// A form shift of its own (2026-10-11, batch 62; the user's choice for plane and form shifts: the GM's): a polymorph action that changes
+// only its own shape — Change Shape's "can take on the appearance of any Small or Medium humanoid", Mimic Object, Impersonate Shape,
+// Sand Form's "becomes an animated pile of sand" — with no save, damage, healing or attack of its own (not Change Size's on another
+// creature, nor Fortune's Favor's save, nor one with a linked spell's effects). true or false.
+function readFormShift(item, text) {
+    if (!(item?.system?.traits?.value ?? []).includes("polymorph") || !["action", "free"].includes(item?.system?.actionType?.value)) return false;
+    // (Not one that casts a spell's effects, Rushed Transformation's humanoid form: that's batch 37's spell, cast through PF2e.)
+    if (/Compendium\.pf2e\.spells-srd\.|@Compendium\[pf2e\.spells-srd\./i.test(String(item?.system?.description?.value ?? ""))) return false;
+    const said = String(text).replace(/’/g, "'");
+    if (/@(?:Check|Damage)\[|\[\[\/(?!act\b)|\b(?:saving throws?|save|saves|Hit Points|temporary|heal\w*|restor\w*|regains?)\b|\bStrikes? (?:against|at)\b|\b(?:a|another|the) (?:target|willing|unwilling) creature\b|\bchanges a creature's\b|\bcombine itself\b|\bsplit into\b|\bnext spell\b/i.test(said)) return false;
+    return /\b(?:appearance|shape|form|transform(?:s|ed)?|changes into|reshapes?|assumes?|unfolds|refolds|contorts|becomes (?:an? )?(?:animated|amorphous|fully)|body becomes|sprout)\b/i.test(said);
 }
 
 // No change to a fight's numbers, in its own words (2026-10-10, batch 38): a disguise that "doesn't change its Speed or its attack

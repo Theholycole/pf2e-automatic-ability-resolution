@@ -1624,3 +1624,20 @@ test("Furious Flailing and Splinter: a Strike as it takes damage of some types (
     // Death Slam: a Strike as it drops.
     assert.deepEqual(compileMonsterAbility(reaction("Death Slam", "The test argorth is reduced to 0 Hit Points", "Before it's knocked out, the test argorth makes a tail Strike against a random creature within reach.")), { builtin: "death-strike", strike: "tail" });
 });
+
+test("Form shifts of its own as the GM's (the user's choice), not one with a save, healing or a linked spell (2026-10-11, batch 62)", () => {
+    const item = (html, traits = ["concentrate", "polymorph"]) => ({ type: "action", name: "Test Shape", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: traits }, description: { value: html } } });
+    for (const html of [
+        "<p>The test fiend can take on the appearance of any Small or Medium humanoid. This increases their Speed to 25 feet. It doesn't change their attack and damage modifiers with their Strikes.</p>",
+        "<p>The test mimic assumes the shape of any Medium object. They have an automatic result of 28 on Deception checks and DCs to pass as the object.</p>",
+        "<p>The test grunt changes into a faceless version of a Small or Medium humanoid they've touched. While transformed, the grunt gains a +2 circumstance bonus to [[/act impersonate]] that creature.</p>",
+        "<p><strong>Frequency</strong> once per day</p><p><strong>Effect</strong> The test prophet loses their coherent form and becomes an animated pile of sand. While in this form, the prophet gains resistance 10 to physical damage.</p>"
+    ]) assert.deepEqual(compileMonsterAbility(item(html)), { builtin: "no-effect" }, html);
+    for (const html of [
+        "<p><strong>Frequency</strong> once per day</p><p><strong>Effect</strong> A target creature within 30 feet must succeed at a @Check[will|dc:25] save or gain the effects of a cursed form.</p>",
+        "<p>The test leshy merges with an adjacent leshy, restoring @Damage[3d6[healing]] Hit Points to itself.</p>",
+        "<p>The test dragon reshapes its body. This has the effects of @UUID[Compendium.pf2e.spells-srd.Item.2qGqa33E4GPUCbMG]{Humanoid Form}.</p>"
+    ]) assert.notDeepEqual(compileMonsterAbility(item(html)), { builtin: "no-effect" }, html);
+    // Not without the polymorph trait.
+    assert.equal(compileMonsterAbility(item("<p>The test fiend can take on the appearance of any Small or Medium humanoid.</p>", ["concentrate"])), null);
+});

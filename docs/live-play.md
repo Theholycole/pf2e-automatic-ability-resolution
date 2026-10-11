@@ -1013,3 +1013,9 @@ The user's choice (2026-10-11): a GM button for each way; the simulator picks th
   - **Live play:** the Strike offer as it's damaged ("damaged it (4)" with the attacker beside it, or "It took 6 damage" for a random creature, the GM's target), with notes: "Only if it was electricity or fire damage.", "At a random creature within its reach: target it first.", and the flat check.
 - **Death Slam** (1): "Trigger The argorth is reduced to 0 Hit Points Effect Before it's knocked out, the argorth makes a tail Strike against a random creature within reach." → batch 25's Strike as it dies.
 - **Checked live in pftest** (PFTEST SIM B61 Forest Troll from Monster Core, Wood Golem from Bestiary 2, goblin dummies on the party's side, in a combat; deleted afterwards): on a dummy's turn, 4 damage on the golem beside it: Splinter, "damaged it (4)", "Only if it was physical damage."; 6 damage on the troll: Furious Flailing with its notes; Claw at the dummy the GM targeted: a hit.
+
+## Form shifts (2026-10-11, batch 62)
+
+- **The user's choice** (2026-10-11, with the plane shifts of batch 48): a form shift is the GM's, counted as covered; the simulator doesn't use it.
+- **Which** (42, 8 of them Battlezoo's): a polymorph action that changes only its own shape — Change Shape's "can take on the appearance of any Small or Medium humanoid. This increases their Speed to 25 feet. It doesn't change their attack and damage modifiers …", Mimic Object's "assumes the shape of any Medium object", Impersonate Shape's "changes into a faceless version of a … humanoid", Sand Form's "becomes an animated pile of sand", Spider Legs, Pruning, Ooze Form and their kin → { builtin: "no-effect" }.
+- **Not** one with a save, damage, healing or temporary Hit Points, an attack, another creature as its subject (Change Size, Fortune's Favor), or a linked spell's effects (Rushed Transformation's humanoid form stays batch 37's spell, cast through PF2e).
