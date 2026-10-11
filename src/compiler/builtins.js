@@ -108,6 +108,10 @@ export function readMultiStrikes(text) {
             return "";
         })
         .replace(/ at any point during (?:that|its|their|the) movement/i, "")
+        // (Batch 60: Writhing Arms' "up to four arm Strikes with different arms", the kraken's "two Strikes with two different arms or
+        // tentacles, each limb targeting a different creature".)
+        .replace(/ with (?:two |three |four )?different (?:arms|limbs|tentacles|heads)(?: or (?:arms|limbs|tentacles|heads))?(?=,)/i, "")
+        .replace(/, each limb targeting /i, ", each targeting ")
         // (Batch 42: "two fist Strikes, applying her multiple attack penalty as normal", "two Strikes, each of which must be an unarmed
         // Strike or temple bell Strike", "two unarmed Strikes, or one unarmed Strike and a dueling pistol Strike": its best melee
         // Strikes; "thrashes wildly with its wings, making wing Strikes against up to three adjacent foes".)
@@ -201,7 +205,7 @@ export function readMultiStrikes(text) {
             countsAs = /one/i.test(match[1]) ? 1 : count(match[1].split(" ")[0]);
             continue;
         }
-        if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty (?:doesn't|does not) increase until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
+        if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty (?:doesn't|does not) increase(?: the)? until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
             sameMap = true;
             continue;
         }
@@ -246,6 +250,9 @@ export function readMultiStrikes(text) {
             continue;
         }
         if (grab && /^(?:It|They|He|She|The [\w' -]+?) can have up to (?:two|three|four|\w+) creatures Grabbed\b/i.test(sentence)) continue;
+        // (Batch 60, Double Attack: "If the zelekhut subsequently uses the Knockdown action, it affects all creatures it hit with Double
+        // Attack.", the kraken's "… uses the Grab action, it Grabs any number of creatures it hit …" — the GM's.)
+        if (/^If (?:the [\w' -]+?|it|they|[A-Z][\w'-]*) subsequently uses? the (?:Knockdown|Grab|Improved Grab) action, (?:it|they) (?:affects all|(?:can )?Grabs? any number of) creatures (?:it|they) hit with [\w' -]+\.$/i.test(sentence)) continue;
         return null;
     }
     // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
@@ -365,15 +372,24 @@ export function readCharge(text) {
     // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
     // (Batch 42: "With a quick sprint, the test warrior dashes up to their foe and swings.", "… with jets of energy from its feet, …".)
     if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|\d+ feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^(?:[A-Z][^,.]*, (?=the ))?[Tt]he [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
+    // (Batch 60, Ram Charge: "Strides twice in a straight line and then makes a horn Strike with a +1 circumstance bonus to its attack roll".)
+    let plainBonus = 0;
+    sentences[0] = (sentences[0] ?? "").replace(/ with a \+(\d+) circumstance bonus to (?:its|their|his|her) attack roll(?=\.$)/i, (_all, value) => {
+        plainBonus = Number(value);
+        return "";
+    });
     const match = /^The [^.]+? Strides( twice)? and (?:then )?makes an? (?:([\w' -]+?) )?Strike(?: at the end of that movement)?\.$/i.exec(sentences[0] ?? "");
     // Other moves and wordings (2026-10-10): "Flies up to double its fly Speed and then makes a talon Strike".
     const other = match ? null : moveThenStrike(sentences[0] ?? "");
     if (!match && !other) return null;
     const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[2].trim()) ? match[2].toLowerCase() : null };
+    if (plainBonus) charge.attackBonus = plainBonus;
     const moved = "^(?:If|As long as) (?:it|they|he|she|the [\\w' -]+?|[A-Z][\\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, ";
     for (const sentence of sentences.slice(1)) {
         // (Nothing for the simulation: "During the Stride, it gains a +10-foot circumstance bonus to its Speed.")
         if (/remains? hidden until after/i.test(sentence) || /^During (?:the|this|that) (?:Stride|movement), (?:it|they|he|she|the [\w' -]+?) gains? a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(sentence)) continue;
+        // (Batch 60, Propulsive Launch: "If it's in the air and not attached to a creature after the Strike, it falls.")
+        if (/^If (?:it|they)'s in the air and not attached to a creature after the Strike, (?:it|they) falls?\.$/i.test(sentence.replace(/’/g, "'"))) continue;
         // (Batch 37: "This Strike gains the fatal d12 trait", "The Strike deals half damage".)
         const trait = /^(?:This|The) (?:[\w' -]+? )?(?:Strike|strike) gains the (fatal|deadly) d(\d+) trait(?: for this attack)?\.$/i.exec(sentence);
         if (trait) {
@@ -894,6 +910,8 @@ export function compileBuiltin(item, slug) {
     const sweepSkill = readSkillSweep(text);
     if (sweepSkill) return { builtin: "skill-sweep", actions, ...sweepSkill };
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
+    // (Batch 60, Elf Step: "The elementalist Steps twice.")
+    if (/^(?:The )?[^.]+? Steps twice\.$/i.test(text.trim())) return { builtin: "safe-move", actions };
     const teleport = readTeleport(text);
     if (teleport) return { builtin: "safe-move", actions, ...(teleport.recharge ? { recharge: teleport.recharge } : {}) };
     // (Batch 48, Disperse as a move: "Strides or Flies. This movement doesn't trigger reactions. During the movement, … It then coalesces
@@ -1110,6 +1128,8 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 60, Undulate: "Strides or Steps. During this movement, it can pass through spaces as narrow as 5 feet without Squeezing.")
+    if (/^(?:The )?[^.]+? (?:Strides(?: up to (?:its|his|her|their) Speed)?(?: or Steps)?|Swims|Climbs|Burrows)\. During this movement, (?:it|they|he|she) can pass through spaces as narrow as \d+ feet without Squeezing\.$/i.test(said)) return true;
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;

@@ -829,6 +829,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // first": its time; leaving the reach is the GM's.)
         const text = htmlToPlainText(sentence.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim()
             .replace(/ or until (?:it|the target|the creature) (?:leaves (?:the [\w' -]+?'s|its|their|his|her) reach|is no longer within the reach of (?:the [\w' -]+?'s|its|their|his|her) hand), whichever comes first(?=\.$)/i, "")
+            // (Batch 60, Savage Jaws: "makes a single Strike with its jaws" as "makes a jaws Strike".)
+            .replace(/\bmakes a single Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike")
             // (Batch 47, Power Attack: "makes a melee Strike that counts as two attacks when calculating their multiple attack penalty".)
             .replace(/ that counts as (two|three) attacks when calculating (?:its|their|his|her|the) multiple attack penalty(?=\.$)/i, (_all, number) => {
                 activity.countsAs = { two: 2, three: 3 }[number.toLowerCase()];
@@ -911,6 +913,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
         else if ((match = /^This counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the(?: [\w' -]+?'s)?) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
+        // (Batch 60, Savage Jaws: "If the attack hits, it deals @Damage[(4d12+16)[piercing]] damage (versatile S)." — its damage in place
+        // of the Strike's; Bully's Bludgeon: "This attack is nonlethal.")
+        else if (new RegExp(`${hit}(?:it|he|she|they) deals? @Damage\\[[^\\]]*(?:\\[[^\\]]*\\])?[^\\]]*\\] damage(?: \\(versatile [BPS]\\))?\\.$`, "i").test(htmlToPlainText(sentence).replace(/\s+/g, " ").trim()) && inlineTags(sentence, "Damage").length === 1) activity.damage = readDamage(inlineTags(sentence, "Damage")[0]);
+        else if (/^(?:This|The) (?:attack|Strike) is nonlethal\.$/i.test(text)) activity.nonlethal = true;
         // "If this Strike hits, he deals an extra die of weapon damage."
         // (Batch 47: "deals an extra a die of weapon damage", as printed.)
         else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) deals? an? (?:additional|extra) (?:an? )?(?:weapon )?die of (?:weapon )?(?:\\w+ )?damage\\.$`, "i").test(text)) activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
@@ -962,7 +968,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     const rider = activity.onHit;
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage)) return null;
+    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length) return null;
     return activity;
 }
