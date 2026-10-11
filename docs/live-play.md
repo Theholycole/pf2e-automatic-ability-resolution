@@ -896,3 +896,12 @@ The user's choice (2026-10-11): the simulator negates the first harmful conditio
 - **Live play:** as a condition item lands on the monster in an encounter (not off-guard or one that helps it), the offer "it would be Frightened 1 — Use it: negate Frightened 1"; using it deletes that condition and spends a use of the ability's frequency; with none left, no offer.
 - **Checked live in pftest** (PFTEST SIM B49 Cave Worm from Monster Core in an encounter with Ezren; deleted afterwards): Frightened 1 on it: the offer; Use it: the condition gone, Slough Skin's uses today 1 → 0; Sickened 1 after that: no offer.
 
+## Trap falls and summoning traps (2026-10-11, batch 50)
+
+The user's choice (2026-10-11): a trap's damage, saves and conditions into its card where the text allows; summoning stays the GM's.
+
+- **A fall with Grab an Edge** (14 new, 5 better): "Trigger A creature walks onto the trapdoor. Effect The triggering creature falls in and takes falling damage (typically @Damage[10[bludgeoning]] damage) as well as @Damage[2d6[piercing]] damage from falling on to the knives. That creature can use the Grab an Edge reaction to avoid falling." → its damage on the creature that set it off (the GM's target), with the reminder "{target} can use Grab an Edge (a Reflex save) to avoid falling and the damage". With its DC given ("(@Check[reflex|dc:22] save)", "[[/act grab-an-edge dc=16]]", "the DC to Climb the walls or Grab an Edge is 14"): a Reflex save, a success catching the edge (no damage), a failure the fall. "The trapdoor then slams shut, and the hazard rolls initiative" comes along as a reminder.
+  - Only falls: not with a Strike, a condition, a Speed penalty, drowning, or a save of its own against spikes (the weakened floor keeps its earlier reading).
+  - The simulator: a hazard's trigger abilities already fire at the creature that set it off (E4); these now carry their damage.
+- **A trap that summons a creature** (11): "Effect The trap summons a Cockatrice. The cockatrice rolls initiative and remains for 2d6 rounds; …" → the GM's.
+

@@ -422,6 +422,9 @@ export function readReaction(item, text) {
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
+    // A trap that summons a creature (batch 50; the user's choice: the GM's): "Effect The trap summons a Cockatrice. The cockatrice rolls
+    // initiative and remains for 2d6 rounds; …".
+    if (/^(?:The|This) trap summons\b[^.]*\.\s+(?:The [\w' -]+?|It) rolls initiative and remains for\b/i.test(effect.trim())) return { builtin: "no-effect" };
     // Shake It Off, Slough Skin (batch 49; the user's choice): "Trigger The purple worm would be affected by a condition or adverse effect
     // (such as Cursed Metamorphosis) Effect The purple worm negates the triggering condition or effect. Effects from artifacts, deities, or
     // a similarly powerful source can't be avoided in this way." → { builtin: "negate-condition" }; Dogged Persistence's "would be affected

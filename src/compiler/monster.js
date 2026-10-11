@@ -1831,6 +1831,48 @@ export function followUpSkill(item, html, basicActions) {
     return { ...plan, ...base(item, { traits }), targeting: { ...plan.targeting, target: "the creature the Strike hits" }, trigger: { event: "use" } };
 }
 
+// A trap's fall (2026-10-11, batch 50; the user's choice: its card where the text allows): "Trigger A creature walks onto the trapdoor.
+// Effect The triggering creature falls in and takes falling damage (typically @Damage[10[bludgeoning]] damage) as well as
+// @Damage[2d6[piercing]] damage from falling on to the knives. That creature can use the Grab an Edge reaction to avoid falling." → the
+// damage on the creature that set it off, Grab an Edge as a reminder; with its DC given ("(@Check[reflex|dc:22] save)", "[[/act
+// grab-an-edge dc=16]]", "the DC to Climb the walls or Grab an Edge is 14"), a Reflex save whose success catches the edge. Only falls:
+// not with a Strike, a condition, a Speed penalty or anything else the text adds. null otherwise.
+function trapFall(item) {
+    if (!["reaction", "free"].includes(item.system?.actionType?.value)) return null;
+    const html = String(item.system?.description?.value ?? "");
+    if (!/\bGrab (?:an|the) Edge\b|grab-an-edge/i.test(html)) return null;
+    const effect = /<strong>\s*Effect\s*<\/strong>([\s\S]*)$/i.exec(html)?.[1] ?? html;
+    const plain = htmlToPlainText(effect.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const damages = [];
+    const reminders = [];
+    let edge = false;
+    let dc = null;
+    for (const sentence of plain.split(/(?<=\.)\s+(?=[A-Z])/)) {
+        const tags = inlineTags(sentence, "Damage");
+        if (/\bGrab (?:an|the) Edge\b|grab-an-edge|\bgrab hold of the edge\b/i.test(sentence) && !tags.length) {
+            edge = true;
+            dc ??= Number(/@Check\[reflex\|dc:(\d+)/i.exec(sentence)?.[1] ?? /grab-an-edge dc=(\d+)/i.exec(sentence)?.[1] ?? /\bGrab an Edge is (\d+)\b/i.exec(sentence)?.[1]) || null;
+            continue;
+        }
+        if (tags.length && /\b(?:falls?|falling|fall|plummets?|lands?)\b/i.test(sentence) && !/\b(?:Strikes?|blind\w*|entangle\w*|Speed|drown\w*|persistent|Grabbed|Prone|Restrained|Stunned|summons?|save)\b|@Check/i.test(sentence)) {
+            damages.push(...tags.map((tag) => readDamage(tag)));
+            continue;
+        }
+        if (/^The (?:trapdoor|trap door) then slams shut, and the hazard rolls initiative\.$|^The trap then rolls initiative\.$/i.test(sentence)) {
+            reminders.push(sentence);
+            continue;
+        }
+        return null;
+    }
+    if (!edge || !damages.length) return null;
+    const formulas = damages.flatMap((formula) => String(formula).split(/,(?![^[]*\])/)).map((formula) => ({ formula: formula.trim() })).filter((entry) => entry.formula);
+    const fall = { damage: { mode: "formulas", formulas, rollScope: "outcome" }, effects: [] };
+    const resolution = dc
+        ? { kind: "save", check: { roll: "save", statistic: "reflex", basic: false, against: { dc: "fixed", value: dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: fall, criticalFailure: fall }, reminders: ["A success catches the edge: no fall.", ...reminders] }
+        : { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: fall, failure: none(), criticalFailure: none() }, reminders: ["{target} can use Grab an Edge (a Reflex save) to avoid falling and the damage.", ...reminders] };
+    return { ...base(item), targeting: { target: "the triggering creature", range: null, area: null }, trigger: { event: "use" }, resolution };
+}
+
 // A skill action set off by its own critical hit (2026-10-11, batch 44, Unnerving Prowess): "Trigger Dura critically succeeds at a
 // Strike or Disarm with her Aldori dueling sword. Effect Dura attempts to Demoralize the target of her Strike or Disarm. This
 // Demoralize attempt does not have the auditory trait, nor does Dura take a penalty …" → the basic action's plan (followUpSkill),
@@ -1928,7 +1970,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? trapFall(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
