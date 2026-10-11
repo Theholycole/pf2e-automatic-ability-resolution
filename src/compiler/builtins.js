@@ -207,10 +207,12 @@ export function readMultiStrikes(text) {
 // → { strike, max }, or null.
 export function readSwipe(text) {
     const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
-    const match = /^(?:The )?[^.]+? makes an? (?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's) (?:melee )?reach(?: and adjacent to each other)?)?\.$/i.exec(sentences.shift() ?? "");
+    // (Batch 38, Wide Swing: "makes a single greataxe Strike and compares the attack roll result to the ACs of up to two foes within
+    // its reach".)
+    const match = /^(?:The )?[^.]+? makes (?:a single |an? )(?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|ACs|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's) (?:melee )?reach(?: and adjacent to each other)?| within (?:its|their|his|her) reach)?\.$/i.exec(sentences.shift() ?? "");
     if (!match) return null;
     for (const sentence of sentences) {
-        if (/^Roll (?:the )?damage only once(?:,)? and apply it to each creature (?:hit|it hits)\.$/i.test(sentence)) continue;
+        if (/^(?:Roll|(?:It|They|He|She) rolls?) (?:the )?damage only once(?:,)? and appl(?:y|ies) it to each creature (?:hit|it hits|they hit|he hits|she hits)\.$/i.test(sentence)) continue;
         if (/^(?:An? |The )?[\w' -]+? counts as (?:two|three) attacks (?:for|when calculating) [^.]*multiple attack penalty\.$/i.test(sentence)) continue;
         return null;
     }
@@ -221,7 +223,7 @@ export function readSwipe(text) {
 // "The guard Strides twice. If it ends its movement within melee reach of at least one enemy, it makes a melee Strike against
 // that enemy." (Sudden Charge; 2026-10-10) → "The guard Strides twice and makes a melee Strike." for the charge readers.
 export function chargeSentences(text) {
-    return String(text).replace(/\b(Strides twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)\.\s+If (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement (?:within (?:melee )?(?:reach|range) of (?:at least one|an?|any) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that|the) (?:enemy|foe|creature|target)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
+    return String(text).replace(/\b(Strides twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)\.\s+If (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement (?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that|the) (?:enemy|foe|creature|target)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
 }
 
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
@@ -266,7 +268,7 @@ export function moveThenStrike(said) {
     // (Batch 37: "Strides or Steps, then Strikes with his hand crossbow", "Burrows and then Strikes", "Strides twice and Strikes with its bayonet".)
     const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or (?:${MOVES}|Steps?))?)( twice| up to two times)?(?:, then| and(?: then)?) Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?\.$`, "i").exec(text);
     if (bare) return { strides: bare[2] ? 2 : 1, strike: bare[3] ? bare[3].toLowerCase() : null };
-    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)))*)\.$`, "i").exec(text);
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
     if (!match) return null;
     const how = match[2].trim();
     const strides = /three times/i.test(how) ? 3 : /twice|double|two times/i.test(how) ? 2 : 1;
@@ -280,7 +282,8 @@ export function moveThenStrike(said) {
 // bonus to its attack roll" → attackBonus; "the Strike's damage is increased
 // to 3d10+20" → damage. Any other sentence: null.
 export function readCharge(text) {
-    const sentences = chargeSentences(text).trim().split(/(?<=\.)\s+/);
+    // ("Frequency once per turn Effect The knight Strides twice. …": its Effect, batch 38.)
+    const sentences = chargeSentences(String(text).replace(/^Frequency once per (?:turn|round) Effect /, "")).trim().split(/(?<=\.)\s+/);
     // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
     if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^The [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
     const match = /^The [^.]+? Strides( twice)? and (?:then )?makes an? (?:([\w' -]+?) )?Strike(?: at the end of that movement)?\.$/i.exec(sentences[0] ?? "");
@@ -376,6 +379,23 @@ export function readReaction(item, text) {
         const dc = hidden ? 11 : concealed ? 5 : misses ? named : null;
         if (dc) return { builtin: "conceal-reaction", dc, ranged: /\branged\b/i.test(trigger) && !/\bmelee\b/i.test(trigger), when: /\bis hit\b/i.test(trigger) ? "hit" : "targeted" };
     }
+    // Tail Lash, Avenging Bite, Violent Retort (2026-10-10, batch 38): a Strike at a creature that Strikes or attempts a skill check in
+    // its reach (a hit: "the creature takes a –2 circumstance penalty to the triggering roll"), that attacks one of its allies, or that
+    // critically hits it → triggers "strike" and "skill", "ally-attacked", "critical-hit".
+    const owner = String.raw`(?:the [\w' -]+?['’]s|an? [\w' -]+?['’]s|[A-Z][\w'-]+(?: (?:the |of )?[A-Z][\w'-]+)?['’]s|its|their)`;
+    const lash = new RegExp(String.raw`^A creature within reach of ${owner} ([\w' -]+?)(?: Strike)? (?:makes a Strike or attempts a skill check(?: as part of an attack action)?|(?:takes|uses) an action to Strike or attempt a skill check)\.?$`, "i").exec(trigger.trim());
+    const avenge = new RegExp(String.raw`^A creature within reach of ${owner} ([\w' -]+?)(?: Strike)? attacks one of ${owner} allies\.?$`, "i").exec(trigger.trim());
+    const retort = new RegExp(String.raw`^A creature within ${owner} reach critically hits (?:the [\w' -]+?|it|him|her|them)\.?$`, "i").exec(trigger.trim());
+    if (lash || avenge || retort) {
+        const said = effect.replace(/\s*Effect: [\w' -]+$/, "").trim();
+        const back = /^(?:The )?[^.]+? (?:Strikes with (?:its|their|his|her) ([\w' -]+?) at the triggering creature|attempts to Strike the triggering creature with (?:its|their|his|her) ([\w' -]+?)|makes an? ([\w' -]+?)(?: or [\w' -]+?)? Strike (?:at|against) the (?:triggering )?creature)(?: (?:with|at) an? [–-](\d+) penalty)?(?:, after applying all the effects of the critical hit to (?:the [\w' -]+?|it|itself|themselves))?\.(?: If (?:the Strike|it|he|she|they) hits?, the (?:creature|target) takes an? [–-](\d+) circumstance penalty to the triggering roll\.)?$/i.exec(said);
+        const name = back ? (back[1] ?? back[2] ?? back[3]).toLowerCase() : null;
+        if (back && (!back[5] || lash)) return { builtin: "reaction-strike", triggers: lash ? ["strike", "skill"] : avenge ? ["ally-attacked"] : ["critical-hit"], strike: name, penalty: Number(back[4] ?? 0), disrupts: false, ...(back[5] ? { hinders: Number(back[5]) } : {}) };
+    }
+    // (A Step when an ally moves next to it, Goblin Scuttle, batch 38: nothing for the fight's numbers.)
+    if (/^An? [\w' -]+ ally ends a move action adjacent to [^.]+\.?$/.test(trigger.trim()) && /^(?:The )?[^.]+? Steps\.$/.test(effect.trim())) return { builtin: "no-effect" };
+    // Fast Swallow (2026-10-10, batch 38): "Trigger The worm Grabs a creature (with its maw); Effect The worm uses Swallow Whole."
+    if (/^(?:The )?[^.]+? Grabs a creature(?: (?:with|in) (?:its|their|his|her) [\w' -]+?)?;?\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? uses Swallow Whole\.?$/i.test(effect.trim())) return { builtin: "fast-swallow" };
     const moving = /\buses a move action\b|\bleaves a square during a move action\b/i.test(trigger);
     const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
     if (moving && struck) return { builtin: "reaction-strike", triggers: ["move"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect) };
@@ -688,7 +708,35 @@ export function compileBuiltin(item, slug) {
     // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
     if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
     if (readStrikeOnly(text)) return { builtin: "no-effect", strikeOnly: true };
+    if (readSafeMove(text)) return { builtin: "safe-move", actions };
+    if (readNoCombatEffect(text)) return { builtin: "no-effect" };
     return null;
+}
+
+// A move that doesn't trigger reactions (2026-10-10, batch 38): "The cultist jumps up to half its Speed. This movement doesn't
+// trigger reactions." (Swift Leap), "… moves up to 60 feet in a straight line through the water without triggering reactions"
+// (Jet), "Strides up to his Speed and does not trigger reactions during this movement". Only the move: not with a Strike, a check
+// or a condition on where it goes ("but must begin and end in dim light"). true or false.
+function readSafeMove(text) {
+    const sentences = String(text).replace(/’/g, "'").trim().split(/(?<=[.;])\s+(?=[A-Z])/);
+    if (sentences.length === 3 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strike)\b|\d/.test(sentences[0])) sentences.shift();
+    const said = sentences.join(" ");
+    if (/\b(?:Strikes?|checks?|saves?|damage|but|if|unless|Grab|Prone|Interacts?)\b|@/i.test(said) || /\b(?:Requirements?|Trigger)\b/.test(said)) return false;
+    const move = String.raw`(?:jumps|moves|Strides|Flies|Flying|Swims|Leaps|Climbs|Burrows)`;
+    return new RegExp(String.raw`^(?:The |An? )?[^.;]+? ${move} (?:up to|once|twice)?[^.;]*?(?:\. This movement (?:doesn't|does not) trigger reactions\.|; this movement (?:doesn't|does not) trigger reactions\.| without triggering reactions\.| and (?:doesn't|does not) trigger reactions during this movement\.)$`, "i").test(said);
+}
+
+// No change to a fight's numbers, in its own words (2026-10-10, batch 38): a disguise that "doesn't change its Speed or its attack
+// and damage modifiers with its Strikes" (Change Shape and its kin), capsizing a vessel, a Step when an ally moves next to it, two
+// Strides with a bonus to its Speed (Gallop). true or false.
+function readNoCombatEffect(text) {
+    const said = String(text).replace(/’/g, "'").trim();
+    if (/@|\bTrigger\b(?! A [\w' -]+ ally ends a move action adjacent to)/.test(said) && !/^Trigger A [\w' -]+ ally ends a move action adjacent to [^.]+\.? Effect (?:The )?[^.]+? Steps\.$/.test(said)) return false;
+    if (/^Trigger A [\w' -]+ ally ends a move action adjacent to [^.]+\.? Effect (?:The )?[^.]+? Steps\.$/.test(said)) return true;
+    // (A disguise: its numbers stay as they are.)
+    if (/\b(?:take|takes|taking) (?:on )?the (?:specific )?appearance of\b/i.test(said) && /\b(?:doesn't|does not) change (?:its|their|his|her) (?:Speed or (?:its|their|his|her) )?attack and damage (?:bonuses|modifiers) with (?:its|their|his|her) Strikes\b/i.test(said) && !/\b(?:increases?|decreases?|gains?|loses?)\b/i.test(said)) return true;
+    if (/^(?:The )?[^.]+? tries to capsize an adjacent (?:aquatic )?vessel\b/i.test(said)) return true;
+    return /^(?:The )?[^.]+? Strides twice\. (?:It|They|He|She) (?:has|have) a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed during these Strides\.$/i.test(said);
 }
 
 // Only a Strike, with what comes with it the simulation doesn't play (2026-10-10, batch 37): "Calmont draws his weapon and attacks
@@ -706,6 +754,6 @@ function readStrikeOnly(text) {
     const draw = new RegExp(String.raw`${who} (?:Interacts? to draw|draws?) (?:a|an|his|her|its|their) [^,.]+?(?: using the Interact action| with an Interact action)?,? (?:and |then |and then )+(?:Strikes with (?:it|that weapon|the weapon)|throws it as a ranged Strike|makes an? (?:[\w' -]+? )?Strike with it)(?:,? or [^.]+)?\.$`, "i");
     const reload = new RegExp(String.raw`${who} reloads (?:its|his|her|their) [\w' -]+? and makes an? (?:[\w' -]+? )?Strike\.$`, "i");
     const returning = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike, after which the [\w' -]+? returns to (?:its|his|her|their|the [\w' -]+?'s) hand\.$`, "i");
-    const reach = new RegExp(String.raw`${who} makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike\.$`, "i");
+    const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet)\.$`, "i");
     return [draw, reload, returning, reach].some((pattern) => pattern.test(sentence));
 }

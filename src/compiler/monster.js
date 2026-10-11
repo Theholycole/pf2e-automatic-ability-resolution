@@ -1703,6 +1703,9 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
         return { builtin: slug, ...(strike ? { strike } : {}) };
     }
     if (NO_EFFECT.has(slug)) return { builtin: "no-effect" };
+    // Aquatic Ambush (the glossary's; batch 38): from hiding in the water, a move and a Strike at a creature off-guard to it; once a
+    // fight, as it starts hidden.
+    if (slug === "aquatic-ambush") return { builtin: "charge", actions: Number(item.system?.actions?.value) || 1, strides: 1, strike: null, offGuard: true, oncePerFight: true };
     if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push", "pull", "improved-pull"].includes(slug)) return rider(item, slug, basicActions);
     // Retributive Strike (the glossary's): as a champion's, the ally's resistance is 2 + the monster's level.
     if (slug === "retributive-strike") {

@@ -759,3 +759,19 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Caustic Drool: no effect of the module's (PF2e links its own);
   - Deepen the Wound, then a critical hit with the main-gauche: its card dealt 2 × 4d6 piercing precision damage.
 
+## Reaction Strikes, Fast Swallow, safe moves (2026-10-10, batch 38)
+
+- **Reaction Strikes** (43, 5 Battlezoo):
+  - "A creature within reach of the dragon's tail takes an action to Strike or attempt a skill check" (Tail Lash): its tail Strike, at its penalty; "If it hits, the creature takes a –2 circumstance penalty to the triggering roll";
+  - "A creature within reach of the warg's jaws attacks one of the warg's allies" (Avenging Bite);
+  - "A creature within the sovereign dragon's reach critically hits the dragon" (Violent Retort): its claw Strike back.
+  - **Live play:** offered as the monster's reaction when PF2e's attack roll comes in: a Strike (or a skill check with the attack trait) by a creature in its reach, an attack on another creature on its side, a critical hit on it; the Strike buttons for the Strikes in reach. Tail Lash's card says to lower the triggering roll by 2 if its Strike hits (PF2e has rolled it already).
+  - **The simulator** (B70): before the roll of a Strike by an engaged foe (Tail Lash; its hit takes 2 off that roll) or on one of its allies (Avenging Bite); after a critical hit on it (Violent Retort).
+- **Fast Swallow** (26, 4 Battlezoo): "The worm Grabs a creature (in its jaws). Effect The worm uses Swallow Whole." Live play: when a Grab card leaves a creature grabbed or restrained by the monster, its Swallow Whole card follows on that creature ("Fast Swallow (its reaction)"). The simulator: Swallow Whole as its reaction once the action that grabbed ends.
+- **A move that doesn't trigger reactions** (68): "jumps up to half its Speed. This movement doesn't trigger reactions" (Swift Leap), "moves up to 60 feet in a straight line through the water without triggering reactions" (Jet). The simulator: out of a Melee without provoking where a Step can't go (a foe with reach). Live play: the GM moves the token (nothing to apply).
+- **Charges** (57, 8 Battlezoo): "makes a single greataxe Strike and compares the attack roll result to the ACs of up to two foes within its reach" (Wide Swing); "Strides twice. If the guard captain ends their movement within a melee reach of at least one enemy" (Sudden Charge); "swims up to 10 feet in a straight line and makes a jaws Strike with a reach of 10 feet" (Lunging Bite); Aquatic Ambush (the glossary's): a move and a Strike at a creature off-guard to it, once a fight (it starts hidden in the water).
+- **Nothing for a fight's numbers** (48): two Strides with a bonus to its Speed (Gallop), a Step when a goblin ally moves next to it (Goblin Scuttle), capsizing a vessel, a disguise that "doesn't change its Speed or its attack and damage bonuses with its Strikes", a jaws Strike with a longer reach (the dragons' Lunging Bite).
+- **Checked live in pftest** (PFTEST SIM B38 River Drake, two Wargs and a Cave Worm around an Ezren token, in a combat; all deleted afterwards, Ezren restored):
+  - Ezren's staff Strike at one warg brought two offers: the drake's Tail Lash ("made a Strike in its reach", with the note to lower the roll by 2) and the other warg's Avenging Bite ("attacked its ally");
+  - the worm's jaws hit, its Improved Grab card applied (a success: grabbed; a critical success restrains, which also counts), and the Swallow Whole card followed on Ezren, "Fast Swallow (its reaction)".
+

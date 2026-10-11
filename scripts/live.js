@@ -844,6 +844,8 @@ async function applyCard(message) {
         }
     }
     lines.push(...(await grantImmunity(state)));
+    // Fast Swallow (batch 38): a creature it just Grabbed: its Swallow Whole's card, as its reaction.
+    await fastSwallow(state, result.changes);
     // "It can't use it again for 1d4 rounds": rolled now.
     const recharge = state.plan?.trigger?.recharge?.formula;
     if (recharge && state.ability.uuid) {
@@ -860,6 +862,25 @@ async function applyCard(message) {
 
 // "Temporarily immune for 1 minute" (Frightful Presence, Stench, Demoralize):
 // an effect on each target whose result grants it, which aura cards check.
+async function fastSwallow(state, changes) {
+    // (Grabbed, or restrained by a Grab's critical success.)
+    const grabbed = changes.filter((change) => change.op === "condition" && ["grabbed", "restrained"].includes(change.slug) && change.target !== "source");
+    if (!grabbed.length || !state.source?.actorUuid) return;
+    const actor = await fromUuid(state.source.actorUuid);
+    if (!actor || !["npc", "hazard"].includes(actor.type)) return;
+    await ready;
+    const abilities = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) }));
+    const fast = abilities.find(({ plan }) => plan?.builtin === "fast-swallow");
+    const swallow = fast ? abilities.find(({ plan }) => Object.values(plan?.resolution?.outcomes ?? {}).some((row) => row?.effects?.some((effect) => effect.kind === "swallow"))) : null;
+    if (!swallow) return;
+    const sourceToken = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
+    for (const change of grabbed) {
+        const target = state.targets.find((entry) => entry.id === change.target);
+        const token = target?.tokenUuid ? await fromUuid(target.tokenUuid) : null;
+        if (token) await postCard({ plan: swallow.plan, item: swallow.item, sourceActor: actor, sourceToken, tokens: [token.object ?? token], cause: `${fast.item.name} (its reaction)` });
+    }
+}
+
 async function grantImmunity(state) {
     const immunity = state.plan?.trigger?.immunity;
     const slug = state.plan?.source?.slug ?? state.ability.slug;

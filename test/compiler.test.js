@@ -1244,3 +1244,30 @@ test("more damage on its own Strikes for a while, plain Strikes, and more charge
     const deepen = compile("<strong>Requirements</strong> Test Duelist's last attack was a successful melee Strike with her rapier</p><hr /><p><strong>Effect</strong> Test Duelist makes a dagger Strike against the same creature that she just hit. This Strike deals an additional 4d6 precision damage.");
     assert.deepEqual([deepen.builtin, deepen.strike, deepen.after, deepen.onHit.damage], ["strike-activity", "dagger", { melee: true, strike: "rapier", on: ["success", "criticalSuccess"] }, ["4d6[precision]"]]);
 });
+
+test("reaction Strikes to a Strike, an attack on an ally or a critical hit; Fast Swallow; safe moves; more charges (2026-10-10, batch 38)", () => {
+    const item = (name, html, type = "action", actions = 1, slug = null) => ({ type: "action", name, system: { slug, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const reaction = (trigger, effect) => compileMonsterAbility(item("Test Reaction", `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction"));
+    // Tail Lash: a Strike or a skill check in its reach; its hit, -2 to that roll.
+    assert.deepEqual(reaction("A creature within reach of the test drake's tail takes an action to Strike or attempt a skill check", "The test drake Strikes with its tail at the triggering creature at a –2 penalty. If it hits, the creature takes a –2 circumstance penalty to the triggering roll."), { builtin: "reaction-strike", triggers: ["strike", "skill"], strike: "tail", penalty: 2, disrupts: false, hinders: 2 });
+    assert.deepEqual(reaction("A creature within reach of Test Wyrm's tail uses an action to Strike or attempt a skill check", "Test Wyrm attempts to Strike the triggering creature with their tail. If he hits, the target takes a -2 circumstance penalty to the triggering roll.").hinders, 2);
+    assert.deepEqual(reaction("A creature within reach of the test wolf's jaws attacks one of the test wolf's allies", "The test wolf makes a jaws Strike against the triggering creature.").triggers, ["ally-attacked"]);
+    assert.deepEqual(reaction("A creature within the test dragon's reach critically hits the dragon", "The test dragon makes a claw or tail Strike against the creature, after applying all the effects of the critical hit to the dragon."), { builtin: "reaction-strike", triggers: ["critical-hit"], strike: "claw", penalty: 0, disrupts: false });
+    // Fast Swallow; a Step when an ally moves next to it.
+    assert.deepEqual(reaction("The test worm Grabs a creature in its jaws", "The test worm uses Swallow Whole."), { builtin: "fast-swallow" });
+    assert.deepEqual(reaction("A goblin ally ends a move action adjacent to Test Boss.", "Test Boss Steps."), { builtin: "no-effect" });
+    // A move that doesn't trigger reactions; one with more to it isn't.
+    const action = (html, actions = 1) => compileMonsterAbility(item("Test Action", `<p>${html}</p>`, "action", actions));
+    assert.deepEqual(action("The test ghoul jumps up to half its Speed. This movement doesn't trigger reactions."), { builtin: "safe-move", actions: 1 });
+    assert.deepEqual(action("The test squid moves up to 60 feet in a straight line through the water without triggering reactions.", 2), { builtin: "safe-move", actions: 2 });
+    assert.equal(action("The test killer Strides up to twice its Speed. This movement doesn't trigger reactions, but it must begin and end in darkness.", 2)?.builtin, undefined);
+    // Nothing for the fight's numbers.
+    assert.deepEqual(action("The test shifter can take on the appearance of any Medium humanoid. This doesn't change its Speed or its attack and damage bonuses with its Strikes, but might change the damage type its Strikes deal."), { builtin: "no-effect" });
+    assert.deepEqual(action("The test horse Strides twice. It has a +10-foot circumstance bonus to its Speed during these Strides.", 2), { builtin: "no-effect" });
+    // More charges: one roll at two foes in its reach; a lunge with a longer reach; Aquatic Ambush (the glossary's), once a fight.
+    assert.deepEqual(action("The test giant makes a single greataxe Strike and compares the attack roll result to the ACs of up to two foes within its reach. This counts as two attacks for the test giant's multiple attack penalty."), { builtin: "multi-strike", actions: 1, strikes: ["greataxe"], each: true, max: 2, sameMap: true });
+    assert.deepEqual(action("The test eel darts forward. It swims up to 10 feet in a straight line and makes a jaws Strike with a reach of 10 feet.", 2), { builtin: "charge", actions: 2, strides: 1, strike: "jaws" });
+    assert.deepEqual(action("The test dragon lunges its head forward, making a jaws Strike with an extended reach of 20 feet."), { builtin: "no-effect", strikeOnly: true });
+    assert.deepEqual(action("The test shrike Strides twice. If it ends its movement within melee reach of one creature, it can make a melee Strike against that creature.", 2), { builtin: "charge", actions: 2, strides: 2, strike: null });
+    assert.deepEqual(compileMonsterAbility(item("Aquatic Ambush", "<p>30 feet @Localize[PF2E.NPC.Abilities.Glossary.AquaticAmbush]</p>")), { builtin: "charge", actions: 1, strides: 1, strike: null, offGuard: true, oncePerFight: true });
+});

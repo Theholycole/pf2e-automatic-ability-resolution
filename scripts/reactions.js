@@ -178,8 +178,11 @@ async function onMessage(message) {
         if (ranged) await provokeTrigger(scene, combat, token, "ranged", "made a ranged attack");
         await defend(message, context, scene, combat, token);
         await ownStrike(message, context, scene, combat, token);
+        await strikeAnswers(context, scene, combat, token);
         return;
     }
+    // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
+    if (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("attack")) await strikeAnswers(context, scene, combat, token, { skill: true });
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
     const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
     if (castTraits?.includes("manipulate")) {
@@ -189,6 +192,31 @@ async function onMessage(message) {
     // A concentrate action: a spell with the trait, or a check with it (Demoralize; batch 22).
     if (castTraits?.includes("concentrate") || (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("concentrate"))) {
         await provokeTrigger(scene, combat, token, "concentrate", castTraits ? "cast a concentrate spell" : "used a concentrate action");
+    }
+}
+
+// Tail Lash, Avenging Bite, Violent Retort (batch 38): a Strike in its reach (or a skill check that's an attack), an attack on one of
+// its allies, a critical hit on it: its reaction Strike, offered at the creature. Tail Lash's hit: the GM lowers the roll.
+async function strikeAnswers(context, scene, combat, attacker, { skill = false } = {}) {
+    const grid = gridOf(scene);
+    const targetToken = context.target?.token ? fromUuidSync(context.target.token) : null;
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, attacker)) continue;
+        for (const { item, plan } of reactions) {
+            if (plan.builtin !== "reaction-strike") continue;
+            const triggers = plan.triggers ?? [];
+            const onIt = targetToken?.id === monster.id;
+            const onAlly = !!targetToken && targetToken.id !== monster.id && targetToken.disposition === monster.disposition;
+            const why = triggers.includes(skill ? "skill" : "strike") ? (skill ? "attempted an attack check in its reach" : "made a Strike in its reach")
+                : !skill && triggers.includes("ally-attacked") && onAlly ? "attacked its ally"
+                : !skill && triggers.includes("critical-hit") && onIt && context.outcome === "criticalSuccess" ? "critically hit it" : null;
+            if (!why) continue;
+            const distance = distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid);
+            const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
+            if (!strikes.length) continue;
+            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : null });
+            break;
+        }
     }
 }
 
