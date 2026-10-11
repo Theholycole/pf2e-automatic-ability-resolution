@@ -1928,6 +1928,27 @@ function downsDemoralize(item, basicActions) {
     return { ...plan, ...base(item, { traits: plan.traits }), targeting: plan.targeting, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
 }
 
+// Scattershot (2026-10-11, batch 56): "The dragon exhales a cloud of small balls of pure energy that deal @Damage[(11d4+11)[force]] damage in
+// a @Template[type:cone|distance:60] with no save. The dragon can't use Scattershot again for 1d4 rounds." → that damage on everyone in
+// the area, no roll; its recharge. null otherwise.
+function noSaveArea(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
+    if (!/^(?:The )?[^.@]+? that deals? @D damage in an? @T with no save\.(?: (?:The )?[^.]+? can't use [^.]+? again for [^.]+\.)?$/i.test(plain)) return null;
+    const damage = inlineTags(html, "Damage");
+    const template = inlineTags(html, "Template").map(readTemplate).find(Boolean);
+    if (damage.length !== 1 || !template) return null;
+    const recharge = readRecharge(html);
+    const hit = { damage: { mode: "formulas", formulas: [{ formula: readDamage(damage[0]) }], rollScope: "outcome" }, effects: [] };
+    return {
+        ...base(item),
+        targeting: { target: null, range: null, area: template },
+        trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: hit, failure: none(), criticalFailure: none() } }
+    };
+}
+
 // Stoke the Flames (2026-10-11, batch 52): "The dragon intensifies nearby fires. Every foe within 60 feet that is taking persistent fire
 // damage takes @Damage[5d6[fire]] damage." → that damage on each foe within that distance taking persistent fire damage
 // (targeting.foes, targeting.taking: "fire"); live play: the GM's targets, with that as a reminder. null otherwise.
@@ -2086,7 +2107,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? noSaveArea(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
@@ -2293,22 +2314,36 @@ function selfHeal(item) {
     if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0])) return null;
     const plain = htmlToPlainText(html.replace(/@Damage\[[^\]]*\]\]?(?:\{[^}]*\})?/g, "\u0000").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
     // (Requirements with no "Effect" label: "Requirements The ravenile's regeneration is currently active The ravenile regains …".)
-    const requires = /^(?:Frequency [^.]*?\s+)?Requirements? (.+?)\s+Effect\s/i.exec(plain)?.[1] ?? (/\bRequirements?\b/.test(plain) ? (/\bRequirements? (.+?)\s+(?:The |It |They )/.exec(plain)?.[1] ?? "its requirements") : null);
-    const effect = plain.replace(/^(?:Frequency .+?\s+)?(?:Requirements? .+?\s+)?Effect\s+/i, "").replace(/^Frequency .+?\s+Effect\s+/i, "").replace(/^(?:Frequency [^.]*?\s+)?Requirements? .+?\s+(?=(?:The |It |They ))/, "");
-    const sentences = effect.split(/(?<=\.)\s+/);
+    // (The labels are capitalised, so a "fear effect" in the requirement doesn't end it — batch 56.)
+    const requires = /^(?:Frequency [^.]*?\s+)?Requirements? (.+?)\s+Effect\s/.exec(plain)?.[1] ?? (/\bRequirements?\b/.test(plain) ? (/\bRequirements? (.+?)\s+(?:The |It |They )/.exec(plain)?.[1] ?? "its requirements") : null);
+    const effect = plain.replace(/^(?:Frequency .+?\s+)?(?:Requirements? .+?\s+)?Effect\s+/, "").replace(/^Frequency .+?\s+Effect\s+/i, "").replace(/^(?:Frequency [^.]*?\s+)?Requirements? .+?\s+(?=(?:The |It |They ))/, "");
+    // (Batch 56, Feed on Fear: "The will-o'wisp feeds on the creature's terror. It regains 2d4 Hit Points, and if it has Gone Dark, its glow
+    // reignites." — the first sentence only tells it, the glow is the GM's.)
+    const sentences = effect.replace(/,? and (?:if (?:it has|they've|they have) Gone Dark, (?:its|their) glow reignites|its Glow reignites if it had been extinguished)\./i, ". If it has Gone Dark, its glow reignites.").replace(/^They regains\b/, "They regain").split(/(?<=\.)\s+/)
+        .filter((sentence) => !/^(?:The )?[^.]+? feeds on the creature's (?:terror|fear)\.$/i.test(sentence));
     const at = sentences.findIndex((sentence) => /\u0000/.test(sentence));
+    // (A wait on another of its abilities is that one's, kept as a note: Voidglutton's "It cannot use Consume Light again for 1d4 rounds".)
+    const other = /\bcan(?:'t|not) use ([A-Z][\w' -]+?) again\b/.exec(effect)?.[1];
+    const elsewhere = Boolean(other) && other.toLowerCase() !== String(item.name ?? "").toLowerCase();
     if (at < 0 || !HEALS_ITSELF.test(sentences[at]) || /\b(?:to (?:the|an?|each|all|its|their) (?!itself)|allies|ally|each|every|for each|creature|target)\b/i.test(sentences[at].replace(/to (?:itself|himself|herself|themselves|themself)/, ""))) return null;
     // Its other sentences: words only (no roll, no condition), and no condition of their own.
     const notes = [];
     for (const [index, sentence] of sentences.entries()) {
-        if (index === at || /^(?:It|They|He|She|The [\w' -]+?) can(?:'t|not) use [^.]+ again for \d+d\d+ rounds\.$/i.test(sentence)) continue;
+        if (index === at || (!elsewhere && /^(?:It|They|He|She|The [\w' -]+?) can(?:'t|not) use [^.]+ again for \d+d\d+ rounds\.$/i.test(sentence))) continue;
+        if (/^If it has Gone Dark, its glow reignites\.$/i.test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
         if (/@|\u0000|\b(?:If|When|Whenever|Unless|While|Until)\b/.test(sentence) || /\b(?:damage|save|Strike|Grabbed|Frightened|Stunned|Slowed|Quickened|bonus|penalty|ally|allies|each|creatures?)\b/i.test(sentence)) return null;
         notes.push(sentence);
     }
     const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
-    const recharge = readRecharge(html);
+    const recharge = elsewhere ? null : readRecharge(html);
+    // (Feed on Fear's requirement, for the simulator: "An enemy is under a fear effect or Dying within 15 feet of the will-o'-wisp".)
+    const foe = /^An enemy (?:within (\d+) feet )?is (?:under|being affected by|affected by) a fear effect or (?:has the Frightened or )?Dying(?: condition)?,?(?: and is)?(?: within (\d+) feet\b)?/i.exec(requires ?? "");
     return {
         ...base(item),
+        ...(foe && (foe[1] ?? foe[2]) ? { requiresFoe: { conditions: ["frightened", "dying"], within: Number(foe[1] ?? foe[2]) } } : {}),
         targeting: { target: "self", range: null, area: null },
         trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
         resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } },

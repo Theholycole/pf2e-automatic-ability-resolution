@@ -955,3 +955,12 @@ The user's choice (2026-10-11): a GM button for each way; the simulator picks th
   - **Live play:** as the turn passes, the Strike offer at the creature that ended its turn within 5 feet of it.
 - **Checked live in pftest** (PFTEST SIM B55 Medusa from Monster Core and a dummy on the party's side; deleted afterwards): the medusa's own turn ending: nothing; the dummy's ending beside it: "ended its turn beside it", Snake Fangs.
 
+## Feed on Fear, Scattershot (2026-10-11, batch 56)
+
+- **Feed on Fear** (9): "Requirements An enemy is under a fear effect or Dying within 15 feet of the will-o'-wisp. Effect The will-o'-wisp feeds on the creature's terror. It regains 2d4 Hit Points, and if it has Gone Dark, its glow reignites." → batch 24's healing on itself, now in all its wordings ("An enemy within 15 feet is under …", "is being affected by …", "is affected by a fear effect or has the Frightened or Dying condition, and is within 25 feet"; "They regains", "if they've Gone Dark, their glow reignites", "its Glow reignites if it had been extinguished"). The requirement's "fear effect" no longer ends it early (the labels are capitalised). The glow is a note; "only once per round" too. The voidglutton's "It cannot use Consume Light again for 1d4 rounds" is Consume Light's wait, so a note, not Feed on Fear's recharge.
+  - **The requirement** for the simulator: { requiresFoe: { conditions: ["frightened", "dying"], within } }.
+  - **The simulator** (B83): only while an enemy within that distance is frightened, or down and dying.
+  - **Live play:** PF2e's healing roll, its heading "Only if: …" for the GM, as before.
+- **Scattershot** (8): "The dragon exhales a cloud of small balls of pure energy that deal 5d4+5 force damage in a 30-foot cone with no save. The dragon can't use Scattershot again for 1d4 rounds." → the damage on everyone in the area, no roll to resist; its recharge (the simulator: 43 uses in the bestiary run; live play: the card at the GM's targets, "no roll", then Apply).
+- **Checked live in pftest** (PFTEST SIM B56 Barrage Dragon (Young) from the Lost Omens Bestiary, two goblin dummies on the party's side, and a Monster Core Will-o'-Wisp; deleted afterwards): Scattershot's card at the two targets, Apply: one 5d4+5 roll, 14 force to each, "recharges in 2 rounds"; Feed on Fear's roll: "Only if: An enemy within 15 feet is under a fear effect or Dying. If it has Gone Dark, its glow reignites."
+

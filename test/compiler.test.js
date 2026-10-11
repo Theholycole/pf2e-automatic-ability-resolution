@@ -1524,3 +1524,19 @@ test("Breach, glides and other moves, Envenom Weapon with its own venom, Reactiv
     // Biting Snakes: a Strike at a creature ending its turn beside it.
     assert.deepEqual(compileMonsterAbility(item("Biting Snakes", "<p><strong>Trigger</strong> A creature ends its turn adjacent to the test medusa.</p><hr /><p><strong>Effect</strong> The test medusa makes a snake fangs Strike against the creature.</p>", "reaction")), { builtin: "reaction-strike", triggers: ["turn-end-adjacent"], strike: "snake fangs", penalty: 0, disrupts: false });
 });
+
+test("Feed on Fear's wordings and requirement, Scattershot (2026-10-11, batch 56)", () => {
+    const item = (name, html, type = "action", actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: ["concentrate"] }, description: { value: html } } });
+    const heal = (formula) => `@Damage[${formula}[healing]]`;
+    for (const [html, within, notes] of [
+        [`<p><strong>Requirements</strong> An enemy is under a fear effect or Dying within 15 feet of the test wisp.</p><hr /><p><strong>Effect</strong> The test wisp feeds on the creature's terror. It regains ${heal("2d4")} Hit Points, and if it has Gone Dark, its glow reignites. A test wisp can take this action only once per round.</p>`, 15, ["If it has Gone Dark, its glow reignites.", "A test wisp can take this action only once per round."]],
+        [`<p><strong>Requirements</strong> An enemy within 15 feet is under a fear effect or Dying</p><hr /><p><strong>Effect</strong> They regains ${heal("2d4")} Hit Points, and if they've Gone Dark, their glow reignites.</p>`, 15, ["If it has Gone Dark, its glow reignites."]],
+        [`<p><strong>Requirements</strong> An enemy is affected by a fear effect or has the Frightened or Dying condition, and is within 25 feet of the test glutton</p><hr /><p><strong>Effect</strong> It regains ${heal("3d4")} Hit Points and its Glow reignites if it had been extinguished. It cannot use Consume Light again for 1d4 rounds, as it is too full to dim.</p>`, 25, ["If it has Gone Dark, its glow reignites.", "It cannot use Consume Light again for 1d4 rounds, as it is too full to dim."]]
+    ]) {
+        const plan = compileMonsterAbility(item("Feed on Fear", html));
+        assert.deepEqual([plan?.resolution?.kind, plan?.targeting?.target, plan?.requiresFoe, plan?.notes, plan?.trigger?.recharge], ["healing", "self", { conditions: ["frightened", "dying"], within }, notes, undefined], html);
+    }
+    // Scattershot: damage in a cone with no save.
+    const shot = compileMonsterAbility(item("Scattershot", "<p>The test dragon exhales a spray of force pellets that deal @Damage[(5d4+5)[force]|options:area-damage] damage in a @Template[type:cone|distance:30] with no save. The test dragon can't use Scattershot again for [[/gmr 1d4 #Recharge Scattershot]]{1d4 rounds}.</p>", "action", 2));
+    assert.deepEqual([shot?.targeting?.area?.type, shot?.targeting?.area?.value, shot?.resolution?.check?.statistic, shot?.resolution?.outcomes?.success?.damage?.formulas?.[0]?.formula, shot?.trigger?.recharge?.formula], ["cone", 30, "automatic", "(5d4+5)[force]", "1d4"]);
+});
