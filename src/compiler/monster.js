@@ -1354,6 +1354,45 @@ function compileModes(item, options) {
     return { builtin: "modes", actions: Number(item.system?.actions?.value) || 1, modes };
 }
 
+// Wicked Bite (2026-10-11, batch 51; the user's choice: a GM button for each way, the simulator the better one): "Requirements The
+// urdefhan damaged a creature with a jaws Strike on their last action Effect … The target must succeed at a @Check[fortitude|dc:22] save
+// or be affected by drain blood or drain vitality (the urdefhan's choice). If the jaws Strike was a critical hit, the creature is
+// affected by both effects, using the same save result for both. • Drain Blood … On a failed save, the creature is Drained 1 and the
+// urdefhan regains 5 HP (or, on a critical failure, it's Drained 2 and the urdefhan regains 10 HP). • Drain Vitality … The creature
+// becomes Enfeebled 1 for 1 hour on a failed save (or Enfeebled 2 for 1 hour on a critical failure)." → modes, each a Fortitude save
+// after that Strike (batch 36's follow-up), its regained Hit Points and the critical hit's both ways as reminders. null otherwise.
+function wickedBite(item) {
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    if (!/\bDrain Blood\b/.test(plain) || !/\bDrain Vitality\b/.test(plain)) return null;
+    const need = /\bRequirements? (.+?) Effect\b/.exec(plain)?.[1];
+    const last = need ? followUpNeed(need) : null;
+    const dc = Number(/@Check\[fortitude\|dc:(\d+)/i.exec(html)?.[1]);
+    if (!last || !dc) return null;
+    const WHO = String.raw`(?:the [\w' -]+?|[A-Z][\w'-]+)`;
+    const HP = String.raw`(?:@Damage\[)?(\d+)(?:\[healing\]\])? HP`;
+    const blood = new RegExp(String.raw`\bDrain Blood\b[^.]*\.\s*On a failed save, the creature is Drained (\d) and ${WHO} regains ${HP} \((?:or, )?on a critical failure, it's Drained (\d) and ${WHO} regains ${HP}\)\.`, "i").exec(plain);
+    const vitality = /\bDrain Vitality\b[^.]*\.\s*The creature becomes Enfeebled (\d) for 1 hour on a failed save \(or Enfeebled (\d) for 1 hour on a critical failure\)\./i.exec(plain);
+    if (!blood || !vitality) return null;
+    const hour = readDuration("for 1 hour");
+    const condition = (slug, value, duration = null) => ({ kind: "condition", slug, value: Number(value), duration });
+    const both = "If the Strike was a critical hit, {target} is affected by both ways, with the same save result.";
+    const save = (failure, critical, reminders) => ({
+        ...base(item),
+        targeting: { target: "the creature the Strike hits", range: "touch", area: null },
+        trigger: { event: "use", followUp: last },
+        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: { damage: none().damage, effects: failure }, criticalFailure: { damage: none().damage, effects: critical } }, reminders }
+    });
+    return {
+        builtin: "modes",
+        actions: Number(item.system?.actions?.value) || 1,
+        modes: [
+            { name: "Drain Blood", plan: save([condition("drained", blood[1])], [condition("drained", blood[3])], [`On a failed save, {source} regains ${blood[2]} HP (${blood[4]} on a critical failure).`, both]) },
+            { name: "Drain Vitality", plan: save([condition("enfeebled", vitality[1], hour)], [condition("enfeebled", vitality[2], hour)], [both]) }
+        ]
+    };
+}
+
 // A save whose damage "depends on the number of actions" (a troop's coordinated attacks), each count's damage after its
 // action glyph ("<span class="action-glyph">2</span> @Damage[(3d6+10)[bludgeoning]] damage") or its number
 // ("2 @Damage[…]"): the basic save with the lowest count's damage, and resolution.native.byActions[n] with each
@@ -1958,7 +1997,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     }
     if (slug === "engulf") return engulf(item, actor);
     // Used in one of several ways (two breath weapons): a plan for each.
-    const modes = compileModes(item, { basicActions, actor });
+    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor });
     if (modes) return modes;
     // Damage by the number of actions spent (a troop's attacks): one plan, the damage for each count.
     const byActions = actionCountSave(item, actor);

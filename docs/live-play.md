@@ -905,3 +905,12 @@ The user's choice (2026-10-11): a trap's damage, saves and conditions into its c
   - The simulator: a hazard's trigger abilities already fire at the creature that set it off (E4); these now carry their damage.
 - **A trap that summons a creature** (11): "Effect The trap summons a Cockatrice. The cockatrice rolls initiative and remains for 2d6 rounds; …" → the GM's.
 
+## Wicked Bite (2026-10-11, batch 51)
+
+The user's choice (2026-10-11): a GM button for each way; the simulator picks the better one.
+
+- **Wicked Bite** (12): "Requirements The urdefhan damaged a creature with a jaws Strike on their last action Effect … The target must succeed at a @Check[fortitude|dc:22] save or be affected by drain blood or drain vitality (the urdefhan's choice). If the jaws Strike was a critical hit, the creature is affected by both effects, using the same save result for both. • Drain Blood … On a failed save, the creature is Drained 1 and the urdefhan regains 5 HP (or, on a critical failure, it's Drained 2 and the urdefhan regains 10 HP). • Drain Vitality … Enfeebled 1 for 1 hour on a failed save (or Enfeebled 2 for 1 hour on a critical failure)." (also "chooses one of two options, each of which requires a … save", the ways without bold names) → { builtin: "modes" } with two ways, each a Fortitude save after that Strike: Drained (its regained Hit Points a reminder, "{source} regains 5 HP (10 on a critical failure)"), Enfeebled for 1 hour; the critical hit's both ways a reminder.
+  - **Live play:** "Wicked Bite: which way?" with a button for each, then that way's card (checked live: an Urdefhan Tormentor's jaws hit on Ezren, Wicked Bite, Drain Vitality: a DC 22 Fortitude save card, Enfeebled 1 for 1 hour on a failure).
+  - **The simulator** (B78): a Strike now readies every follow-up it allows (each way), and the planner weighs each; after a jaws hit it usually still prefers a second Strike.
+- **Not yet:** Kharostan's (a trigger, Doomed too), Pike and Strike (moving the target or a second Strike: the simulator's ways are saves and checks).
+
