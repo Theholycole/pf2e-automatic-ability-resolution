@@ -284,6 +284,27 @@ export function readReaction(item, text) {
         const frequency = item?.system?.frequency;
         return { builtin: "crit-downgrade", dc: Number(flat), ...(item?.system?.actionType?.value === "free" ? { uses: Number(frequency?.max) || 1 } : {}) };
     }
+    // A champion's reaction in its own words (2026-10-10, batch 29): "Trigger An enemy damages the archon's ally and both are within
+    // 15 feet of the archon; Effect The ally gains resistance 15 to all damage against the triggering damage and the archon can make
+    // a Strike against the enemy" (Archon's Protection, Retributive Strikes in full): the glossary Retributive Strike's, with its
+    // resistance.
+    const champion = /\bally gains resistance (\d+) to all damage against the triggering damage\b/i.exec(effect);
+    if (champion && /^An? (?:enemy|foe) damages (?:the [\w' -]+?['’]s|one of [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) ally\b/i.test(trigger) && /\b(?:makes? a (?:melee )?Strike against (?:it|them|the (?:enemy|foe))|can make a Strike against the (?:enemy|foe))\b/i.test(effect) && !/\b(?:grabs|restrains|chooses?)\b/i.test(`${trigger} ${effect}`)) {
+        return { builtin: "retributive-strike", resistance: Number(champion[1]) };
+    }
+    // A critical hit on it answered with resistance against that attack (2026-10-10, batch 29): "Trigger The dragon is critically hit
+    // by an attack; Effect … gaining resistance 20 to all damage against the triggering attack" (Wished Away, Withhold Death).
+    const resist = /\b(?:gains?|gaining) resistance (\d+) to all damage against the triggering attack\b/i.exec(effect);
+    if (resist && /\bis critically hit by an? (?:attack|Strike)\b/i.test(trigger) && !/\bRequirements?\b/i.test(text)) return { builtin: "crit-resistance", value: Number(resist[1]) };
+    // A critical hit made a normal hit with no check (2026-10-10, batch 29): Collapse's "the attack deals damage for a hit, rather
+    // than a critical hit" or "… deals only normal damage", Twist Fate's "The triggering attack becomes a hit instead", Half-Ear's
+    // Luck's "The critical hit becomes a normal hit". Collapse's "until it does, it is Immobilized and Off-Guard" (re-forming as
+    // an action) is what it's left with: collapse. Not one with a requirement, nor one the attacker chooses.
+    if (!flat && /\b(?:is critically hit|takes a critical hit|critically hits (?:the|it|him|her|them)\b|scores a critical hit on)\b/i.test(trigger) && /\b(?:deals (?:damage for a hit,? rather than a critical hit|only normal damage)|(?:triggering attack|critical hit) (?:becomes|is) a (?:normal )?hit(?: instead)?)\b/i.test(effect) && !/\bRequirements?\b/i.test(text) && !/\bchoose\b/i.test(effect)) {
+        const frequency = item?.system?.frequency;
+        const collapse = /\bImmobilized\b[^.]*\bOff-Guard\b|\bOff-Guard\b[^.]*\bImmobilized\b/i.test(effect) && /\bre-?form\w*\b[^.]*\baction\b/i.test(effect);
+        return { builtin: "crit-downgrade", dc: null, ...(item?.system?.actionType?.value === "free" ? { uses: Number(frequency?.max) || 1 } : {}), ...(collapse ? { collapse: true } : {}) };
+    }
     // Concealment against the triggering attack (2026-10-10): "gains concealment against the triggering attack" (a DC 5 flat check
     // for the attacker), "The attacker must succeed at a DC 11 flat check … as if the drake were Hidden" (DC 11), "must attempt a
     // DC 11 flat check; on a failure, the attack passes harmlessly through". Ranged attacks only when the trigger says so.
@@ -317,7 +338,7 @@ const SELF_ATTACKED = new RegExp(String.raw`\b(?:targets? ${SELF} with an? ${KIN
 function acDodge(text, trigger, effect) {
     // No "Effect" label: the trigger's first sentence, then the rest (after any requirements).
     // (Not with a requirement the simulator can't check; "is not encumbered" it can.)
-    if (/\bRequirements? (?![^.]*?\bnot encumbered\b)/i.test(text)) return null;
+    if (/\bRequirements? (?![^.]*?\b(?:not encumbered|(?:can't|cannot) use this reaction while Encumbered)\b)/i.test(text)) return null;
     if (!/ Effect /.test(text)) {
         const parts = /^Trigger (.+?)\.\s+(?:Requirements? [^.]+\.\s+)?(.+)$/.exec(text.trim());
         if (!parts) return null;
@@ -328,7 +349,9 @@ function acDodge(text, trigger, effect) {
     const shared = own !== trigger;
     trigger = own;
     const bonus = /(?:gains?|gaining|giving (?:it|itself)|providing) a \+(\d+) circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)\b/i.exec(effect);
-    if (!bonus || !SELF_ATTACKED.test(trigger)) return null;
+    // (Nimble Dodge's older wording, batch 29: "is hit or critically hit by an attack made by a creature it can see".)
+    const hit = /\bis hit or critically hit by an? (?:attack|Strike)\b/i.test(trigger);
+    if (!bonus || !(SELF_ATTACKED.test(trigger) || hit)) return null;
     // (Shielding Wing protects "itself or the bonded companion": its own part is read.)
     if (/\b(?:ally|allies|rider|liege|object|spells?|splash|area|bow|until)\b/i.test(`${trigger} ${effect.slice(0, bonus.index + 120)}`) || (!shared && /\bcompanion\b/i.test(effect.slice(0, bonus.index + 120)))) return null;
     const melee = /\bmelee\b|\badjacent\b/i.test(trigger);
@@ -337,7 +360,7 @@ function acDodge(text, trigger, effect) {
     // (Not the PF2e effect it links: "… Effect: Shielding Wing".)
     const plain = effect.trim().replace(/\s*\bEffect: [^.]+$/, "");
     const only = /^[^.]*?\+\d+ circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)(?: against (?:the|that) triggering (?:attack|Strike))?\.?$/i.test(plain);
-    return { builtin: "ac-reaction", value: Number(bonus[1]), when: "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(only ? {} : { notes: [plain] }) };
+    return { builtin: "ac-reaction", value: Number(bonus[1]), when: hit ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(only ? {} : { notes: [plain] }) };
 }
 
 // A condition the monster always has (2026-10-10, batch 21): "The zombie is permanently Slowed 1 and can't use reactions" (Slow),

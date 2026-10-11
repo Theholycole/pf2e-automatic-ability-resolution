@@ -1455,7 +1455,15 @@ export function readReactionTrigger(text) {
     // "The egarhowl rolls initiative" (not "… while in water").
     if (new RegExp(String.raw`^${SELF} rolls (?:for )?initiative$`).test(trigger)) return { event: "initiative", reaction: true };
     let match = new RegExp(String.raw`^${SELF} (?:is (critically )?hit|takes a (critical) hit)\b(.*)$`).exec(trigger);
-    if (match) return hit({ critical: Boolean(match[1] || match[2]), how: match[3] });
+    if (match) {
+        // (Batch 29: "is hit by an attack or spell attack from an enemy within 30 feet", a made-up example: a hit, from that far.)
+        const how = match[3].replace(/\bby an? (Strike|attack) or (?:a )?spell attack\b/i, "by a $1");
+        const from = /\s*from (?:a|an) (?:creature|foe|enemy)(?: (?:that|who))?(?: [\w' -]+? can see)? (within \d+ feet)$/i.exec(how);
+        return hit({ critical: Boolean(match[1] || match[2]), how: from ? how.slice(0, from.index) : how, within: from ? from[1] : "" });
+    }
+    // "A Strike deals fire damage to the elemental" (batch 29; a made-up example).
+    match = new RegExp(String.raw`^An? (?:attack|Strike) deals ((?:\w+ )?)damage to ${SELF}$`).exec(trigger);
+    if (match) return hit({ critical: false, how: `${match[1]}damage` });
     match = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|foe|enemy)((?: (?:within|in) [^,]+?)?) (?:successfully )?(critically hits|hits|damages|deals ([\w ,]+?) damage to|[Ss]trikes) ${SELF}\b(.*)$`).exec(trigger);
     if (match) {
         const found = hit({ critical: /^critically/i.test(match[3]), how: `${match[4] ? `${match[4]} damage ` : ""}${match[5]}`, adjacent: Boolean(match[1]), within: match[2] ?? "" });
@@ -1465,11 +1473,14 @@ export function readReactionTrigger(text) {
     // "A creature scores a critical hit on the firehoof minotaur" (batch 18).
     match = new RegExp(String.raw`^(?:An?|Any) (?:creature|foe|enemy) scores a critical hit (?:on|against) ${SELF}\b(.*)$`).exec(trigger);
     if (match) return hit({ critical: true, how: match[1] });
-    match = new RegExp(String.raw`^${SELF} (?:is damaged|takes (?:any )?([\w ,]*?)\s*damage)\b(.*)$`).exec(trigger);
+    // (Batch 29: "The spark troll would take sonic damage", "is dealt fire or cold damage" (made up), "The woodblessed is damaged
+    // by a creature within their reach".)
+    match = new RegExp(String.raw`^${SELF} (?:is damaged|(?:takes|would take|is dealt) (?:any )?([\w ,]*?)\s*damage)\b(.*)$`).exec(trigger);
     if (match) {
         if (refused(match[1] ?? "") || /\d/.test(match[1] ?? "")) return null;
         const rest = match[2].trim();
-        if (/^from (?:a|an) (?:melee )?(?:Strike|attack|weapon)/i.test(rest)) return hit({ critical: false, how: `${match[1] ?? ""} damage ${rest}` });
+        if (/^from (?:a|an) (?:melee |physical )?(?:Strike|attack|weapon)/i.test(rest)) return hit({ critical: false, how: `${match[1] ?? ""} damage ${rest}` });
+        if (/^by (?:a|an) (?:creature|foe|enemy) within (?:its|their|his|her) reach$/i.test(rest)) return hit({ critical: false, how: `${match[1] ?? ""} damage`, within: " within reach" });
         if (rest && !/^from any source$/i.test(rest)) return null;
         const damageTypes = types(match[1]);
         return { event: "damaged", reaction: true, ...(damageTypes ? { damageTypes } : {}) };

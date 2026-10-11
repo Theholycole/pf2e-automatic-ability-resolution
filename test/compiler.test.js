@@ -1049,3 +1049,27 @@ test("riders that name their Strike, critical hits only, and natural invisibilit
     assert.deepEqual(compileMonsterAbility(passive("Naturally Invisible", "<p>The test wisp is Invisible at all times, though when it takes a hostile action of any kind, it is Hidden instead of undetected until the start of its next turn.</p>")).conditions, [{ slug: "invisible", value: null }]);
     assert.equal(compileMonsterAbility(passive("Shy", "<p>A test sprite is naturally Invisible while within sight of their bound home.</p>"))?.builtin, undefined);
 });
+
+test("critical hits made normal hits, resistance against a critical hit, dodges and more reaction triggers (2026-10-10, batch 29)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    const reaction = (name, html, type = "reaction") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, frequency: type === "free" ? { max: 1, per: "day" } : null, description: { value: html } } });
+    const immobilized = "@UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized}";
+    const offGuard = "@UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard}";
+    // Collapse: no check; immobilized and off-guard until it re-forms.
+    assert.deepEqual(compileMonsterAbility(reaction("Collapse", `<p><strong>Trigger</strong> The test skeleton is critically hit</p><p><strong>Effect</strong> The test skeleton collapses into a pile of bones and the attack deals only normal damage. The skeleton can reform in a standing position as an action, but until it does, it is ${immobilized} and ${offGuard}.</p>`)), { builtin: "crit-downgrade", dc: null, collapse: true });
+    assert.deepEqual(compileMonsterAbility(reaction("Twist Fate", "<p><strong>Trigger</strong> A creature critically hits the test norn</p><p><strong>Effect</strong> The test norn manipulates fortune in her favor. The triggering attack becomes a hit instead.</p>")), { builtin: "crit-downgrade", dc: null });
+    assert.deepEqual(compileMonsterAbility(reaction("Luck", "<p><strong>Trigger</strong> The test captain takes a critical hit or critically fails a saving throw</p><p><strong>Effect</strong> The critical hit becomes a normal hit, or the critical failure becomes a normal failure.</p>", "free")), { builtin: "crit-downgrade", dc: null, uses: 1 });
+    // Resistance against the critical hit.
+    assert.deepEqual(compileMonsterAbility(reaction("Wished Away", "<p><strong>Trigger</strong> The test dragon is critically hit by an attack</p><p><strong>Effect</strong> The test dragon wishes not to be hurt by this attack, gaining resistance 20 to all damage against the triggering attack.</p>")), { builtin: "crit-resistance", value: 20 });
+    // Nimble Dodge's older wording, with its Encumbered requirement.
+    assert.deepEqual(compileMonsterAbility(reaction("Nimble Dodge", "<p><strong>Requirements</strong> The test rogue can't use this reaction while Encumbered.</p><p><strong>Trigger</strong> The test rogue is hit or critically hit by an attack made by a creature the test rogue can see.</p><p><strong>Effect</strong> The test rogue gains a +2 circumstance bonus to their Armor Class against the triggering attack.</p>")), { builtin: "ac-reaction", value: 2, when: "hit" });
+    // More triggers.
+    assert.deepEqual(readReactionTrigger("The test golem is hit by an attack or spell attack from an enemy within 30 feet"), { event: "hit-by", reaction: true, melee: false, within: 30 });
+    assert.deepEqual(readReactionTrigger("A Strike deals fire damage to the test elemental"), { event: "hit-by", reaction: true, melee: false, damageTypes: ["fire"] });
+    assert.deepEqual(readReactionTrigger("The test wall would take damage from a melee attack"), { event: "hit-by", reaction: true, melee: true });
+    assert.deepEqual(readReactionTrigger("The test troll would take sonic damage"), { event: "damaged", reaction: true, damageTypes: ["sonic"] });
+    assert.deepEqual(readReactionTrigger("The test treant is dealt fire or cold damage"), { event: "damaged", reaction: true, damageTypes: ["fire", "cold"] });
+    assert.deepEqual(readReactionTrigger("The test guardian is damaged by a creature within their reach"), { event: "hit-by", reaction: true, melee: true });
+    // A champion's reaction in its own words: the glossary Retributive Strike's, with its resistance.
+    assert.deepEqual(compileMonsterAbility(reaction("Test Protection", "<p><strong>Trigger</strong> An enemy damages the test archon's ally and both are within 15 feet of the test archon</p><p><strong>Effect</strong> The ally gains resistance 15 to all damage against the triggering damage and the test archon can make a Strike against the enemy.</p>")), { builtin: "retributive-strike", resistance: 15 });
+});

@@ -625,3 +625,23 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - a leshy at 0 HP: a 1d4 healing roll naming only the other leshy, whose button healed it 3;
   - the poltergeist's Invisible, removed, came back at its turn;
   - the Amphisbaena's Blinding Spittle card came with its 2 critical hits and none of its 4 plain hits.
+
+## Critical hits made hits, resistance against a critical hit, champion reactions, more reaction triggers (2026-10-10, batch 29)
+
+- **A critical hit made a normal hit, with no check** (9): Collapse's "the attack deals damage for a hit, rather than a critical hit" or "… deals only normal damage", Twist Fate's "The triggering attack becomes a hit instead", Half-Ear's Luck (a free action, once a day). Collapse's "until it does, it is Immobilized and Off-Guard" (re-forming as an action) comes with it.
+  - **Live play:** offered as a critical hit lands on the monster ("Use it": apply the attack's normal damage), as batch 12's flat-check ones; Use applies Collapse's Immobilized and Off-Guard.
+  - **The simulator** (B59): the critical hit is a hit; a collapsed monster spends its first action re-forming.
+- **Resistance against a critical hit** (24): "Trigger The dragon is critically hit by an attack; Effect … gaining resistance 20 to all damage against the triggering attack" (Wished Away, Withhold Death, Divine Deflection).
+  - **Live play:** offered on the critical hit, with the resistance for the GM to take off as the damage is applied.
+  - **The simulator** (B60): the critical hit's damage with that resistance.
+- **Nimble Dodge's older wording** (5): "Requirements … can't use this reaction while Encumbered. Trigger … is hit or critically hit by an attack made by a creature it can see": +2 AC against the attack, offered on a hit it would turn into a miss.
+- **Champion reactions in their own words** (14): Archon's Protection, Exalted Retributive Strike and Retributive Strikes written out ("The ally gains resistance 15 to all damage against the triggering damage and the archon can make a Strike against the enemy"): the glossary Retributive Strike's offer (its resistance, then a Strike) and simulation.
+- **More reaction triggers** (28, 23 Battlezoo): a hit by a Strike or a spell attack from a creature some distance away ("within 30 feet"), an attack that deals a type of damage to it, damage it "would take" or "is dealt" of a type ("The spark troll would take sonic damage"), damage "by a creature within their reach" ("The woodblessed is damaged by a creature within their reach"): reactions whose results already compiled are now offered (batch 16's hit and damage offers).
+- 80 in all (52 new PF2e, plus 28 triggers read).
+- Over seven bestiaries (5,673 fights, no errors): Wished Away, Withhold Death and Divine Deflection on critical hits; Nimble Dodge 37 → 40; with a second copy of each monster, Archon's Protection 6, Retributive Strike 2.
+- **Checked live in pftest** (PFTEST SIM goblins of the party's alliance against an Iroran Skeleton, Wish Dragon, Drow Rogue, and a Rekhep with a goblin ally; deleted afterwards):
+  - a critical hit on the skeleton offered Collapse, whose Use made it Immobilized and Off-Guard;
+  - one on the dragon offered Wished Away with resistance 20;
+  - a hit by 1 on the drow offered Nimble Dodge ("+2 AC against it turns a hit into a miss"); hits by 4 or 5 offered nothing;
+  - 6 damage on the Rekhep's ally offered Archon's Protection (resistance 15, then a Strike), and "Resist only" put the goblin back to 6 HP.
+  - (PF2e sets an NPC token's disposition from its actor's alliance: a test attacker needs the "party" alliance.)

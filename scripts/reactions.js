@@ -31,7 +31,7 @@ import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } fr
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -253,7 +253,13 @@ async function defend(message, context, scene, combat, attacker) {
             if (change) return offer({ kind: "ac", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against it`, note: plan.notes?.join(" ") || null, attack: { messageId: message.id, value: plan.value, ...change } });
         }
         if (plan.builtin === "attack-misfortune" && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
-        if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc, free: item.system?.actionType?.value === "free" } });
+        // Wished Away (batch 29): resistance to all damage against the critical hit, for the GM as the damage is applied.
+        if (plan.builtin === "crit-resistance" && context.outcome === "criticalSuccess") {
+            const text = `Resistance ${plan.value} to all damage against this attack: take ${plan.value} off each damage type as you apply its damage.`;
+            return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: text, attack: { messageId: message.id, dc: null, text } });
+        }
+        // (No check, batch 29: Collapse, Twist Fate: the critical hit becomes a normal hit; Collapse leaves it immobilized and off-guard.)
+        if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: plan.dc == null ? `The critical hit becomes a normal hit${plan.collapse ? "; it collapses, Immobilized and Off-Guard until it re-forms (an action)" : ""}.` : "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc ?? null, free: item.system?.actionType?.value === "free", collapse: Boolean(plan.collapse) } });
         // Concealment against the attack (Shadow Evade): offered on a hit, the attacker's flat check; a failure misses (2026-10-10).
         if (plan.builtin === "conceal-reaction" && hit && (!plan.ranged || ranged)) {
             return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: `${attacker.name} rolls a DC ${plan.dc} flat check (${plan.dc === 11 ? "as if it were Hidden" : "concealment"}); on a failure, the attack misses.`,
@@ -458,10 +464,16 @@ async function use(message, action, slug) {
         await game.pf2e.Check.rerollFromMessage(attack, { keep: "lower" });
         result = `${state.ability.name}: the attack is rerolled, keeping the worse.`;
     } else if (state.kind === "flat") {
-        // The flat check, rolled for all to see; a success turns the critical hit into a normal hit.
-        const roll = await new Roll("1d20").evaluate();
-        await roll.toMessage({ flavor: `${state.ability.name}: DC ${state.attack.dc} flat check`, speaker: ChatMessage.getSpeaker({ actor, token: monster }) });
-        result = roll.total >= state.attack.dc ? `${roll.total}: ${state.attack.success ?? "success. The critical hit becomes a normal hit; apply the attack's normal damage."}` : `${roll.total}: ${state.attack.failure ?? "failure. The critical hit stands."}`;
+        if (state.attack.dc == null) {
+            // No check (Collapse, Twist Fate): a normal hit; Collapse's conditions on the monster.
+            if (state.attack.collapse) for (const slug of ["immobilized", "off-guard"]) if (!actor.hasCondition?.(slug)) await actor.increaseCondition(slug);
+            result = state.attack.text ?? `The critical hit becomes a normal hit; apply the attack's normal damage.${state.attack.collapse ? ` ${state.monster.name} is Immobilized and Off-Guard until it re-forms (an action).` : ""}`;
+        } else {
+            // The flat check, rolled for all to see; a success turns the critical hit into a normal hit.
+            const roll = await new Roll("1d20").evaluate();
+            await roll.toMessage({ flavor: `${state.ability.name}: DC ${state.attack.dc} flat check`, speaker: ChatMessage.getSpeaker({ actor, token: monster }) });
+            result = roll.total >= state.attack.dc ? `${roll.total}: ${state.attack.success ?? "success. The critical hit becomes a normal hit; apply the attack's normal damage."}` : `${roll.total}: ${state.attack.failure ?? "failure. The critical hit stands."}`;
+        }
         // A free action doesn't use the reaction.
         if (state.attack.free) return settle(message, state, "used", result);
     } else if (state.kind === "ferocity") {
