@@ -14,6 +14,7 @@
 //   (Challenge Fate), reaction-strike on a move (Twisting Tail), death-strike (Death Frenzy)
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
+import { readableText } from "./inline.js";
 
 const NUMBERS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4 };
 
@@ -220,7 +221,7 @@ export function readSwipe(text) {
 // "The guard Strides twice. If it ends its movement within melee reach of at least one enemy, it makes a melee Strike against
 // that enemy." (Sudden Charge; 2026-10-10) → "The guard Strides twice and makes a melee Strike." for the charge readers.
 export function chargeSentences(text) {
-    return String(text).replace(/\b(Strides twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)\.\s+If (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement within (?:melee )?reach of (?:at least one|an?|any) (?:enemy|foe|creature|target), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that|the) (?:enemy|foe|creature|target)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
+    return String(text).replace(/\b(Strides twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)\.\s+If (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement (?:within (?:melee )?(?:reach|range) of (?:at least one|an?|any) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that|the) (?:enemy|foe|creature|target)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
 }
 
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
@@ -258,11 +259,14 @@ export function readSweep(text) {
 // 10 feet"; the Strike "at any point during that movement", "at the end of its movement", "against a foe within its
 // reach", "against an adjacent creature at the end of its movement".
 const MOVES = String.raw`(?:Strides?|Flies|Fly|Swims?|Climbs?|Burrows?|Leaps?)`;
-export function moveThenStrike(text) {
+export function moveThenStrike(said) {
+    // (Batch 37: "The ray Swims, making one tail Strike at any point along the way.")
+    const text = String(said).replace(/, making (?:an?|one) ((?:[\w' -]+? )?Strike)\b/i, " and makes a $1");
     // ("Grandfather Mantis Strides, then Strikes.", "… Strides twice, then Strikes with their horn.", batch 25.)
-    const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES})( twice| up to two times)?, then Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?\.$`, "i").exec(text);
+    // (Batch 37: "Strides or Steps, then Strikes with his hand crossbow", "Burrows and then Strikes", "Strides twice and Strikes with its bayonet".)
+    const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or (?:${MOVES}|Steps?))?)( twice| up to two times)?(?:, then| and(?: then)?) Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?\.$`, "i").exec(text);
     if (bare) return { strides: bare[2] ? 2 : 1, strike: bare[3] ? bare[3].toLowerCase() : null };
-    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)))*)\.$`, "i").exec(text);
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)))*)\.$`, "i").exec(text);
     if (!match) return null;
     const how = match[2].trim();
     const strides = /three times/i.test(how) ? 3 : /twice|double|two times/i.test(how) ? 2 : 1;
@@ -287,7 +291,17 @@ export function readCharge(text) {
     const moved = "^(?:If|As long as) (?:it|they|he|she|the [\\w' -]+?|[A-Z][\\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, ";
     for (const sentence of sentences.slice(1)) {
         // (Nothing for the simulation: "During the Stride, it gains a +10-foot circumstance bonus to its Speed.")
-        if (/remains? hidden until after/i.test(sentence) || /^During (?:the|this|that) (?:Stride|movement), (?:it|they|he|she) gains? a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(sentence)) continue;
+        if (/remains? hidden until after/i.test(sentence) || /^During (?:the|this|that) (?:Stride|movement), (?:it|they|he|she|the [\w' -]+?) gains? a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(sentence)) continue;
+        // (Batch 37: "This Strike gains the fatal d12 trait", "The Strike deals half damage".)
+        const trait = /^(?:This|The) (?:[\w' -]+? )?(?:Strike|strike) gains the (fatal|deadly) d(\d+) trait(?: for this attack)?\.$/i.exec(sentence);
+        if (trait) {
+            charge[trait[1].toLowerCase()] = Number(trait[2]);
+            continue;
+        }
+        if (/^The (?:Strike|strike) deals half damage\.$/.test(sentence)) {
+            charge.halfDamage = true;
+            continue;
+        }
         const bonus = new RegExp(`${moved}(?:it gains|they gain|he gains|she gains) a \\+(\\d+) circumstance bonus to (?:its|their|his|her|this|the) attack roll\\.$`, "i").exec(sentence);
         const damage = new RegExp(`${moved}the Strike's damage (?:is increased to|increases to) (.+?)(?: damage)?\\.$`, "i").exec(sentence);
         if (bonus) charge.attackBonus = Number(bonus[1]);
@@ -539,6 +553,105 @@ export function readRage(item, actor = null) {
     };
 }
 
+// More damage on its own Strikes for a while (2026-10-10, batch 37): "Until the start of her next turn, her fangs Strikes deal an
+// additional 2d8 sonic damage", "For the next minute, its melee Strikes deal an additional 1d6 fire damage", "While in this stance,
+// all the hunter's Strikes deal an additional 2d8 precision damage", "Until the end of its turn, the warhound's jaws Strike deals an
+// additional 2 points of acid damage", "… Strikes deal an additional die of damage" (made-up and PF2e wordings). → { builtin:
+// "self-effect", actions, model: { name, rounds, modifiers, tempHp }, damage: [formulas], strike (its name, or null for all),
+// melee, duration { value, unit, expiry } (live play's), stance?, notes? }. The damage formulas: "2d8[sonic]", "1d10[persistent,
+// bleed]", "2[acid]", "1d6[precision]", "die" (one more of the Strike's own dice). A first sentence that only tells what it does
+// is left out; other sentences go to the GM as notes. Not with a trigger or a requirement, nor damage only against some creatures.
+const BUFF_OWNER = String.raw`(?:all )?(?:its|their|his|her|(?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)(?:'s|’s|')) `;
+const BUFF_PART = String.raw`(?:\u0001(\d+)\u0001|(\d+d\d+(?:\s*[+-]\s*\d+)?) (persistent |precision )?((?!damage\b)[a-z]+)?|(\d+) (?:points? of )?(persistent |precision )?((?!damage\b)[a-z]+)?|(die) of damage)`;
+export function readStrikeBuff(item) {
+    if (item?.system?.actionType?.value !== "action") return null;
+    const html = String(item?.system?.description?.value ?? "");
+    const formulas = [];
+    // ("@Damage[2d8[sonic]]" and "[[/r 1d4[slashing]]]" as numbered marks; links as their labels.)
+    const marked = html
+        .replace(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g, (_all, raw) => `\u0001${formulas.push(String(raw).split("|")[0]) - 1}\u0001`)
+        .replace(/\[\[\/r ((?:[^[\]]|\[[^\]]*\])+?)(?: #[^\]]*)?\]\](?:\{[^}]*\})?/g, (_all, raw) => `\u0001${formulas.push(raw.trim()) - 1}\u0001`)
+        .replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
+    const text = htmlToPlainText(marked).replace(/\s+/g, " ").trim();
+    if (/^(?:Trigger|Requirements?)\b|\b(?:Trigger|Requirements?) [A-Z]/.test(text)) return null;
+    const body = text.replace(/^Frequency [^.]*?(?=\s+Effect\b)\s+Effect\s+/, "").replace(/^Effect\s+/, "");
+    const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/).map((sentence) => sentence.trim()).filter(Boolean);
+    const lead = String.raw`(Until the (start|end) of ${BUFF_OWNER.replace("(?:all )?", "")}(next )?turn|For the next minute|For (\d+|one) minutes?|While in this stance|While in (?:its|their|his|her) [\w' -]+? form)`;
+    const key = new RegExp(String.raw`^(?:${lead},? )?${BUFF_OWNER}(?:(melee|ranged) )?(?:([\w' -]+?) )??Strikes? deals? an? (?:additional|extra) ${BUFF_PART}(?: damage)?(?:,? (?:and|plus) (?:an? (?:additional|extra) )?${BUFF_PART}(?: damage)?)?((?: on a successful attack, or [^.]+? on a critical (?:hit|success))?(?:,? and gains? the [a-z]+ trait)?(?:, and [^.]+)?)\.$`, "i");
+    let found = null;
+    let index = -1;
+    for (const [at, sentence] of sentences.entries()) {
+        const match = key.exec(sentence);
+        if (match) {
+            found = match;
+            index = at;
+            break;
+        }
+    }
+    if (!found) return null;
+    const [, , edge, next, minutes] = found;
+    const leadText = found[1] ?? "";
+    // Its parts, "2d8[sonic]", "2[acid]", "die".
+    const part = (offset) => {
+        const [mark, dice, diceKind, diceType, flat, flatKind, flatType, die] = found.slice(offset, offset + 8);
+        if (mark !== undefined) {
+            const formula = formulas[Number(mark)];
+            return /\[[a-z,]+\]$/i.test(formula ?? "") ? formula.replace(/^\((.*)\)(\[[^\]]+\])$/, "$1$2") : null;
+        }
+        // ("2d8 precision damage": precision; "2d6 damage": untyped.)
+        const typed = (kind, type) => (type ? `${kind ? `${kind.trim()},` : ""}${type.toLowerCase()}` : kind ? kind.trim() : "untyped");
+        if (dice) return `${dice.replace(/\s+/g, "")}[${typed(diceKind, diceType)}]`;
+        if (flat) return `${flat}[${typed(flatKind, flatType)}]`;
+        return die ? "die" : null;
+    };
+    // (The groups: 1–4 the time, 5 melee or ranged, 6 the Strike's name, 7–14 and 15–22 the two parts, 23 the rest.)
+    const said = (offset) => found.slice(offset, offset + 8).some((group) => group !== undefined);
+    const damage = [part(7), part(15)].filter(Boolean);
+    if (!damage.length || (said(15) && damage.length < 2)) return null;
+    const rest = found[23] ?? "";
+    // The time: when the lead names none, a sentence before it does ("transforms into a being of pure light for 1 minute").
+    let duration;
+    let rounds;
+    let stance = false;
+    if (/^Until/i.test(leadText)) {
+        if (/start/i.test(edge)) [duration, rounds] = [{ value: 1, unit: "rounds", expiry: "turn-start" }, 1];
+        else if (next) [duration, rounds] = [{ value: 1, unit: "rounds", expiry: "turn-end" }, 2];
+        else [duration, rounds] = [{ value: 0, unit: "rounds", expiry: "turn-end" }, 0];
+    } else if (/^For/i.test(leadText)) {
+        const count = /next minute/i.test(leadText) ? 1 : Number(minutes) || 1;
+        [duration, rounds] = [{ value: count, unit: "minutes", expiry: null }, 10 * count];
+    } else if (/stance/i.test(leadText)) {
+        [duration, rounds, stance] = [{ value: -1, unit: "unlimited", expiry: null }, null, true];
+    } else {
+        const said = sentences.slice(0, index).join(" ");
+        const count = /\bfor (\d+|one) minutes?\b/i.exec(said)?.[1];
+        if (!leadText || !count) return null;
+        [duration, rounds] = [{ value: Number(count) || 1, unit: "minutes", expiry: null }, 10 * (Number(count) || 1)];
+    }
+    // Its other sentences: the first one only telling what it does is left out; the rest, and the key sentence's other part, the GM's.
+    const notes = [];
+    for (const [at, sentence] of sentences.entries()) {
+        if (at === index) continue;
+        if (at < index && !/\u0001|\d|\b(?:damage|bonus|penalty|save|check|Hit Points|HP|Strikes?|resistance|weakness|immun\w*)\b/i.test(sentence)) continue;
+        if (/^Effect: /.test(sentence)) continue;
+        notes.push(readableText(sentence.replace(/\u0001(\d+)\u0001/g, (_all, mark) => `@Damage[${formulas[Number(mark)]}]`)));
+    }
+    const other = rest.replace(/^ on a successful attack, or [^.,]+? on a critical (?:hit|success)/i, "").replace(/^,? and gains? the [a-z]+ trait/i, "").replace(/^, and /, "").trim();
+    if (other) notes.unshift(other[0].toUpperCase() + other.slice(1) + ".");
+    const name = found[6] && !/^(?:weapon|unarmed)$/i.test(found[6]) ? found[6].toLowerCase() : null;
+    return {
+        builtin: "self-effect",
+        actions: Number(item.system?.actions?.value) || 1,
+        model: { name: item.name, rounds, modifiers: [], tempHp: 0 },
+        damage,
+        strike: name,
+        melee: /^melee$/i.test(found[5] ?? ""),
+        duration,
+        ...(stance ? { stance: true } : {}),
+        ...(notes.length ? { notes } : {})
+    };
+}
+
 export function compileBuiltin(item, slug) {
     const rules = item?.system?.rules ?? [];
     const fastHealing = rules.find((rule) => rule?.key === "FastHealing");
@@ -574,5 +687,25 @@ export function compileBuiltin(item, slug) {
     const charge = readCharge(text);
     // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
     if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
+    if (readStrikeOnly(text)) return { builtin: "no-effect", strikeOnly: true };
     return null;
+}
+
+// Only a Strike, with what comes with it the simulation doesn't play (2026-10-10, batch 37): "Calmont draws his weapon and attacks
+// with the same motion. He Interacts to draw a weapon, then Strikes with that weapon." (Quick Draw), "… draws an alchemical bomb with
+// an Interact action and throws it as a ranged Strike", "… reloads its sling and makes a sling Strike" (made up), "… makes a boomerang
+// Strike, after which the boomerang returns to its hand", "makes a Strike with his fist and increases his reach by 5 feet for this
+// Strike". Live play: the Strike from the sheet; nothing more to apply. true or false.
+function readStrikeOnly(text) {
+    const sentences = String(text).trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    // (A first sentence that only tells what it does.)
+    if (sentences.length === 2 && !/\b(?:damage|bonus|penalty|save|check|DC|feet|Hit Points|HP|Grab|Prone)\b|\d/.test(sentences[0])) sentences.shift();
+    if (sentences.length !== 1) return false;
+    const [sentence] = sentences;
+    const who = String.raw`^(?:The |An? )?[^.]+?`;
+    const draw = new RegExp(String.raw`${who} (?:Interacts? to draw|draws?) (?:a|an|his|her|its|their) [^,.]+?(?: using the Interact action| with an Interact action)?,? (?:and |then |and then )+(?:Strikes with (?:it|that weapon|the weapon)|throws it as a ranged Strike|makes an? (?:[\w' -]+? )?Strike with it)(?:,? or [^.]+)?\.$`, "i");
+    const reload = new RegExp(String.raw`${who} reloads (?:its|his|her|their) [\w' -]+? and makes an? (?:[\w' -]+? )?Strike\.$`, "i");
+    const returning = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike, after which the [\w' -]+? returns to (?:its|his|her|their|the [\w' -]+?'s) hand\.$`, "i");
+    const reach = new RegExp(String.raw`${who} makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike\.$`, "i");
+    return [draw, reload, returning, reach].some((pattern) => pattern.test(sentence));
 }

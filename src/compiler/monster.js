@@ -13,7 +13,7 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
-import { chargeSentences, compileBuiltin, moveThenStrike, readRage } from "./builtins.js";
+import { chargeSentences, compileBuiltin, moveThenStrike, readRage, readStrikeBuff } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 import { castSpell } from "./casts.js";
@@ -721,10 +721,17 @@ function hitSave(item, text) {
 function openingParts(text) {
     let attack = 0;
     let damage = null;
+    let damageBonus = 0;
+    // (Batch 37: "making one tail Strike", "attempts a ranged Strike with her longbow", "makes a fist strike gaining a +4 status bonus
+    // to the damage roll".)
     let plain = text
         .replace(/^It make an? /, "It makes a ")
-        .replace(/, making an? ((?:[\w' -]+? )?Strike)\b/i, " and makes a $1")
-        .replace(/\b(makes|attempts) an? (?:melee )?Strike with (?:its|his|her|their) ([a-z][\w' -]*?)(?=[.,]| against\b)/i, "$1 a $2 Strike");
+        .replace(/, making (?:an?|one) ((?:[\w' -]+? )?Strike)\b/i, " and makes a $1")
+        .replace(/\b(makes|attempts) an? (?:melee |ranged )?Strike with (?:its|his|her|their) ([a-z][\w' -]*?)(?=[.,]| against\b)/i, "$1 a $2 Strike")
+        .replace(/\b((?:[\w' -]+? )?)strike gaining an? \+(\d+) (?:status|circumstance) bonus to the damage roll(?=\.$)/, (_all, name, value) => {
+            damageBonus += Number(value);
+            return `${name}Strike`;
+        });
     plain = plain.replace(/ with an? [-\u2013\u2212](\d+) circumstance penalty to (?:its |the )?attack roll/i, (_all, value) => {
         attack -= Number(value);
         return "";
@@ -737,7 +744,7 @@ function openingParts(text) {
         damage = hitDamage(tag);
         return "";
     });
-    return { plain, attack, damage };
+    return { plain, attack, damage, damageBonus };
 }
 
 function hitResults(text, activity, item, conditions) {
@@ -825,6 +832,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
         const opening = () => {
             opened = true;
             activity.attackBonus += lead?.attack ?? 0;
+            activity.damageBonus += lead?.damageBonus ?? 0;
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
         if (text === "[once]") activity.oncePerFight = true;
@@ -867,8 +875,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
         else if (hitResults(text, activity, item, conditions)) continue;
         // "The extra damage and frightened value are doubled on a critical hit." (the damage is, as any.)
         else if ((match = /^The (?:extra|additional) damage and (\w+) value are doubled on a critical hit\.$/i.exec(text)) && activity.onHit.conditions.some((entry) => entry.slug === match[1].toLowerCase() && Number.isFinite(entry.value))) activity.onHit.critical = activity.onHit.conditions.map((entry) => (entry.slug === match[1].toLowerCase() && Number.isFinite(entry.value) ? { ...entry, value: entry.value * 2 } : entry));
-        // "This Strike deals an additional 3d6 precision damage." (only a hit deals it).
-        else if ((match = /^(?:This|The) Strike deals an? (?:additional|extra) (.+?) damage\.$/i.exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]));
+        // "This Strike deals an additional 3d6 precision damage." (only a hit deals it). (Batch 37: "1d6 persistent bleed".)
+        else if ((match = /^(?:This|The) Strike deals an? (?:additional|extra) (.+?) damage\.$/i.exec(text)) && (inlineTags(sentence, "Damage").length === 1 || plainDice(match[1]) || hitDamage(match[1]))) activity.onHit.damage.push(inlineTags(sentence, "Damage").length ? readDamage(inlineTags(sentence, "Damage")[0]) : plainDice(match[1]) ?? hitDamage(match[1]));
+        // (Batch 37: "This Strike gains the fatal d12 trait", "… the deadly d4 trait for this attack"; "The Strike deals half damage".)
+        else if ((match = /^(?:This|The) (?:[\w' -]+? )?(?:Strike|strike) gains the (fatal|deadly) d(\d+) trait(?: for this attack)?\.$/i.exec(text))) activity[match[1].toLowerCase()] = Number(match[2]);
+        else if (/^The Strike deals half damage\.$/i.test(text)) activity.halfDamage = true;
         // "This Strike ignores their multiple attack penalty and doesn't count toward that penalty."
         else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
@@ -923,7 +934,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     const rider = activity.onHit;
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap)) return null;
+    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length) return null;
     return activity;
 }
@@ -1477,7 +1488,7 @@ function followUpStrikeText(html) {
         .replace(/^(\s*(?:<p>)?\s*)the\b/, "$1The")
         .replace(/\bmakes (?:a second|another) ((?:[\w' -]+? )?Strike)\b/gi, "makes a $1")
         .replace(/(\bStrike) (?:as|while) (?:it|he|she|they) [^.]*\./g, "$1.")
-        .replace(/ against the same (?:target|creature)\b/gi, "")
+        .replace(/ against the same (?:target|creature)(?: that (?:it|he|she|they) just hit)?\b/gi, "")
         .replace(/, using the previous Strike's multiple attack penalty\./gi, () => {
             previousMap = true;
             return ".";
@@ -1495,7 +1506,7 @@ function followUpStrikeText(html) {
 // Strike"; "X damaged a creature with a jaws Strike on its last action", "hit a creature with a drill Strike with his previous
 // action", "made a successful Strike against a living creature with its touch on its previous action" (made-up names). Not with
 // more it needs (", and the target is adjacent to a wall", "or a Draconic Frenzy …", a size, the weapon's damage type).
-const LAST_ACTION = String.raw`(?:last|previous) action(?: this turn)?`;
+const LAST_ACTION = String.raw`(?:last|previous) (?:action|attack)(?: this turn)?`;
 const STRUCK_ONE = String.raw`(?:the|a|an|its|their|his|her) (?:living )?(?:target|creature|opponent|foe|enemy)(?: creature)?`;
 const HIT_DEGREES = ["success", "criticalSuccess"];
 export function followUpNeed(need) {
@@ -1737,7 +1748,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 

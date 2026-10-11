@@ -17,7 +17,8 @@ export function activityRider(activity, { strikeType = null } = {}) {
     const conditions = (list) => (list ?? []).map((entry) => ({ kind: "condition", slug: entry.slug, value: entry.value ?? null, duration: entry.duration ?? null }));
     const hit = conditions(onHit.conditions);
     const critical = onHit.critical ? conditions(onHit.critical) : hit;
-    const formulas = (onHit.damage ?? []).filter(Boolean).map((formula) => String(formula).replace(/\[strike\]/g, `[${strikeType ?? "untyped"}]`));
+    // (Precision damage too, "4d6[precision]", batch 37: the Strike's type.)
+    const formulas = (onHit.damage ?? []).filter(Boolean).map((formula) => String(formula).replace(/\[strike\]/g, `[${strikeType ?? "untyped"}]`).replace(/\[precision\]/g, `[precision,${strikeType ?? "untyped"}]`));
     const pushOf = (distance) => (Number(distance) > 0 ? { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } : null);
     const push = pushOf(onHit.push);
     const criticalPush = pushOf(onHit.criticalPush) ?? push;

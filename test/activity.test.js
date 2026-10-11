@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { strikeBuffEffect } from "../src/live/buff.js";
 import { CORE_FAMILIES, createRegistry, validateChanges } from "../../pf2e-resolution-core/src/index.js";
 
 const registry = createRegistry();
@@ -137,4 +138,23 @@ test("a follow-up's last Strike: its degree, name, range and listed riders; a hi
     const plan = { resolution: { kind: "check", check: { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } }, outcomes: { criticalSuccess: row("enfeebled", 3), success: row("enfeebled", 2), failure: row("x", 0), criticalFailure: row("x", 0) } } };
     const asHit = followUpAsHit(plan);
     assert.deepEqual([asHit.resolution.check.roll, asHit.resolution.outcomes.success.effects[0].value, asHit.resolution.outcomes.criticalSuccess.effects.length], ["automatic", 2, 0]);
+});
+
+test("more damage on its own Strikes: a PF2e effect with DamageDice and FlatModifier rules, on the Strike it names (2026-10-10, batch 37)", () => {
+    const strikes = [{ name: "Fangs", slug: "fangs", isRanged: false }, { name: "Claw", slug: null, isRanged: false }];
+    const plan = (fields) => ({ builtin: "self-effect", actions: 1, model: { name: "Test Buff", rounds: 1 }, strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, ...fields });
+    const fangs = strikeBuffEffect(plan({ damage: ["2d8[sonic]"], strike: "fangs" }), { name: "Test Buff", strikes });
+    assert.deepEqual([fangs.type, fangs.system.duration, fangs.system.rules], ["effect", { value: 1, unit: "rounds", expiry: "turn-start", sustained: false }, [{ key: "DamageDice", selector: "fangs-damage", diceNumber: 2, dieSize: "d8", damageType: "sonic", label: "Test Buff" }]]);
+    assert.equal(strikeBuffEffect(plan({ damage: ["1d6[fire]"], strike: "claw" }), { name: "x", strikes }).system.rules[0].selector, "claw-damage");
+    assert.equal(strikeBuffEffect(plan({ damage: ["1d6[fire]"], melee: true }), { name: "x", strikes }).system.rules[0].selector, "melee-strike-damage");
+    assert.deepEqual(strikeBuffEffect(plan({ damage: ["1d10[persistent,bleed]", "2[acid]", "2d8[precision]", "die"] }), { name: "x", strikes }).system.rules.map(({ label, ...rule }) => rule), [
+        { key: "DamageDice", selector: "strike-damage", diceNumber: 1, dieSize: "d10", damageType: "bleed", category: "persistent" },
+        { key: "FlatModifier", selector: "strike-damage", value: 2, damageType: "acid" },
+        { key: "DamageDice", selector: "strike-damage", diceNumber: 2, dieSize: "d8", category: "precision" },
+        { key: "DamageDice", selector: "strike-damage", diceNumber: 1 }
+    ]);
+    // (A Strike activity's precision damage takes the Strike's own type.)
+    assert.deepEqual(activityRider({ builtin: "strike-activity", source: { name: "Test Stab" }, onHit: { conditions: [], damage: ["4d6[precision]"] } }, { strikeType: "piercing" }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "4d6[precision,piercing]" }]);
+    // No such Strike: none (the GM's note instead).
+    assert.equal(strikeBuffEffect(plan({ damage: ["1d6[fire]"], strike: "tail" }), { name: "x", strikes }), null);
 });

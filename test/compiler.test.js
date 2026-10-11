@@ -1211,3 +1211,36 @@ test("follow-ups to a Strike: more requirement wordings, results with no roll, a
     const feint = compile("The test duelist's previous action this turn was a Strike that failed or critically failed", "The test duelist Strikes the same target, who is Off-Guard against this attack. On a hit, the test duelist deals 1d6 additional precision damage.");
     assert.deepEqual([feint.offGuard, feint.onHit.damage], [true, ["1d6[precision]"]]);
 });
+
+test("more damage on its own Strikes for a while, plain Strikes, and more charge and Strike activity wordings (2026-10-10, batch 37)", () => {
+    const action = (name, html, actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${html}</p>` } } });
+    const compile = (html, actions = 1, name = "Test Ability") => compileMonsterAbility(action(name, html, actions));
+    // Its Strikes' extra damage: the Strike it names, its melee Strikes, all of them; for its time; other sentences the GM's.
+    const fangs = compile("The test bat hums deep in its throat. Until the start of its next turn, its fangs Strikes deal an additional @Damage[2d8[sonic]] damage. The test bat can't do this while it holds something in its mouth.");
+    assert.deepEqual([fangs.builtin, fangs.damage, fangs.strike, fangs.melee, fangs.duration, fangs.model.rounds, fangs.notes], ["self-effect", ["2d8[sonic]"], "fangs", false, { value: 1, unit: "rounds", expiry: "turn-start" }, 1, ["The test bat can't do this while it holds something in its mouth."]]);
+    const hot = compile("For the next minute, its melee Strikes deal an additional 1d6 fire damage.");
+    assert.deepEqual([hot.damage, hot.strike, hot.melee, hot.duration.unit, hot.model.rounds], [["1d6[fire]"], null, true, "minutes", 10]);
+    const bleed = compile("Until the end of the test lizard's next turn, its claws Strikes deal an additional 1d10 persistent bleed damage.");
+    assert.deepEqual([bleed.damage, bleed.duration, bleed.model.rounds], [["1d10[persistent,bleed]"], { value: 1, unit: "rounds", expiry: "turn-end" }, 2]);
+    const drool = compile("Until the end of its turn, the test hound's jaws Strike deals an additional 2 points of acid damage on a successful attack, or 4 points on a critical success.");
+    assert.deepEqual([drool.damage, drool.duration], [["2[acid]"], { value: 0, unit: "rounds", expiry: "turn-end" }]);
+    const stance = compile("While in this stance, all the test hunter's Strikes deal an additional 2d8 precision damage, and its bow's range increment is 20 feet longer.");
+    assert.deepEqual([stance.damage, stance.stance, stance.model.rounds, stance.notes], [["2d8[precision]"], true, null, ["Its bow's range increment is 20 feet longer."]]);
+    // Not with a requirement, nor only against some creatures.
+    assert.equal(compile("<strong>Requirements</strong> The test mage cast a spell last. <strong>Effect</strong> For the next minute, its melee Strikes deal an additional 1d6 fire damage.")?.builtin, undefined);
+    assert.equal(compile("Until the start of its next turn, the test guide's Strikes deal an extra 1d4 precision damage to that creature.")?.builtin, undefined);
+    // Only a Strike: drawing first, reloading, a returning weapon, a longer reach.
+    for (const text of ["The test rogue draws a dagger and attacks in one motion. The test rogue Interacts to draw a weapon, then Strikes with that weapon.", "The test alchemist draws an alchemical bomb with an Interact action and throws it as a ranged Strike.", "The test slinger reloads its sling and makes a sling Strike.", "The test hunter makes a boomerang Strike, after which the boomerang returns to the test hunter's hand.", "Test Brute makes a Strike with his fist and increases his reach by 5 feet for this Strike."]) assert.deepEqual(compile(text), { builtin: "no-effect", strikeOnly: true }, text);
+    // Charges and Strike activities.
+    assert.deepEqual(compile("The test bear Strides and makes a Strike at the end of that movement. During the Stride, the test bear gains a +10-foot circumstance bonus to its Speed.", 2), { builtin: "charge", actions: 2, strides: 1, strike: null });
+    assert.deepEqual(compile("The test skirmisher Strides or Steps, then Strikes with his hand crossbow."), { builtin: "charge", actions: 1, strides: 1, strike: "hand crossbow" });
+    assert.deepEqual(compile("The test ox Strides twice. If the test ox ends its movement with an enemy within its reach, it makes a horn Strike against that enemy. The strike gains the fatal d12 trait.", 2), { builtin: "charge", actions: 2, strides: 2, strike: "horn", fatal: 12 });
+    assert.deepEqual(compile("The test ray Swims, making one tail Strike at any point along the way. The Strike deals half damage."), { builtin: "charge", actions: 1, strides: 1, strike: "tail", halfDamage: true });
+    const lunge = compile("The test husk Strides twice. If it ends its movement within melee range of an enemy, it makes a leg Strike against that enemy. On a hit, the Strike deals an additional @Damage[1d6[bleed]].", 2);
+    assert.deepEqual([lunge.builtin, lunge.strides, lunge.strike, lunge.onHit.damage], ["strike-activity", 2, "leg", ["1d6[bleed]"]]);
+    const kinetic = compile("The test tanuki makes a fist strike gaining a +4 status bonus to the damage roll.", 2);
+    assert.deepEqual([kinetic.builtin, kinetic.strike, kinetic.damageBonus], ["strike-activity", "fist", 4]);
+    // A follow-up after "last attack was …": a Strike at the same creature.
+    const deepen = compile("<strong>Requirements</strong> Test Duelist's last attack was a successful melee Strike with her rapier</p><hr /><p><strong>Effect</strong> Test Duelist makes a dagger Strike against the same creature that she just hit. This Strike deals an additional 4d6 precision damage.");
+    assert.deepEqual([deepen.builtin, deepen.strike, deepen.after, deepen.onHit.damage], ["strike-activity", "dagger", { melee: true, strike: "rapier", on: ["success", "criticalSuccess"] }, ["4d6[precision]"]]);
+});

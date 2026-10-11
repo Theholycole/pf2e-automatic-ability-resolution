@@ -12,6 +12,7 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { strikeBuffEffect } from "../src/live/buff.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
@@ -185,6 +186,13 @@ async function cardForAbility(message) {
         if (recharge) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula: recharge, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
         return;
     }
+    // More damage on its own Strikes for a while (batch 37, Vocal Warm-Up): an effect on the monster with that damage, for its time;
+    // not when the ability links PF2e's own effect (its card offers that).
+    if (plan?.builtin === "self-effect" && plan.damage?.length && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+        await strikeBuff(item, plan, sourceToken);
+        if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+        return;
+    }
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
@@ -204,6 +212,20 @@ async function cardForAbility(message) {
     }
     // No card to apply: its recharge starts as it's used.
     if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+}
+
+// The effect of a self-buff on its Strikes (batch 37), on the monster the GM used it from; a GM note when it can't be made.
+async function strikeBuff(item, plan, sourceToken) {
+    const actor = sourceToken?.actor ?? item.actor;
+    const strikes = actor.itemTypes.melee.map((melee) => ({ name: melee.name, slug: melee.slug ?? null, isRanged: !!melee.isRanged }));
+    const data = strikeBuffEffect(plan, { name: item.name, img: item.img, strikes, uuid: item.uuid });
+    if (!data) return noteToGM(item.actor, sourceToken, [`${item.name}: add its extra damage to ${plan.strike ? `the ${plan.strike} Strikes` : "the Strikes"} by hand.`]);
+    const combat = game.combat;
+    data.system.start = { value: game.time.worldTime, initiative: combat?.started ? combat.combatant?.initiative ?? null : null };
+    // (Earlier copies of it end.)
+    const old = actor.itemTypes.effect.filter((effect) => effect.flags?.[MODULE_ID]?.strikeBuff && effect.slug === data.system.slug).map((effect) => effect.id);
+    if (old.length) await actor.deleteEmbeddedDocuments("Item", old);
+    await actor.createEmbeddedDocuments("Item", [data]);
 }
 
 // A spell an ability casts, with no rank given: half the creature's level rounded up (as its focus spells and cantrips), not
