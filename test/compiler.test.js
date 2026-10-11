@@ -1408,3 +1408,10 @@ test("Capsize and Drench with their rolls, Impaling Charge, Knocking Sweep (2026
     assert.deepEqual(compileMonsterAbility(item("Knocking Sweep", "<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test adept swings their weapon with a sweeping spin. They attempt separate Athletics checks to [[/act trip]] any number of creatures within their reach. Each attempt counts toward the test adept's multiple attack penalty, but the multiple attack penalty doesn't increase until after they make all the attacks.</p>", 2)),
         { builtin: "skill-sweep", actions: 2, action: "trip", sameMap: true, oncePerTurn: true });
 });
+
+test("Consume Fear: temporary Hit Points as a creature near it loses the Frightened condition (2026-10-11, batch 46)", () => {
+    const item = { type: "action", name: "Consume Fear", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature within 60 feet loses the @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened} condition</p><hr /><p><strong>Effect</strong> The test dragon feasts upon the fear that leaves the triggering creature's body, gaining 6d8 temporary Hit Points that last for 1 minute.</p>" } } };
+    const plan = compileMonsterAbility(item);
+    assert.deepEqual(plan?.trigger, { event: "condition-lost", reaction: true, condition: "frightened", within: 60 });
+    assert.deepEqual([plan?.targeting?.target, plan?.resolution?.outcomes?.success?.effects?.[0]?.kind, plan?.resolution?.outcomes?.success?.effects?.[0]?.formula], ["self", "temp-hp", "6d8"]);
+});

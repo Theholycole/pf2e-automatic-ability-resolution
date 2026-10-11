@@ -1970,6 +1970,9 @@ export function readReactionTrigger(text) {
         return { event: "hit-by", reaction: true, melee, ...(unarmed ? { unarmed: true } : {}), ...(critical ? { critical: true } : {}), ...(damageTypes ? { damageTypes } : {}), ...(distance ? { within: distance } : {}) };
     };
     if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
+    // A creature near it losing a condition (batch 46, Consume Fear): "A creature within 60 feet loses the Frightened condition".
+    const lost = /^(?:An?|Any) creature within (\d+) feet loses the (\w+) condition$/i.exec(trigger);
+    if (lost) return { event: "condition-lost", reaction: true, condition: lost[2].toLowerCase(), within: Number(lost[1]) };
     // "A creature attempts to target the hundun with a mental effect", "… with a mental effect or spell" (batch 17).
     const targeted = targetedWith(trigger);
     if (targeted) return { ...targeted, reaction: true };
@@ -2050,7 +2053,8 @@ function selfCondition(item) {
     const ownTurn = trigger && type === "free" && /^(?:The [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)'s? turn begins\.?$/.test(trigger) ? true : null;
     // (Batch 30: a reaction's trigger the module reads, for temporary Hit Points on itself: "The forest dragon is targeted with a
     // water spell or effect".)
-    const reacting = trigger && !ownTurn && type !== "action" ? readReactionTrigger(trigger) : null;
+    // (The condition marks out of it: "loses the Frightened condition", batch 46.)
+    const reacting = trigger && !ownTurn && type !== "action" ? readReactionTrigger(trigger.replace(/[\u0001\u0002]/g, "")) : null;
     if (trigger && !ownTurn && !reacting) return null;
     const requires = /\bRequirements? (.+?) Effect\b/.exec(plain)?.[1] ?? null;
     const effect = plain.includes("Effect ") ? plain.slice(plain.indexOf("Effect ") + 7) : plain;

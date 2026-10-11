@@ -60,6 +60,10 @@ export function setUpReactions({ compileItem }) {
     Hooks.on("combatStart", (combat) => {
         if (isActiveGM()) serially("initiative", () => onInitiative(combat));
     });
+    // A condition ending on a creature (Consume Fear's "A creature within 60 feet loses the Frightened condition"; batch 46).
+    Hooks.on("deleteItem", (item) => {
+        if (isActiveGM() && item.type === "condition" && item.actor) serially("condition-lost", () => onConditionLost(item));
+    });
     Hooks.on("renderChatMessageHTML", (message, html) => wire(message, html));
     for (const element of document.querySelectorAll("[data-message-id]")) {
         const message = game.messages.get(element.dataset.messageId);
@@ -329,6 +333,21 @@ async function onTurnStart(combat) {
         const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "turn-start" && (!plan.trigger.living || living));
         if (!entry || distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > entry.plan.trigger.within) continue;
         await offer({ kind: "card", item: entry.item, monster, actor, target: token, trigger: `starts its turn within ${entry.plan.trigger.within} feet`, free: !!entry.plan.trigger.free });
+    }
+}
+
+// A creature losing a condition within a monster's distance (Consume Fear, batch 46): the monster's reaction, on itself.
+async function onConditionLost(item) {
+    const slug = item.slug ?? item.system?.slug;
+    const token = item.actor?.token ?? item.actor?.getActiveTokens?.(false, true)?.[0] ?? null;
+    const scene = token?.parent;
+    if (!slug || !scene) return;
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, game.combat)) {
+        if (monster.id === token.id) continue;
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "condition-lost" && plan.trigger.condition === slug);
+        if (!entry || (entry.plan.trigger.within && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > entry.plan.trigger.within)) continue;
+        await offer({ kind: "card", item: entry.item, monster, actor, target: null, trigger: `${token.name} is no longer ${slug}`, free: !!entry.plan.trigger.free });
     }
 }
 

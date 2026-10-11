@@ -856,3 +856,10 @@ Compiler readings into what live play and the simulator already do.
   - **Live play:** Trip's card at the creatures the GM targets, a roll for each ("Separate checks, each at the multiple attack penalty it started with."); with none targeted, a note to target them.
 - **Checked live in pftest** (PFTEST SIM B45 Jackal Guard from Strength of Thousands; deleted afterwards): with no target, the note; at Valeros and Seelah, Trip's card, rolled: Athletics 37 against DC 21 (critical success) and 25 against DC 18 (success); not applied.
 
+## Consume Fear (2026-10-11, batch 46)
+
+- **Consume Fear** (9): "Trigger A creature within 60 feet loses the Frightened condition Effect The dragon feasts upon the fear that leaves the triggering creature's body, gaining 6d8 temporary Hit Points that last for 1 minute." → a new reaction trigger, { event: "condition-lost", condition: "frightened", within: 60 }, with batch 30's temporary Hit Points on itself. (The trigger was hidden from its reader by the marks around a linked condition; they're taken out first now.)
+  - **The simulator** (B76): as a creature's frightened ends at the end of its turn, each monster with the reaction and its reaction free (anyone in the fight from 60 feet) gains the temporary Hit Points.
+  - **Live play:** as a condition item leaves a creature on the scene, a monster in the encounter within the distance gets its reaction offer ("Ezren is no longer frightened"), then the card.
+- **Checked live in pftest** (PFTEST SIM B46 Despair Dragon (Young) from Monster Core 2 in an encounter with Ezren; deleted afterwards): Ezren Frightened 1, then not: the offer; Use it, then Apply: the dragon has 26 temporary Hit Points (4d8) for 1 minute.
+
