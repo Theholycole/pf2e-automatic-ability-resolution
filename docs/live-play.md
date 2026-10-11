@@ -787,3 +787,9 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Hunt Prey: a note to the GM, "Ezren is its prey. The first time it hits its prey each round, it deals 1d8 more precision damage";
   - Hydraulic Deflection: the item's own +1 waited on its switch (a modifier of the same name, which hid the effect's own at first); the effect now turns the switch on: AC 18 → 19.
 
+## Mist Escape, a weapon that appears, unlabeled reactions (2026-10-11, batch 40)
+
+- **Nothing for a fight's numbers** (37): Mist Escape ("Trigger The vampire is reduced to 0 HP. Effect The vampire uses Turn to Mist. They can take move actions to move toward its coffin …": it leaves the fight, which the simulation already counts at 0 Hit Points; the GM plays the mist), Manifest Runelord's Polearm ("causes their runelord's polearm to appear in one of their hands": the simulation has its Strikes ready), Goblin Scuttle written as "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction to Step", and as "An ally ends a move action adjacent to the pirate goblin".
+- **Avenging Bite** (2): "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a jaws Strike against that creature" and "within the reach of": batch 38's reaction Strike to an attack on an ally.
+- Compiler only: the plays and cards are batch 38's; no live check needed.
+

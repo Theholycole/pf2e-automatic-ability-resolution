@@ -1292,3 +1292,12 @@ test("Focus Gaze through the gaze it names, a monster's Hunt Prey, a bonus to it
     assert.deepEqual([flames.model.modifiers[0].value, flames.notes], [2, ["An adjacent creature that hits it takes 1d6 fire damage."]]);
     assert.equal(compileMonsterAbility(item("Test Stance", "<p><strong>Requirements</strong> Test Monk is in Test Stance</p><hr /><p><strong>Effect</strong> Test Monk gains a +2 circumstance bonus to AC until the start of her next turn.</p>"))?.builtin, undefined);
 });
+
+test("Mist Escape, a weapon that appears in its hand, Goblin Scuttle and Avenging Bite with no labels (2026-10-11, batch 40)", () => {
+    const item = (name, html, type) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("Mist Escape", "<p><strong>Trigger</strong> The test vampire is reduced to 0 HP.</p><hr /><p><strong>Effect</strong> The test vampire uses Turn to Mist. It can take move actions to move toward its coffin even though it's at 0 HP.</p>", "free")), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("Test Polearm", "<p><strong>Requirements</strong> The test lord isn't holding its polearm</p><hr /><p><strong>Effect</strong> The test lord causes its polearm to appear in one of its hands.</p>", "action")), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("Goblin Scuttle", "<p>If a goblin ally ends a move action adjacent to the test goblin, the test goblin can use their reaction to Step.</p>", "reaction")), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("Goblin Scuttle", "<p><strong>Trigger</strong> An ally ends a move action adjacent to the test goblin</p><hr /><p><strong>Effect</strong> The test goblin Steps.</p>", "reaction")), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("Avenging Bite", "<p>When a creature within the reach of the test wolf's bite attacks one of its allies, the test wolf can spend its reaction to make a jaws Strike against that creature.</p>", "reaction")), { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: "jaws", penalty: 0, disrupts: false });
+});
