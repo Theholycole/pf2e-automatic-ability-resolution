@@ -13,7 +13,7 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
-import { chargeSentences, compileBuiltin, moveThenStrike } from "./builtins.js";
+import { chargeSentences, compileBuiltin, moveThenStrike, readRage } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 import { castSpell } from "./casts.js";
@@ -1477,7 +1477,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 

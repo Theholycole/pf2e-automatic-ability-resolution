@@ -1114,3 +1114,16 @@ test("Blood Drain and the Drink Blood family (2026-10-10, batch 31)", () => {
     assert.deepEqual([thoughts.resolution.outcomes.success.effects[0].value, thoughts.resolution.outcomes.criticalSuccess.effects[0].value], [1, 2]);
     assert.match(thoughts.resolution.reminders[0], /regains 18 Hit Points \(any excess as temporary Hit Points\), unless \{target\} was already stupefied/);
 });
+
+test("a rage or frenzy on itself, for the simulator (2026-10-10, batch 32)", () => {
+    const action = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const rage = compileMonsterAbility(action("Rage", "<p>The test brute flies into a rage. He gains 6 temporary Hit Points, deals 2 additional damage with melee Strikes, takes a -1 penalty to AC, and can't use other actions with the concentrate trait. This effect lasts for 1 minute.</p><p>@UUID[Compendium.pf2e.feat-effects.Item.z3uyCMBddrPK5umr]{Effect: Rage}</p>"));
+    assert.deepEqual(rage, { builtin: "self-effect", actions: 1, model: { name: "Rage", rounds: 10, modifiers: [{ on: "damage", type: "untyped", value: 2 }, { on: "ac", type: "untyped", value: -1 }], tempHp: 6 }, noConcentrate: true });
+    // "has taken damage": once it's hurt; temporary Hit Points from its level and Constitution.
+    const frenzy = compileMonsterAbility(action("Fanatical Frenzy", "<p><strong>Requirements</strong> The test zealot has taken damage and is neither Fatigued nor already in a frenzy</p><p><strong>Effect</strong> The test zealot flies into a frenzy that lasts 1 minute. While frenzied, it gains a +1 status bonus to attack rolls and a +2 status bonus to damage rolls, but takes a –2 penalty to AC.</p>"));
+    assert.deepEqual([frenzy.whenHurt, frenzy.model.modifiers.map((modifier) => [modifier.on, modifier.value])], [true, [["damage", 2], ["attack", 1], ["ac", -2]]]);
+    const leveled = compileMonsterAbility(action("Rage", "<p><strong>Requirements</strong> The test raider isn't Fatigued or raging</p><p><strong>Effect</strong> The test raider begins raging. It gains a number of temporary Hit Points equal to its level plus its Constitution modifier. While raging, it deals 2 additional damage on melee Strikes.</p>"), { actor: { system: { details: { level: { value: 5 } }, abilities: { con: { mod: 3 } } } } });
+    assert.equal(leveled.model.tempHp, 8);
+    // Not with a requirement it can't check, nor with a trigger.
+    assert.equal(compileMonsterAbility(action("Scent of Blood", "<p><strong>Requirements</strong> A creature within the test beast's scent range is taking bleed damage</p><p><strong>Effect</strong> The test beast flies into a frenzy, gaining 10 temporary HP for 1 minute and a +4 status bonus to damage rolls.</p>"))?.builtin, undefined);
+});

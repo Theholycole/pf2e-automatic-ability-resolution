@@ -683,3 +683,11 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **Checked live in pftest** (a PFTEST SIM Manananggal and Puddles Ghoul, each holding a party-side goblin; deleted afterwards):
   - Blood Drain dealt 14 untyped damage, left the goblin Drained 1, and gave the manananggal 14 temporary Hit Points;
   - Slurp Blood's Athletics 20 against DC 15 dealt 4 piercing, and the ghoul, 1 HP below its maximum, regained 1 HP and gained 2 temporary Hit Points.
+
+## Rages and frenzies, for the simulator (2026-10-10, batch 32)
+
+- **Read now** (23, all PF2e): an action that puts the monster into a rage or frenzy, read as an effect on itself: "Akiros flies into a rage. He gains 6 temporary Hit Points, deals 2 additional damage with melee Strikes, takes a -1 penalty to AC, and can't use other actions with the concentrate trait. This effect lasts for 1 minute", Fanatical Frenzy's "+1 status bonus to attack rolls and a +2 status bonus to damage rolls, but takes a –2 penalty to AC", "a number of temporary Hit Points equal to its level plus its Constitution modifier" (from the creature), "deals an additional 1d4 electricity damage with her weapon Strikes".
+  - A requirement it can check: "isn't Fatigued or raging"; "has taken damage" (Fanatical Frenzy) means once it's hurt.
+  - Not one with another requirement ("A creature within its scent range is taking bleed damage"), a trigger, confusion, a weakness, or allies.
+- **Live play:** unchanged: most link PF2e's own Rage effect, which PF2e's card applies.
+- **The simulator** (B64): a self-effect with those modifiers, temporary Hit Points and extra dice on its melee Strikes, for 1 minute; no concentrate actions while it lasts.
