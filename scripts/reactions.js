@@ -147,6 +147,18 @@ async function onMove(token, movement) {
             await offer({ kind: "card", item: own.item, monster, actor, target: token, trigger: `moved within ${typeof own.plan.trigger.within === "number" ? `${own.plan.trigger.within} feet` : "its reach"}`, free: !!own.plan.trigger.free, note: squares === 1 ? "If this was a Step, it doesn't trigger." : null });
             continue;
         }
+        // Telekinetic Defense, Wing Rebuff (batch 54): a creature coming within its distance (or its Strike's reach), a Strike at it.
+        const approach = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("approach"));
+        if (approach) {
+            const strikes = (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(approach.plan.strike))
+                .map((action) => ({ slug: action.slug, label: action.label, reach: Number(actor.getReach?.({ action: "attack", weapon: action.item })) || 5 }));
+            const radius = approach.plan.within ?? Math.max(5, ...strikes.map((strike) => strike.reach));
+            const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= radius);
+            if (strikes.length && !insides[0] && insides.some(Boolean)) {
+                await offer({ kind: "strike", item: approach.item, monster, actor, target: token, strikes, penalty: approach.plan.penalty ?? 0, trigger: `came within ${radius} feet`, note: approach.plan.disrupts ? "If it Pushes the creature, the move is disrupted." : null });
+                continue;
+            }
+        }
         for (const { item, plan } of reactions) {
             const movesTrigger = plan.builtin === "reactive-strike" || (plan.builtin === "reaction-strike" && plan.triggers?.includes("move"));
             if (!movesTrigger) continue;
@@ -457,6 +469,12 @@ async function onDamaged(actor, amount) {
         }
         if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
         const grid = gridOf(scene);
+        // Wing Thrash (batch 54): an adjacent enemy (the one whose turn it is) that damages it, a Strike back (and one at another).
+        const thrash = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("damaged-adjacent"));
+        if (thrash && isFoe(token, attacker) && distanceFeet(box(token, grid.size), box(attacker, grid.size), grid) <= 5) {
+            const strikes = meleeStrikes(actor, `(${thrash.plan.strike} only)`);
+            if (strikes.length) await offer({ kind: "strike", item: thrash.item, monster: token, actor, target: attacker, strikes, penalty: thrash.plan.penalty ?? 0, trigger: `damaged it (${amount})`, note: thrash.plan.second ? "It can make a second Strike at another adjacent creature." : null });
+        }
         for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
             if (monster.id === token.id || monster.disposition !== token.disposition || !isFoe(monster, attacker)) continue;
             const entry = reactions.find(({ plan }) => plan.builtin === "retributive-strike");

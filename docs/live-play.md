@@ -933,3 +933,14 @@ The user's choice (2026-10-11): a GM button for each way; the simulator picks th
 - **Live play:** a failed save in an encounter: the saver's Cat's Luck ("Reroll, keep the better": PF2e's reroll from the save's message keeping the higher, a use of the day spent) or Golden Luck, or an ally's Word of Wisdom within its distance ("Use it: one degree better": "The save becomes a success: apply that result instead. Not again for 1d4 rounds.").
 - **Checked live in pftest** (PFTEST SIM B53 Catfolk Pouncer from Monster Core and Gold Dragon (Adult) from the Bestiary in an encounter; deleted afterwards): the Pouncer's Reflex save failing DC 60: the offer, the reroll keeping the higher, its use today 1 → 0; the dragon's Fortitude save critically failing DC 80: "The save becomes a failure: apply that result instead. Not again for 1d4 rounds."
 
+## Wing Thrash, Telekinetic Defense, Wing Rebuff (2026-10-11, batch 54)
+
+- **Wing Thrash** (7): "Trigger An adjacent enemy damages the giant bat Effect The bat makes one or two wing Strikes—one against the triggering creature and one against another adjacent creature." (or "each against a different adjacent creature") → a reaction Strike, { triggers: ["damaged-adjacent"], second: true }.
+  - **The simulator** (B81): a melee Strike that damages it, answered with its wing Strike at the attacker, then one at another foe in its Melee.
+  - **Live play:** as damage lands on it while an adjacent foe has the turn, the Strike offer at that foe, "It can make a second Strike at another adjacent creature."
+- **Telekinetic Defense, Wing Rebuff** (11): "Trigger A creature approaches within 10 feet of the poltergeist Effect The poltergeist makes a telekinetic object Strike against the triggering creature.", "A creature moves from beyond the reach of the roc's wing to within the reach of the roc's wing" / "moves into the reach of the frost roc's wing" (… "If the roc Pushes the creature, it disrupts the triggering move action.") → { triggers: ["approach"], within? }.
+  - **The simulator** (B81): a creature engaging it (a Stride into its Melee) is Struck by it.
+  - **Live play:** a token whose move comes from outside its distance (or its Strike's reach) to inside: the Strike offer, ranged ones too ("came within 10 feet").
+- **Not read:** Clawed Feet (only while it's flying).
+- **Checked live in pftest** (PFTEST SIM B54 Giant Bat and Poltergeist from Monster Core, two dummies on the party's side, in an encounter; deleted afterwards): damage on the bat on an adjacent dummy's turn: Wing Thrash's offer with its second-Strike note; a dummy walking within 10 feet of the poltergeist: Telekinetic Defense's offer, its ranged Strike rolled from it.
+
