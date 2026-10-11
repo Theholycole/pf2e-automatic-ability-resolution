@@ -63,10 +63,14 @@ export function hitSetsOff(trigger, { outcome, ranged = false, unarmed = false, 
 
 // Its own Strike that sets off a passive or a reaction (batch 18, 19): the degree, the Strike it names, the kind of weapon
 // ("with a firearm", "with an unarmed attack", "a brawling weapon", "one of its melee Strikes"). options: the attack roll's.
-export function ownStrikeSetsOff(trigger, { outcome, strikeName = "", options = [] }) {
+// (Batch 69: a target with a condition, "hits a Slowed creature" — conditions: the target's condition slugs, or the roll's
+// "target:condition:…" options; "… on its turn" — ownTurn: false when it isn't.)
+export function ownStrikeSetsOff(trigger, { outcome, strikeName = "", options = [], conditions = [], ownTurn = null }) {
     if (trigger?.event !== "own-strike" || !(trigger.on ?? []).includes(outcome)) return false;
     const name = String(strikeName).toLowerCase();
     if (trigger.strike && !(name.includes(trigger.strike) || trigger.strike.includes(name))) return false;
+    if (trigger.condition && !(options.includes(`target:condition:${trigger.condition}`) || conditions.includes(trigger.condition))) return false;
+    if (trigger.ownTurn && ownTurn === false) return false;
     const unarmed = options.includes("item:category:unarmed") || options.includes("item:trait:unarmed");
     switch (trigger.weapon) {
         case "firearm": return options.includes("item:group:firearm") || /\b(?:pistol|musket|rifle|arquebus|blunderbuss|pepperbox|firearm|gun)\b/i.test(name);

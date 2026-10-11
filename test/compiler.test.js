@@ -1725,3 +1725,40 @@ test("Reactive Strike's kin in its own words: a Strike, a Trip or a Grapple at a
         assert.deepEqual([plan?.trigger?.event, plan?.resolution?.check?.statistic, plan?.targeting?.target], ["provoke", skill, "the attacker"], trigger);
     }
 });
+
+test("its own hit, or a foe's, that brings a save; on a creature with a condition, on its turn, with a kind of weapon (2026-10-11, batch 69)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const reaction = (trigger, effect, type = "reaction") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } });
+    const compile = (trigger, effect, type) => compileMonsterAbility(reaction(trigger, effect, type), { basicActions });
+    const slowed = "@UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed}";
+    // A save after its own hit: on the creature it hit; "a Slowed creature" — the condition it needs.
+    let plan = compile(`The test golem hits a ${slowed} creature.`, "The creature must succeed at a @Check[fortitude|dc:30] save or become @UUID[Compendium.pf2e.conditionitems.Item.6uEgoh53GbXuHpTF]{Paralyzed} for 1 round.");
+    assert.deepEqual([plan?.trigger, plan?.targeting?.target, plan?.resolution?.outcomes?.failure?.effects?.[0]?.slug], [{ event: "own-strike", reaction: true, on: ["success", "criticalSuccess"], strike: null, condition: "slowed" }, "the creature the Strike hits", "paralyzed"]);
+    // "… on its turn", and persistent damage on a failure.
+    plan = compile("The test fowl hits a target with its peck Strike on its turn", "The target must attempt a @Check[reflex|dc:16] save or take @Damage[1d4[persistent,fire]] damage.");
+    assert.deepEqual([plan?.trigger?.strike, plan?.trigger?.ownTurn, plan?.resolution?.outcomes?.failure?.damage?.formulas], ["peck", true, [{ formula: "1d4[persistent,fire]" }]]);
+    // "With a Strike" is any Strike; "with a melee Strike", "with an unarmed Strike" its kind of weapon.
+    assert.equal(compile("The test knight hits a foe with a Strike.", "The creature struck must succeed at a @Check[will|dc:17] save or be Stunned 1.")?.trigger?.strike, null);
+    plan = compile("Test Vinn critically hits a foe with an unarmed Strike", "The creature struck must succeed at a @Check[will|dc:17] save or be Stunned 1.");
+    assert.deepEqual([plan?.trigger?.on, plan?.trigger?.strike, plan?.trigger?.weapon], [["criticalSuccess"], null, "unarmed"]);
+    // "(Enfeebled 2 if it critically fails)": the critical failure's own.
+    plan = compile("Test Duelist critically hits a target with his rapier", "The target must succeed at a @Check[will|dc:29] save or become @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (@UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 2} if it critically fails).");
+    assert.deepEqual([plan?.trigger?.strike, plan?.resolution?.outcomes?.failure?.effects?.[0]?.value, plan?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], ["rapier", 1, 2]);
+    // A foe's hit on it that brings a save on the attacker ("An adjacent creature damages the test ooze with a melee Strike").
+    plan = compile("An adjacent creature damages the test ooze with a melee Strike", "Some of the ooze gushes out under the triggering creature's feet. They must succeed at a @Check[reflex|dc:15] save or fall @UUID[Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60]{Prone}.");
+    assert.deepEqual([plan?.trigger?.event, plan?.targeting?.target, plan?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["hit-by", "the attacker", "prone"]);
+    // Not a save only a critical hit brings after a choice on any hit: the GM's, as before.
+    plan = compile("Test Rogue's Strike hits an Off-Guard creature and deals damage.", "The target becomes Enfeebled 1 or takes a -10-foot status penalty to its Speeds, as chosen by Test Rogue. On a critical hit, the target must also attempt a @Check[fortitude|dc:34] save.");
+    assert.notEqual(plan?.trigger?.event, "own-strike");
+    // Demoralize after a hit, the downed target's alternative and the language rule for the GM.
+    plan = compile("Test Head-Taker hits a creature with a melee Strike", "Test Head-Taker makes an Intimidate check to [[/act demoralize]] the target creature. If the target creature was reduced to 0 Hit Points by the triggering Strike, Test Head-Taker can instead Demoralize all opponents within 30 feet by comparing the result of his Intimidation check to each creature's Will DC. Test Head-Taker doesn't take a penalty to these Intimidation checks for not speaking a target's language.", "free");
+    assert.deepEqual([plan?.trigger?.event, plan?.trigger?.weapon, plan?.trigger?.free, plan?.resolution?.check?.statistic, plan?.resolution?.reminders?.length], ["own-strike", "melee", true, "intimidation", 2]);
+    plan = compile("The test vanguard critically hits a creature with an alchemical grenade Strike", "The test vanguard attempts to [[/act demoralize]] the creature with a mere look.");
+    assert.deepEqual([plan?.trigger?.strike, plan?.resolution?.check?.statistic], ["alchemical grenade", "intimidation"]);
+    // Extra damage on the creature it hit, no roll; what only tells it dropped.
+    plan = compile("The test elk hits a creature with an antler Strike", "The test elk snarls, dealing an additional @Damage[1d8[sonic]] damage to the creature struck. This is in addition to the normal sonic damage from the antler Strike.");
+    assert.deepEqual([plan?.trigger?.strike, plan?.resolution?.check?.roll, plan?.resolution?.sharedDamage?.components?.[0]?.formula, plan?.resolution?.outcomes?.success?.manualInstructions], ["antler", "automatic", "1d8[sonic]", undefined]);
+    // A held creature's suffering and its way out, for the GM on the failures.
+    plan = compile("The test maw hits a creature with a jaws Strike", "The test maw bites down; the target must succeed at a @Check[reflex|dc:34] save or be @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized}. While immobilized, the victim takes @Damage[3d8[persistent,bleed]] damage. The creature is immobilized until the test maw ends the effect as a free action or the target succeeds at a DC 38 check to [[/act escape dc=38]].", "free");
+    assert.deepEqual(plan?.resolution?.outcomes?.failure?.manualInstructions, ["{target}: While immobilized, the victim takes 3d8 persistent bleed damage.", "{target}: The creature is immobilized until the test maw ends the effect as a free action or the target succeeds at a DC 38 check to Escape."]);
+});

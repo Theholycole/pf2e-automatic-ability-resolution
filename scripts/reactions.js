@@ -409,7 +409,8 @@ async function ownStrike(message, context, scene, combat, token) {
     for (const { item, plan } of mine.reactions) {
         const trigger = plan.trigger;
         if (!trigger?.reaction || trigger.event !== "own-strike" || !trigger.on?.includes(context.outcome)) continue;
-        if (!ownStrikeSetsOff(trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [] }) || !fitsSize(target.actor.size, trigger.maxSize)) continue;
+        const conditions = [...(target.actor.conditions ?? [])].map((condition) => condition.slug);
+        if (!ownStrikeSetsOff(trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [], conditions, ownTurn: combat?.combatant ? combat.combatant.tokenId === mine.token.id : null }) || !fitsSize(target.actor.size, trigger.maxSize)) continue;
         return offer({ kind: "card", item, monster: mine.token, actor: mine.actor, target, trigger: `took ${degreeWords(context.outcome)} from ${strike.name}`, free: !!trigger.free });
     }
 }

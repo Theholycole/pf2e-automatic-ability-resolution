@@ -404,7 +404,7 @@ async function cardsForRiders(message) {
         await ready;
         for (const item of actor.itemTypes.action) {
             const plan = compile(item);
-            if (plan?.trigger?.reaction || !ownStrikeSetsOff(plan?.trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [] }) || !plan.resolution || !cardCheck(plan)) continue;
+            if (plan?.trigger?.reaction || !ownStrikeSetsOff(plan?.trigger, { outcome: context.outcome, strikeName: strike.name, options: context.options ?? [], conditions: [...(target.actor.conditions ?? [])].map((condition) => condition.slug) }) || !plan.resolution || !cardCheck(plan)) continue;
             await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: "free" } });
         }
     }

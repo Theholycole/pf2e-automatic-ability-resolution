@@ -512,12 +512,13 @@ function unlessClause(sentence) {
     return match ? `${/^takes?$/i.test(match[1]) ? "takes" : "becomes"} ${match[2]}${/^\s*\(/.test(match[3]) ? ` ${match[3].trim()}` : ""}` : null;
 }
 
-function saveOrOutcomes(html, components, { afterHit = false, riders = false, names = [] } = {}) {
+function saveOrOutcomes(html, components, { afterHit = false, riders = false, triggered = false, names = [] } = {}) {
     // (Line breaks inside a paragraph read as spaces.)
     const sentences = String(html).replace(/<\/?p[^>]*>/gi, " ").replace(/\s+/g, " ").split(/(?<=\.)\s+(?=[A-Z@<])/);
     const index = sentences.findIndex((sentence) => /@Check\[(?:type:)?(?:fortitude|reflex|will)/i.test(sentence));
     if (index < 0) return null;
-    const upTo = htmlToPlainText(sentences.slice(0, index + 1).join(" "));
+    // (A reaction set off by a hit, its own or a foe's, reads from its Effect on: the hit is its trigger's; batch 69.)
+    const upTo = htmlToPlainText(sentences.slice(0, index + 1).join(" ")).replace(triggered ? /^[\s\S]*?\bEffect\b/ : /^(?!)/, "");
     // A save that follows a Strike's hit ("On a hit, …", "struck by this attack") or a death ("When the dancer dies"): not an action of its own.
     if (!afterHit && !riders && /\bStrike\b|\bOn a (?:hit|success)\b|\bstruck by\b|\bhits\b/i.test(upTo)) return null;
     if (/\bWhen (?:a creature (?:slays|kills)|(?:the|this|a|an) [\w' -]+? (?:dies|is (?:killed|destroyed|slain))|killed)\b/i.test(upTo)) return null;
@@ -580,7 +581,8 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, na
     // Tags inside the brackets ("(@Damage[(6d6+18)[piercing]] damage on a critical failure)") are read whole; what
     // follows a semicolon in them ("…on a critical failure; creatures in the hall gain +2 …)") isn't the critical's.
     const TAGGED = String.raw`(?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^();@])`;
-    const replaced = new RegExp(String.raw`\((?:or )?(${TAGGED}+?) on (?:a )?critical failure(?:;[^()]*)?\)`, "i").exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
+    // (Batch 69: also "(Enfeebled 2 if it critically fails)".)
+    const replaced = new RegExp(String.raw`\((?:or )?(${TAGGED}+?) (?:on (?:a )?critical failure|if (?:it|they|the (?:creature|target)) critically fails?)(?:;[^()]*)?\)`, "i").exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
     const added = new RegExp(String.raw`\(on (?:a )?critical failure,? (${TAGGED}+?)\)`, "i").exec(failure);
     const bracket = added ? { text: added[1], adds: true } : replaced ? { text: replaced[1], adds: false } : null;
     if (added) failure = failure.replace(added[0], "");
@@ -1038,6 +1040,14 @@ function basicSaveDamage(html) {
     return tags ? tags.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null })) : null;
 }
 
+// A reaction or free action whose trigger reads (batch 69).
+function readsTrigger(item) {
+    if (!["reaction", "free"].includes(item.system?.actionType?.value)) return false;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const text = /\bTrigger\s+(.+?)\s*(?:\bEffect\b|\bRequirements?\b|\bFrequency\b|$)/s.exec(plain)?.[1];
+    return Boolean(text && /\bEffect\b/.test(plain) && readReactionTrigger(text));
+}
+
 function inlineSave(item, actor = null, { afterHit = false } = {}) {
     const html = item.system?.description?.value ?? "";
     const checks = inlineTags(html, "Check").map(readCheck).filter((check) => check.save && check.dc);
@@ -1116,8 +1126,12 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
             outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects], ...(own.forcedMovement ? { forcedMovement: own.forcedMovement } : {}) };
         }
     } else {
-        outcomes = saveOrOutcomes(html, components, { names: ownNames(actor ?? item.actor ?? item.parent), afterHit });
+        outcomes = saveOrOutcomes(html, components, { names: ownNames(actor ?? item.actor ?? item.parent), afterHit, triggered: readsTrigger(item) });
         if (!outcomes) return null;
+        // (Batch 69: what a held creature suffers and how it gets free, "While immobilized, the victim takes 3d8 persistent bleed
+        // damage …", "The creature is immobilized until … the target succeeds at a DC 38 check to Escape": the GM's, on the failures.)
+        const held = sentencesOf(String(html).replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).filter((sentence) => /^(?:While (?:immobilized|grabbed|restrained),|The (?:creature|target|victim) is (?:immobilized|grabbed|restrained) until\b)/i.test(htmlToPlainText(sentence.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).trim()));
+        if (held.length) for (const degree of ["failure", "criticalFailure"]) if (outcomes[degree]?.effects?.some((effect) => ["immobilized", "grabbed", "restrained"].includes(effect.slug))) outcomes[degree].manualInstructions = [...(outcomes[degree].manualInstructions ?? []), ...held.map((sentence) => `{target}: ${readableText(sentence)}`)];
     }
     const plain = htmlToPlainText(html);
     const passive = item.system?.actionType?.value === "passive";
@@ -1181,9 +1195,12 @@ function automaticEffect(item, actor = null, { rider = false } = {}) {
         const takes = AUTO_SUBJECT.test(plain) && /\btakes? @D(?: damage)?\b/i.test(plain);
         // (Also "… sucks blood from that target, dealing 2d4 damage".)
         // (Batch 65: "The lizard's jaws deal 1d6 piercing damage and 1d6 acid damage to the triggering creature".)
-        const deals = /\bdeal(?:s|ing)? @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim|triggering creature)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain));
+        // (Batch 69: "dealing an additional 1d8 sonic damage to the creature struck".)
+        const deals = /\b(?:deal(?:s|ing)?|dealing an (?:additional|extra)) @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim|triggering creature)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain));
         const conditions = readConditions(sentence).filter((entry) => entry.recipient !== "self");
         const is = (AUTO_SUBJECT.test(plain) || deals) && conditions.length > 0;
+        // (What it only tells: "This is in addition to the normal sonic damage from the antler Strike".)
+        if (first >= 0 && /^This is in addition to the (?:normal |regular |usual )?(?:\w+ )?damage (?:from|of|dealt by) (?:the|its) [\w' -]+?(?: Strike)?\.$/i.test(plain)) continue;
         if (!takes && !deals && !is) {
             // Damage it doesn't read ("deals 3d6 spirit or 3d6 void damage to the triggering enemy"): not one reading.
             // (Not a condition's damage, "If the attack misses, … takes …", nor a threshold, "a Strike that deals at least @D damage".)
@@ -1891,11 +1908,17 @@ export function followUpSkill(item, html, basicActions) {
     const reminders = [];
     for (const sentence of sentences) {
         let match;
-        if (!slug && (match = /^(?:The )?[\w' -]+? (?:[a-z]+s [^.,]*? and )?attempts to (Disarm|Reposition|Shove|Trip|Grapple|Demoralize) (?:the (?:creature|target|foe)(?: (?:they|it|he|she) hit)?(?: using (?:their|its|his|her) [\w' -]+?'s reach)?|it|an object the creature (?:they|it|he|she) hit is holding|the target of (?:their|its|his|her) (?:[\w' -]+? )?Strike(?: or Disarm)?|the creature (?:they|it|he|she) struck(?: or disarmed)?)(?: with a sudden [a-z]+)?(?:,? even if (?:the [\w' -]+?|it|they) (?:doesn't|does not) have a free hand)?\.$/i.exec(sentence))) slug = match[1].toLowerCase();
+        // (Batch 69: "makes an Intimidate check to Demoralize the target creature", "attempts an Athletics check to Grapple the target",
+        // "… the creature with a mere look".)
+        if (!slug && (match = /^(?:The )?[\w' -]+? (?:[a-z]+s [^.,]*? and )?(?:attempts to|(?:makes|attempts) an? (?:Intimidat(?:e|ion)|Athletics) check to) (Disarm|Reposition|Shove|Trip|Grapple|Demoralize) (?:the (?:target creature|creature|target|foe)(?: (?:they|it|he|she) hit)?(?: using (?:their|its|his|her) [\w' -]+?'s reach)?|it|an object the creature (?:they|it|he|she) hit is holding|the target of (?:their|its|his|her) (?:[\w' -]+? )?Strike(?: or Disarm)?|the creature (?:they|it|he|she) struck(?: or disarmed)?)(?: with a (?:sudden|mere) [a-z]+)?(?:,? even if (?:the [\w' -]+?|it|they) (?:doesn't|does not) have a free hand)?\.$/i.exec(sentence))) slug = match[1].toLowerCase();
         else if (slug && (match = /^(?:They|It|He|She) gains? a \+(\d+) (status|circumstance) bonus (?:on|to) the (?:Athletics|Intimidation) check\.$/i.exec(sentence))) bonus = { value: Number(match[1]), type: match[2].toLowerCase() };
         else if (slug && /^This attempt (?:neither applies nor counts toward|doesn't (?:apply|count toward)|does not (?:apply|count toward)) (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.$/i.test(sentence)) noMap = true;
         // (What follows the move, "If the target ends its movement adjacent to an obstacle …": the GM's.)
         else if (slug && /^If the target ends its movement\b/i.test(sentence)) reminders.push(readableText(sentence).replace(/\bthe target\b/gi, "{target}"));
+        // (Batch 69: a Demoralize after a hit that downed its target, "If the target creature was reduced to 0 Hit Points by the
+        // triggering Strike, … can instead Demoralize all opponents within 30 feet …", and "… doesn't take a penalty to these
+        // Intimidation checks for not speaking a target's language": the GM's.)
+        else if (slug === "demoralize" && (/^If the target(?: creature)? was reduced to 0 Hit Points by the triggering Strike, [^.]*? can instead (?:attempt to )?Demoralize all (?:opponents|enemies|foes) within \d+ feet\b[^.]*\.$/i.test(sentence) || /^(?:The )?[\w' -]+? (?:doesn't|does not) take a penalty to (?:these|this|the) Intimidation checks? for not speaking (?:a|the) target's language\.$/i.test(sentence))) reminders.push(readableText(sentence));
         else return null;
     }
     const basic = slug && FOLLOW_SKILLS.includes(slug) ? basicActions[slug] : null;
@@ -2222,6 +2245,9 @@ const SELF = String.raw`(?:[Tt]he [\w' -]+?|it|him|her|them|[A-Z][\w'-]+(?: [A-Z
 const DAMAGE_WORDS = /\b(bludgeoning|piercing|slashing|physical|fire|cold|acid|electricity|sonic|poison|mental|force|vitality|void|spirit|bleed)\b/gi;
 const ATTACKER = /\b(?:attacker|assailant|tormentor|triggering|creature (?:who|that) (?:dealt|made|hit|damaged|attacked)|that creature)\b/i;
 
+// The conditions a monster's hit may need on its target (batch 69: "hits a Slowed creature", "hits an off-guard creature").
+const OWN_HIT_CONDITIONS = "Slowed|[Oo]ff-[Gg]uard|Prone|Frightened|Grabbed|Restrained|Immobilized|Paralyzed|Stunned|Blinded|Dazzled|Sickened|Fatigued|Enfeebled|Clumsy|Drained|Stupefied|Fascinated|Confused";
+
 export function readReactionTrigger(text) {
     // Batch 22: Reactive Strike's triggers, with results of its own (on the whole text: its ", or …" are its triggers).
     const provoked = provokeTrigger(String(text ?? "").trim().replace(/[.;]\s*$/, ""));
@@ -2262,10 +2288,15 @@ export function readReactionTrigger(text) {
     // hits with a beak Strike", "Ingnovim damages a creature with a syringe Strike" (not on only some creatures: "a holy
     // creature", "an off-guard creature").
     // (Batch 44, Unnerving Prowess: "Dura critically succeeds at a Strike or Disarm with her Aldori dueling sword", its Strike's.)
-    let own = new RegExp(String.raw`^${SELF} (critically hits|critically succeeds at an attack roll against|critically succeeds at a Strike(?: or Disarm)?|hits|damages|deals damage to)(?: (?:an?|the) (?:((?:Tiny|Small|Medium|Large|Huge) or smaller) )?(?:creature|foe|enemy|target))?(?: with (?:its|his|her|their|an?) ([\w' -]+?)(?: Strike)?)?(?: and deals damage)?$`).exec(trigger);
+    // (Batch 69: on a creature with a condition, "The stone golem hits a Slowed creature" — { condition }; "with a Strike", "with a melee
+    // Strike", "with an unarmed Strike" — any Strike, or its kind of weapon; "… on its turn" — { ownTurn }.)
+    const turn = / on (?:its|his|her|their) (?:own )?turn$/i.test(trigger);
+    let own = new RegExp(String.raw`^${SELF} (critically hits|critically succeeds at an attack roll against|critically succeeds at a Strike(?: or Disarm)?|hits|damages|deals damage to)(?: (?:an?|the) (?:((?:Tiny|Small|Medium|Large|Huge) or smaller) )?(?:(${OWN_HIT_CONDITIONS}) )?(?:creature|foe|enemy|target))?(?: with (?:its|his|her|their|an?) ([\w' -]+?)(?: Strike)?)?(?: and deals damage)?$`).exec(trigger.replace(/ on (?:its|his|her|their) (?:own )?turn$/i, ""));
     if (own) {
         const critical = /^critically/i.test(own[1]);
-        return { event: "own-strike", reaction: true, on: critical ? ["criticalSuccess"] : ["success", "criticalSuccess"], strike: own[3] ? own[3].toLowerCase() : null, ...(own[2] ? { maxSize: own[2].split(" ")[0].toLowerCase() } : {}) };
+        const named = own[4] ? own[4].toLowerCase() : null;
+        const kind = named && /^(?:strike|attack|weapon|weapon strike)$/.test(named) ? "any" : named && /^melee(?: weapon)?(?: strike| attack)?$/.test(named) ? "melee" : named && /^(?:melee )?unarmed(?: strike| attack)?$/.test(named) ? "unarmed" : null;
+        return { event: "own-strike", reaction: true, on: critical ? ["criticalSuccess"] : ["success", "criticalSuccess"], strike: kind ? null : named, ...(kind && kind !== "any" ? { weapon: kind } : {}), ...(own[2] ? { maxSize: own[2].split(" ")[0].toLowerCase() } : {}), ...(own[3] ? { condition: own[3].toLowerCase() } : {}), ...(turn ? { ownTurn: true } : {}) };
     }
     // Attacked, before the roll: "A hostile creature targets the jinxer with a melee Strike", "A creature Chafkhem can see makes a
     // melee Strike against Chafkhem", "Adma is targeted with a Strike by a creature within 30 feet".
@@ -2640,6 +2671,9 @@ function reactionTrigger(item, plan) {
     if (!read) return null;
     const trigger = type === "free" ? { ...read, reaction: true, free: true } : read;
     const effect = plain.split(/\bEffect\b/).slice(1).join(" ");
+    // (Batch 69: not a save that only a critical hit brings, after a choice on any hit — "On a critical hit, the target must also
+    // attempt a … save", Critical Debilitating Strike: the GM's, as before.)
+    if (trigger.event === "own-strike" && trigger.on.includes("success") && /\bOn a critical hit\b/i.test(effect)) return null;
     // Not a lasting area it leaves ("… creating an aura of difficult terrain …; a creature who starts their turn in the area takes …").
     if (trigger.event !== "turn-start" && /\b(?:starts?|begins?|ends?) (?:its|their|his|her) turn\b/i.test(effect)) return null;
     // Its targets: the attacker when it names it, or when "the creature" is the first it names ("The dragon's blood sprays on

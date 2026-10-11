@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
 
 test("which Strike a reaction allows", () => {
     assert.equal(onlyStrike("Reactive Strike (Tail Only)"), "tail");
@@ -85,4 +85,23 @@ test("the Ferocity offer names how many Hit Points it stays at (2026-10-11, batc
     assert.match(offerHTML(state), />Stay at 1 HP</);
     assert.match(offerHTML({ ...state, survive: { hp: "half", wounded: true } }), />Stay at half its HP</);
     assert.match(offerHTML({ ...state, survive: { hp: 25, wounded: false } }), />Stay at 25 HP</);
+});
+
+test("its own hit sets off a reaction only on a creature with the condition it names, and on its turn when it says so (2026-10-11, batch 69)", () => {
+    const slowed = { event: "own-strike", on: ["success", "criticalSuccess"], strike: null, condition: "slowed" };
+    assert.equal(ownStrikeSetsOff(slowed, { outcome: "success", strikeName: "Fist" }), false);
+    assert.equal(ownStrikeSetsOff(slowed, { outcome: "success", strikeName: "Fist", conditions: ["slowed"] }), true);
+    // Off-guard from flanking is the roll's option, not a condition the target has.
+    const offGuard = { ...slowed, condition: "off-guard" };
+    assert.equal(ownStrikeSetsOff(offGuard, { outcome: "success", strikeName: "Dagger", options: ["target:condition:off-guard"] }), true);
+    assert.equal(ownStrikeSetsOff(offGuard, { outcome: "success", strikeName: "Dagger", options: [] }), false);
+    // "… on its turn": not on another's; out of combat, the GM's.
+    const turn = { event: "own-strike", on: ["success", "criticalSuccess"], strike: "peck", ownTurn: true };
+    assert.equal(ownStrikeSetsOff(turn, { outcome: "success", strikeName: "Peck", ownTurn: false }), false);
+    assert.equal(ownStrikeSetsOff(turn, { outcome: "success", strikeName: "Peck", ownTurn: true }), true);
+    assert.equal(ownStrikeSetsOff(turn, { outcome: "success", strikeName: "Peck" }), true);
+    // "With a melee Strike": not a ranged one.
+    const melee = { event: "own-strike", on: ["success", "criticalSuccess"], strike: null, weapon: "melee" };
+    assert.equal(ownStrikeSetsOff(melee, { outcome: "success", strikeName: "Longbow", options: ["item:ranged"] }), false);
+    assert.equal(ownStrikeSetsOff(melee, { outcome: "success", strikeName: "Glaive", options: [] }), true);
 });
