@@ -1849,3 +1849,20 @@ test("plain double moves, Speed Surge's kin, a final Strike, Raise a Shield unde
     assert.deepEqual([plan?.trigger?.event, plan?.trigger?.within, plan?.targeting?.target, plan?.resolution?.outcomes?.success?.forcedMovement?.distance], ["hit-by", 15, "the attacker", 45]);
     assert.match(plan.resolution.outcomes.success.manualInstructions[0], /teleported up to 45 feet away rather than pushed/);
 });
+
+test("a condition that grows with each later failure (2026-10-11, batch 74)", async () => {
+    const { readStack } = await import("../src/compiler/monster.js");
+    const action = (description) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } });
+    const stacks = (description) => { const outcomes = compileMonsterAbility(action(description), { basicActions: {} })?.resolution?.outcomes; return ["failure", "criticalFailure"].map((degree) => outcomes?.[degree]?.effects?.map((effect) => [effect.slug, effect.value, effect.stack ?? null])); };
+    // "… increases by 1 (or 2 if it critically fails) (to a maximum of stupefied 4)": by the degree.
+    assert.deepEqual(stacks("The test lamia touches a creature, who must succeed at a @Check[will|dc:28] save or become Stupefied 1 (Stupefied 2 if it critically fails). If the target fails additional saves against this ability, the condition value increases by 1 (or 2 if it critically fails) (to a maximum of stupefied 4). This condition value decreases by 1 every 24 hours."),
+        [[["stupefied", 1, { by: 1, max: 4 }]], [["stupefied", 2, { by: 2, max: 4 }]]]);
+    // "If the creature is already drained, this increases its drained value instead": by the value it gives.
+    assert.deepEqual(stacks("The grabbed creature must succeed at a @Check[fortitude|dc:38] save or become Drained 2 (Drained 3 on a critical failure). If the creature is already drained, this increases its drained value instead, to a maximum of drained 4."),
+        [[["drained", 2, { by: 2, max: 4 }]], [["drained", 3, { by: 3, max: 4 }]]]);
+    assert.deepEqual(readStack("<p>On each subsequent failure, the drained condition value increases by 1 (or by 2 on a critical failure), to a maximum of drained 4.</p>"), { slug: "drained", by: 1, critical: 2, max: 4 });
+    assert.deepEqual(readStack("<p>If it's already stupefied, its stupefied value increases by 1 instead (to a maximum of Stupefied 4).</p>"), { slug: "stupefied", by: 1, max: 4 });
+    assert.deepEqual(readStack("<p>Each time a target fails an additional save against this ability, the condition value increases by 1 (to a maximum of Clumsy 4).</p>"), { slug: null, by: 1, max: 4 });
+    // Not two conditions at once.
+    assert.equal(readStack("<p>If the target is already drained or doomed, the value increases by 1 (to a maximum of 4).</p>"), null);
+});

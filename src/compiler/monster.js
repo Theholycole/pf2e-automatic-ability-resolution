@@ -2028,6 +2028,40 @@ function downsDemoralize(item, basicActions) {
     return { ...plan, ...base(item, { traits: plan.traits }), targeting: plan.targeting, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
 }
 
+// A condition whose value grows with each later failure (2026-10-11, batch 74): "If the target fails additional saves against this
+// ability, the condition value increases by 1 (or 2 if it critically fails) (to a maximum of stupefied 4)" (Lamia's Caress, Fate Drain,
+// Caress Soul's "by 1 if failed, or 2 if critically failed"), "Each time a target fails an additional save against this ability, the
+// condition value increases by 1 (to a maximum of Clumsy 4)", "On each subsequent failure, the drained condition value increases by 1 (or
+// by 2 on a critical failure), to a maximum of drained 4", "If the creature is already drained, its drained value increases by 1 (to a
+// maximum of drained 4)", "If it's already stupefied, its stupefied value increases by 1 instead". → { slug?, by, critical?, max? }, or
+// null. Not one that grows two conditions, nor drinking blood's (its healing changes too).
+const STACKED_CONDITION = "(clumsy|drained|enfeebled|frightened|sickened|slowed|stupefied|doomed|stunned)";
+export function readStack(html) {
+    const plain = htmlToPlainText(String(html ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ");
+    for (const sentence of plain.split(/(?<=[.)])\s+(?=[A-Z])/)) {
+        const said = sentence.trim();
+        const max = Number(/\bto a maximum of (?:[a-z]+ )?(\d+)\b/i.exec(said)?.[1]) || null;
+        let match = /^(?:If the (?:target|creature) fails (?:additional|further) saves|Each time a target fails an additional save) against this (?:ability|effect), the condition value increases by (\d+)(?: if failed,? or (\d+) if critically failed| \(or (\d+) if it critically fails\)| \(increases by (\d+) on a critical failure)?(?!\d)/i.exec(said);
+        if (match) return { slug: null, by: Number(match[1]), ...(match[2] ?? match[3] ?? match[4] ? { critical: Number(match[2] ?? match[3] ?? match[4]) } : {}), ...(max ? { max } : {}) };
+        match = new RegExp(String.raw`^On (?:each subsequent failure|a failed save), the ${STACKED_CONDITION} condition value increases by (\d+)(?: \(or by (\d+) on a critical failure\))?`, "i").exec(said);
+        if (match) return { slug: match[1].toLowerCase(), by: Number(match[2]), ...(match[3] ? { critical: Number(match[3]) } : {}), ...(max ? { max } : {}) };
+        match = new RegExp(String.raw`^If (?:(?:the (?:creature|target)|it) (?:is|was)|it['’]s) already ${STACKED_CONDITION}(?: by [^,]+?)?(?: before attempting the save)?, (?:(?:its|the) \1 (?:condition )?value increases by (\d+)(?: instead)?|it instead increases (?:the condition's|its \1) value by (\d+)|the (?:condition value|value of the condition) increases by (\d+)|this increases its \1 value instead|a failed save increases the value of the \1 condition by (\d+))\b`, "i").exec(said);
+        // ("… this increases its drained value instead": by the value it gives.)
+        if (match && !/\b(?:or|and) (?:doomed|stunned|drained|stupefied)\b/i.test(said.split(",")[0])) return { slug: match[1].toLowerCase(), by: Number(match[2] ?? match[3] ?? match[4] ?? match[5]) || null, ...(max ? { max } : {}) };
+    }
+    return null;
+}
+// Its rows' condition marked: { …, stack: { by, max? } } on the failure's and the critical failure's (by the critical's own value).
+function stackConditions(outcomes, html) {
+    const rule = /\b(?:increases? (?:by|the value|its|the condition|both|either)|value increases)\b/i.test(htmlToPlainText(String(html))) ? readStack(html) : null;
+    if (!rule) return;
+    for (const degree of ["failure", "criticalFailure"]) {
+        const valued = (outcomes[degree]?.effects ?? []).filter((effect) => effect.kind === "condition" && Number.isFinite(effect.value));
+        const hit = rule.slug ? valued.filter((effect) => effect.slug === rule.slug) : valued.length === 1 ? valued : [];
+        for (const effect of hit) effect.stack = { by: (degree === "criticalFailure" ? rule.critical ?? rule.by : rule.by) ?? effect.value, ...(rule.max ? { max: rule.max } : {}) };
+    }
+}
+
 // Shoo! (2026-10-11, batch 73): "Trigger An enemy within 15 feet damages the dragon Effect The dragon teleports the creature up to 45 feet
 // away. The destination must be on the ground and in a space with no hazards." → no roll: the creature moved that far away (the
 // simulator's push and live play's, the teleport's own rules a note for the GM). null otherwise.
@@ -2248,7 +2282,10 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
     if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
+    const read = listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
+    // A condition that grows with each later failure (batch 74): on its rows' condition.
+    if (read?.resolution?.outcomes) stackConditions(read.resolution.outcomes, item.system?.description?.value ?? "");
+    return read;
 }
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The

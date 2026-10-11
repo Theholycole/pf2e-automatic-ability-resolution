@@ -1013,6 +1013,13 @@ async function applyChange(change, state) {
                 await timedCondition(actor, change.slug, change.value, duration, state);
                 return `${target.name}'s ${change.slug} lasts ${durationText(duration, state.source.name)}${change.duration.valueRoll ? ` (rolled ${change.duration.valueRoll})` : ""}`;
             }
+            // A condition that grows with each later failure (batch 74): what it already has plus the stack, to its maximum.
+            const now = Number(actor.itemTypes.condition.find((condition) => condition.slug === change.slug && condition.active)?.value) || 0;
+            if (change.stack && now > 0 && Number.isFinite(change.value)) {
+                const grown = Math.min(Number(change.stack.max) || Infinity, now + (Number(change.stack.by) || 1));
+                await setCondition(actor, change.slug, grown);
+                return `${target.name}'s ${change.slug} grows to ${grown}${Number.isFinite(change.stack.max) && grown >= change.stack.max ? " (its maximum)" : ""}`;
+            }
             await setCondition(actor, change.slug, change.value);
             // "Fleeing for as long as it's frightened": the GM ends it with that condition.
             if (change.duration?.mode === "while" && change.duration.condition) return `${target.name}'s ${change.slug} lasts as long as it's ${change.duration.condition}`;
