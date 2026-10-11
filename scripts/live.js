@@ -999,6 +999,16 @@ async function applyChange(change, state) {
                 await actor.applyDamage({ damage: roll, token: token ?? undefined });
                 return null;
             }
+            // Already slowed (batch 75): "a failed save causes it to be Petrified permanently" — the worse condition, for its time or for good.
+            if (change.escalate?.slug && actor.itemTypes.condition.some((condition) => condition.slug === change.escalate.if && condition.active)) {
+                const worse = change.escalate;
+                if (worse.duration?.mode === "fixed" && ["rounds", "minutes"].includes(worse.duration.unit)) {
+                    await timedCondition(actor, worse.slug, worse.value, worse.duration, state);
+                    return `${target.name} was already ${worse.if}: ${worse.slug}, ${durationText(worse.duration, state.source.name)}`;
+                }
+                await setCondition(actor, worse.slug, worse.value);
+                return `${target.name} was already ${worse.if}: ${worse.slug}${worse.duration ? "" : " (until it's restored)"}`;
+            }
             // Off-guard to one creature's attacks (Feint, Create a Diversion): an effect on that creature.
             if (change.slug === "off-guard" && change.scope?.attacker) return scopedOffGuard(state, change);
             // While it stays in the aura (Aura of Sobs' stupefied): an effect scripts/auras.js ends when it leaves.

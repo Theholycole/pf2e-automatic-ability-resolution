@@ -1866,3 +1866,14 @@ test("a condition that grows with each later failure (2026-10-11, batch 74)", as
     // Not two conditions at once.
     assert.equal(readStack("<p>If the target is already drained or doomed, the value increases by 1 (to a maximum of 4).</p>"), null);
 });
+
+test("a worse condition for a creature that already has the first: slowed, then petrified (2026-10-11, batch 75)", async () => {
+    const { readEscalation } = await import("../src/compiler/monster.js");
+    const action = (description) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: description } } });
+    // Set aside for the other readings, then on the failure's Slowed; its paragraph's end and a sentence after it.
+    const plan = compileMonsterAbility(action("<p>The test basilisk stares at a creature it can see within 30 feet. That creature must attempt a @Check[fortitude|dc:27] save. If it fails and has not already been slowed by this ability, it becomes @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1}. If the creature was already slowed by this ability, a failed save causes the creature to be @UUID[Compendium.pf2e.conditionitems.Item.dTwPJuKgBQCMxixg]{Petrified} permanently.</p>\n<p>A creature petrified in this manner can be restored with fresh blood.</p>"), { basicActions: {} });
+    assert.deepEqual(plan?.resolution?.outcomes?.failure?.effects, [{ kind: "condition", slug: "slowed", value: 1, duration: null, escalate: { if: "slowed", slug: "petrified", value: null, duration: null } }]);
+    // Its time when it says one.
+    assert.deepEqual([readEscalation("<p>If a creature is already slowed when it fails its save, it becomes Paralyzed for 1 round.</p>")].map((entry) => [entry.if, entry.slug, entry.duration?.value, entry.duration?.unit]), [["slowed", "paralyzed", 1, "rounds"]]);
+    assert.equal(readEscalation("<p>When a creature already slowed by the test thorns fails its Fortitude save, it becomes Petrified for 1 minute but is turned to wood instead of stone.</p>")?.duration?.unit, "minutes");
+});

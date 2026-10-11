@@ -2062,6 +2062,34 @@ function stackConditions(outcomes, html) {
     }
 }
 
+// A worse condition for a creature that already has the first (2026-10-11, batch 75): "If the creature was already Slowed by petrifying gaze
+// before attempting its save, a failed save causes it to be Petrified permanently", "If the creature is already slowed, it becomes
+// Petrified as it is turned into crystal …", "If a creature is already slowed when it fails its save, it becomes Paralyzed for 1 round",
+// "When a creature already slowed by Briar's Hold fails its Fortitude save, it becomes Petrified for 1 minute but …" → { raw (the
+// sentence, as written), if, slug, duration }, or null.
+export function readEscalation(html) {
+    // (Its own split, on the description as written, so the sentence can be taken out of it as it is.)
+    // (Across a paragraph's end too: "… permanently.</p> <p>A creature petrified …"; the sentence without its closing tag.)
+    for (const piece of String(html ?? "").split(/(?<=\.(?:<\/p>)?)(?:\s|&nbsp;)+(?=(?:<p>)?[A-Z@])/)) {
+        const raw = piece.replace(/<\/p>$/, "");
+        const plain = htmlToPlainText(raw.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+        const match = /^(?:If|When) (?:the |a )?(?:creature|target)(?: (?:was|is) already| already (?:was|is)) (slowed)\b(?: by [^,]+?)?(?: before attempting (?:its|the) save| when it fails (?:its|the) save)?, (?:a failed save causes (?:it|the creature|the target) to (?:be|become)|it becomes) (Petrified|Paralyzed)\b( permanently| for (?:\d+|one) (?:rounds?|minutes?))?(?: as [^.]+| but [^.]+)?\.$/i.exec(plain)
+            ?? /^When a creature already (slowed) by [^,]+? fails (?:its|the) (?:\w+ )?save, it becomes (Petrified|Paralyzed)\b( permanently| for (?:\d+|one) (?:rounds?|minutes?))?(?: but [^.]+)?\.$/i.exec(plain);
+        if (!match) continue;
+        const lasting = (match[3] ?? "").trim();
+        return { raw, if: match[1].toLowerCase(), slug: match[2].toLowerCase(), duration: /^for /i.test(lasting) ? readDuration(lasting.replace(/\bone\b/i, "1")) : null };
+    }
+    return null;
+}
+// The failures' condition that matches (Slowed 1): { …, escalate: { if, slug, value: null, duration } }.
+function escalateConditions(outcomes, escalation) {
+    for (const degree of ["failure", "criticalFailure"]) {
+        for (const effect of outcomes[degree]?.effects ?? []) {
+            if (effect.kind === "condition" && effect.slug === escalation.if) effect.escalate = { if: escalation.if, slug: escalation.slug, value: null, duration: escalation.duration ?? null };
+        }
+    }
+}
+
 // Shoo! (2026-10-11, batch 73): "Trigger An enemy within 15 feet damages the dragon Effect The dragon teleports the creature up to 45 feet
 // away. The destination must be on the ground and in a space with no hazards." → no roll: the creature moved that far away (the
 // simulator's push and live play's, the teleport's own rules a note for the GM). null otherwise.
@@ -2224,8 +2252,22 @@ function linkedEffect(plan, html) {
 // A plan for an NPC ability, { builtin } for rules the simulator plays itself,// A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
-export function compileMonsterAbility(source, { basicActions = {}, actor = null } = {}) {
+export function compileMonsterAbility(source, options = {}) {
     if (!source || (source.type !== "action" && source.type !== "feat")) return null;
+    const html = String(modernItem(source).system?.description?.value ?? "");
+    // (Batch 75: "If the creature was already Slowed …, a failed save causes it to be Petrified permanently" — read on its own, set aside
+    // for the other readings, and put back on the failures' condition after them.)
+    const escalation = readEscalation(html);
+    const read = compileAbilityText(escalation ? withDescription(modernItem(source), html.replace(escalation.raw, "")) : source, options);
+    // A condition that grows with each later failure (batch 74), a worse one for a creature that already has it (batch 75).
+    if (read?.resolution?.outcomes) {
+        stackConditions(read.resolution.outcomes, html);
+        if (escalation) escalateConditions(read.resolution.outcomes, escalation);
+    }
+    return read;
+}
+
+function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     const item = modernItem(source);
     const slug = glossarySlug(item);
     if (BUILT_IN.has(slug)) {
@@ -2282,10 +2324,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
     if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? plan;
-    const read = listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
-    // A condition that grows with each later failure (batch 74): on its rows' condition.
-    if (read?.resolution?.outcomes) stackConditions(read.resolution.outcomes, item.system?.description?.value ?? "");
-    return read;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
