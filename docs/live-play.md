@@ -838,3 +838,12 @@ Several Strikes with more to them, which the simulator now plays (B74).
   - Twin Feint: the GM's note;
   - Focused Assault with a natural 3 (19 against AC 20): the failure's note; with a natural 10 (26): its card, 4d6 piercing (2×(4d6) on a critical hit).
 
+## Snagging Strike, Unnerving Prowess, Leaping Charge, Feign Death (2026-10-11, batch 44)
+
+Compiler readings into what live play and the simulator already do.
+
+- **Snagging Strike** (7): "Requirements The scout has one hand free, and its target is within reach of that hand Effect The scout makes a melee Strike while keeping one hand free. If this Strike hits, the target is Off-Guard until the start of the scout's next turn or until it leaves the scout's reach, whichever comes first." → a Strike activity needing a free hand (not while it holds a creature), off-guard until the start of its next turn (leaving its reach is the GM's). The same requirement written as a "Trigger" in an action reads as a requirement. Combat Grab's "has one hand free" and "while keeping one hand free" read the same way (5). Not read: one copy whose data makes it a reaction.
+- **Unnerving Prowess** (5): "Trigger Dura critically succeeds at a Strike or Disarm with her Aldori dueling sword. Effect Dura attempts to Demoralize the target of her Strike or Disarm. This Demoralize attempt does not have the auditory trait, …" → PF2e's Demoralize, set off by its own critical hit with that weapon (a free action), without the auditory trait. Live play: the reaction offer after that critical hit, then Demoralize's card. The simulator: its answer to its own critical hit. Not read: a copy that writes "hisAldori".
+- **Leaping Charge** (3): "Strides up to 10 feet, ignoring difficult terrain as it leaps over obstacles. It then makes a Strike with its talons, gaining a +1 circumstance bonus to its attack roll", "Leaps up to 20 feet. It then makes a mandibles Strike, …" → a charge: one move and the Strike at +1.
+- **Feign Death as a reaction** (4): "Trigger The opossum is reduced below 15 HP Effect The opossum collapses. It is Off-Guard and can use actions that require only its mind, but any other action ends the ruse. …" → the GM's (no-effect), as the other ruses.
+
