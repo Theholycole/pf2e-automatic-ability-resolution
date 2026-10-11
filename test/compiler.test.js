@@ -1540,3 +1540,28 @@ test("Feed on Fear's wordings and requirement, Scattershot (2026-10-11, batch 56
     const shot = compileMonsterAbility(item("Scattershot", "<p>The test dragon exhales a spray of force pellets that deal @Damage[(5d4+5)[force]|options:area-damage] damage in a @Template[type:cone|distance:30] with no save. The test dragon can't use Scattershot again for [[/gmr 1d4 #Recharge Scattershot]]{1d4 rounds}.</p>", "action", 2));
     assert.deepEqual([shot?.targeting?.area?.type, shot?.targeting?.area?.value, shot?.resolution?.check?.statistic, shot?.resolution?.outcomes?.success?.damage?.formulas?.[0]?.formula, shot?.trigger?.recharge?.formula], ["cone", 30, "automatic", "(5d4+5)[force]", "1d4"]);
 });
+
+test("Reaction Strikes at a Strike on it, a critical miss on it, damage from beside it, an attack or spell aimed at it (2026-10-11, batch 57)", () => {
+    const reaction = (name, trigger, effect) => ({ type: "action", name, system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } });
+    const strike = (triggers, name) => ({ builtin: "reaction-strike", triggers, strike: name, penalty: 0, disrupts: false });
+    for (const [trigger, effect, expected] of [
+        ["A creature within reach of the test dragon's chin blade that the test dragon can see makes a Strike against the test dragon", "The test dragon makes a chin blade Strike against the triggering creature.", strike(["attacked"], "chin blade")],
+        ["The test skull is attacked by a creature within their reach", "The test skull makes a jaws Strike against that creature.", strike(["attacked"], "jaws")],
+        ["A creature makes a melee Strike against or touches the test witchfire", "The test witchfire makes a witchflame caress Strike against the triggering creature.", strike(["attacked"], "witchflame caress")],
+        ["A creature within the test wolf's reach critically fails a Strike against it", "The test wolf makes a jaws Strike against the triggering creature.", strike(["critical-miss"], "jaws")],
+        ["A creature adjacent to the test wereant critically misses the test wereant with a melee Strike", "The test wereant makes a mandibles Strike against the triggering creature.", strike(["critical-miss"], "mandibles")],
+        ["A creature critically fails a melee Strike against the test dreshkan", "The test dreshkan makes a needle Strike against that creature.", strike(["critical-miss"], "needle")],
+        ["The test pig is damaged by an adjacent creature", "The test pig makes a hoof Strike at the triggering creature.", strike(["damaged-adjacent"], "hoof")],
+        ["The test dragon is targeted by an attack or spell", "The test dragon channels its lightning along the attack. The test dragon attempts a storm bolt Strike against the attacker, regardless of range.", strike(["targeted"], "storm bolt")]
+    ]) assert.deepEqual(compileMonsterAbility(reaction("Test", trigger, effect)), expected, trigger);
+    // Not a Strike only when it chooses another way, nor "at any range" without the trigger that allows it.
+    assert.equal(compileMonsterAbility(reaction("Test", "A creature critically fails a Strike against the test duelist", "The test duelist makes a melee Strike against or attempts to Disarm the triggering creature.")), null);
+    assert.equal(compileMonsterAbility(reaction("Test", "The test skull is attacked by a creature within their reach", "The test skull makes a jaws Strike against the attacker, regardless of range.")), null);
+});
+
+test("Jeer at Failure: PF2e's Demoralize at a foe that falls prone or critically fails a Strike (2026-10-11, batch 57)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const item = { type: "action", name: "Jeer at Failure", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: ["auditory", "emotion"] }, description: { value: "<p><strong>Trigger</strong> A foe within 90 feet becomes @UUID[Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60]{Prone} or critically fails on a Strike</p><hr /><p><strong>Effect</strong> The test dragon laughs dismissively at the foe, attempting an Intimidation check to [[/act demoralize]] the creature. They do not take a penalty if the creature doesn't understand their language.</p>" } } };
+    const plan = compileMonsterAbility(item, { basicActions });
+    assert.deepEqual([plan?.trigger, plan?.targeting?.target, plan?.resolution?.check?.statistic], [{ event: "foe-mishap", reaction: true, within: 90 }, "the attacker", "intimidation"]);
+});

@@ -1916,6 +1916,14 @@ function downsDemoralize(item, basicActions) {
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
     const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain);
     const trigger = parts ? readReactionTrigger(parts[1]) : null;
+    if (trigger?.event === "foe-mishap") {
+        // (Batch 57, Jeer at Failure: "Effect The mocking dragon laughs dismissively at the foe, attempting an Intimidation check to
+        // Demoralize the creature. They do not take a penalty if the creature doesn't understand their language." → PF2e's Demoralize
+        // at the triggering creature.)
+        if (!/^(?:The )?[^.]+? laughs dismissively at the foe, attempting an Intimidation check to Demoralize the creature\.(?: (?:It|They|He|She) (?:does|do) not take a penalty if the creature doesn't understand (?:its|their|his|her) language\.)?$/i.test(parts[2])) return null;
+        const plan = structuredClone(basicActions.demoralize);
+        return { ...plan, ...base(item, { traits: plan.traits }), targeting: { ...plan.targeting, target: "the attacker" }, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
+    }
     if (trigger?.event !== "downs") return null;
     // (A first sentence that only tells it: "After downing the foe, Krosovahn menacingly reminds another foe that he's coming after them next.")
     const effect = parts[2].replace(/^After downing the foe, [^.]+\.\s*/i, "");
@@ -2157,6 +2165,9 @@ export function readReactionTrigger(text) {
     if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
     // Downing a creature itself (batch 52, You're Next): "The prisoner reduces a creature to 0 hit points".
     if (new RegExp(String.raw`^${SELF} reduces (?:a creature|an enemy|a foe) to 0 (?:HP|[Hh]it [Pp]oints)$`).test(trigger)) return { event: "downs", reaction: true };
+    // A foe's mishap near it (batch 57, Jeer at Failure): "A foe within 90 feet becomes Prone or critically fails on a Strike".
+    const mishap = /^An? (?:foe|enemy) within (\d+) feet becomes Prone or critically fails on a Strike$/i.exec(trigger);
+    if (mishap) return { event: "foe-mishap", reaction: true, within: Number(mishap[1]) };
     // A creature near it losing a condition (batch 46, Consume Fear): "A creature within 60 feet loses the Frightened condition".
     const lost = /^(?:An?|Any) creature within (\d+) feet loses the (\w+) condition$/i.exec(trigger);
     if (lost) return { event: "condition-lost", reaction: true, condition: lost[2].toLowerCase(), within: Number(lost[1]) };

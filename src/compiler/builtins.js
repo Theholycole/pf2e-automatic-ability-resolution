@@ -434,6 +434,26 @@ export function readReaction(item, text) {
     // triggering creature and one against another adjacent creature." → a reaction Strike at it as it's damaged (and a second at another).
     const thrash = /^An? adjacent enemy damages (?:the [\w' -]+?|it|him|her|them)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes one or two ([\w' -]+?) Strikes(?:\s*[-\u2013\u2014]\s*one against the triggering creature and one against another adjacent creature|, each against a different adjacent creature)\.$/i.exec(effect.trim()) : null;
     if (thrash) return { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: thrash[1].toLowerCase(), penalty: 0, disrupts: false, second: true };
+    // Batch 57: a Strike back at a creature that Strikes it in its reach (Cutting Rebuke's "A creature within reach of the dragon's chin
+    // blade that the dragon can see makes a Strike against the dragon", Bite Back's "The skull is attacked by a creature within their
+    // reach", "makes a melee Strike against or touches the witchfire"), that critically fails a Strike against it ("A creature within
+    // the great wolf's reach critically fails a Strike against it", "critically misses the wereant with a melee Strike"), that damages it
+    // from beside it (Squealed Outrage, one Strike), or that targets it with an attack or a spell, at any range (Superconductor's "The
+    // dragon attempts a storm bolt Strike against the attacker, regardless of range") → triggers "attacked", "critical-miss",
+    // "damaged-adjacent", "targeted".
+    const its = String.raw`(?:the [\w' -]+?|it|him|her|them|[A-Z][\w'-]+)`;
+    const reachOf = String.raw`(?:the [\w' -]+?['’]s|its|their|his|her) reach`;
+    const answered = [
+        [new RegExp(String.raw`^(?:The )?[^.]+? is attacked by a creature within ${reachOf}$`, "i"), "attacked"],
+        [new RegExp(String.raw`^A creature within (?:the )?reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+?(?: that ${its} can see)? makes a Strike against ${its}$`, "i"), "attacked"],
+        [new RegExp(String.raw`^A creature makes a melee Strike against or touches ${its}$`, "i"), "attacked"],
+        [new RegExp(String.raw`^A creature (?:within ${reachOf} |adjacent to ${its} )?critically (?:fails an? (?:melee )?Strike against|misses) ${its}(?: with a melee Strike)?$`, "i"), "critical-miss"],
+        [new RegExp(String.raw`^(?:The )?[^.]+? is damaged by an adjacent creature$`, "i"), "damaged-adjacent"],
+        [new RegExp(String.raw`^(?:The )?[^.]+? is targeted by an attack or spell$`, "i"), "targeted"]
+    ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
+    // (Superconductor's first sentence only tells it.)
+    const backAt = answered ? /^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) (?:the (?:triggering )?creature|that creature|the attacker)(, regardless of range)?\.$/i.exec((answered === "targeted" ? effect.trim().split(/(?<=\.)\s+/).at(-1) : effect.trim())) : null;
+    if (backAt && (answered === "targeted") === Boolean(backAt[2])) return { builtin: "reaction-strike", triggers: [answered], strike: backAt[1].toLowerCase(), penalty: 0, disrupts: false };
     // Telekinetic Defense, Wing Rebuff (batch 54): "Trigger A creature approaches within 10 feet of the poltergeist", "A creature moves from
     // beyond the reach of the roc's wing to within the reach of the roc's wing", "A creature moves into the reach of the frost roc's wing";
     // "Effect The poltergeist makes a telekinetic object Strike against the triggering creature." (and "If the roc Pushes the creature, it

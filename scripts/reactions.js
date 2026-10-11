@@ -195,6 +195,11 @@ async function onMessage(message) {
         const mine = reactors(scene, combat).find((entry) => entry.token.id === event.defender.id);
         const entry = mine && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.trigger?.reaction && targetedSetsOff(plan.trigger, event)) : null;
         if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: `aimed ${event.spell ? "a spell" : "an effect"} at it (${event.traits.filter((trait) => entry.plan.trigger.traits?.includes(trait)).join(", ") || "spell"})`, free: !!entry.plan.trigger.free });
+        // Superconductor (batch 57): an attack or a spell aimed at it, its Strike back at the attacker at any range.
+        const attack = event.spell || event.traits.includes("attack") || ["attack-roll", "spell-attack-roll"].includes(context?.type);
+        const conductor = mine && attack && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("targeted")) : null;
+        const strikes = conductor ? (mine.actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(conductor.plan.strike)).map((action) => ({ slug: action.slug, label: action.label })) : [];
+        if (strikes.length) await offer({ kind: "strike", item: conductor.item, monster: mine.token, actor: mine.actor, target: event.attacker, strikes, penalty: conductor.plan.penalty ?? 0, trigger: `aimed ${event.spell ? "a spell" : "an attack"} at it`, note: "At any range." });
     }
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
@@ -203,6 +208,7 @@ async function onMessage(message) {
         await defend(message, context, scene, combat, token);
         await ownStrike(message, context, scene, combat, token);
         await strikeAnswers(context, scene, combat, token);
+        if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
     }
     // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
@@ -222,7 +228,8 @@ async function onMessage(message) {
 }
 
 // Tail Lash, Avenging Bite, Violent Retort (batch 38): a Strike in its reach (or a skill check that's an attack), an attack on one of
-// its allies, a critical hit on it: its reaction Strike, offered at the creature. Tail Lash's hit: the GM lowers the roll.
+// its allies, a critical hit on it; a Strike at it, a critically failed one (batch 57): its reaction Strike, offered at the creature.
+// Tail Lash's hit: the GM lowers the roll.
 async function strikeAnswers(context, scene, combat, attacker, { skill = false } = {}) {
     const grid = gridOf(scene);
     const targetToken = context.target?.token ? fromUuidSync(context.target.token) : null;
@@ -235,7 +242,10 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             const onAlly = !!targetToken && targetToken.id !== monster.id && targetToken.disposition === monster.disposition;
             const why = triggers.includes(skill ? "skill" : "strike") ? (skill ? "attempted an attack check in its reach" : "made a Strike in its reach")
                 : !skill && triggers.includes("ally-attacked") && onAlly ? "attacked its ally"
-                : !skill && triggers.includes("critical-hit") && onIt && context.outcome === "criticalSuccess" ? "critically hit it" : null;
+                : !skill && triggers.includes("critical-hit") && onIt && context.outcome === "criticalSuccess" ? "critically hit it"
+                // (Batch 57: Cutting Rebuke, Bite Back; Opportune Bite, Gnawing Retort.)
+                : !skill && triggers.includes("attacked") && onIt ? "made a Strike against it"
+                : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it" : null;
             if (!why) continue;
             const distance = distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid);
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
@@ -382,6 +392,7 @@ async function onConditionGained(item) {
     const token = item.actor?.token ?? item.actor?.getActiveTokens?.(false, true)?.[0] ?? null;
     const scene = token?.parent;
     if (!scene) return;
+    if (slug === "prone") await mishapAnswers(scene, token, "fell prone");
     const mine = reactors(scene, game.combat).find((entry) => entry.token.id === token.id);
     const entry = mine?.reactions.find(({ plan }) => plan.builtin === "negate-condition" && (!plan.conditions || plan.conditions.includes(slug)));
     if (!entry) return;
@@ -423,6 +434,20 @@ async function onDowned(actor) {
         const mine = reactors(scene, combat).find((entry) => entry.actor.uuid === source.actor);
         const entry = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "downs");
         if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: null, trigger: `downed ${token.name}`, free: !!entry.plan.trigger.free });
+    }
+}
+
+// A foe's mishap within a monster's distance (Jeer at Failure, batch 57: "A foe within 90 feet becomes Prone or critically fails on a
+// Strike"): the monster's reaction, at that foe.
+async function mishapAnswers(scene, token, why) {
+    const combat = runningCombat(scene);
+    if (!combat || !inEncounter(combat).has(token.id)) return;
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, token)) continue;
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "foe-mishap");
+        if (!entry || (entry.plan.trigger.within && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > entry.plan.trigger.within)) continue;
+        await offer({ kind: "card", item: entry.item, monster, actor, target: token, trigger: why, free: !!entry.plan.trigger.free });
     }
 }
 
@@ -486,7 +511,8 @@ async function onDamaged(actor, amount) {
         }
         if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
         const grid = gridOf(scene);
-        // Wing Thrash (batch 54): an adjacent enemy (the one whose turn it is) that damages it, a Strike back (and one at another).
+        // Wing Thrash (batch 54): an adjacent enemy (the one whose turn it is) that damages it, a Strike back (and one at another);
+        // Squealed Outrage (batch 57): the Strike back only.
         const thrash = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("damaged-adjacent"));
         if (thrash && isFoe(token, attacker) && distanceFeet(box(token, grid.size), box(attacker, grid.size), grid) <= 5) {
             const strikes = meleeStrikes(actor, `(${thrash.plan.strike} only)`);
