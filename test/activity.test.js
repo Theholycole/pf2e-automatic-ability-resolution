@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
-import { activityRider, fitsSize, strikeMatches } from "../src/live/activity.js";
+import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { CORE_FAMILIES, createRegistry, validateChanges } from "../../pf2e-resolution-core/src/index.js";
 
 const registry = createRegistry();
@@ -124,4 +124,17 @@ test("a skill action after the Strike's hit, and an automatic Shove (2026-10-10,
     // "can automatically Shove the target, with the same benefits as the Shove action …": pushed 5 feet, 10 on a critical hit.
     const shove = compileMonsterAbility(action("Test Shove", "<p>The test guard makes a longsword Strike. If the Strike hits, the target is @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard} until the start of the test guard's next turn, and the test guard can automatically Shove the target, with the same benefits as the Shove action (including the critical success effect if the Strike was a critical hit). If the test guard moves to follow the target, this movement doesn't trigger reactions.</p>", 2));
     assert.deepEqual([shove.onHit.push, shove.onHit.criticalPush, shove.onHit.conditions[0].duration?.expiry], [5, 10, "turn-start"]);
+});
+
+test("a follow-up's last Strike: its degree, name, range and listed riders; a hit's results with no Strike to go by (2026-10-10, batch 36)", () => {
+    const need = { strike: "jaws", melee: false, on: ["success", "criticalSuccess"] };
+    assert.equal(followUpFits(need, { outcome: "success", strikeName: "Jaws" }), true);
+    assert.equal(followUpFits(need, { outcome: "failure", strikeName: "Jaws" }), false);
+    assert.equal(followUpFits(need, { outcome: "success", strikeName: "Claw" }), false);
+    assert.equal(followUpFits({ strike: null, melee: true, on: ["criticalSuccess"] }, { outcome: "criticalSuccess", strikeName: "Javelin", ranged: true }), false);
+    assert.equal(followUpFits({ strike: null, melee: false, on: ["success"], listing: "push" }, { outcome: "success", strikeName: "Wing", attackEffects: ["improved-push"] }), true);
+    const row = (slug, value) => ({ damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [{ kind: "condition", slug, value }] });
+    const plan = { resolution: { kind: "check", check: { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } }, outcomes: { criticalSuccess: row("enfeebled", 3), success: row("enfeebled", 2), failure: row("x", 0), criticalFailure: row("x", 0) } } };
+    const asHit = followUpAsHit(plan);
+    assert.deepEqual([asHit.resolution.check.roll, asHit.resolution.outcomes.success.effects[0].value, asHit.resolution.outcomes.criticalSuccess.effects.length], ["automatic", 2, 0]);
 });

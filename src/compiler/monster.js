@@ -31,7 +31,8 @@ export function glossarySlug(item) {
     if (own) return own;
     // The glossary's text written out, with no slug (2026-10-10): "Requirements The monster's last action was a success with a
     // Strike that lists Grab in its damage entry …" → "grab".
-    const named = String(item?.name ?? "").trim().toLowerCase().replace(/\s+/g, "-");
+    // (Batch 36: a distance in the name, "Improved Push 15ft".)
+    const named = String(item?.name ?? "").trim().toLowerCase().replace(/\s+/g, "-").replace(/^((?:improved-)?(?:push|pull))-\d+-?(?:ft|feet|foot)$/, "$1");
     if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push", "pull", "improved-pull"].includes(named) && /last action was a success with a Strike that lists/i.test(item?.system?.description?.value ?? "")) return named;
     // Reactive Strike under either name ("Attack of Opportunity (Tail Only)"), its trigger written out.
     const reactive = /^(attack-of-opportunity|reactive-strike)\b/.exec(named)?.[1];
@@ -692,7 +693,7 @@ const DICE_COUNT = { a: 1, an: 1, one: 1, two: 2, three: 3 };
 function hitDamage(text) {
     const tags = inlineTags(text, "Damage");
     if (tags.length) return tags.length === 1 && /^@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?$/.test(text.trim()) ? readDamage(tags[0]) : null;
-    const match = /^(\d+d\d+(?:\s*[+-]\s*\d+)?)(?: (persistent )?([a-z]+))?$/i.exec(text.trim());
+    const match = /^(\d+d\d+(?:\s*[+-]\s*\d+)?)(?: (persistent )?([a-z]+))?$/i.exec(text.trim()) ?? /^(\d+) (persistent )([a-z]+)$/i.exec(text.trim());
     if (!match) return null;
     const dice = match[1].replace(/\s+/g, "");
     if (match[2]) return `${dice}[persistent,${match[3].toLowerCase()}]`;
@@ -766,6 +767,8 @@ function hitResults(text, activity, item, conditions) {
             if (match[2] && !extra) return false;
             if (extra) found.damage.push(extra);
         } else if ((match = new RegExp(`^(?:${HIT_ACTOR} )?(?:also )?(?:deals?|does|takes?) (?:an? )?(?:additional |extra )?(.+?)(?: damage)?(?: of the same (?:damage )?type)?$`, "i").exec(part)) && hitDamage(match[1])) found.damage.push(hitDamage(match[1]));
+        // (Two at once, batch 36: "takes an additional 1d4 slashing damage and 1 persistent bleed damage".)
+        else if ((match = new RegExp(`^(?:${HIT_ACTOR} )?(?:also )?(?:deals?|takes?) (?:an? )?(?:additional |extra )?(\\d+d\\d+ [a-z]+) damage and (\\d+(?:d\\d+)? (?:persistent )?[a-z]+) damage$`, "i").exec(part)) && hitDamage(match[1]) && hitDamage(match[2])) found.damage.push(hitDamage(match[1]), hitDamage(match[2]));
         else if ((match = /^(?:is )?pushed (?:back )?(\d+) feet(?: away)?$/i.exec(part))) found.push = Number(match[1]);
         // A skill action after the hit (batch 35): "it attempts to Demoralize the target", "the grave spinosaurus makes an Athletics
         // check to Trip the target", "the vigilante can then Shove the target", "can attempt to Trip the target, without
@@ -797,7 +800,7 @@ function hitResults(text, activity, item, conditions) {
     return true;
 }
 
-function strikeActivity(item, actor) {
+function strikeActivity(item, actor, { after = null } = {}) {
     const reject = (text) => {
         strikeActivityReject.last = text;
         return null;
@@ -918,6 +921,8 @@ function strikeActivity(item, actor) {
         } else return reject(text);
     }
     const rider = activity.onHit;
+    // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
+    if (after && opened) return { ...activity, after };
     if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.save && !activity.offGuard && !activity.damageBonus && !activity.extraWeaponDice && !activity.noMap)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length) return null;
     return activity;
@@ -1400,35 +1405,255 @@ function effectAbility(item) {
 // Strike hit, used as before (the card comes when the GM uses it), with trigger.followUp { strike, melee, on } for the
 // simulator, which uses it only straight after such a hit: strike is the Strike's name ("claw"; null for any), on the
 // degrees ("a critical hit": criticalSuccess only). null otherwise.
-function followUp(item, actor) {
+function followUp(item, actor, basicActions = {}) {
     const html = item.system?.description?.value ?? "";
     const block = /<strong>\s*Requirements?\s*<\/strong>([\s\S]*?)(?=<\/p>|<hr|<strong>\s*Effect\s*<\/strong>)/i.exec(html);
     if (!block) return null;
     const need = htmlToPlainText(block[1].replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
-    const last = /\blast action was an? (successful|critical hit with an?|critical) (?:([\w' -]+?) )??Strike\b(.*)$/i.exec(need)
-        ?? /\b(hit|damaged|struck|critically hit) an? (?:[\w-]+ )?(?:creature|target|foe|enemy) with (?:an?|its|their|his|her) (?:([\w' -]+?) )??Strike (?:on|during) (?:its|their|his|her) last action\b(.*)$/i.exec(need);
+    const last = followUpNeed(need);
     if (!last) return null;
-    // Only the Strike's own conditions: not "or a Draconic Frenzy that included …", "against a Medium or larger creature".
-    if (/\bor (?:a|an)\b|\bagainst an? (?:Tiny|Small|Medium|Large|Huge|Gargantuan)\b/i.test(last[3] ?? "")) return null;
-    const critical = /critical/i.test(last[1]);
-    const name = last[2] && !/^(?:melee|ranged|weapon|unarmed)$/i.test(last[2].trim()) ? last[2].trim().toLowerCase() : null;
-    const melee = /\bmelee\b/i.test(last[2] ?? "");
+    const { strike: name, melee, on } = last;
     // The Effect, as an ability of its own.
-    const effect = html.slice(block.index + block[0].length).replace(/^\s*<\/p>\s*(?:<hr\s*\/?>)?\s*/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "");
+    // ("must succeed on a … save" as "at a", batch 36.)
+    const effect = html.slice(block.index + block[0].length).replace(/^\s*<\/p>\s*(?:<hr\s*\/?>)?\s*/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "").replace(/\bsucceed on an? (@Check\[)/gi, "succeed at a $1");
+    // (One of several ways, "choosing one of the three following options": the GM's.)
+    if (/\bchoos(?:es|ing) one of\b|\bone of the (?:\w+ )?following (?:options|effects)\b/i.test(htmlToPlainText(effect))) return null;
+    // A Strike it makes (batch 36): "the zombie horse makes a second jaws Strike as it … On a success, the target takes an
+    // additional 1d4 persistent bleed damage", "makes another greatclub Strike against the same target, using the previous Strike's
+    // multiple attack penalty", "Strikes the same target, who is Off-Guard against this attack", "Strides up to 10 feet and
+    // Strikes": a Strike activity, after such a Strike.
+    const strikeText = followUpStrikeText(effect);
+    if (strikeText) {
+        let activity = null;
+        try {
+            activity = strikeActivity(withDescription(item, strikeText.html), actor, { after: last });
+        } catch {
+            activity = null;
+        }
+        return activity ? { ...activity, ...(strikeText.previousMap ? { previousMap: true } : {}) } : null;
+    }
+    // (Batch 36: a first sentence that only tells what it does, "The test wisp clings to the creature it hit with its Strike." (made
+    // up), left out when the readings that follow find nothing with it.)
+    const [first, ...others] = sentencesOf(effect);
+    const told = others.length && !/@|\d|\b(?:save|check|damage|Hit Points|HP|bonus|penalty|Strikes? (?:against|at)|makes?|attempts?)\b/i.test(htmlToPlainText(first ?? "")) && !readConditions(first ?? "", { plain: STAGE_CONDITIONS }).length ? others.join(" ") : null;
     const own = withDescription(item, effect);
+    // (The first reading with results: batch 36's after the others, each in turn.)
     let plan = null;
-    try {
-        plan = inlineSave(own, actor) ?? compileSkillAction(own, { actor }) ?? effectAbility(own) ?? automaticEffect(own, actor);
-    } catch {
-        plan = null;
+    for (const read of [() => inlineSave(own, actor), () => compileSkillAction(own, { actor }), () => effectAbility(own), () => automaticEffect(own, actor), () => followUpResults(own, effect), () => followUpSkill(own, effect, basicActions)]) {
+        try {
+            plan = read();
+        } catch {
+            plan = null;
+        }
+        if (plan?.resolution) break;
+    }
+    if (!plan?.resolution && told) {
+        const shorter = withDescription(item, told);
+        try {
+            plan = inlineSave(shorter, actor) ?? automaticEffect(shorter, actor);
+        } catch {
+            plan = null;
+        }
     }
     if (!plan?.resolution) return null;
     if (plan.resolution.outcomes) noteUnread(plan.resolution.outcomes, effect);
     return {
         ...plan,
         targeting: plan.targeting?.area ? plan.targeting : { target: "the creature the Strike hits", range: "touch", area: null },
-        trigger: { ...(plan.trigger ?? {}), event: "use", followUp: { strike: name, melee, on: critical ? ["criticalSuccess"] : ["success", "criticalSuccess"] } }
+        trigger: { ...(plan.trigger ?? {}), event: "use", followUp: { strike: name, melee, on, ...(last.listing ? { listing: last.listing } : {}) } }
     };
+}
+
+// A follow-up's Strike in a Strike activity's words (batch 36): { html, previousMap } or null when it makes no Strike. "makes a
+// second jaws Strike as it …" → "makes a jaws Strike."; "against the same target" left out (the creature it just struck); ",
+// using the previous Strike's multiple attack penalty" → previousMap; "Strikes the same target, who is Off-Guard against this
+// attack." → "Strikes. The target is Off-Guard against this Strike."; "Strides up to 10 feet and Strikes." → "… and makes a
+// Strike."; "deals 1d6 additional precision damage" → "deals an additional 1d6 precision damage".
+function followUpStrikeText(html) {
+    const plain = htmlToPlainText(String(html));
+    if (!/\b(?:makes (?:a second|another|an?) (?:[\w' -]+? )?Strike|Strikes the same (?:target|creature)|and Strikes\.)/i.test(plain)) return null;
+    let previousMap = false;
+    const text = String(html)
+        .replace(/^(\s*(?:<p>)?\s*)the\b/, "$1The")
+        .replace(/\bmakes (?:a second|another) ((?:[\w' -]+? )?Strike)\b/gi, "makes a $1")
+        .replace(/(\bStrike) (?:as|while) (?:it|he|she|they) [^.]*\./g, "$1.")
+        .replace(/ against the same (?:target|creature)\b/gi, "")
+        .replace(/, using the previous Strike's multiple attack penalty\./gi, () => {
+            previousMap = true;
+            return ".";
+        })
+        .replace(/\bStrikes the same (?:target|creature), who is (@UUID\[[^\]]*\]\{Off-Guard\}|Off-Guard) (?:against|to) this attack\./gi, "Strikes. The target is Off-Guard against this Strike.")
+        .replace(/\b(Strides [^.]*?) and Strikes\./g, "$1 and makes a Strike.")
+        .replace(/\bdeals (\d+d\d+) additional (\w+) damage\b/gi, "deals an additional $1 $2 damage");
+    return { html: text, previousMap };
+}
+
+// What a follow-up needs of the action before it (batch 36): { strike, melee, on } (on: the Strike's degrees), or null. "The
+// skull fairy's last action was a successful fist Strike", "… previous action this turn was …", "a success with a jaws Strike",
+// "a critical hit with a melee Strike", "a melee Strike that critically succeeded", "a fang Strike that hit the target", "a jaws
+// Strike that dealt damage to its target", "a club Strike that missed", "a hit against an adjacent creature with its tendril
+// Strike"; "X damaged a creature with a jaws Strike on its last action", "hit a creature with a drill Strike with his previous
+// action", "made a successful Strike against a living creature with its touch on its previous action" (made-up names). Not with
+// more it needs (", and the target is adjacent to a wall", "or a Draconic Frenzy …", a size, the weapon's damage type).
+const LAST_ACTION = String.raw`(?:last|previous) action(?: this turn)?`;
+const STRUCK_ONE = String.raw`(?:the|a|an|its|their|his|her) (?:living )?(?:target|creature|opponent|foe|enemy)(?: creature)?`;
+const HIT_DEGREES = ["success", "criticalSuccess"];
+export function followUpNeed(need) {
+    const name = (melee, raw) => ({ melee: /^melee$/i.test(melee ?? ""), strike: raw && !/^(?:melee|ranged|weapon|unarmed)$/i.test(raw.trim()) ? raw.trim().toLowerCase() : null });
+    // ("…, and the target is adjacent to …", "or a Draconic Frenzy that included …": more it needs. Another way to qualify, "a
+    // successful bite Strike or Test Lunge" (made up), leaves the Strike's.)
+    const text = need.replace(/[.;]\s*$/, "").trim().replace(/( Strike) or (?!an?\b)[A-Z][\w' -]*$/, "$1");
+    if (/,|\bor (?:a|an)\b|\b(?:of size|larger|smaller|Tiny|Small|Medium|Large|Huge|Gargantuan|weapon that)\b/i.test(text)) return null;
+    let match = new RegExp(String.raw`^(?:The |the )?[^,]*? ${LAST_ACTION} was (.+)$`, "i").exec(text);
+    if (match) {
+        const rest = match[1];
+        // "a success with a Strike that has Disarm in its damage entry": a Strike listing it.
+        if ((match = /^a success with a Strike that (?:has|lists) ([A-Z][a-z]+) in its damage entry$/.exec(rest))) return { strike: null, melee: false, on: HIT_DEGREES, listing: match[1].toLowerCase() };
+        // (What the creature hit has or is, "against a creature with teeth", "… that is standing in water" (made up): the GM's.)
+        const tail = String.raw`(?: (?:against|to) ${STRUCK_ONE}(?: within \d+ feet| (?:with|that|who) [^,]+?)?)?(?: that (?:dealt damage|damaged)(?: (?:to )?${STRUCK_ONE})?)?`;
+        if ((match = new RegExp(String.raw`^an? (successful|success with an?|critical hit with an?|critical success (?:on|with) an?) (?:(melee|ranged) )?(?:([\w' -]+?) )??Strike(?: with (?:its|their|his|her) ([\w' -]+?))?${tail}$`, "i").exec(rest))) return { ...name(match[2], match[3] ?? match[4]), on: /critical/i.test(match[1]) ? ["criticalSuccess"] : HIT_DEGREES };
+        if ((match = new RegExp(String.raw`^an? (?:(melee|ranged) )?(?:([\w' -]+?) )??Strike that (hit|dealt damage|damaged|critically succeeded|missed|failed or critically failed)(?: (?:to )?${STRUCK_ONE})?$`, "i").exec(rest))) return { ...name(match[1], match[2]), on: /critically succeeded/i.test(match[3]) ? ["criticalSuccess"] : /missed|failed/i.test(match[3]) ? ["failure", "criticalFailure"] : HIT_DEGREES };
+        if ((match = new RegExp(String.raw`^a hit against an? (?:adjacent )?(?:creature|target|foe|enemy) with (?:its|their|his|her) (?:(melee) )?(?:([\w' -]+?) )??Strike$`, "i").exec(rest))) return { ...name(match[1], match[2]), on: HIT_DEGREES };
+        return null;
+    }
+    match = new RegExp(String.raw`^(?:The |the )?[^,]*? (hit|damaged|struck|critically hit|made a successful Strike against) an? (?:living )?(?:creature|target|foe|enemy)(?: it is duplicating)? with (?:an?|its|their|his|her) (?:(melee) )?(?:([\w' -]+?) )??(?:Strike )?(?:on|in|during|with) (?:its|their|his|her) ${LAST_ACTION}$`, "i").exec(text);
+    return match ? { ...name(match[2], match[3]), on: /critically/i.test(match[1]) ? ["criticalSuccess"] : HIT_DEGREES } : null;
+}
+
+// A follow-up's results with no roll of their own (batch 36), sentence by sentence: damage to the creature hit ("automatically
+// deals an additional 2d8 bludgeoning damage to the creature it just bit", "…, inflicting 1d6 bleed to the target", "…, dealing an
+// additional 1d6+5 slashing damage", "the Strike's target takes 2d6 persistent bleed damage", "This deals 2d4 bleed damage"), its
+// conditions ("making the creature Enfeebled 2 (or Enfeebled 3 on a critical hit)", "The victim becomes Drained 1", "Grabs it"),
+// a push or a pull ("pushes his foe back 5 feet, with the effects of a successful Shove", "pulls the creature 5 feet closer"), a
+// Disarm's critical success, the monster's own healing ("the flea regains 5 HP"). (Made-up wordings.) → a plan of roll
+// "automatic" (its success row), or one by the Strike's degree when a critical hit gives more. A first sentence with none of
+// these describes it; later ones go to the GM. null when a sentence has a check, a choice, a Strike or damage it doesn't read.
+const FOLLOW_STRUCK = String.raw`(?:the (?:creature|target|victim|foe|enemy)(?: (?:it|they|he|she) (?:just )?(?:bit|hit|struck|has struck))?|the creature struck|its (?:target|victim|foe)|that creature|the Strike's target|his foe|her foe|their foe)`;
+export function followUpResults(item, html) {
+    const components = [];
+    const effects = [];
+    const reminders = [];
+    let critical = null;
+    let movement = null;
+    let read = false;
+    for (const [index, sentence] of sentencesOf(html).entries()) {
+        // ("[[/r 1d6[persistent,bleed]]]" as "@Damage[1d6[persistent,bleed]]".)
+        const text = sentence.replace(/\[\[\/r ((?:[^[\]]|\[[^\]]*\])+?)(?: #[^\]]*)?\]\](?:\{[^}]*\})?/g, "@Damage[$1]");
+        const plain = htmlToPlainText(text.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D")).replace(/\s+/g, " ").trim();
+        if (!plain || /^Effect:/i.test(plain)) continue;
+        // (A check, a Strike it makes: not this reading. "the Strike's target" is the creature hit. An Escape's DC, "([[/act escape
+        // dc=42]])", goes with the grab.)
+        if (/@Check\[|\[\[\/act (?!escape\b)|\b(?:makes?|attempts?|making) (?:a|an|another|one|two|a second)\b[^.]*\bStrikes?\b|\bStrikes (?:the|a|an|it)\b|\b(?:save|saving throw|check)\b/i.test(plain)) return null;
+        const choice = /\b(?:chooses?|choice|choosing|either)\b/i.test(plain);
+        const tags = inlineTags(text, "Damage");
+        const hurt = tags.filter((raw) => !/\bhealing\b/i.test(raw));
+        const healing = tags.filter((raw) => /\bhealing\b/i.test(raw));
+        let found = false;
+        if (hurt.length) {
+            const dealt = new RegExp(String.raw`\b(?:automatically )?(?:deals?|dealing|inflicting|inflicts?) (?:an? (?:additional|extra) )?@D(?: damage)?(?: (?:to|on) ${FOLLOW_STRUCK})?(?=[,.;]|$| and\b)`, "i").test(plain)
+                || new RegExp(String.raw`(?:^|; )${FOLLOW_STRUCK} takes @D(?: damage)?\b`, "i").test(plain) || /^This deals @D(?: damage)?\b/i.test(plain);
+            if (hurt.length !== 1 || !dealt || choice || /\b(?:if|unless|instead)\b|@D[^.]*?\bor @D/i.test(plain)) return null;
+            components.push(readDamage(hurt[0]));
+            found = true;
+        }
+        // Its own healing: "the flea regains 5 HP", "The void zombie regains 4 Hit Points".
+        if (healing.length) {
+            if (healing.length !== 1 || !/\b(?:regains?|recovers?) @D (?:Hit Points|HP)\b/i.test(plain) || choice || /\b(?:if|unless|instead)\b/i.test(plain)) return null;
+            const amount = readDamage(healing[0]).replace(/\[healing(?:,[a-z]+)?\]/i, "").replace(/^\((.*)\)$/, "$1");
+            effects.push({ kind: "heal", ...(/^\d+$/.test(amount) ? { amount: Number(amount) } : { formula: amount }), recipient: "self" });
+            found = true;
+        }
+        // A push or a pull ("with the effects of a successful Shove": pushed back; its following move is the GM's).
+        const moved = readPush(plain.replace(/\bpush(es)? (?:his|her|its|their|the) (?:foe|enemy|target|creature) back\b/i, "push$1 the target back"));
+        if (moved && /\b(?:push|pull|knock)/i.test(plain) && !choice) {
+            if (movement) return null;
+            movement = moved;
+            found = true;
+        }
+        // "Disarms the creature they hit, as a critical success on a Disarm attempt", "knocks a held or carried weapon to the ground".
+        if (/\bDisarms (?:the (?:creature|target)|it)(?: (?:they|it|he|she) hit)?,? as (?:a )?critical success on a Disarm (?:attempt|check)\b|\bknocks? an? (?:held or carried |held )?weapon (?:to the ground|out of (?:its|their|the target's) (?:hands?|grasp))\b/i.test(plain) && !choice) {
+            effects.push({ kind: "disarm", what: "drop" });
+            found = true;
+        }
+        // Its conditions on the creature hit; "(or Enfeebled 3 on a critical hit)": a critical hit's.
+        const bracket = /\s*\((?:or )?((?:[A-Z][a-z]+ \d+(?:,? (?:and|or) )?)+) on a critical hit\)/.exec(plain);
+        const named = readConditions(text.replace(/\s*\((?:or )?(?:@UUID\[[^\]]*\]\{)?[A-Z][a-z]+ \d+\}? on a critical hit\)/g, ""), { plain: STAGE_CONDITIONS }).filter((entry) => entry.recipient !== "self" && STAGE_CONDITIONS.includes(entry.slug));
+        const grabs = /\bGrabs (?:it|them|the (?:creature|target|victim))\b/i.test(plain) && !named.some((entry) => entry.slug === "grabbed") ? [condition("grabbed")] : [];
+        // (Named again later, "This is cumulative with other enfeebled conditions …", "The encumbered condition … disappears
+        // after 10 minutes": the GM's.)
+        const again = read && [...named, ...grabs].every((entry) => effects.some((other) => other.slug === entry.slug));
+        if ((named.length || grabs.length) && !again && !choice) {
+            // ("… is Drained 1 until it receives healing of any kind or amount": until healed, the GM's.)
+            const untilHealed = /\buntil (?:it|they|the creature|the target) receives? (?:healing|any (?:kind or amount of )?healing)\b/i.test(plain);
+            if (/\b(?:if|unless|instead)\b/i.test(plain.replace(/\((?:or )?[^()]* on a critical hit\)/, "")) && !untilHealed) return null;
+            const conditions = named.map((entry) => condition(entry.slug, entry.value ?? null, untilHealed ? null : entry.duration ?? null));
+            effects.push(...conditions, ...grabs);
+            if (untilHealed) reminders.push(`{target}'s ${named.map((entry) => entry.slug).join(" and ")} lasts until it receives healing of any kind or amount.`);
+            if (bracket) critical = readConditions(bracket[1], { plain: STAGE_CONDITIONS }).map((entry) => condition(entry.slug, entry.value ?? null, entry.duration ?? null));
+            found = true;
+        }
+        if (found) {
+            read = true;
+            // More in it than its results ("… and its resistances are 5 lower for 1 round …" (made up)): the sentence for the GM.
+            if (/\b(?:resistances?|weakness|penalty|bonus|can't|cannot|Speeds?|immune|as long as)\b/i.test(plain)) reminders.push(readableText(sentence));
+            continue;
+        }
+        // (Before its results: what it does, in words. "He can follow the foe as normal for a successful shove": the GM's.)
+        if (!read && index === 0 && !/@D|\b(?:damage|bonus|penalty|Hit Points|HP)\b/i.test(plain)) continue;
+        if (/\bcan follow the (?:foe|target|creature) as normal\b|\bInteracts? to (?:return|retrieve)\b/i.test(plain)) continue;
+        if (!read) return null;
+        reminders.push(readableText(sentence));
+    }
+    if (!read || (!components.length && !effects.length && !movement)) return null;
+    const row = (conditions) => ({
+        damage: components.length ? { mode: "formulas", formulas: components.map((formula) => ({ formula })), rollScope: "outcome" } : none().damage,
+        effects: conditions,
+        ...(movement ? { forcedMovement: { ...movement } } : {})
+    });
+    // A critical hit's conditions in place of the hit's of the same name.
+    const criticalRow = critical ? row([...effects.filter((entry) => !critical.some((other) => other.slug === entry.slug)), ...critical]) : null;
+    return {
+        ...base(item),
+        targeting: { target: "the creature the Strike hits", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: {
+            kind: "check",
+            check: criticalRow ? { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } } : { roll: "automatic", statistic: "automatic" },
+            sharedDamage: null,
+            outcomes: { criticalSuccess: criticalRow ?? none(), success: row(effects), failure: none(), criticalFailure: none() },
+            ...(reminders.length ? { reminders } : {})
+        }
+    };
+}
+
+// A skill action after the hit (batch 36): "The larabay attempts to Disarm the creature they hit", "… attempts to Reposition the
+// creature they hit using their halberd's reach"; with
+// "They gain a +4 status bonus to the Athletics check" (its bonus, on the plan's check) and "This attempt neither applies nor
+// counts toward the …'s multiple attack penalty". PF2e's basic action, as the creature's. null otherwise.
+const FOLLOW_SKILLS = ["disarm", "reposition", "shove", "trip", "grapple", "demoralize"];
+export function followUpSkill(item, html, basicActions) {
+    const sentences = sentencesOf(String(html).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).map((sentence) => htmlToPlainText(sentence).replace(/\s+/g, " ").trim()).filter(Boolean);
+    let slug = null;
+    let bonus = null;
+    let noMap = false;
+    const reminders = [];
+    for (const sentence of sentences) {
+        let match;
+        if (!slug && (match = /^(?:The )?[\w' -]+? (?:[a-z]+s [^.,]*? and )?attempts to (Disarm|Reposition|Shove|Trip|Grapple|Demoralize) (?:the (?:creature|target|foe)(?: (?:they|it|he|she) hit)?(?: using (?:their|its|his|her) [\w' -]+?'s reach)?|it|an object the creature (?:they|it|he|she) hit is holding|the target of (?:their|its|his|her) [\w' -]+? Strike)(?: with a sudden [a-z]+)?(?:,? even if (?:the [\w' -]+?|it|they) (?:doesn't|does not) have a free hand)?\.$/i.exec(sentence))) slug = match[1].toLowerCase();
+        else if (slug && (match = /^(?:They|It|He|She) gains? a \+(\d+) (status|circumstance) bonus (?:on|to) the (?:Athletics|Intimidation) check\.$/i.exec(sentence))) bonus = { value: Number(match[1]), type: match[2].toLowerCase() };
+        else if (slug && /^This attempt (?:neither applies nor counts toward|doesn't (?:apply|count toward)|does not (?:apply|count toward)) (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.$/i.test(sentence)) noMap = true;
+        // (What follows the move, "If the target ends its movement adjacent to an obstacle …": the GM's.)
+        else if (slug && /^If the target ends its movement\b/i.test(sentence)) reminders.push(readableText(sentence).replace(/\bthe target\b/gi, "{target}"));
+        else return null;
+    }
+    const basic = slug && FOLLOW_SKILLS.includes(slug) ? basicActions[slug] : null;
+    if (!basic?.resolution) return null;
+    const plan = structuredClone(basic);
+    if (bonus) plan.resolution.check = { ...plan.resolution.check, bonus };
+    if (reminders.length) plan.resolution.reminders = [...(plan.resolution.reminders ?? []), ...reminders];
+    // (Its attack trait, for the multiple attack penalty, unless it "neither applies nor counts toward" it.)
+    const traits = [...new Set([...(noMap ? [] : plan.traits ?? []), ...(item.system?.traits?.value ?? [])])].filter((trait) => !noMap || trait !== "attack");
+    return { ...plan, ...base(item, { traits }), targeting: { ...plan.targeting, target: "the creature the Strike hits" }, trigger: { event: "use" } };
 }
 
 // The one PF2e effect an ability links, on the rows that apply nothing else: a save's failure and critical failure, a
@@ -1501,7 +1726,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     const exposure = exposureSave(item, actor);
     if (exposure) return exposure;
     // A follow-up to a Strike that hit ("Requirements … last action was a successful claw Strike").
-    const after = item.system?.actionType?.value === "action" ? followUp(item, actor) : null;
+    const after = item.system?.actionType?.value === "action" ? followUp(item, actor, basicActions) : null;
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));

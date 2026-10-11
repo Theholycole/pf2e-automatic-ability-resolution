@@ -1156,3 +1156,58 @@ test("a rider with a critical hit's alternative, by the Strike's degree (2026-10
     // Not one on only some creatures ("a creature that qualifies as their favored game").
     assert.equal(compileMonsterAbility(passive("Test Fear", "<p>When the test hunter hits a creature that qualifies as their favored game, that creature is @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1} (or Frightened 2 on a critical hit).</p>"), { actor: { items: [{ type: "melee", name: "Spear", system: { attackEffects: { value: ["test-fear"] } } }] } })?.trigger?.event, undefined);
 });
+
+test("follow-ups to a Strike: more requirement wordings, results with no roll, a skill action, a second Strike (2026-10-10, batch 36)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const action = (name, need, effect) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: `<p><strong>Requirements</strong> ${need}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } });
+    const compile = (need, effect, name = "Test Follow-up") => compileMonsterAbility(action(name, need, effect), { basicActions });
+    const link = (id, label) => `@UUID[Compendium.pf2e.conditionitems.Item.${id}]{${label}}`;
+    // The requirement's wordings (made-up creatures).
+    const need = (text) => compile(text, "The creature is @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard} until the start of the test beast's next turn.")?.trigger?.followUp ?? null;
+    const hit = ["success", "criticalSuccess"];
+    assert.deepEqual(need("The test beast's previous action was a successful horn Strike against the target"), { strike: "horn", melee: false, on: hit });
+    assert.deepEqual(need("The test beast's last action was a success with a tusk Strike."), { strike: "tusk", melee: false, on: hit });
+    assert.deepEqual(need("The test beast's last action was a melee Strike that critically succeeded"), { strike: null, melee: true, on: ["criticalSuccess"] });
+    assert.deepEqual(need("The test beast's last action was a hoof Strike that dealt damage to its target"), { strike: "hoof", melee: false, on: hit });
+    assert.deepEqual(need("Test Beast damaged a creature with a jaws Strike in its previous action"), { strike: "jaws", melee: false, on: hit });
+    assert.deepEqual(need("The test beast made a successful Strike against a living creature with its cold touch on its previous action"), { strike: "cold touch", melee: false, on: hit });
+    assert.deepEqual(need("The test beast's last action was a successful Strike with its stinger against a target with blood"), { strike: "stinger", melee: false, on: hit });
+    assert.deepEqual(need("The test beast's last action was a success with a Strike that lists Trip in its damage entry."), { strike: null, melee: false, on: hit, listing: "trip" });
+    // (What the creature hit is, the GM's; another way to qualify leaves the Strike's.)
+    assert.deepEqual(need("The test beast's last action was a successful claw Strike against a creature that is standing in water"), { strike: "claw", melee: false, on: hit });
+    assert.deepEqual(need("The test beast's last action was a successful jaws Strike against a living creature"), { strike: "jaws", melee: false, on: hit });
+    assert.deepEqual(need("The test beast's last action was a successful bite Strike or Test Lunge"), { strike: "bite", melee: false, on: hit });
+    // Not with more it needs.
+    assert.equal(need("The test beast's last action was a successful jaws Strike, and the target is adjacent to a wall"), null);
+    assert.equal(need("The test beast's last action was a successful claw Strike against a Medium or larger creature"), null);
+    // Damage with no roll on the creature hit, its flavor first.
+    const clamp = compile("The test turtle damaged a creature with a jaws Strike in its previous action", "The test turtle bites down hard and automatically deals an additional @Damage[2d6[piercing]] damage to the creature it just bit.");
+    assert.deepEqual([clamp.resolution.check.roll, clamp.resolution.outcomes.success.damage.formulas, clamp.targeting.target], ["automatic", [{ formula: "2d6[piercing]" }], "the creature the Strike hits"]);
+    const wrench = compile("The test raider's last action was a successful spear Strike", "The test raider twists the spear, inflicting @Damage[1d6[bleed]] to the target.");
+    assert.deepEqual(wrench.resolution.outcomes.success.damage.formulas, [{ formula: "1d6[bleed]" }]);
+    // A critical hit's condition: results by the Strike's degree; later words about it for the GM.
+    const steal = compile("The test shade hit a living creature with a shadow hand Strike on its previous action.", `The test shade tugs at the target's shadow, making the creature ${link("MIRkyAjyBeXivMa7", "Enfeebled 1")} (or ${link("MIRkyAjyBeXivMa7", "Enfeebled 2")} on a critical hit). This adds to other enfeebled conditions from test shades, up to enfeebled 3.`);
+    const values = (row) => steal.resolution.outcomes[row].effects.map((effect) => [effect.slug, effect.value]);
+    assert.deepEqual([steal.resolution.check.statistic, values("success"), values("criticalSuccess"), steal.resolution.reminders.length], ["strike", [["enfeebled", 1]], [["enfeebled", 2]], 1]);
+    // Its own healing, Drained until healed; a push; a pull and a grab; a Disarm's critical success.
+    const sip = compile("The test leech's last action was a successful mouth Strike", `The test leech drinks. The victim becomes ${link("4D2KBtexWXa6oUMR", "Drained 1")} and the test leech regains @Damage[6[healing]] HP.`);
+    assert.deepEqual(sip.resolution.outcomes.success.effects.map((effect) => [effect.kind, effect.slug ?? effect.amount, effect.recipient ?? null]), [["heal", 6, "self"], ["condition", "drained", null]]);
+    const tendril = compile("The test leech's last action was a successful mouth Strike", `The test leech regains @Damage[3[healing]] Hit Points, and the creature is ${link("4D2KBtexWXa6oUMR", "Drained 1")} until it receives healing of any kind or amount.`);
+    assert.match(tendril.resolution.reminders[0], /until it receives healing/);
+    const shove = compile("The test giant's last action was a successful melee Strike", "The test giant pushes his foe back 10 feet, with the effects of a successful Shove. He can follow the foe as normal for a successful Shove.");
+    assert.deepEqual([shove.resolution.outcomes.success.forcedMovement.kind, shove.resolution.outcomes.success.forcedMovement.distance], ["push", 10]);
+    const chain = compile("The test devil's last action was a success with a hook Strike.", `The test devil pulls the creature 10 feet closer and ${link("kWc1fhmv9LBiTuei", "Grabs")} it with the hook ([[/act escape dc=30]]). The creature is freed if the test devil moves away.`);
+    assert.deepEqual([chain.resolution.outcomes.success.forcedMovement.kind, chain.resolution.outcomes.success.effects.map((effect) => effect.slug)], ["pull", ["grabbed"]]);
+    const upper = compile("The test rogue's last action was a melee Strike that critically succeeded", "The test rogue Disarms the creature they hit, as a critical success on a Disarm attempt. The weapon lands next to the creature (the test rogue's choice).");
+    assert.deepEqual([upper.trigger.followUp.on, upper.resolution.outcomes.success.effects], [["criticalSuccess"], [{ kind: "disarm", what: "drop" }]]);
+    // A skill action after the hit: PF2e's, with its own bonus; not counting toward the penalty, no attack trait.
+    const pry = compile("The test imp's last action was a successful claw Strike", "The test imp attempts to [[/act disarm]] the creature they hit. They gain a +4 status bonus to the Athletics check. This attempt neither applies nor counts toward the test imp's multiple attack penalty.");
+    assert.deepEqual([pry.resolution.check.statistic, pry.resolution.check.bonus, pry.traits.includes("attack"), pry.resolution.outcomes.criticalSuccess.effects[0].kind], ["athletics", { value: 4, type: "status" }, false, "disarm"]);
+    // A second Strike: a Strike activity after such a Strike; "using the previous Strike's multiple attack penalty"; off-guard.
+    const gnaw = compile("The test hound's previous action was a jaws Strike that dealt damage to its target", "the test hound makes a second jaws Strike as it shakes its head. On a success, the target takes an additional 1d4 slashing damage and 1 persistent bleed damage.");
+    assert.deepEqual([gnaw.builtin, gnaw.strike, gnaw.onHit.damage, gnaw.after.on], ["strike-activity", "jaws", ["1d4[slashing]", "1[persistent,bleed]"], hit]);
+    const swing = compile("The test thrall's last action was a club Strike that missed", "The test thrall makes another club Strike against the same target, using the previous Strike's multiple attack penalty.");
+    assert.deepEqual([swing.builtin, swing.after.on, swing.previousMap], ["strike-activity", ["failure", "criticalFailure"], true]);
+    const feint = compile("The test duelist's previous action this turn was a Strike that failed or critically failed", "The test duelist Strikes the same target, who is Off-Guard against this attack. On a hit, the test duelist deals 1d6 additional precision damage.");
+    assert.deepEqual([feint.offGuard, feint.onHit.damage], [true, ["1d6[precision]"]]);
+});

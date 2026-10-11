@@ -19,7 +19,8 @@ export function cardCheck(plan) {
     if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic };
     // No roll ("The target takes 3d8 fire damage"): every target is affected (2026-10-10).
     if (check.roll === "automatic") return { kind: "automatic" };
-    if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic };
+    // (A bonus of its own, "a +4 status bonus to the Athletics check", batch 36: added to the roll.)
+    if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}) };
     return null;
 }
 
@@ -161,7 +162,8 @@ export function checkLine(state) {
     if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
-    return `${statisticLabel(check.statistic)} against each target's ${statisticLabel(check.against)} DC`;
+    const bonus = check.bonus ? ` (+${check.bonus.value} ${check.bonus.type})` : "";
+    return `${statisticLabel(check.statistic)}${bonus} against each target's ${statisticLabel(check.against)} DC`;
 }
 
 // The card's HTML. Buttons carry data-aar-action ("roll", "roll-all", "targets",

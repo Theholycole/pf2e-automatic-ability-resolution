@@ -11,7 +11,7 @@
 
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
-import { activityRider, fitsSize, strikeMatches } from "../src/live/activity.js";
+import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
@@ -131,6 +131,11 @@ async function cardForAbility(message) {
     const formula = rechargeFormula(item, plan);
     // Used again while it recharges: the card says so (the GM decides).
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;
+    // A follow-up to a Strike (batch 36, "last action was a successful jaws Strike"): on the creature that Strike hit.
+    if (plan?.resolution && plan.trigger?.followUp && (plan.trigger.event ?? "use") === "use") {
+        await followUpCard(item, plan, sourceToken, warning);
+        return;
+    }
     if (plan?.resolution && (plan.trigger?.event ?? "use") === "use" && cardCheck(plan)) {
         // On itself (Go Dark, batch 26): its own token; on its allies around it: those in its emanation; otherwise the GM's targets.
         const area = plan.targeting?.allies && plan.targeting.area?.type === "emanation" ? Number(plan.targeting.area.value) || 0 : 0;
@@ -283,6 +288,23 @@ async function hazardCast(message, state, { rank, dc }) {
 // client; a use more than 10 minutes old is dropped).
 const pendingActivities = new Map();
 const ACTIVITY_WAIT = 10 * 60 * 1000;
+// Each monster's last Strike, hit or miss (batch 36): the creature a follow-up acts on, and the Strike's degree.
+const lastStrikes = new Map();
+
+// A follow-up's card: on the creature the monster's last Strike hit when that Strike allows it (its results by that Strike's
+// degree when they differ); otherwise on the GM's targets, a hit's results, with a line to check the requirement.
+async function followUpCard(item, plan, sourceToken, warning) {
+    const last = lastStrikes.get(item.actor.uuid);
+    const fresh = last && Date.now() - last.at <= ACTIVITY_WAIT && last.target?.actor ? last : null;
+    const fits = fresh && followUpFits(plan.trigger.followUp, { outcome: fresh.context.outcome, strikeName: fresh.strike.name, ranged: !!fresh.strike.isRanged, attackEffects: fresh.strike.system?.attackEffects?.value ?? [] });
+    const token = sourceToken ?? fresh?.sourceToken ?? null;
+    if (fits && plan.resolution.check?.statistic === "strike") return degreeCard(fresh.message, item, plan, { ...fresh, sourceToken: token, cost: "action" });
+    if (fits) return postCard({ plan, item, sourceActor: item.actor, sourceToken: token, tokens: [fresh.target], rider: { strikeName: fresh.strike.name, cost: "action" }, warning });
+    const need = plan.trigger.followUp;
+    const strike = `${need.on?.length === 1 && need.on[0] === "criticalSuccess" ? "critical hit" : "hit"}${need.strike ? ` with its ${need.strike}` : ""}`;
+    const unchecked = `No ${strike} just before was found: check ${item.name}'s requirement.`;
+    return postCard({ plan: followUpAsHit(plan), item, sourceActor: item.actor, sourceToken: token, tokens: [...game.user.targets], warning: [warning, unchecked].filter(Boolean).join(" ") });
+}
 
 // A monster's or a hazard's Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each. The Strike of
 // a Strike activity used just before: a card with the activity's results on a hit.
@@ -295,6 +317,7 @@ async function cardsForRiders(message) {
     const hit = ["success", "criticalSuccess"].includes(context.outcome);
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const target = targetToken?.object ?? targetToken;
+    if (target?.actor) lastStrikes.set(actor.uuid, { message, actor, strike, target, targetToken, context, sourceToken: message.token ?? null, at: Date.now() });
     // (The activity's Strike, hit or miss, uses it up.)
     const pending = pendingActivities.get(actor.uuid);
     if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
@@ -644,7 +667,9 @@ async function rollTarget(message, target) {
     const statistic = source?.getStatistic?.(state.check.statistic);
     if (!statistic) throw new Error(`${state.source.name} has no ${statisticLabel(state.check.statistic)}.`);
     if (!Number.isFinite(target.dc)) throw new Error(`${target.name}'s ${statisticLabel(state.check.against)} DC is unknown.`);
-    return statistic.roll({ dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)} DC` }, identifier, skipDialog: true, item });
+    // (Its own bonus, batch 36: "They gain a +4 status bonus to the Athletics check".)
+    const bonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
+    return statistic.roll({ dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)} DC` }, identifier, skipDialog: true, item, ...(bonus.length ? { modifiers: bonus } : {}) });
 }
 
 // A roll tagged with a card's identifier: its result, onto the card (active GM only).

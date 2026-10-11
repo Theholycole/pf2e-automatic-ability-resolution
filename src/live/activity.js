@@ -70,3 +70,20 @@ export function fitsSize(size, limit) {
     const at = SIZES.indexOf(String(size ?? "").toLowerCase().replace(/^sm$/, "small").replace(/^med$/, "medium").replace(/^lg$/, "large").replace(/^grg$/, "gargantuan"));
     return at < 0 || at <= SIZES.indexOf(String(limit).toLowerCase());
 }
+
+// Whether the creature's last Strike allows a follow-up (batch 36: "Requirements … last action was a successful jaws Strike"):
+// followUp { strike, melee, on, listing } against that Strike's outcome, name, range and listed riders ("disarm").
+export function followUpFits(followUp, { outcome, strikeName = "", ranged = false, attackEffects = [] } = {}) {
+    if (!followUp || !(followUp.on ?? ["success", "criticalSuccess"]).includes(outcome)) return false;
+    if (followUp.melee && ranged) return false;
+    if (followUp.listing && !attackEffects.some((effect) => String(effect).replace(/^improved-/, "") === followUp.listing)) return false;
+    return !followUp.strike || strikeMatches({ strike: followUp.strike }, { name: strikeName, isRanged: ranged });
+}
+
+// A follow-up by the Strike's degree with no Strike to go by: a hit's results, applied as they are (the GM checks the rest).
+export function followUpAsHit(plan) {
+    const resolution = plan?.resolution;
+    if (resolution?.check?.statistic !== "strike") return plan;
+    const none = { damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] };
+    return { ...plan, resolution: { ...resolution, check: { roll: "automatic", statistic: "automatic" }, outcomes: { criticalSuccess: { ...none }, success: resolution.outcomes.success, failure: { ...none }, criticalFailure: { ...none } } } };
+}
