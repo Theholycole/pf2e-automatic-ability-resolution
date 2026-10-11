@@ -286,7 +286,10 @@ export function readSwipe(text) {
 // that enemy." (Sudden Charge; 2026-10-10) → "The guard Strides twice and makes a melee Strike." for the charge readers.
 export function chargeSentences(text) {
     // (Batch 42: "They Stride or Swim twice; if they end their movement …, they can make a melee Strike against it.")
-    return String(text).replace(/\b(Strides? twice|Strides? or Swims? twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)[.;]\s+[Ii]f (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement (?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that (?:enemy|foe|creature|target)|the (?:enemy|foe|creature|target)|it)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
+    // (Batch 70: "Strides twice If they end …" with its full stop missing, "If they end their flight at a lower elevation than they started and
+    // within melee reach of at least one enemy, they can make a melee Strike against that enemy, gaining a +1 circumstance bonus to the
+    // Strike" — the bonus as its attack roll's.)
+    return String(text).replace(/\b(Strides? twice|Strides? or Swims? twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)(?:[.;]\s+|\s+)[Ii]f (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) ends? (?:its|their|his|her) (?:movement|flight) (?:at a lower elevation than (?:it|they|he|she) started and )?(?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that (?:enemy|foe|creature|target)|the (?:enemy|foe|creature|target)|it)(?:, gaining a \+(\d+) circumstance bonus to the Strike)?\./gi, (_whole, move, strike, bonus) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike${bonus ? ` with a +${bonus} circumstance bonus to its attack roll` : ""}.`);
 }
 
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
@@ -342,15 +345,21 @@ export function moveThenStrike(said) {
     const text = String(said).replace(/, making (?:an?|one) ((?:[\w' -]+? )?Strike)\b/i, " and makes a $1");
     // ("Grandfather Mantis Strides, then Strikes.", "… Strides twice, then Strikes with their horn.", batch 25.)
     // (Batch 37: "Strides or Steps, then Strikes with his hand crossbow", "Burrows and then Strikes", "Strides twice and Strikes with its bayonet".)
-    const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or (?:${MOVES}|Steps?))?)( twice| up to two times)?(?:, then| and(?: then)?) Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?\.$`, "i").exec(text);
+    const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or (?:${MOVES}|Steps?))?)( twice| up to two times)?(?:, then| and(?: then)?) Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?(?: at any point during (?:its|their|his|her|the|this) movement)?\.$`, "i").exec(text);
     if (bare) return { strides: bare[2] ? 2 : 1, strike: bare[3] ? bare[3].toLowerCase() : null };
-    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike((?: (?:at any point (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way|along (?:its|the) movement)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|against (?:a|an|one) (?:foe|enemy|creature|target) (?:within (?:its|their|his|her) reach|adjacent to it)|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:single )?(?:([\w' -]+?) )??Strike((?: (?:at any (?:point|time) (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way|along (?:its|the) movement)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|(?:after|at the end of) either Stride|against (?:a|an|one) (?:foe|enemy|creature|target)(?: (?:within (?:its|their|his|her) reach|adjacent to it))?|against any (?:foe|enemy|creature) along (?:its|their|his|her) path|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
     if (!match) return null;
     const how = match[2].trim();
     const strides = /three times/i.test(how) ? 3 : /twice|double|two times/i.test(how) ? 2 : 1;
     const name = match[3] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[3].trim()) ? match[3].trim().replace(/^(?:melee|ranged)\s+/i, "").toLowerCase() : null;
     return { strides, strike: name };
 }
+
+// What only tells a charge (batch 70): concealed as it moves ("During this movement, wisps of ethereal smoke trail from its body, making it
+// Concealed."), "The pale horse can move through creatures.", "Grace can Fly instead of Stride if she has a fly speed (…)", "It can
+// substitute a Swim action in place of any Stride.", "If they damage a living creature with this Strike, the temporary Hit Points they
+// receive from Glutton's Feast is increased to 2d4." (its other ability's).
+const CHARGE_TELLS = /^During (?:this|the) movement, [^.]*?\bmaking (?:it|them|him|her) Concealed\.$|^(?:The [\w' -]+?|It|They|He|She) can move through creatures\.$|^(?:The [\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*) can Fly instead of Stride if (?:it|they|he|she) (?:has|have) a fly [Ss]peed(?: \([^)]*\))?\.$|^(?:It|They|He|She) can substitute a Swim action in place of any Stride\.$|^If (?:it|they|he|she) damages? a living creature with this Strike, the temporary Hit Points (?:it|they|he|she) receives? from Glutton's Feast (?:is|are) increased to \d+d\d+\.$/i;
 
 // "The smilodon Strides and makes a Strike at the end of that movement." (the
 // hidden note after it changes nothing in the simulation) → { strides, strike }.
@@ -370,8 +379,27 @@ export function readCharge(text) {
     // (Batch 63: a move of up to half its Speed that triggers no reactions, with a Strike at a foe in reach at any point of it, the foe
     // off-guard, perhaps after a sentence that only tells it → safe, offGuard.)
     if (/^(?:[^.]+\. )?(?:The )?[^.]+? (?:Strides|Flies|Swims) up to (?:half )?(?:its|their|his|her) Speed; this movement (?:doesn't|does not) trigger reactions\. At any point during this movement, (?:it|they|he|she) can Strike an? (?:foe|creature|enemy) within reach; the (?:foe|creature|enemy|target) is Off-Guard against that attack\.$/i.test(String(text).replace(/’/g, "'").trim())) return { strides: 1, strike: null, offGuard: true, safe: true };
+    // (Not only in the first round: "Requirements It's the first round of combat Effect The elk Strides twice …".)
+    if (/^Requirements?\b[^.]*?\bfirst round of (?:combat|an encounter)\b/i.test(String(text).trim())) return null;
+    // (Batch 70, Feral Leap: "The rabbit jumps with a maximum height and distance each equal to half its Speed. This movement doesn't
+    // trigger reactions. At any point, the rabbit attempts a jaws Strike." → a move that triggers no reactions, and its Strike.)
+    const jump = /^(?:The )?[^.]+? jumps with a maximum height and distance each equal to half (?:its|their|his|her) Speed\. This movement (?:doesn't|does not) trigger reactions\. At any point, (?:the [\w' -]+?|it|they|he|she) attempts an? ([\w' -]+?) Strike\.$/i.exec(String(text).replace(/’/g, "'").trim());
+    if (jump) return { strides: 1, strike: jump[1].toLowerCase(), safe: true };
     // ("Frequency once per turn Effect The knight Strides twice. …": its Effect, batch 38.)
-    const sentences = chargeSentences(String(text).replace(/^Frequency once per (?:turn|round) Effect /, "")).trim().split(/(?<=\.)\s+/);
+    // (Batch 70: what only tells the move — "…, ignoring difficult terrain caused by rubble", "…, during which it attempts a High Jump or a
+    // Long Jump" — and "Strides twice, Leaps twice, or Strides once and Leaps once. It then makes a jaws Strike at the end of the movement".)
+    const told = chargeSentences(String(text).replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1"))
+        .replace(/\b((?:Strides|Flies|Swims)(?: or (?:Strides|Flies|Swims))? (?:twice|up to (?:double|twice) (?:its|their|his|her) Speed)),? (?:ignoring (?:any )?difficult terrain(?: caused by [^.;]+?)?|during which (?:it|they|he|she) attempts a High Jump or a Long Jump)(?=[.;])/i, "$1")
+        .replace(/\bStrides twice, Leaps twice, or Strides once and Leaps once\. (?:It|They|He|She) then makes an? ([\w' -]+?) Strike at the end of the movement\./i, "Strides twice and makes a $1 Strike.");
+    const sentences = told.trim().split(/(?<=\.)\s+/);
+    // (Batch 70: a move, then its Strike in a sentence of its own — "The mist bear Strides twice. During this movement, … The mist bear then
+    // Strikes.", "… Strides up to twice its Speed. At any point during its movement, the morlock can make a melee Strike against an enemy
+    // in its reach." — read as one; what's between only tells it.)
+    const bareMove = /^((?:The )?[^.]+? (?:Strides|Flies|Swims)(?: or (?:Strides|Flies|Swims))?) (?:twice|up to (?:double|twice) (?:its|their|his|her) Speed)\.$/i.exec(sentences[0] ?? "");
+    const strikeAt = bareMove ? sentences.findIndex((sentence, index) => index > 0 && /^(?:(?:The [\w' -]+?|It|They|He|She) then Strikes|At any point during (?:its|their|his|her|this|the) movement, (?:the [\w' -]+?|it|they|he|she) can make a melee Strike against an enemy in (?:its|their|his|her) reach)\.$/i.test(sentence)) : -1;
+    if (strikeAt > 0 && sentences.slice(1, strikeAt).every((sentence) => CHARGE_TELLS.test(sentence))) {
+        sentences.splice(0, strikeAt + 1, `${bareMove[1]} twice and makes a Strike.`);
+    }
     // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
     // (Batch 42: "With a quick sprint, the test warrior dashes up to their foe and swings.", "… with jets of energy from its feet, …".)
     if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|\d+ feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^(?:[A-Z][^,.]*, (?=the ))?[Tt]he [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
@@ -387,8 +415,33 @@ export function readCharge(text) {
     if (!match && !other) return null;
     const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[2].trim()) ? match[2].toLowerCase() : null };
     if (plainBonus) charge.attackBonus = plainBonus;
-    const moved = "^(?:If|As long as) (?:it|they|he|she|the [\\w' -]+?|[A-Z][\\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, ";
+    // (Batch 70: any name, "the ōmukade".)
+    const moved = "^(?:If|As long as) (?:it|they|he|she|the [^,.]+?|[A-Z][\\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, ";
     for (const sentence of sentences.slice(1)) {
+        // (Batch 70: what only tells it — concealed as it moves, moving through creatures, flying or swimming in place of a Stride, another
+        // ability's temporary Hit Points.)
+        if (CHARGE_TELLS.test(sentence)) continue;
+        // (Batch 70: "The target is Off-Guard to this attack if the bear moved at least 20 feet"; "… against this Strike unless it has seen a
+        // Rearward Rush before" — the first time it's used on that creature; a circumstance bonus to its damage roll once it has moved 20 feet;
+        // "The morlock then can't use Leap Attack for 1 round". Extra damage on a hit is the Strike activity's, whose card applies it.)
+        if (/^The target is Off-Guard (?:to|against) this (?:attack|Strike) if (?:it|they|he|she|the [^,.]+?) moved at least 20 feet\.$/i.test(sentence)) {
+            charge.offGuard = true;
+            continue;
+        }
+        if (/^The target is Off-Guard (?:to|against) this (?:attack|Strike) unless it has seen an? [\w' -]+? before\.$/i.test(sentence)) {
+            charge.offGuard = "first";
+            continue;
+        }
+        const harder = new RegExp(`${moved}(?:it gains|they gain|he gains|she gains) a \\+(\\d+) circumstance bonus to (?:its|their|his|her) damage rolls?\\.$`, "i").exec(sentence);
+        if (harder) {
+            charge.damageBonus = Number(harder[1]);
+            continue;
+        }
+        const wait = /^(?:The [\w' -]+?|It|They|He|She) then can(?:'t|not) use [\w' -]+? (?:again )?for (\d+|\d+d\d+) rounds?\.$/i.exec(sentence);
+        if (wait) {
+            charge.recharge = wait[1];
+            continue;
+        }
         // (Nothing for the simulation: "During the Stride, it gains a +10-foot circumstance bonus to its Speed.")
         if (/remains? hidden until after/i.test(sentence) || /^During (?:the|this|that) (?:Stride|movement), (?:it|they|he|she|the [\w' -]+?) gains? a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(sentence)) continue;
         // (Batch 60, Propulsive Launch: "If it's in the air and not attached to a creature after the Strike, it falls.")

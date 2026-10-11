@@ -1762,3 +1762,31 @@ test("its own hit, or a foe's, that brings a save; on a creature with a conditio
     plan = compile("The test maw hits a creature with a jaws Strike", "The test maw bites down; the target must succeed at a @Check[reflex|dc:34] save or be @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized}. While immobilized, the victim takes @Damage[3d8[persistent,bleed]] damage. The creature is immobilized until the test maw ends the effect as a free action or the target succeeds at a DC 38 check to [[/act escape dc=38]].", "free");
     assert.deepEqual(plan?.resolution?.outcomes?.failure?.manualInstructions, ["{target}: While immobilized, the victim takes 3d8 persistent bleed damage.", "{target}: The creature is immobilized until the test maw ends the effect as a free action or the target succeeds at a DC 38 check to Escape."]);
 });
+
+test("charges in their own words: the Strike in a sentence of its own, off-guard the first time, a recharge, a bonus to damage (2026-10-11, batch 70)", () => {
+    const action = (description, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } });
+    const charge = (description, actions) => compileMonsterAbility(action(description, actions), { basicActions: {} });
+    for (const [description, expected] of [
+        // The Strike in a sentence of its own, with what only tells the move between; off-guard if it moved 20 feet.
+        ["The test bear Strides twice. During this movement, wisps of smoke trail from its body, making it Concealed. The test bear then Strikes. The target is Off-Guard to this attack if the bear moved at least 20 feet.", { strides: 2, strike: null, offGuard: true }],
+        ["The test morlock Strides up to twice its Speed, during which it attempts a High Jump or a Long Jump. At any point during its movement, the test morlock can make a melee Strike against an enemy in its reach. The test morlock then can't use Leap Attack for 1 round.", { strides: 2, strike: null, recharge: "1" }],
+        ["The test scavenger Strides twice, ignoring difficult terrain caused by rubble. At any point during its movement, the test scavenger can make a melee Strike against an enemy in its reach.", { strides: 2, strike: null }],
+        // Off-guard to a creature that hasn't seen it.
+        ["The test evil Strides twice, then makes a pseudopod Strike. The target is Off-Guard against this Strike unless it has seen a Slithering Strike before.", { strides: 2, strike: "pseudopod", offGuard: "first" }],
+        // A Strike after either Stride, along its path, at any point; a jump; the Strike if it ends in reach (its full stop missing).
+        ["The test aurochs Strides twice and makes a single horn Strike against any foe along its path.", { strides: 2, strike: "horn" }],
+        ["The test lagofir Strides twice and Strikes at any point during its movement. It can substitute a Swim action in place of any Stride.", { strides: 2, strike: null }],
+        ["The test groplit Strides twice, Leaps twice, or Strides once and Leaps once. It then makes a jaws Strike at the end of the movement.", { strides: 2, strike: "jaws" }],
+        ["The test rabbit jumps with a maximum height and distance each equal to half its Speed. This movement doesn't trigger reactions. At any point, the test rabbit attempts a jaws Strike.", { strides: 1, strike: "jaws", safe: true }],
+        ["The test raider Strides twice If they end their movement within melee reach of an enemy, they can make a melee Strike against that enemy.", { strides: 2, strike: null }],
+        ["The test munagola Flies twice. If they end their flight at a lower elevation than they started and within melee reach of at least one enemy, they can make a melee Strike against that enemy, gaining a +1 circumstance bonus to the Strike.", { strides: 2, strike: null, attackBonus: 1 }],
+        ["Test Grace Strides twice; if she ends her movement within melee reach of at least one enemy, she can make a melee Strike against that enemy. Test Grace can Fly instead of Stride if she has a fly speed (such as with Angelic Wings).", { strides: 2, strike: null }],
+        // Another ability's temporary Hit Points, a name with an accent, a bonus to damage.
+        ["The test glutton Strides twice and makes a jaws Strike. If they damage a living creature with this Strike, the temporary Hit Points they receive from Glutton's Feast is increased to [[/r 2d4 #Temporary Hit Points]]{2d4}.", { strides: 2, strike: "jaws" }],
+        ["The ōmukade Strides twice and then makes a mandibles Strike. If the ōmukade moved at least 20 feet away from its starting position, it gains a +2 circumstance bonus to this attack roll.", { strides: 2, strike: "mandibles", attackBonus: 2 }],
+        ["The test knight Strides twice and then makes a lance Strike. If the test knight moved at least 20 feet from its starting position, it gains a +3 circumstance bonus to its damage rolls.", { strides: 2, strike: "lance", damageBonus: 3 }]
+    ]) assert.deepEqual(charge(description), { builtin: "charge", actions: 2, ...expected }, description);
+    // Not only in the first round; extra damage on a hit is the Strike activity's (its card applies it).
+    assert.equal(charge("Requirements It's the first round of combat Effect The test elk Strides twice and makes a hoof Strike at the end of either Stride."), null);
+    assert.notEqual(charge("The test elk Strides twice and makes a hoof Strike after either Stride. If the Strike hits, the test elk deals an additional @Damage[2d4[bludgeoning]] damage.")?.builtin, "charge");
+});
