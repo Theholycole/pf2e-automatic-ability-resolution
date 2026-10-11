@@ -450,6 +450,18 @@ export function readReaction(item, text) {
     // triggering creature and one against another adjacent creature." → a reaction Strike at it as it's damaged (and a second at another).
     const thrash = /^An? adjacent enemy damages (?:the [\w' -]+?|it|him|her|them)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes one or two ([\w' -]+?) Strikes(?:\s*[-\u2013\u2014]\s*one against the triggering creature and one against another adjacent creature|, each against a different adjacent creature)\.$/i.exec(effect.trim()) : null;
     if (thrash) return { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: thrash[1].toLowerCase(), penalty: 0, disrupts: false, second: true };
+    // Batch 61: a Strike as it takes damage of some types — the trolls' Furious Flailing, "Trigger The forest troll takes electricity or
+    // fire damage Effect The troll makes a claw Strike against a random creature within its reach. If the troll has persistent fire
+    // damage, they attempt a DC 15 flat check to remove it." (Furious Carve's "hatchet or claw", Furious Spit's "within their first range
+    // increment"); the wood golem's Splinter, "takes physical damage … The golem makes a splinter Strike against an adjacent creature
+    // without triggering reactions." → triggers ["damaged-by"], damageTypes, random (a random creature) or the attacker first,
+    // persistentFire (its extra flat check).
+    const hurtBy = /^(?:The )?[^.]+? takes (electricity|fire|cold|sonic|acid|physical|force|mental|void|vitality)(?: or (electricity|fire|cold|sonic|acid|physical|force|mental|void|vitality))? damage\.?$/i.exec(trigger.trim());
+    if (hurtBy) {
+        const said = effect.trim().replace(/@Check\[(?:type:)?flat\|dc:(\d+)[^\]]*\]/gi, "a DC $1 flat check").replace(/a a DC/i, "a DC");
+        const lashes = /^(?:(?:A|An|The) [^.]+? (?:lances|bursts?) (?:out )?(?:from [^.]+? )?at (?:the [\w' -]+?'s|its|their) attacker\. )?(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against (a random creature within (?:(?:its|their) )?(?:reach|first range increment)|an adjacent creature without triggering reactions)\.( If (?:the [\w' -]+?|it|they) (?:has|have|is taking|are taking) persistent fire damage, (?:it|they|he|she) attempts? (?:a|an) DC 15 flat check to remove it\.)?$/i.exec(said);
+        if (lashes) return { builtin: "reaction-strike", triggers: ["damaged-by"], damageTypes: [hurtBy[1], hurtBy[2]].filter(Boolean).map((type) => type.toLowerCase()), strike: lashes[1].replace(/\s+or\s+.*$/i, "").toLowerCase(), penalty: 0, disrupts: false, ...(/random/i.test(lashes[2]) ? { random: true } : {}), ...(lashes[3] ? { persistentFire: true } : {}) };
+    }
     // Batch 57: a Strike back at a creature that Strikes it in its reach (Cutting Rebuke's "A creature within reach of the dragon's chin
     // blade that the dragon can see makes a Strike against the dragon", Bite Back's "The skull is attacked by a creature within their
     // reach", "makes a melee Strike against or touches the witchfire"), that critically fails a Strike against it ("A creature within
@@ -592,7 +604,8 @@ export function readReaction(item, text) {
     const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
     if (moving && struck) return { builtin: "reaction-strike", triggers: ["move"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect) };
     if (/^The [^.]+? is reduced to 0 Hit Points\.?$/i.test(trigger.trim())) {
-        const last = /^The [^.]+? makes an? (?:([\w' -]+?) )?Strike before (?:dying|being destroyed)\./i.exec(effect);
+        // (Batch 61, Death Slam: "Before it's knocked out, the argorth makes a tail Strike against a random creature within reach.")
+        const last = /^The [^.]+? makes an? (?:([\w' -]+?) )?Strike before (?:dying|being destroyed)\./i.exec(effect) ?? /^Before (?:it|they)['’](?:s| are) knocked out, the [^.]+? makes an? (?:([\w' -]+?) )?Strike against a random creature within (?:(?:its|their) )?reach\.$/i.exec(effect.trim());
         if (last) return { builtin: "death-strike", strike: last[1] ? last[1].toLowerCase() : null };
     }
     return null;

@@ -511,6 +511,16 @@ async function onDamaged(actor, amount) {
             const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
             await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger), free: !!own.plan.trigger.free });
         }
+        // Furious Flailing, Splinter (batch 61): damage of its types (the GM checks the type), its Strike at a random creature in its
+        // reach (the GM's target), or at the attacker beside it; the trolls' flat check against persistent fire, a note.
+        const flail = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("damaged-by"));
+        if (flail) {
+            const near = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) && distanceFeet(box(token, gridOf(scene).size), box(attacker, gridOf(scene).size), gridOf(scene)) <= 5;
+            const foe = !flail.plan.random && near ? attacker : null;
+            const strikes = (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(flail.plan.strike)).map((action) => ({ slug: action.slug, label: action.label }));
+            const note = [`Only if it was ${(flail.plan.damageTypes ?? []).join(" or ")} damage.`, flail.plan.random ? "At a random creature within its reach: target it first." : foe ? null : "At a creature beside it: target it first.", flail.plan.persistentFire ? "If it has persistent fire damage, it also attempts a DC 15 flat check to remove it." : null].filter(Boolean).join(" ");
+            if (strikes.length) await offer({ kind: "strike", item: flail.item, monster: token, actor, target: foe, strikes, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note });
+        }
         if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
         const grid = gridOf(scene);
         // Wing Thrash (batch 54): an adjacent enemy (the one whose turn it is) that damages it, a Strike back (and one at another);

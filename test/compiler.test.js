@@ -1611,3 +1611,16 @@ test("Double Attack, Writhing Arms, Ram Charge, Propulsive Launch, Savage Jaws, 
     assert.deepEqual(compileMonsterAbility(item("Elf Step", "<p>The test elementalist Steps twice.</p>", 1)), { builtin: "safe-move", actions: 1 });
     for (const html of ["<p>The test centipede Strides up to its Speed or Steps. During this movement, it can pass through spaces as narrow as 10 feet without @UUID[Compendium.pf2e.actionspf2e.Item.kMcV8e5EZUxa6evt]{Squeezing}.</p>", "<p>The test con rit Swims. During this movement, it can pass through spaces as narrow as 5 feet without Squeezing.</p>"]) assert.deepEqual(compileMonsterAbility(item("Undulate", html, 1)), { builtin: "no-effect" });
 });
+
+test("Furious Flailing and Splinter: a Strike as it takes damage of some types (2026-10-11, batch 61)", () => {
+    const reaction = (name, trigger, effect) => ({ type: "action", name, system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } });
+    const strike = (types, name, extra = {}) => ({ builtin: "reaction-strike", triggers: ["damaged-by"], damageTypes: types, strike: name, penalty: 0, disrupts: false, ...extra });
+    for (const [trigger, effect, expected] of [
+        ["The test troll takes electricity or fire damage", "The test troll makes a claw Strike against a random creature within its reach. If the test troll has persistent fire damage, they attempt a @Check[flat|dc:15] to remove it.", strike(["electricity", "fire"], "claw", { random: true, persistentFire: true })],
+        ["The test troll takes fire or sonic damage", "The test troll makes a hatchet or claw Strike against a random creature within reach. If the test troll has persistent fire damage, they attempt a @Check[flat|dc:15] to remove it.", strike(["fire", "sonic"], "hatchet", { random: true, persistentFire: true })],
+        ["The test troll takes cold or fire damage", "The test troll makes a sludge cough Strike against a random creature within their first range increment.", strike(["cold", "fire"], "sludge cough", { random: true })],
+        ["The test golem takes physical damage", "A jagged splinter of wood lances out at the test golem's attacker. The test golem makes a splinter Strike against an adjacent creature without triggering reactions.", strike(["physical"], "splinter")]
+    ]) assert.deepEqual(compileMonsterAbility(reaction("Test", trigger, effect)), expected, trigger);
+    // Death Slam: a Strike as it drops.
+    assert.deepEqual(compileMonsterAbility(reaction("Death Slam", "The test argorth is reduced to 0 Hit Points", "Before it's knocked out, the test argorth makes a tail Strike against a random creature within reach.")), { builtin: "death-strike", strike: "tail" });
+});
