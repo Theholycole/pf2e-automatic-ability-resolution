@@ -2013,10 +2013,13 @@ function downsDemoralize(item, basicActions) {
         const plan = structuredClone(basicActions.demoralize);
         return { ...plan, ...base(item, { traits: plan.traits }), targeting: { ...plan.targeting, target: "the attacker" }, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
     }
-    if (trigger?.event !== "downs") return null;
+    // (Batch 72: as the fight starts or its turn begins, "The brass dragon roars out a mighty challenge and attempts to Demoralize a creature it
+    // can see", "The director general attempts to Demoralize a creature within 60 feet that they can see and that can see the director
+    // general" — at a creature of the GM's, the simulator's nearest foe.)
+    if (!["downs", "initiative", "own-turn-start"].includes(trigger?.event)) return null;
     // (A first sentence that only tells it: "After downing the foe, Krosovahn menacingly reminds another foe that he's coming after them next.")
     const effect = parts[2].replace(/^After downing the foe, [^.]+\.\s*/i, "");
-    const WHOM = String.raw`(?:a single creature|a creature within \d+ feet)(?: (?:that )?(?:it|he|she|they|xe) can see)?(?: and that can see (?:it|him|her|them|xir))?`;
+    const WHOM = String.raw`(?:a single creature|a creature|one creature|a creature within \d+ feet)(?: (?:that )?(?:it|he|she|they|xe) can see)?(?: and that can see (?:it|him|her|them|xir|the [\w' -]+?))?`;
     const match = new RegExp(String.raw`^(?:The )?[^.]+? attempts? (?:an Intimidation check (?:with a \+(\d+) circumstance bonus )?to Demoralize ${WHOM}(?:,? with a \+(\d+) circumstance bonus)?|to Demoralize ${WHOM}(?:,? with a \+(\d+) circumstance bonus)?)\.(?: (?:It|He|She|They|Xe) gains? a \+(\d+) circumstance bonus to this check\.)?$`, "i").exec(effect);
     if (!match) return null;
     const bonus = Number(match.slice(1).find(Boolean)) || 0;
@@ -2226,7 +2229,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
     if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? plan;
-    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
+    return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
@@ -2314,6 +2317,8 @@ export function readReactionTrigger(text) {
     if (own) return { event: "turn-start", reaction: true, within: Number(own[2]), ...(own[1] ? { living: true } : {}) };
     // "The egarhowl rolls initiative" (not "… while in water").
     if (new RegExp(String.raw`^${SELF} rolls (?:for )?initiative$`).test(trigger)) return { event: "initiative", reaction: true };
+    // (Batch 72: "The director general's turn begins", "The fetch starts its turn" — its own turn starting.)
+    if (new RegExp(String.raw`^${SELF}['’]s? turn begins$|^${SELF} (?:starts|begins) (?:its|their|his|her) turn$`).test(trigger)) return { event: "own-turn-start", reaction: true };
     let match = new RegExp(String.raw`^${SELF} (?:is (critically )?hit|takes a (critical) hit)\b(.*)$`).exec(trigger);
     if (match) {
         // (Batch 29: "is hit by an attack or spell attack from an enemy within 30 feet", a made-up example: a hit, from that far.)
@@ -2661,7 +2666,7 @@ function targetedBy(item, plan) {
     return { ...plan, targeting: { target: "the attacker", range: "touch", area: null }, trigger: { ...plan.trigger, ...targetedWith(clause) } };
 }
 
-function reactionTrigger(item, plan) {
+function reactionTrigger(item, plan, actor = null) {
     // (A free action with a trigger too: Chilling Cry's "Trigger Losko rolls initiative"; its trigger.free.)
     const type = item.system?.actionType?.value;
     if (!["reaction", "free"].includes(type) || !plan?.resolution || plan.builtin || (plan.trigger?.event ?? "use") !== "use") return null;
@@ -2671,6 +2676,8 @@ function reactionTrigger(item, plan) {
     if (!read) return null;
     const trigger = type === "free" ? { ...read, reaction: true, free: true } : read;
     const effect = plain.split(/\bEffect\b/).slice(1).join(" ");
+    // (Batch 72: its own turn starting — not with a requirement, nor a hazard's, whose card its hazard flow posts.)
+    if (trigger.event === "own-turn-start" && (/\bRequirements?\b/.test(plain) || (actor ?? item.actor ?? item.parent)?.type === "hazard")) return null;
     // (Batch 69: not a save that only a critical hit brings, after a choice on any hit — "On a critical hit, the target must also
     // attempt a … save", Critical Debilitating Strike: the GM's, as before.)
     if (trigger.event === "own-strike" && trigger.on.includes("success") && /\bOn a critical hit\b/i.test(effect)) return null;
@@ -2684,7 +2691,7 @@ function reactionTrigger(item, plan) {
     // (Not "chooses a different creature … and attempts to swap places with that creature".)
     const other = /\b(?:a different|another) creature\b/i.test(effect);
     const single = !other && ["attacked", "turn-start", "provoke"].includes(trigger.event) && plan.targeting?.target === "1 creature";
-    const onAttacker = !other && !["death", "own-strike", "initiative"].includes(trigger.event) && !plan.targeting?.area && (single || ATTACKER.test(effect) || /^the creature$/i.test(first));
+    const onAttacker = !other && !["death", "own-strike", "initiative", "own-turn-start"].includes(trigger.event) && !plan.targeting?.area && (single || ATTACKER.test(effect) || /^the creature$/i.test(first));
     const around = !plan.targeting?.area && !onAttacker && trigger.event !== "own-strike" ? (/^(?:all |each )?adjacent creatures\b/i.test(first) || /\b(?:on|to|all|each) adjacent creatures\b/i.test(effect) ? 5 : Number(/(?:\b(?:any|each|every|all) (?:[\w-]+ )?creatures?|(?:^|[.!?]\s+)Creatures) within (\d+) feet\b/i.exec(effect)?.[1]) || null) : null;
     // Its own Strike's: on the creature it hit, or around it ("a blast of lightning in a 10-foot burst centered on the target").
     const struck = trigger.event === "own-strike" ? (plan.targeting?.area ? { ...plan.targeting, area: { ...plan.targeting.area, around: "target" } } : { target: "the creature the Strike hits", range: "touch", area: null }) : null;

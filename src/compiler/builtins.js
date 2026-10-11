@@ -560,6 +560,12 @@ export function readReaction(item, text) {
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
+    // (Batch 72: one that only brings another into the fight — "The rocks of the area begin to crumble. The hazard rolls for initiative.",
+    // "The augdunars roll initiative." — or Sustains a Spell as its turn begins: the GM's.)
+    const joining = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const quiet = (sentence) => !/\d|@|\b(?:damage|save|Strikes?|attacks?|check|penalty|bonus|condition|Hit Points|HP|casts?|uses?|makes?|Strides?|Steps?|moves?|teleports?|creates?|summons?|spawns?|expos\w*|Grabbed|Restrained|Immobilized|Prone|Escape|difficult terrain|pulls?|push\w*)\b|\bat the (?:target|triggering creature)\b/i.test(sentence);
+    if (joining.every(quiet) && /^(?:The [\w' -]+?|It|They|[A-Z][\w'-]+)(?: [a-z][\w' -]*? and)? (?:then )?rolls? (?:for )?initiative\.$/i.test(joining.at(-1))) return { builtin: "no-effect" };
+    if (joining.every(quiet) && /\b(?:Sustains a Spell|gains the effects of the Sustain a Spell action)\b/.test(effect) && /\bturn begins\b/i.test(trigger)) return { builtin: "no-effect" };
     // Biting Snakes (batch 55): "Trigger A creature ends its turn adjacent to the medusa. Effect The medusa makes a snake fangs Strike against
     // the creature." → a reaction Strike as a creature ends its turn beside it.
     const ending = /^An? creature ends its turn adjacent to (?:the [\w' -]+?|[A-Z][\w'-]+|it)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the (?:triggering )?creature\.$/i.exec(effect.trim()) : null;

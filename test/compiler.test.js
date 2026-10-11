@@ -1806,3 +1806,27 @@ test("a reaction's resistance against the damage that sets it off (2026-10-11, b
     assert.notEqual(read("The test bard would take damage", "The test bard gains resistance 2 to the triggering damage and teleports to an adjacent space.")?.builtin, "resist-damage");
     assert.notEqual(read("The test devil takes fire damage", "The test devil gains resistance 8 to fire against the triggering attack. If this damage came from an unarmed attack, the creature who caused the damage takes @Damage[8[fire]] damage.")?.builtin, "resist-damage");
 });
+
+test("its own turn beginning as a trigger, Demoralize as the fight starts, and what only brings another into the fight (2026-10-11, batch 72)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    const ability = (trigger, effect, type = "free", { requirements = null, actor = null } = {}) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p>${requirements ? `<p><strong>Requirements</strong> ${requirements}</p>` : ""}<hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions, actor });
+    assert.deepEqual(readReactionTrigger("The test director's turn begins"), { event: "own-turn-start", reaction: true });
+    assert.deepEqual(readReactionTrigger("The test fetch starts its turn"), { event: "own-turn-start", reaction: true });
+    // Demoralize as the fight starts, or as its turn begins.
+    let plan = ability("The test dragon rolls initiative.", "The test dragon roars out a mighty challenge and attempts to [[/act demoralize]] a creature it can see.");
+    assert.deepEqual([plan?.trigger, plan?.resolution?.check?.statistic], [{ event: "initiative", reaction: true, free: true }, "intimidation"]);
+    plan = ability("The test director's turn begins", "The test director attempts to Demoralize a creature within 60 feet that they can see and that can see the test director.");
+    assert.deepEqual([plan?.trigger, plan?.resolution?.check?.statistic], [{ event: "own-turn-start", reaction: true, free: true }, "intimidation"]);
+    // Only another brought into the fight (the GM's: a hazard joins the encounter in its own flow), or a spell Sustained.
+    for (const effect of ["The trap rolls initiative.", "The rocks of the area begin to crumble. The hazard rolls for initiative.", "The test wheel begins to spin and rolls initiative."]) assert.deepEqual(ability("A creature opens the vault door", effect, "reaction"), { builtin: "no-effect" }, effect);
+    assert.deepEqual(ability("The test druid's turn begins.", "The test druid calls upon the natural world to support his magic. He Sustains a Spell."), { builtin: "no-effect" });
+    // Not with more than that: a spell, a condition, a creature exposed to an effect.
+    assert.notDeepEqual(ability("A creature takes damage within the area", "The test coral casts Spirit Link on its ally. The hazard rolls initiative.", "reaction"), { builtin: "no-effect" });
+    assert.notDeepEqual(ability("A creature enters the water", "A shadowy figure grabs a creature's ankles; it becomes Grabbed. The haunt then rolls initiative.", "reaction"), { builtin: "no-effect" });
+    // Its turn beginning, but a requirement, or a hazard's: as before.
+    plan = ability("The test python begins its turn", "That creature must attempt a @Check[fortitude|dc:32] save. Critical Success The creature is unaffected. Success The creature is Slowed 1 for 1 round. Failure The creature is Petrified for 1 round.", "free", { requirements: "The test python has a creature Grabbed" });
+    assert.notEqual(plan?.trigger?.event, "own-turn-start");
+    plan = ability("The test fireworks begin its turn.", "The test fireworks explode, dealing @Damage[6d8[fire]] damage (@Check[reflex|dc:25|basic]) save to all creatures within 15 feet.", "reaction", { actor: { type: "hazard", name: "Test Fireworks", items: [] } });
+    assert.notEqual(plan?.trigger?.event, "own-turn-start");
+});
