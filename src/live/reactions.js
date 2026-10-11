@@ -108,3 +108,27 @@ export function offerHTML(state) {
     const controls = buttons.length ? `<footer class="aar-controls">${buttons.join("")}</footer>` : "";
     return `<section class="pf2e-aar-card pf2e-aar-reaction" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong> <span class="aar-rider">${escape(state.monster.name)}'s ${state.free ? "free action" : "reaction"}</span><span class="aar-check">${who}</span></header>${detail}${note}${result}${controls}</section>`;
 }
+
+// A creature of the kind an ability names (batch 28: Verdant Burst's "each plant creature", Rotten Burst's "each undead fungi or
+// plant creature"): filter { all, any } of trait slugs; none: any creature.
+export function traitsFit(traits, filter) {
+    const has = new Set([...(traits ?? [])].map((trait) => String(trait).toLowerCase()));
+    if (!filter) return true;
+    return (filter.all ?? []).every((trait) => has.has(trait)) && (!(filter.any ?? []).length || filter.any.some((trait) => has.has(trait)));
+}
+
+// Golem Antimagic (batch 28): what a spell does to a golem, from its kinds (the spell's traits, damage types and name, lowercase):
+// { kind: "harmed", formula } (untyped damage instead of the spell's usual effect; from an area, the parenthetical amount),
+// { kind: "healed", formula? } (it loses slowed and regains half the damage the spell would have dealt; an area's amount),
+// { kind: "slowed", rounds? } (slowed 1 for 2d6 rounds; an area, for that round), or { kind: "immune" }.
+export function golemAnswer(plan, { kinds, area = false }) {
+    const has = new Set([...(kinds ?? [])].map((kind) => String(kind).toLowerCase()));
+    const listed = (entry) => (entry?.by ?? []).some((kind) => has.has(kind));
+    if (listed(plan?.harmed)) {
+        const formula = area ? plan.harmed.area ?? plan.harmed.damage : plan.harmed.damage ?? plan.harmed.area;
+        return formula ? { kind: "harmed", formula } : { kind: "immune" };
+    }
+    if (listed(plan?.healed)) return { kind: "healed", formula: area ? plan.healed.area ?? null : null };
+    if (listed(plan?.slowed)) return { kind: "slowed", rounds: area ? 1 : null };
+    return { kind: "immune" };
+}

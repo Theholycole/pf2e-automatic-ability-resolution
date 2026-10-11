@@ -361,7 +361,54 @@ export function readPermanent(text) {
     return { builtin: "permanent-condition", conditions: [{ slug, value: match[2] ? Number(match[2]) : (slug === "slowed" ? 1 : null) }], ...(match[3] ? { noReactions: true } : {}), ...(strikeOnly ? { quickenedFor: "strike" } : {}) };
 }
 
+// Naturally invisible (2026-10-10, batch 28): "A poltergeist is naturally Invisible. It becomes visible only when it uses
+// Frighten.", "The phade is Invisible at all times, though when it takes a hostile action of any kind, it is Hidden instead …":
+// invisible from the start of the fight, as a condition it always has. Not one only somewhere ("while within sight of their bound
+// home", "outside of their bottle", "Unless it has fed recently").
+function readNaturallyInvisible(text) {
+    const plain = String(text).replace(/@\w+\[[^\]]*\]\{([^}]*)\}/g, "$1").trim();
+    const first = plain.split(/(?<=\.)\s+/)[0] ?? "";
+    if (!/^(?:The |An? )?[\w' -]+? is (?:naturally Invisible|Invisible at all times)(?:\.$| and only becomes visible\b|, though\b| though\b)/i.test(first)) return null;
+    if (/\b(?:while|unless|outside|within sight|if)\b/i.test(first.replace(/\bthough when\b.*$/i, ""))) return null;
+    return { builtin: "permanent-condition", conditions: [{ slug: "invisible", value: null }] };
+}
+
 // The builtin for an item, or null.
+// Steady Spellcasting (2026-10-10, batch 28): "If another creature's reaction would disrupt the cleric's spellcasting action,
+// the cleric attempts a DC 15 flat check. On a success, the action isn't disrupted." → { builtin: "steady-spellcasting", dc }.
+function readSteady(text) {
+    if (!/\b(?:reaction )?(?:would )?disrupts? [^.]*?\bspell(?:casting)?\b/i.test(text) || !/\bisn't disrupted\b|\bavoiding the disruption\b/i.test(text)) return null;
+    const dc = /@Check\[(?:type:)?flat\|dc:(\d+)/i.exec(text)?.[1] ?? /\bDC (\d+) flat check\b/i.exec(text)?.[1];
+    return dc ? { builtin: "steady-spellcasting", dc: Number(dc) } : null;
+}
+
+// Golem Antimagic (2026-10-10, batch 28): "Harmed by sonic (6d6, 2d6 from areas or persistent damage); healed by fire (area 2d6
+// HP); slowed by cold" → { builtin: "golem-antimagic", harmed: { by, damage, area }, healed: { by, area }, slowed: { by } } (by:
+// the damage types, traits or spell names it lists, lowercase; damage: untyped, area: from areas or persistent damage). A golem is
+// immune to others' magic; magic of these kinds harms, heals or slows it instead (PF2e's glossary).
+export function readGolemAntimagic(text) {
+    // (Inline rolls and @Damage as their formulas: "[[/r {8d10}]]", "@Damage[(6d10+4)[untyped]]".)
+    const plain = String(text)
+        .replace(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g, (_all, raw) => ` ${String(raw).split("|")[0].replace(/\[[a-z,]+\]$/i, "").replace(/^\((.*)\)$/, "$1")} `)
+        .replace(/\[\[\/(?:r|br|gmr) \{?([^\]}#]+?)\}?(?: #[^\]]*)?\]\](?:\{[^}]*\})?/g, " $1 ")
+        .replace(/\s+/g, " ");
+    if (!/\bharmed by\b/i.test(plain) || !/\b(?:healed|slowed) by\b/i.test(plain) && !/\bGolem ?Antimagic\b/i.test(plain)) return null;
+    const kinds = (list) => list.trim().replace(/\.$/, "").split(/\s*(?:,|\band\b|\bor\b)\s*/i).map((kind) => kind.trim().toLowerCase()).filter(Boolean);
+    const dice = (part) => part.match(/\(?\d+d\d+(?:\s*[+-]\s*\d+)?\)?|\b\d+\b(?= (?:HP|Hit Points|damage))/gi)?.map((formula) => formula.replace(/\s+/g, "").replace(/^\((.*)\)$/, "$1")) ?? [];
+    const harmed = /\bharmed by ([^(;]+?) \(([^)]*)\)/i.exec(plain);
+    if (!harmed) return null;
+    const [first, second] = dice(harmed[2]);
+    const areaOnly = second === undefined && /from areas/i.test(harmed[2]);
+    const healed = /\bhealed by ([^(;]+?) \(([^)]*)\)/i.exec(plain);
+    const slowed = /\bslowed by ([^;.@]+?)(?=\s*(?:@Localize|A golem\b|;|\.|$))/i.exec(plain);
+    return {
+        builtin: "golem-antimagic",
+        harmed: { by: kinds(harmed[1]), damage: areaOnly ? null : first ?? null, area: areaOnly ? first : second ?? null },
+        healed: healed ? { by: kinds(healed[1]), area: dice(healed[2])[0] ?? null } : null,
+        slowed: slowed ? { by: kinds(slowed[1]) } : null
+    };
+}
+
 export function compileBuiltin(item, slug) {
     const rules = item?.system?.rules ?? [];
     const fastHealing = rules.find((rule) => rule?.key === "FastHealing");
@@ -381,7 +428,7 @@ export function compileBuiltin(item, slug) {
     if (type === "passive") {
         const momentum = slug === "draconic-momentum" || /critical hit with a Strike/i.test(text) ? readMomentum(text) : null;
         if (momentum) return { builtin: "momentum", ...momentum };
-        return readPermanent(text);
+        return readSteady(text) ?? readGolemAntimagic(text) ?? readPermanent(text) ?? readNaturallyInvisible(text);
     }
     // Reactions, and free actions with a trigger (Cushioned Blow).
     if (type === "reaction" || (type === "free" && /\bTrigger\b/.test(text))) return readReaction(item, text);

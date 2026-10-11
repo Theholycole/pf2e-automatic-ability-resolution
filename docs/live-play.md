@@ -596,3 +596,32 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
 - **The simulator** (B54): the same, the untyped dice of the Strike's damage type.
 - Over seven bestiaries (5,673 fights, no errors): Skewer 18, Calculated Blow 7, Grievous Strike 6, Kick Back 2, Shock Mind 2, Fiendish Lunge 1.
 - **Checked live in pftest** (a PFTEST SIM Grioth Cultist, Babau and Goblin Warrior, deleted afterwards): Shock Mind's hit posted the damage card ("Strike 18 vs AC 16: success") and the DC 20 Will save card; Apply dealt 9 mental damage. Grievous Strike's critical hit with the Claw posted 2×(2d6) slashing; Apply dealt 18 slashing and made the goblin Frightened 2.
+
+## Steady Spellcasting, Golem Antimagic, healing as it dies, more riders, natural invisibility (2026-10-10, batch 28)
+
+- **Steady Spellcasting** (81, 2 Battlezoo): "If another creature's reaction would disrupt the cleric's spellcasting action, the cleric attempts a DC 15 flat check. On a success, the action isn't disrupted." Read as its flat check's DC (15; 12 for troops, 17 once). For the simulator only (B55); in live play PF2e's own flat-check button on the sheet stays the GM's, as disruption isn't tracked.
+- **Golem Antimagic** (46, 4 Battlezoo): "Harmed by fire (5d8, 3d4 from areas or persistent damage); healed by electricity (area 2d4 HP); slowed by cold" (PF2e's glossary for the rest). Read as what harms, heals and slows it, with the amounts.
+  - **Live play:** a spell's attack roll against the golem, or the golem's save against a spell:
+    - harmed: PF2e's untyped damage roll ("… is harmed by Ignition, instead of its usual effect"), whatever the attack roll;
+    - slowed: a card applying Slowed 1 for 2d6 rounds (rolled);
+    - healed: a note to the GM ("loses Slowed and regains Hit Points equal to half the damage the spell would have dealt"), or an area's healing roll;
+    - anything else: a note to the GM that it's immune.
+  - From an area: the amounts in brackets, and slowed for that round. PF2e's data doesn't list golems' immunity to magic, so the spell's own damage is still the GM's to leave unapplied.
+  - **The simulator** (B56): the same; the planner knows the golem shrugs off other magic.
+- **Healing as it dies, for creatures of a kind** (30): Verdant Burst's "When a leshy dies, a burst of primal energy explodes from its body, restoring 2d8 Hit Points to each plant creature in a 30-foot emanation" (Rotten Burst: "each undead fungi or plant creature"). Its other sentences (difficult terrain) are the GM's notes.
+  - **Live play:** as it dies, PF2e's healing roll naming the creatures of that kind within the emanation, with its button to apply the healing to the selected tokens.
+  - **The simulator** (B57): those creatures in the area are healed.
+- **More riders** (13, 1 Battlezoo):
+  - "Creatures hit by the clockwork assassin's rapier hand Strike are Off-Guard …", "A creature critically hit by an amphisbaena's spit Strike is Blinded for 1 round": the creature hit as the subject;
+  - a passive that names its Strike but isn't listed by it ("When the wraith damages a living creature with its spectral hand Strike, …") rides on the Strike it names;
+  - **fixed:** a rider for critical hits only ("A creature critically hit by …") came on every hit, in live play and in the simulator (39 such riders); now only on a critical hit (B58).
+- **Naturally invisible** (12): "A poltergeist is naturally Invisible. It becomes visible only when it uses Frighten.", "The phade is Invisible at all times, though when it takes a hostile action …". Invisible as a condition it always has (batch 21's), back at the start of its turns; not one only somewhere ("while within sight of their bound home"). The simulator plays it as hidden (B58).
+- Over seven bestiaries (5,673 fights, no errors); the critical-hit fix shows: Devastation 14 → 1, Grievous Wound 5 → 1, Blinding Sand 4 → 0. With a second copy of each monster: Verdant Burst and Spiny Burst heal the other leshy.
+- **Checked live in pftest** (PFTEST SIM Flesh Golem, two Leaf Leshies, Goblin Warrior, Poltergeist and Amphisbaena, and a token of the PFTEST SIM Ezren fixture; deleted afterwards):
+  - Ignition at the golem: "harmed by Ignition" with a 5d8 untyped roll;
+  - Frostbite: the slowed card, whose Apply made it Slowed 1 with a 6-round effect;
+  - Electric Arc: the healed note;
+  - Hand of the Apprentice: the immune note;
+  - a leshy at 0 HP: a 1d4 healing roll naming only the other leshy, whose button healed it 3;
+  - the poltergeist's Invisible, removed, came back at its turn;
+  - the Amphisbaena's Blinding Spittle card came with its 2 critical hits and none of its 4 plain hits.

@@ -12,7 +12,7 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, strikeMatches } from "../src/live/activity.js";
-import { damageNote, hitSetsOff, ownStrikeSetsOff } from "../src/live/reactions.js";
+import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
@@ -51,6 +51,7 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
         cardsForRiders(message).catch((error) => console.error(`${MODULE_ID} | rider card`, error));
         cardsForHitBy(message).catch((error) => console.error(`${MODULE_ID} | hit-by card`, error));
         cardsForTargeted(message).catch((error) => console.error(`${MODULE_ID} | targeted card`, error));
+        cardsForGolem(message).catch((error) => console.error(`${MODULE_ID} | golem card`, error));
         cardForSkillAction(message).catch((error) => console.error(`${MODULE_ID} | skill action card`, error));
         spendOffGuard(message).catch((error) => console.error(`${MODULE_ID} | spending off-guard`, error));
     });
@@ -312,12 +313,16 @@ async function cardsForRiders(message) {
         }
     }
     const effects = strike?.system?.attackEffects?.value ?? [];
-    if (!hit || !effects.length || !target?.actor) return;
+    if (!hit || !target?.actor) return;
     await ready;
+    const strikeName = String(strike?.name ?? "").toLowerCase();
     for (const item of actor.itemTypes.action) {
         const plan = compile(item);
         const trigger = plan?.trigger;
-        if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug))) continue;
+        // Listed by the Strike, or naming it ("hit by the wraith's spectral hand Strike"; batch 28).
+        if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug) || (trigger.strikes ?? []).includes(strikeName))) continue;
+        // (A critical hit's only, "A creature critically hit by …": not on a plain hit; batch 28.)
+        if (!(trigger.on ?? ["success", "criticalSuccess"]).includes(context.outcome)) continue;
         await postCard({ plan, item, sourceActor: actor, sourceToken: message.token ?? null, tokens: [target], rider: { strikeName: strike.name, cost: trigger.cost ?? "free" } });
     }
 }
@@ -400,6 +405,53 @@ async function cardsForTargeted(message) {
     }
 }
 
+// Golem Antimagic (batch 28): a spell's attack roll against a golem, or the golem's save against a spell (an area's too): harmed
+// (PF2e's untyped damage roll instead of the spell's usual effect), healed (the GM's note; an area's healing roll), slowed (a
+// card applying Slowed 1 for 2d6 rounds, or that round for an area), or immune (the GM's note), as its list says.
+async function cardsForGolem(message) {
+    const context = message.flags?.pf2e?.context;
+    if (!context?.type || message.flags?.[MODULE_ID]) return;
+    const options = context.options ?? [];
+    const defender = ["attack-roll", "spell-attack-roll"].includes(context.type) ? (context.target?.token ? await fromUuid(context.target.token) : null) : context.type === "saving-throw" ? message.token : null;
+    const actor = defender?.actor;
+    if (actor?.type !== "npc") return;
+    const spell = message.item?.type === "spell" ? message.item : message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid).catch(() => null) : null;
+    if (spell?.type !== "spell" && !options.includes("item:type:spell")) return;
+    await ready;
+    const item = actor.itemTypes.action.find((entry) => compile(entry)?.builtin === "golem-antimagic");
+    if (!item || spell?.actor?.uuid === actor.uuid) return;
+    const plan = compile(item);
+    const kinds = [
+        ...(context.traits ?? []).map((trait) => trait?.name ?? trait),
+        ...options.filter((option) => /^(?:origin:)?item:trait:/.test(option)).map((option) => option.replace(/^(?:origin:)?item:trait:/, "")),
+        ...(spell?.system?.traits?.value ?? []),
+        ...Object.values(spell?.system?.damage ?? {}).map((entry) => entry?.type).filter(Boolean),
+        spell?.name ?? ""
+    ];
+    const area = options.some((option) => /^(?:origin:)?item:area\b|^area-effect$/.test(option)) || Boolean(spell?.system?.area);
+    const answer = golemAnswer(plan, { kinds, area });
+    const name = defender.name ?? actor.name;
+    const what = spell?.name ?? "this spell";
+    const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    const speaker = ChatMessage.getSpeaker({ actor, token: defender ?? undefined });
+    if (answer.kind === "harmed" || (answer.kind === "healed" && answer.formula)) {
+        const DamageRoll = damageRollClass();
+        const roll = await new DamageRoll(`(${answer.formula})[${answer.kind === "harmed" ? "untyped" : "healing"}]`).evaluate();
+        await roll.toMessage({ speaker, flavor: `<strong>${escape(item.name)}</strong>: ${escape(name)} is ${answer.kind} by ${escape(what)}${answer.kind === "harmed" ? ", instead of its usual effect" : ", and loses Slowed"}` });
+    } else if (answer.kind === "healed") {
+        await noteToGM(actor, defender, [`<strong>${escape(item.name)}</strong>: ${escape(name)} is healed by ${escape(what)}: instead of its usual effect, it loses Slowed and regains Hit Points equal to half the damage the spell would have dealt.`]);
+    } else if (answer.kind === "slowed") {
+        const rounds = answer.rounds ?? (await new Roll("2d6").evaluate()).total;
+        const none = { mode: "none", multiplier: 0, sourceComponentIds: [] };
+        const row = (effects) => ({ damage: { ...none }, effects });
+        const slowed = { kind: "condition", slug: "slowed", value: 1, duration: { mode: "fixed", value: rounds, unit: "rounds", expiry: "turn-end", anchor: "effect-start" } };
+        const card = { modelVersion: 13, source: { name: item.name }, rank: 1, traits: [], activation: { time: "free", traits: [] }, automation: { level: "automatic" }, targeting: { target: "self", range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: row([slowed]), success: row([slowed]), failure: row([slowed]), criticalFailure: row([slowed]) } } };
+        await postCard({ plan: card, item, sourceActor: actor, sourceToken: defender, tokens: [defender.object ?? defender], cause: `slowed by ${what}, ${rounds} round${rounds === 1 ? "" : "s"}, instead of its usual effect` });
+    } else {
+        await noteToGM(actor, defender, [`<strong>${escape(item.name)}</strong>: ${escape(name)} is immune to ${escape(what)}.`]);
+    }
+}
+
 // A passive on a creature a monster holds, as a turn starts or ends (2026-10-10, batch 20): on the held creature's turn, its
 // holder's ("A creature that starts its turn grabbed by the baatamidar must …"); on the monster's own turn, each creature it
 // holds ("at the end of its turn, all creatures it has grabbed take …"). Swallowed: the "Swallowed by …" effect
@@ -470,11 +522,29 @@ async function cardsForDeath(actor) {
     const last = recentDeaths.get(actor.uuid);
     if (last && Date.now() - last < 30 * 1000) return;
     await ready;
-    const deaths = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).filter(({ plan }) => plan?.trigger?.event === "death" && plan.resolution && cardCheck(plan));
+    const deaths = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).filter(({ plan }) => plan?.trigger?.event === "death" && plan.resolution && (cardCheck(plan) || plan.resolution.kind === "healing"));
     if (!deaths.length) return;
     recentDeaths.set(actor.uuid, Date.now());
     const token = actor.getActiveTokens(true, true)[0] ?? null;
-    for (const { item, plan } of deaths) await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens: tokensAround(token, Number(plan.targeting?.area?.value) || 0), cause: "as it dies" });
+    for (const { item, plan } of deaths) {
+        // Only the creatures of the kind it names (Verdant Burst's plant creatures; batch 28).
+        const tokens = tokensAround(token, Number(plan.targeting?.area?.value) || 0).filter((other) => traitsFit(other.actor?.traits ?? other.document?.actor?.traits, plan.targeting?.traits));
+        if (plan.resolution.kind === "healing") await deathHealing(item, plan, actor, token, tokens);
+        else await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: "as it dies" });
+    }
+}
+
+// Healing as it dies (Verdant Burst): PF2e's own healing roll, with its buttons to apply it to the selected tokens; the creatures
+// it reaches and its other words (difficult terrain) in the roll's heading, for the GM.
+async function deathHealing(item, plan, actor, token, tokens) {
+    const formula = plan.resolution.native?.healing?.components?.[0]?.formula;
+    if (!formula) return;
+    const DamageRoll = damageRollClass();
+    const roll = await new DamageRoll(`(${formula})[healing]`).evaluate();
+    const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    const kind = [...(plan.targeting?.traits?.all ?? []), (plan.targeting?.traits?.any ?? []).join(" or ")].filter(Boolean).join(" ");
+    const who = tokens.length ? `heals ${tokens.map((other) => escape(other.name)).join(", ")}` : `no ${escape(kind || "creature")} creature within ${Number(plan.targeting?.area?.value) || 0} feet to heal`;
+    await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor, token: token ?? undefined }), flavor: `<strong>${escape(item.name)}</strong>: as ${escape(token?.name ?? actor.name)} dies, ${who}${(plan.notes ?? []).length ? `<br>${plan.notes.map(escape).join(" ")}` : ""}` });
 }
 
 // The creatures (on either side) within radius feet of the token's space, measured as auras are.
@@ -996,7 +1066,8 @@ async function setCondition(actor, slug, value) {
 function durationText(duration, source) {
     // Minutes and longer: the time itself ("1 minute"); the monster's turns only count rounds.
     if (duration.unit && duration.unit !== "rounds") return `${duration.value} ${duration.value === 1 ? duration.unit.replace(/s$/, "") : duration.unit}`;
-    if (duration.expiry === "turn-end") return duration.value === 0 ? `until the end of ${source}'s turn` : `until the end of ${source}'s next turn`;
+    // (More than a round, batch 28's Golem Antimagic: "until the end of its turn in 6 rounds".)
+    if (duration.expiry === "turn-end") return duration.value === 0 ? `until the end of ${source}'s turn` : duration.value > 1 ? `until the end of ${source}'s turn in ${duration.value} rounds` : `until the end of ${source}'s next turn`;
     if (duration.expiry === "turn-start") return `until the start of ${source}'s turn ${duration.value === 1 ? "next round" : `in ${duration.value} rounds`}`;
     return `${duration.value} ${duration.unit}`;
 }

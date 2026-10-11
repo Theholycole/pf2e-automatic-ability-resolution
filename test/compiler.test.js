@@ -1008,3 +1008,44 @@ test("a condition the monster gives itself or its allies (2026-10-10, batch 26)"
     // Not another creature ("The animal … becomes Quickened").
     assert.equal(compileMonsterAbility(ability("Test Lead", `<p>The test gnome inspires a willing animal. The animal becomes ${quickened} for 1 round.</p>`))?.targeting?.target === "self", false);
 });
+
+test("Steady Spellcasting, Golem Antimagic, and healing as it dies for creatures of a kind (2026-10-10, batch 28)", async () => {
+    const { golemAnswer, traitsFit } = await import("../src/live/reactions.js");
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    // Steady Spellcasting: its flat check's DC.
+    const steady = compileMonsterAbility(passive("Steady Spellcasting", "<p>If another creature's reaction would disrupt the test mage's spellcasting action, the test mage attempts a @Check[flat|dc:15]. On a success, the action isn't disrupted.</p>"));
+    assert.deepEqual(steady, { builtin: "steady-spellcasting", dc: 15 });
+    // Golem Antimagic: what harms, heals and slows it, with the amounts.
+    const golem = compileMonsterAbility(passive("Golem Antimagic", "<p>Harmed by cold and water (@Damage[5d10[untyped]], @Damage[2d8[untyped]] from areas or persistent damage); healed by acid (area @Damage[2d8[healing]] HP); slowed by earth @Localize[PF2E.NPC.Abilities.Glossary.GolemAntimagic]</p>"));
+    assert.deepEqual(golem, { builtin: "golem-antimagic", harmed: { by: ["cold", "water"], damage: "5d10", area: "2d8" }, healed: { by: ["acid"], area: "2d8" }, slowed: { by: ["earth"] } });
+    assert.deepEqual(golemAnswer(golem, { kinds: ["concentrate", "Cold"] }), { kind: "harmed", formula: "5d10" });
+    assert.deepEqual(golemAnswer(golem, { kinds: ["water"], area: true }), { kind: "harmed", formula: "2d8" });
+    assert.deepEqual(golemAnswer(golem, { kinds: ["acid"] }), { kind: "healed", formula: null });
+    assert.deepEqual(golemAnswer(golem, { kinds: ["earth"] }), { kind: "slowed", rounds: null });
+    assert.deepEqual(golemAnswer(golem, { kinds: ["fire"] }), { kind: "immune" });
+    // Verdant Burst: healing as it dies, for plant creatures only; its other words for the GM.
+    const burst = compileMonsterAbility(passive("Verdant Burst", "<p>When a test leshy dies, a burst of primal energy explodes from its body, restoring @Damage[2d8[healing]] Hit Points to each plant creature in a @Template[emanation|distance:30]. The area is filled with flowers, becoming difficult terrain.</p>"));
+    assert.deepEqual([burst.trigger.event, burst.targeting.area, burst.targeting.traits, burst.resolution.native.healing.components[0].formula, burst.notes], ["death", { type: "emanation", value: 30 }, { any: ["plant"] }, "2d8", ["The area is filled with flowers, becoming difficult terrain."]]);
+    const rotten = compileMonsterAbility(passive("Rotten Burst", "<p>When a test zombie leshy dies, a burst of void energy explodes from its body, restoring @Damage[1d8[healing,void]]{1d8} Hit Points to each undead fungi or plant creature in a @Template[type:emanation|distance:30].</p>"));
+    assert.deepEqual(rotten.targeting.traits, { all: ["undead"], any: ["fungus", "plant"] });
+    assert.deepEqual([traitsFit(["plant", "leshy"], burst.targeting.traits), traitsFit(["animal"], burst.targeting.traits), traitsFit(["plant"], rotten.targeting.traits), traitsFit(["undead", "fungus"], rotten.targeting.traits)], [true, false, false, true]);
+});
+
+test("riders that name their Strike, critical hits only, and natural invisibility (2026-10-10, batch 28)", () => {
+    const passive = (name, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const melee = (name, effects = []) => ({ type: "melee", name, system: { attackEffects: { value: effects } } });
+    const offGuard = "@UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard}";
+    // "Creatures hit by … are": the creature hit as the subject; the Strike lists it.
+    const blow = compileMonsterAbility(passive("Test Blow", `<p>Creatures hit by the test automaton's blade hand Strike are ${offGuard} until the start of the test automaton's next turn.</p>`), { actor: { items: [melee("Blade Hand", ["test-blow"])] } });
+    assert.deepEqual([blow.trigger.event, blow.trigger.attackEffect, blow.resolution.outcomes.success.effects[0].slug], ["strike", "test-blow", "off-guard"]);
+    // Not listed, but named: a rider of the Strike it names; a critical hit's only.
+    const gore = compileMonsterAbility(passive("Test Gore", "<p>A creature critically hit by the test stag's antler Strike is @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}.</p>"), { actor: { items: [melee("Antler")] } });
+    assert.deepEqual([gore.trigger.strikes, gore.trigger.on, gore.resolution.outcomes.success.effects[0].slug], [["antler"], ["criticalSuccess"], "stunned"]);
+    // A critical hit's sentence after a hit's: not the hit's ("A creature critically hit by … is Immobilized").
+    const guts = compileMonsterAbility(passive("Test Guts", `<p>A creature hit by the test model's guts attack is ${offGuard} until it takes an action to remove the guts. A creature critically hit by the test model's guts attack is @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized} until it Escapes.</p>`), { actor: { items: [melee("Guts", ["test-guts"])] } });
+    assert.ok(!(guts?.resolution?.outcomes?.success?.effects ?? []).some((effect) => effect.slug === "immobilized"));
+    // Naturally invisible: a condition it always has; not one only somewhere.
+    assert.deepEqual(compileMonsterAbility(passive("Natural Invisibility", "<p>A test spirit is naturally Invisible. It becomes visible only when it uses Frighten.</p>")), { builtin: "permanent-condition", conditions: [{ slug: "invisible", value: null }] });
+    assert.deepEqual(compileMonsterAbility(passive("Naturally Invisible", "<p>The test wisp is Invisible at all times, though when it takes a hostile action of any kind, it is Hidden instead of undetected until the start of its next turn.</p>")).conditions, [{ slug: "invisible", value: null }]);
+    assert.equal(compileMonsterAbility(passive("Shy", "<p>A test sprite is naturally Invisible while within sight of their bound home.</p>"))?.builtin, undefined);
+});

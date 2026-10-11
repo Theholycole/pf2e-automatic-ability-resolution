@@ -1830,9 +1830,35 @@ function deathReading(item, actor) {
     } catch {
         plan = null;
     }
-    if (!plan) return null;
+    if (!plan) return deathHeal(item);
     const area = plan.targeting?.area ?? (/\badjacent creatures?\b|\beach (?:creature|enemy) adjacent\b/i.test(plain) ? { type: "emanation", value: 5 } : /\bwithin (\d+) feet\b/i.exec(plain) ? { type: "emanation", value: Number(/\bwithin (\d+) feet\b/i.exec(plain)[1]) } : null);
     return { ...plan, targeting: { target: null, range: null, area }, trigger: { ...plan.trigger, event: "death" } };
+}
+
+// Verdant Burst (2026-10-10, batch 28): "When a leshy dies, a burst of primal energy explodes from its body, restoring 2d8 Hit
+// Points to each plant creature in a 30-foot emanation. This area is filled with …, becoming difficult terrain. …" → a death plan
+// of the core's healing family on the creatures of that kind in the area (targeting.traits: { all, any }: "each undead fungi or
+// plant creature" is { all: ["undead"], any: ["fungus", "plant"] }). Its other sentences are the GM's notes.
+const DEATH_HEAL = /^(.*?\b(?:dies|is (?:killed|destroyed|slain))\b[^.]*?\brestor(?:ing|es) )\u0000(?: (?:Hit Points|HP))? to each (undead )?((?:plant|fungi|fungus)(?: or (?:plant|fungi|fungus))?) creature (?:in|within) an? (\d+)-foot emanation(?: and [^.]+)?\.$/i;
+function deathHeal(item) {
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    if (!tags.length || !/\bhealing\b/i.test(tags[0])) return null;
+    const plain = htmlToPlainText(html.replace(/@Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})?/gi, "$1-foot emanation").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    let at = 0;
+    const masked = plain.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, () => (at++ === 0 ? "\u0000" : `${readDamage(tags[at - 1]).replace(/\[([a-z]+)\]$/i, " $1")}`));
+    const [first, ...rest] = masked.split(/(?<=\.)\s+/);
+    const match = DEATH_HEAL.exec(first);
+    if (!match || rest.some((sentence) => /\u0000|@Check\[/.test(sentence))) return null;
+    const kinds = match[3].toLowerCase().split(/ or /).map((kind) => (kind === "plant" ? "plant" : "fungus"));
+    const formula = readDamage(tags[0]).replace(/\[healing(?:,(?:vitality|void))?\]$/i, "").replace(/^\((.*)\)$/, "$1");
+    return {
+        ...base(item),
+        targeting: { target: null, range: null, area: { type: "emanation", value: Number(match[4]) }, traits: { ...(match[2] ? { all: ["undead"] } : {}), any: kinds } },
+        trigger: { event: "death" },
+        resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } },
+        ...(rest.length ? { notes: rest } : {})
+    };
 }
 
 // A passive its Strikes list, read as what their hit brings (2026-10-10): its trigger clause dropped ("When the devourer damages
@@ -1847,7 +1873,11 @@ function riderReading(item, actor) {
     // (A hit or damage it deals, as a verb: not "If the creature is already taking persistent fire damage, …".)
     const CLAUSE = /(^|<p>|(?<=[.!?])\s+)(?:If|When(?:ever)?) (?:the |a |an )?[^,.<]{0,80}?\b(?:hits?|damages|critically hits?|strikes?)\b[^,.<]{0,80}?, ([a-z])/gi;
     if ([...html.matchAll(CLAUSE)].some((match) => /\b(?:that's|that is|that has|who|which|whose|already|taking|while|holy|unholy|good|evil|made of|wearing|metal|smaller|larger|Tiny|Small|Medium|Large|Huge|and the)\b/i.test(match[0].replace(/^\W*(?:<p>)?\s*(?:If|When(?:ever)?)\b/i, "")))) return null;
-    const trimmed = html.replace(CLAUSE, (whole, lead, letter) => `${lead}${letter.toUpperCase()}`);
+    // (Batch 28: "A creature hit by the voidworm's tail Strike is …", "Any creature damaged by the wraith's claw Strike must …":
+    // the creature hit as the subject.)
+    // ("critically hit by" only when the whole passive is a critical hit's: Slimy Guts' second sentence isn't the hit's.)
+    const SUBJECT = new RegExp(`(^|<p>|(?<=[.!?])\\s+)(?:(?:A|Any|Each) (?:living )?creature|(?:All )?Creatures) (?:that (?:is|are) |who (?:is|are) )?${criticalOnly(item) ? "(?:critically )?" : ""}(?:hit|damaged|struck)(?: and damaged)? by (?:the |a |an )?[\\w' -]+?['’]s? [\\w -]+? (?:Strike|attack)s?\\s+(is|are|becomes?|must|takes?)\\b`, "gi");
+    const trimmed = html.replace(CLAUSE, (whole, lead, letter) => `${lead}${letter.toUpperCase()}`).replace(SUBJECT, (whole, lead, verb) => `${lead}The target ${{ are: "is", become: "becomes", take: "takes" }[verb.toLowerCase()] ?? verb}`);
     const own = withDescription(item, trimmed);
     let plan = null;
     try {
@@ -1869,15 +1899,29 @@ function listedRider(item, actor, plan) {
     const owner = actor ?? item.actor ?? item.parent;
     const slug = item.system?.slug || String(item.name ?? "").toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const listed = [...(owner?.items ?? [])].some((entry) => entry?.type === "melee" && (entry.system?.attackEffects?.value ?? []).includes(slug));
-    if (!listed) return null;
+    // (Batch 28: a passive that names its Strike, "A creature hit by the clockwork assassin's rapier hand Strike is Off-Guard …",
+    // when the Strike doesn't list it: a rider of the Strikes it names.)
+    const named = listed || type !== "passive" ? [] : namedStrikes(item, owner);
+    if (!listed && !named.length) return null;
     return {
         ...plan,
         activation: { ...(plan.activation ?? {}), time: type === "action" ? plan.activation?.time ?? "1" : "free" },
         // (An area of its own around the creature hit stays.)
         targeting: plan.targeting?.area ? plan.targeting : { target: "the creature the Strike hits", range: "touch", area: null },
         // ("A creature that is critically hit by a hyaenodon must succeed …": a critical hit only.)
-        trigger: { ...plan.trigger, event: "strike", on: criticalOnly(item) ? ["criticalSuccess"] : ["success", "criticalSuccess"], attackEffect: slug, cost: type === "action" ? "action" : "free", map: false }
+        trigger: { ...plan.trigger, event: "strike", on: criticalOnly(item) ? ["criticalSuccess"] : ["success", "criticalSuccess"], ...(named.length ? { strikes: named } : { attackEffect: slug }), cost: type === "action" ? "action" : "free", map: false }
     };
+}
+
+// The creature's Strikes a passive names ("hit by the voidworm's tail Strike", "hit by a xulgath leader's jaws or claw Strike",
+// "When the gourd leshy damages a creature with a fist or seed Strike"): their names, lowercase, when the creature has them.
+function namedStrikes(item, owner) {
+    const words = htmlToPlainText(item.system?.description?.value ?? "");
+    const match = /\b(?:hit|damaged|struck)(?: and damaged)? by (?:the |a |an )?[\w' -]+?['’]s? ([\w -]+?) (?:Strike|attack)\b/i.exec(words) ?? /\b(?:hits?|damages?|critically hits?) (?:a|an|the) (?:living )?(?:creature|target|foe) with (?:its|their|his|her|a|an) ([\w -]+?) (?:Strike|attack)\b/i.exec(words);
+    if (!match || /^ or (?:a|an|any) /i.test(words.slice(match.index + match[0].length))) return [];
+    const names = match[1].toLowerCase().split(/\s*(?:,|\bor\b|\band\b)\s*/).filter(Boolean);
+    const strikes = [...(owner?.items ?? [])].filter((entry) => entry?.type === "melee").map((entry) => String(entry.name ?? "").toLowerCase());
+    return names.length && names.every((name) => strikes.includes(name)) ? names : [];
 }
 
 // The rider's trigger is a critical hit ("critically hit by", "scores a critical hit"), with no plain hit beside it.
