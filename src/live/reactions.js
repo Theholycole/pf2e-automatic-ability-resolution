@@ -92,7 +92,8 @@ export function offerHTML(state) {
         if (state.kind === "strike") for (const strike of state.strikes ?? []) buttons.push(`<button type="button" data-aar-reaction="strike" data-slug="${escape(strike.slug)}">${escape(strike.label)}${state.penalty ? ` (−${state.penalty})` : ""}</button>`);
         if (state.kind === "ac") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(degreeWords(state.attack.after))}</button>`);
         if (state.kind === "misfortune") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the worse</button>`);
-        if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at 1 HP</button>`);
+        // (Batch 67: Ferocity's kin, "half its HP", "25 HP", "4d10 HP".)
+        if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at ${escape(state.survive?.hp === "half" ? "half its" : String(state.survive?.hp ?? 1))} HP</button>`);
         if (state.kind === "card") buttons.push(`<button type="button" data-aar-reaction="use">Use it</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
         if (state.kind === "boost") buttons.push(`<button type="button" data-aar-reaction="use">Use it: one degree better</button>`);

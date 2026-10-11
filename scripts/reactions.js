@@ -550,7 +550,12 @@ async function onDown(actor) {
         const mine = reactors(scene, combat, { atZero: true }).find((entry) => entry.token.id === token.id);
         if (!mine) continue;
         for (const { item, plan } of mine.reactions) {
-            if (plan.builtin === "ferocity" && (actor.getCondition?.("wounded")?.value ?? 0) < 3) await offer({ kind: "ferocity", item, monster: token, actor, target: null, trigger: "is reduced to 0 HP" });
+            // (Batch 67, Ferocity's kin: its Hit Points, whether it's wounded, a use of its frequency, a Mythic Point, a Strike after.)
+            const left = Number(item.system?.frequency?.value);
+            if (plan.builtin === "ferocity" && (plan.wounded === false || (actor.getCondition?.("wounded")?.value ?? 0) < 3) && !(plan.uses && Number.isFinite(left) && left <= 0)) {
+                const hp = plan.hp ?? 1;
+                await offer({ kind: "ferocity", item, monster: token, actor, target: null, trigger: "is reduced to 0 HP", free: !!plan.free, note: [plan.mythic ? "It costs a Mythic Point." : null, plan.strike ? `Then its ${plan.strike} Strike at a creature in its reach: roll it from its sheet.` : null].filter(Boolean).join(" ") || null, survive: { hp, wounded: plan.wounded !== false } });
+            }
             if (plan.builtin === "death-strike") {
                 const strikes = meleeStrikes(actor, plan.strike ? `(${plan.strike} only)` : item.name);
                 if (strikes.length) await offer({ kind: "strike", item, monster: token, actor, target: null, strikes, trigger: "is reduced to 0 HP: a Strike before it dies", note: "It Strikes your target." });
@@ -612,7 +617,7 @@ async function onDamaged(actor, amount) {
 }
 
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, free = false }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -630,6 +635,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         attack,
         retribution,
         ...(negate ? { negate } : {}),
+        ...(survive ? { survive } : {}),
         ...(free ? { free: true } : {}),
         status: "open",
         result: null
@@ -751,13 +757,22 @@ async function use(message, action, slug) {
         // A free action doesn't use the reaction.
         if (state.attack.free) return settle(message, state, "used", result);
     } else if (state.kind === "ferocity") {
-        await actor.update({ "system.attributes.hp.value": 1 });
-        await actor.increaseCondition("wounded");
-        for (const slug of ["unconscious", "dying"]) if (actor.hasCondition?.(slug)) await actor.decreaseCondition(slug, { forceRemove: true });
-        if (actor.statuses?.has?.("dead")) await actor.toggleStatusEffect?.("dead", { active: false });
+        // (Batch 67: half its Hit Points, a number, or a roll; not wounded when it doesn't say so; a use of its frequency spent.)
+        const rule = state.survive ?? { hp: 1, wounded: true };
+        const max = Number(actor.system?.attributes?.hp?.max) || 1;
+        const hp = rule.hp === "half" ? Math.floor(max / 2) : typeof rule.hp === "string" ? (await new Roll(rule.hp).evaluate()).total : Number(rule.hp) || 1;
+        await actor.update({ "system.attributes.hp.value": Math.max(1, Math.min(max, hp)) });
+        if (rule.wounded) await actor.increaseCondition("wounded");
+        const item = await fromUuid(state.ability.uuid);
+        const left = Number(item?.system?.frequency?.value);
+        if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
+        // (PF2e may clear these itself as the Hit Points come back: an effect already gone isn't an error, batch 67.)
+        for (const slug of ["unconscious", "dying"]) if (actor.hasCondition?.(slug)) await actor.decreaseCondition(slug, { forceRemove: true }).catch(() => null);
+        if (actor.statuses?.has?.("dead")) await Promise.resolve(actor.toggleStatusEffect?.("dead", { active: false })).catch(() => null);
         const combatant = game.combat?.combatants.find((entry) => entry.tokenId === monster.id);
         if (combatant?.defeated) await combatant.update({ defeated: false });
-        result = `${state.monster.name} stays at 1 HP; wounded ${actor.getCondition?.("wounded")?.value ?? 1}.`;
+        result = `${state.monster.name} stays at ${actor.system?.attributes?.hp?.value ?? 1} HP${rule.wounded ? `; wounded ${actor.getCondition?.("wounded")?.value ?? 1}` : ""}.`;
+        if (state.free) return settle(message, state, "used", result);
     }
     await markUsed(actor, monster);
     return settle(message, state, "used", result);

@@ -1691,3 +1691,15 @@ test("+AC for an ally as an attack comes at it; Counterattack at a miss from its
     ]) assert.deepEqual(compileMonsterAbility(reaction(trigger, effect)), { builtin: "ally-ac-reaction", ...expected }, trigger);
     assert.deepEqual(compileMonsterAbility(reaction("The test shae is targeted by an attack from an adjacent creature that misses due to the test shae being Concealed", "The test shae makes a Strike against the attacker.", "The test shae is aware of the attack")), { builtin: "reaction-strike", triggers: ["concealed-miss"], strike: "melee", penalty: 0, disrupts: false });
 });
+
+test("Kept standing at 0 HP in its own words, Ferocity's kin (2026-10-11, batch 67)", () => {
+    const reaction = (html, type = "reaction") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const card = (trigger, effect, lead = "") => `${lead}<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`;
+    for (const [html, type, expected] of [
+        [card("Test Orc would be reduced to 0 Hit Points but not immediately killed", "Test Orc avoids being knocked out and remains at 1 Hit Point, and her @UUID[Compendium.pf2e.conditionitems.Item.Yl48xTdMh3aeQYL2]{Wounded} condition increases by 1.", "<p><strong>Frequency</strong> once per day</p>"), "reaction", { hp: 1, wounded: true, uses: 1 }],
+        [card("The test ogre is reduced to 0 HP", "The test ogre avoids being knocked out and remains at half its maximum HP, but its wounded value increases by 1. When it is Wounded 3, it can no longer use this ability.", "<p><strong>Cost</strong> 1 Mythic Point</p>"), "reaction", { hp: "half", wounded: true, mythic: true }],
+        [card("The test flame is reduced to 0 HP", "The test flame avoids being knocked out and regains @Damage[4d10[healing]] Hit Points, but its wounded value increases by 1."), "reaction", { hp: "4d10", wounded: true }],
+        [card("The test manticore is reduced to 0 HP", "The test manticore avoids being knocked out and remains at 1 HP, then can make a stinger Strike against a creature in its reach.", "<p><strong>Frequency</strong> once per day</p>"), "reaction", { hp: 1, wounded: false, uses: 1, strike: "stinger" }],
+        [card("Test Champion's Hit Points are reduced to 0 for the first time that day", "Test Champion refuses to fall. He remains standing with @Damage[25[healing]] Hit Points."), "free", { hp: 25, wounded: false, uses: 1, free: true }]
+    ]) assert.deepEqual(compileMonsterAbility(reaction(html, type)), { builtin: "ferocity", ...expected }, html);
+});

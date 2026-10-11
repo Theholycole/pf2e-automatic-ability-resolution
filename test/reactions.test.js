@@ -79,3 +79,10 @@ test("the attacker's choice on the offer card: a normal hit, or the critical hit
     assert.match(html, /data-aar-reaction="keep">The critical hit, Frightened 2</);
     assert.doesNotMatch(html, />Use it</);
 });
+
+test("the Ferocity offer names how many Hit Points it stays at (2026-10-11, batch 67)", () => {
+    const state = { kind: "ferocity", ability: { name: "Mythic Ferocity" }, monster: { name: "Ogre" }, target: null, trigger: "is reduced to 0 HP", status: "open", result: null };
+    assert.match(offerHTML(state), />Stay at 1 HP</);
+    assert.match(offerHTML({ ...state, survive: { hp: "half", wounded: true } }), />Stay at half its HP</);
+    assert.match(offerHTML({ ...state, survive: { hp: 25, wounded: false } }), />Stay at 25 HP</);
+});
