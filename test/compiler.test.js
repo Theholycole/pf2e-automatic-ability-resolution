@@ -1487,3 +1487,10 @@ test("You're Next and Stoke the Flames (2026-10-11, batch 52)", { skip: !availab
     const stoke = compileMonsterAbility(item("Stoke the Flames", "<p>The test dragon intensifies nearby fires. Every foe within 60 feet that is taking persistent fire damage takes @Damage[4d6[fire]] damage.</p>", "action"));
     assert.deepEqual([stoke?.targeting?.foes, stoke?.targeting?.taking, stoke?.targeting?.area?.value, stoke?.resolution?.outcomes?.success?.damage?.formulas?.[0]?.formula], [true, "fire", 60, "4d6[fire]"]);
 });
+
+test("Golden Luck, Word of Wisdom, Cat's Luck (2026-10-11, batch 53)", () => {
+    const item = (html) => ({ type: "action", name: "Luck", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test dragon fails a saving throw</p><hr /><p><strong>Effect</strong> The dragon improves its result by one degree of success, turning a failure into a success or a critical failure into a normal failure. The dragon can't use this ability again for [[/gmr 1d4 #Recharge Golden Luck]]{1d4 rounds}.</p>")), { builtin: "save-boost", recharge: "1d4" });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> An ally within 60 feet fails a saving throw</p><hr /><p><strong>Effect</strong> The ally improves its result by one degree of success, turning a failure into a success or a critical failure into a normal failure. The dragon can't use this ability again for [[/gmr 1d4 #Recharge Word of Wisdom]]{1d4 rounds}.</p>")), { builtin: "save-boost", ally: true, within: 60, recharge: "1d4" });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test pouncer fails or critically fails a Reflex saving throw.</p><p><strong>Frequency</strong> Once per day.</p><hr /><p><strong>Effect</strong> Reroll that saving throw and take the better result.</p>")), { builtin: "save-reroll", save: "reflex" });
+});

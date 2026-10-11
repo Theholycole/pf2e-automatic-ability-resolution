@@ -422,6 +422,20 @@ export function readReaction(item, text) {
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
+    // A failed save made better (batch 53): Golden Luck, "Trigger The gold dragon fails a saving throw Effect The dragon improves its result
+    // by one degree of success, turning a failure into a success or a critical failure into a normal failure. The dragon can't use this
+    // ability again for 1d4 rounds." (its own); Word of Wisdom, "Trigger An ally within 60 feet fails a saving throw Effect The ally
+    // improves its result by one degree …" (an ally's); Cat's Luck, "Trigger … fails or critically fails a Reflex saving throw Effect …
+    // rerolls the saving throw and takes the better result" (once a day).
+    const improves = String.raw`improves (?:its|his|her|their) result by one degree of success, turning a failure into a success or a critical failure into a normal failure\.`;
+    const again = String.raw`(?: (?:The )?[^.]+? can't use this ability again for (?:\[\[\/gmr (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.)?`;
+    const ally = /^An? ally within (\d+) feet fails a saving throw\.?$/i.exec(trigger.trim());
+    const helped = ally ? new RegExp(String.raw`^The ally ${improves}${again}$`, "i").exec(effect.trim()) : null;
+    if (helped) return { builtin: "save-boost", ally: true, within: Number(ally[1]), ...(helped[1] ?? helped[2] ? { recharge: helped[1] ?? helped[2] } : {}) };
+    const own = !ally && /^(?:The )?[^.]+? fails a saving throw\.?$/i.test(trigger.trim()) ? new RegExp(String.raw`^(?:The )?[^.]+? ${improves}${again}$`, "i").exec(effect.trim()) : null;
+    if (own) return { builtin: "save-boost", ...(own[1] ?? own[2] ? { recharge: own[1] ?? own[2] } : {}) };
+    const luck = /^(?:The )?[^.]+? fails or critically fails an? (Fortitude|Reflex|Will) saving throw\.?(?: Frequency once per day\.?)?$/i.exec(trigger.trim());
+    if (luck && /^(?:(?:The )?[^.]+? rerolls (?:the|that) (?:saving throw|save) and takes the better result|Reroll that saving throw and take the better result)\.$/i.test(effect.trim())) return { builtin: "save-reroll", save: luck[1].toLowerCase() };
     // A trap that summons a creature (batch 50; the user's choice: the GM's): "Effect The trap summons a Cockatrice. The cockatrice rolls
     // initiative and remains for 2d6 rounds; …".
     if (/^(?:The|This) trap summons\b[^.]*\.\s+(?:The [\w' -]+?|It) rolls initiative and remains for\b/i.test(effect.trim())) return { builtin: "no-effect" };

@@ -31,7 +31,7 @@ import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } fr
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -191,6 +191,8 @@ async function onMessage(message) {
         await strikeAnswers(context, scene, combat, token);
         return;
     }
+    // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
+    if (context?.type === "saving-throw" && ["failure", "criticalFailure"].includes(context.outcome)) await saveAnswers(message, context, scene, combat, token);
     // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
     if (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("attack")) await strikeAnswers(context, scene, combat, token, { skill: true });
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
@@ -357,6 +359,27 @@ async function onConditionGained(item) {
     const left = Number(entry.item.system?.frequency?.value);
     if (Number.isFinite(left) && left <= 0) return;
     await offer({ kind: "negate", item: entry.item, monster: token, actor: mine.actor, target: null, trigger: `it would be ${item.name}`, negate: { itemId: item.id, name: item.name } });
+}
+
+// A failed save in an encounter (batch 53): the saver's own Cat's Luck (that kind of save; a reroll keeping the better, while it has a use
+// today) or Golden Luck (one degree better), or an ally's Word of Wisdom within its distance (one degree better, for the GM to apply).
+async function saveAnswers(message, context, scene, combat, saver) {
+    const statistic = ["fortitude", "reflex", "will"].find((save) => context.statistic === save || (context.domains ?? []).includes(save));
+    const better = context.outcome === "criticalFailure" ? "a failure" : "a success";
+    const grid = gridOf(scene);
+    for (const { token, actor, reactions } of reactors(scene, combat)) {
+        const self = token.id === saver.id;
+        for (const { item, plan } of reactions) {
+            if (self && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
+                const left = Number(item.system?.frequency?.value);
+                if (Number.isFinite(left) && left <= 0) continue;
+                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id } });
+            }
+            if (plan.builtin !== "save-boost" || (self ? plan.ally : !plan.ally)) continue;
+            if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
+            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: `The save becomes ${better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}` });
+        }
+    }
 }
 
 // A creature a monster downed (You're Next, batch 52): that monster's reaction offer, its card at the GM's target. The monster: the
@@ -542,6 +565,18 @@ async function use(message, action, slug) {
         result = tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;
         // (A free action doesn't use the reaction.)
         if (state.free) return settle(message, state, "used", result);
+    } else if (state.kind === "reroll") {
+        // Cat's Luck (batch 53): the save rerolled through PF2e, the better kept; a use of its frequency spent.
+        const save = game.messages.get(state.attack.messageId);
+        if (!save) throw new Error("The saving throw is gone.");
+        await game.pf2e.Check.rerollFromMessage(save, { keep: "higher" });
+        const item = await fromUuid(state.ability.uuid);
+        const left = Number(item?.system?.frequency?.value);
+        if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
+        result = `${state.ability.name}: the save is rerolled, keeping the better.`;
+    } else if (state.kind === "boost") {
+        // Golden Luck, Word of Wisdom (batch 53): one degree better, for the GM to apply.
+        result = `${state.ability.name}: ${state.note ?? "one degree better."}`;
     } else if (state.kind === "negate") {
         // Shake It Off (batch 49): the condition it was about to be affected by, removed; a use of its frequency spent.
         await actor.items.get(state.negate.itemId)?.delete();
