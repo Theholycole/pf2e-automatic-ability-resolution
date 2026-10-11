@@ -1271,3 +1271,24 @@ test("reaction Strikes to a Strike, an attack on an ally or a critical hit; Fast
     assert.deepEqual(action("The test shrike Strides twice. If it ends its movement within melee reach of one creature, it can make a melee Strike against that creature.", 2), { builtin: "charge", actions: 2, strides: 2, strike: null });
     assert.deepEqual(compileMonsterAbility(item("Aquatic Ambush", "<p>30 feet @Localize[PF2E.NPC.Abilities.Glossary.AquaticAmbush]</p>")), { builtin: "charge", actions: 1, strides: 1, strike: null, offGuard: true, oncePerFight: true });
 });
+
+test("Focus Gaze through the gaze it names, a monster's Hunt Prey, a bonus to its own AC for a while (2026-10-10, batch 39)", () => {
+    const item = (name, html, type = "action") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    // Focus Gaze: its own gaze's save, for one creature now; the rest for the GM.
+    const gaze = item("Test Gaze", "<p>A creature that ends its turn within 30 feet of the test gorgon must succeed at a @Check[fortitude|dc:25] save or be @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1}.</p>", "passive");
+    gaze.system.traits.value = ["aura", "visual"];
+    const focus = item("Focus Gaze", "<p>The test gorgon fixes their glare at a creature they can see within 30 feet. The target must immediately attempt a @Check[fortitude|dc:25] save against the test gorgon's test gaze. If the creature was already Slowed by the test gaze, a failed save leaves it Immobilized for 1 round. After attempting its save, the creature is temporarily immune until the start of the test gorgon's next turn.</p>");
+    const actor = { items: [gaze, focus] };
+    const plan = compileMonsterAbility(focus, { actor });
+    assert.deepEqual([plan?.resolution?.check?.statistic, plan?.resolution?.outcomes?.failure?.effects?.map((effect) => effect.slug), plan?.targeting?.range, plan?.trigger?.event, plan?.resolution?.reminders?.length], ["fortitude", ["slowed"], "30 feet", "use", 2]);
+    assert.equal(compileMonsterAbility(focus, { actor: { items: [focus] } })?.resolution, undefined, "not when it has no such gaze");
+    // Hunt Prey: its precision edge, or nothing for the fight's numbers.
+    assert.deepEqual(compileMonsterAbility(item("Hunt Prey", "<p>The test hunter designates a single creature they can see and hear, or one they're Tracking, as their prey. The test hunter gains a +2 circumstance bonus to Perception checks to Seek the prey and to Survival checks to Track the prey. The first time the test hunter hits the designated prey in a round, they deal an additional 1d6 precision damage. These effects last until the test hunter uses Hunt Prey again.</p>")), { builtin: "hunt-prey", edge: "precision", dice: 1, die: 6 });
+    assert.deepEqual(compileMonsterAbility(item("Hunt Prey", "<p>The test tracker designates a single creature they can see and hear, or one they're Tracking, as their prey. The test tracker gains a +2 circumstance bonus to Perception checks to Seek the prey and to Survival checks to Track the prey. This effect lasts until the test tracker uses Hunt Prey again.</p>")), { builtin: "no-effect" });
+    // A bonus to its AC until its next turn; what it holds is its requirement; more words for the GM.
+    const parry = compileMonsterAbility(item("Test Parry", "<p><strong>Requirements</strong> Test Duelist is wielding a single one-handed weapon</p><hr /><p><strong>Effect</strong> Test Duelist gains a +2 circumstance bonus to AC until the start of his next turn as long as his other hand remains free.</p>"));
+    assert.deepEqual([parry.builtin, parry.model.modifiers, parry.model.rounds, parry.duration, parry.notes], ["self-effect", [{ on: "ac", type: "circumstance", value: 2 }], 1, { value: 1, unit: "rounds", expiry: "turn-start" }, ["As long as his other hand remains free."]]);
+    const flames = compileMonsterAbility(item("Test Flames", "<p>The test salamander stokes its flames. Until the start of its next turn, it gains a +2 circumstance bonus to AC, and an adjacent creature that hits it takes 1d6 fire damage.</p>"));
+    assert.deepEqual([flames.model.modifiers[0].value, flames.notes], [2, ["An adjacent creature that hits it takes 1d6 fire damage."]]);
+    assert.equal(compileMonsterAbility(item("Test Stance", "<p><strong>Requirements</strong> Test Monk is in Test Stance</p><hr /><p><strong>Effect</strong> Test Monk gains a +2 circumstance bonus to AC until the start of her next turn.</p>"))?.builtin, undefined);
+});

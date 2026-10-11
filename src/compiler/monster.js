@@ -13,7 +13,7 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
-import { chargeSentences, compileBuiltin, moveThenStrike, readRage, readStrikeBuff } from "./builtins.js";
+import { chargeSentences, compileBuiltin, moveThenStrike, readRage, readSelfGuard, readStrikeBuff } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 import { castSpell } from "./casts.js";
@@ -1499,6 +1499,41 @@ function followUpStrikeText(html) {
     return { html: text, previousMap };
 }
 
+// Focus Gaze (2026-10-10, batch 39): "The medusa fixes their glare at a creature they can see within 30 feet. The target must
+// immediately attempt a … save against the medusa's petrifying gaze. If the creature was already Slowed …, a failed save causes it to
+// be Petrified permanently. After attempting its save, the creature is then temporarily immune …": the gaze it names (its own
+// ability, compiled) as a save for that one creature now; the rest of the text for the GM. null when the creature has no such
+// ability, or it reads as no save.
+function focusGaze(item, actor, basicActions) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    if (!/\b(?:stares|fixes (?:its|their|his|her) (?:glare|gaze|[\w' -]+? eyes)|glares|focuses (?:its|their|his|her) gaze) (?:at|on) (?:a|one) (?:single )?creature\b/i.test(plain)) return null;
+    const named = /\bmust (?:immediately )?attempt an? (?:@Check\[[^\]]*\](?:\{[^}]*\})?|Fortitude|Reflex|Will) save against (?:the [\w' -]+?['’]s |[A-Z][\w'-]+(?: [A-Z][\w'-]+)?['’]s )?(?:the )?([\w' -]+?)(?: aura)?\./i.exec(plain);
+    const owner = actor ?? item.actor ?? item.parent;
+    const wanted = named?.[1]?.trim().toLowerCase();
+    const source = wanted ? (owner?.items?.contents ?? owner?.items ?? []).find((other) => other !== item && other.type === "action" && String(other.name).toLowerCase() === wanted) : null;
+    if (!source) return null;
+    let gaze = null;
+    try {
+        gaze = compileMonsterAbility(source, { basicActions, actor: owner });
+    } catch {
+        gaze = null;
+    }
+    if (!gaze?.resolution || gaze.resolution.check?.roll !== "save") return null;
+    const range = Number(/\bwithin (\d+) feet\b/i.exec(plain)?.[1]) || 30;
+    // (Its other sentences, past the save: the GM's.)
+    const after = plain.slice(plain.indexOf(named[0]) + named[0].length).trim();
+    const reminders = after ? after.split(/(?<=\.)\s+(?=[A-Z])/).map((sentence) => readableText(sentence)) : [];
+    return {
+        ...gaze,
+        ...base(item),
+        targeting: { target: "1 creature", range: `${range} feet`, area: null },
+        trigger: { event: "use" },
+        resolution: { ...gaze.resolution, ...(reminders.length ? { reminders: [...(gaze.resolution.reminders ?? []), ...reminders] } : {}) }
+    };
+}
+
 // What a follow-up needs of the action before it (batch 36): { strike, melee, on } (on: the Strike's degrees), or null. "The
 // skull fairy's last action was a successful fist Strike", "… previous action this turn was …", "a success with a jaws Strike",
 // "a critical hit with a melee Strike", "a melee Strike that critically succeeded", "a fang Strike that hit the target", "a jaws
@@ -1751,7 +1786,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan) ?? plan;
 }
 

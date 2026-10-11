@@ -30,17 +30,25 @@ export function buffRule(formula, selector, label) {
     return null;
 }
 
-// The effect's data (PF2e's effect item), or null when it can't be made (no such Strike, a part it can't write).
-export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null } = {}) {
-    if (plan?.builtin !== "self-effect" || !plan.damage?.length) return null;
-    const selector = buffSelector(plan, strikes);
-    if (!selector) return null;
-    const rules = plan.damage.map((formula) => buffRule(formula, selector, name));
+// A bonus to its own statistic (batch 39: Dueling Parry's "+2 circumstance bonus to AC"): its FlatModifier.
+const MODIFIER_SELECTORS = { ac: "ac", attack: "attack", damage: "damage", reflex: "reflex", fortitude: "fortitude", will: "will" };
+const modifierRule = (modifier, label) => (MODIFIER_SELECTORS[modifier.on] ? { key: "FlatModifier", selector: MODIFIER_SELECTORS[modifier.on], type: modifier.type ?? "untyped", value: Number(modifier.value), label } : null);
+
+// The effect's data (PF2e's effect item), or null when it can't be made (no such Strike, a part it can't write). toggles: the
+// ability's own switch, when PF2e gives it one ([{ domain, option }] from its toggleable RollOption rules, batch 39: Hydraulic
+// Deflection's "hydraulic-deflection", whose FlatModifier waits on it): the effect turns that on instead, for its time.
+export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null, toggles = [] } = {}) {
+    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length)) return null;
+    const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
+    if (plan.damage?.length && !toggles.length && !selector) return null;
+    const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
+        : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name))];
     if (rules.some((rule) => !rule)) return null;
     const duration = plan.duration ?? { value: -1, unit: "unlimited", expiry: null };
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
     const which = plan.strike ? `its ${plan.strike} Strikes` : plan.melee ? "its melee Strikes" : "its Strikes";
     const notes = (plan.notes ?? []).map((note) => `<p>${escape(note)}</p>`).join("");
+    const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " "))].filter(Boolean).join(" ");
     return {
         name,
         type: "effect",
@@ -48,7 +56,7 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
         flags: { "pf2e-automatic-ability-resolution": { strikeBuff: { uuid } } },
         system: {
             slug: `aar-${sluggify(name)}`,
-            description: { value: `<p>${escape(which)}: ${escape(plan.damage.join(", "))} more damage.</p>${notes}` },
+            description: { value: `<p>${escape(said)}</p>${notes}` },
             duration: { value: duration.value, unit: duration.unit, expiry: duration.expiry ?? null, sustained: false },
             tokenIcon: { show: true },
             rules

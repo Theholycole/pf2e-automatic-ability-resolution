@@ -188,9 +188,16 @@ async function cardForAbility(message) {
     }
     // More damage on its own Strikes for a while (batch 37, Vocal Warm-Up): an effect on the monster with that damage, for its time;
     // not when the ability links PF2e's own effect (its card offers that).
-    if (plan?.builtin === "self-effect" && plan.damage?.length && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+    // (Batch 39: a bonus to its AC for a while, Dueling Parry; a plan with its own time only, not a rage's, whose PF2e effect is linked.)
+    if (plan?.builtin === "self-effect" && plan.duration && (plan.damage?.length || plan.model?.modifiers?.length) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
         await strikeBuff(item, plan, sourceToken);
         if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+        return;
+    }
+    // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".
+    if (plan?.builtin === "hunt-prey") {
+        const prey = [...game.user.targets][0];
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its prey` : "its prey is the creature it named"}. The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`]);
         return;
     }
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
@@ -218,7 +225,9 @@ async function cardForAbility(message) {
 async function strikeBuff(item, plan, sourceToken) {
     const actor = sourceToken?.actor ?? item.actor;
     const strikes = actor.itemTypes.melee.map((melee) => ({ name: melee.name, slug: melee.slug ?? null, isRanged: !!melee.isRanged }));
-    const data = strikeBuffEffect(plan, { name: item.name, img: item.img, strikes, uuid: item.uuid });
+    // (Its own switch, when PF2e gives it one: turned on for its time.)
+    const toggles = (item.system?.rules ?? []).filter((rule) => rule?.key === "RollOption" && rule.toggleable && rule.option).map((rule) => ({ domain: rule.domain ?? "all", option: rule.option }));
+    const data = strikeBuffEffect(plan, { name: item.name, img: item.img, strikes, uuid: item.uuid, toggles });
     if (!data) return noteToGM(item.actor, sourceToken, [`${item.name}: add its extra damage to ${plan.strike ? `the ${plan.strike} Strikes` : "the Strikes"} by hand.`]);
     const combat = game.combat;
     data.system.start = { value: game.time.worldTime, initiative: combat?.started ? combat.combatant?.initiative ?? null : null };

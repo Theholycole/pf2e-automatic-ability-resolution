@@ -709,8 +709,75 @@ export function compileBuiltin(item, slug) {
     if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
     if (readStrikeOnly(text)) return { builtin: "no-effect", strikeOnly: true };
     if (readSafeMove(text)) return { builtin: "safe-move", actions };
+    const prey = readHuntPrey(text);
+    if (prey) return prey;
     if (readNoCombatEffect(text)) return { builtin: "no-effect" };
     return null;
+}
+
+// A bonus to its own AC for a while (2026-10-10, batch 39): "He gains a +2 circumstance bonus to AC until the start of his next turn"
+// (Dueling Parry), "They gain a +1 circumstance bonus to AC until the start of their next turn" (Hydraulic Deflection), "Until the start
+// of its next turn, it gains a +2 circumstance bonus to AC, and when an adjacent creature touches it … takes 2d6 persistent fire
+// damage …" (Armor of Flames: the rest for the GM), "… or a +2 circumstance bonus if either weapon has the parry trait" (the GM's).
+// → { builtin: "self-effect", actions, model: { name, rounds, modifiers: [{ on: "ac", type, value }], tempHp: 0 }, duration, notes? }.
+// Not with a trigger, nor a requirement other than what it holds ("is wielding", "has his other hand free").
+export function readSelfGuard(item) {
+    if (item?.system?.actionType?.value !== "action") return null;
+    const text = htmlToPlainText(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\s+/g, " ").trim();
+    // (Not one that links PF2e's own effect, which its effect reading uses.)
+    if (/\bTrigger\b/.test(text) || /@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item?.system?.description?.value ?? "")) return null;
+    const required = /^Requirements? (.+?) Effect /.exec(text)?.[1] ?? "";
+    if (required && !/^(?:The )?[\w' -]+? (?:is wielding [^.]+|has (?:a|an|one|two|his|her|its|their) [^.]*?(?:weapon|shield|hand)[^.]*)$/i.test(required.trim())) return null;
+    const body = text.replace(/^Requirements? .+? Effect /, "").replace(/^Frequency [^.]*? Effect /, "");
+    const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/);
+    const until = String.raw`until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn`;
+    const gains = new RegExp(String.raw`^(?:(?:Until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn), )?(?:The [\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?) gains? an? \+(\d+) (circumstance|status) bonus to (?:its |their |his |her )?AC(?: ${until})?((?:, or an? \+\d+ circumstance bonus if [^.,]+)?(?:,? (?:as long as|but loses this bonus if) [^.]+)?(?:, and [^.]+)?)\.$`, "i");
+    let found = null;
+    let at = -1;
+    for (const [index, sentence] of sentences.entries()) {
+        const match = /\b(?:Strikes?|Steps?|Strides?)\b/.test(sentence) ? null : gains.exec(sentence);
+        if (match) {
+            found = match;
+            at = index;
+            break;
+        }
+    }
+    if (!found) return null;
+    const edge = found[1] ?? found[4];
+    if (!edge) return null;
+    const rounds = /end/i.test(edge) ? 2 : 1;
+    const notes = [];
+    for (const [index, sentence] of sentences.entries()) {
+        if (index === at) continue;
+        // (A first sentence that only tells what it does.)
+        if (index < at && !/\d|\b(?:damage|bonus|penalty|save|check|Strike|Hit Points)\b/i.test(sentence)) continue;
+        if (/^Effect: /.test(sentence)) continue;
+        notes.push(sentence);
+    }
+    const rest = (found[5] ?? "").replace(/^, (?:and |or )?/, "").trim();
+    if (rest) notes.unshift(rest[0].toUpperCase() + rest.slice(1) + ".");
+    // (More than its AC in the other sentences, a Strike or a move: not this reading.)
+    if (notes.some((note) => /\b(?:Strikes?|Strides?|Steps?|Flies|Swims)\b/.test(note))) return null;
+    return {
+        builtin: "self-effect",
+        actions: Number(item.system?.actions?.value) || 1,
+        model: { name: item.name, rounds, modifiers: [{ on: "ac", type: found[3].toLowerCase(), value: Number(found[2]) }], tempHp: 0 },
+        duration: { value: 1, unit: "rounds", expiry: rounds === 2 ? "turn-end" : "turn-start" },
+        ...(notes.length ? { notes } : {})
+    };
+}
+
+// Hunt Prey in a monster's own words (2026-10-10, batch 39): "The hunter designates a single creature they can see and hear, or one
+// they're Tracking, as their prey. … The first time the hunter hits the designated prey in a round, they deal an additional 1d8
+// precision damage. …" → { builtin: "hunt-prey", edge: "precision", dice, die }; with only the bonuses to Seek and Track and the
+// range increment (no damage), nothing for the fight's numbers. null when it isn't Hunt Prey.
+function readHuntPrey(text) {
+    if (!/\bdesignates? (?:a single|one) creature\b[^.]*\bas (?:its|their|his|her|your) prey\b|\bdesignates? as (?:its|their|his|her) prey (?:a single|one) creature\b/i.test(text)) return null;
+    const edge = /\bThe first time (?:the [\w' -]+?|an? [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) hits? (?:the|its|their|his|her) (?:designated|hunted) prey in a round, (?:it|they|he|she|the [\w' -]+?) deals? (?:an additional (\d+)d(\d+)|(\d+)d(\d+) additional) precision damage\./i.exec(text);
+    if (edge) return { builtin: "hunt-prey", edge: "precision", dice: Number(edge[1] ?? edge[3]), die: Number(edge[2] ?? edge[4]) };
+    // (Its other words: the Seek and Track bonuses, the range increment, how long it lasts.)
+    const rest = text.split(/(?<=\.)\s+(?=[A-Z])/).filter((sentence) => !/\bdesignates?\b|\bcircumstance bonus to (?:Perception|Survival)\b|\bsecond range increment\b|\b(?:These effects|This effect|The effects?) lasts? until\b|\bcan have only one (?:creature|prey) designated\b|\bmust be able to see or hear the prey\b/i.test(sentence));
+    return rest.length ? null : { builtin: "no-effect" };
 }
 
 // A move that doesn't trigger reactions (2026-10-10, batch 38): "The cultist jumps up to half its Speed. This movement doesn't

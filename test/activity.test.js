@@ -155,6 +155,10 @@ test("more damage on its own Strikes: a PF2e effect with DamageDice and FlatModi
     ]);
     // (A Strike activity's precision damage takes the Strike's own type.)
     assert.deepEqual(activityRider({ builtin: "strike-activity", source: { name: "Test Stab" }, onHit: { conditions: [], damage: ["4d6[precision]"] } }, { strikeType: "piercing" }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "4d6[precision,piercing]" }]);
+    // (Batch 39: a bonus to its own AC, a FlatModifier.)
+    assert.deepEqual(strikeBuffEffect(plan({ model: { name: "Test Parry", rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }] } }), { name: "Test Parry", strikes }).system.rules, [{ key: "FlatModifier", selector: "ac", type: "circumstance", value: 2, label: "Test Parry" }]);
+    // (Its own switch in PF2e: the effect turns it on.)
+    assert.deepEqual(strikeBuffEffect(plan({ model: { name: "Test Parry", rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 1 }] } }), { name: "Test Parry", strikes, toggles: [{ domain: "ac", option: "test-parry" }] }).system.rules, [{ key: "RollOption", domain: "ac", option: "test-parry" }]);
     // No such Strike: none (the GM's note instead).
     assert.equal(strikeBuffEffect(plan({ damage: ["1d6[fire]"], strike: "tail" }), { name: "x", strikes }), null);
 });
