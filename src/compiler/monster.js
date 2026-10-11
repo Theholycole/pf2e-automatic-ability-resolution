@@ -1870,6 +1870,47 @@ export function followUpSkill(item, html, basicActions) {
     return { ...plan, ...base(item, { traits }), targeting: { ...plan.targeting, target: "the creature the Strike hits" }, trigger: { event: "use" } };
 }
 
+// You're Next (2026-10-11, batch 52): "Trigger The prisoner reduces a creature to 0 hit points. Effect The prisoner attempts an
+// Intimidation check with a +2 circumstance bonus to Demoralize a single creature it can see and that can see them." (also "attempts to
+// Demoralize a single creature he can see. He gains a +2 circumstance bonus to this check", "… a creature within 60 feet, with a +2
+// circumstance bonus") → PF2e's Demoralize with that bonus, set off by downing a creature (a free action's: free). null otherwise.
+function downsDemoralize(item, basicActions) {
+    const type = item.system?.actionType?.value;
+    if (!["reaction", "free"].includes(type) || !basicActions.demoralize?.resolution) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
+    const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain);
+    const trigger = parts ? readReactionTrigger(parts[1]) : null;
+    if (trigger?.event !== "downs") return null;
+    // (A first sentence that only tells it: "After downing the foe, Krosovahn menacingly reminds another foe that he's coming after them next.")
+    const effect = parts[2].replace(/^After downing the foe, [^.]+\.\s*/i, "");
+    const WHOM = String.raw`(?:a single creature|a creature within \d+ feet)(?: (?:that )?(?:it|he|she|they|xe) can see)?(?: and that can see (?:it|him|her|them|xir))?`;
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? attempts? (?:an Intimidation check (?:with a \+(\d+) circumstance bonus )?to Demoralize ${WHOM}(?:,? with a \+(\d+) circumstance bonus)?|to Demoralize ${WHOM}(?:,? with a \+(\d+) circumstance bonus)?)\.(?: (?:It|He|She|They|Xe) gains? a \+(\d+) circumstance bonus to this check\.)?$`, "i").exec(effect);
+    if (!match) return null;
+    const bonus = Number(match.slice(1).find(Boolean)) || 0;
+    const plan = structuredClone(basicActions.demoralize);
+    if (bonus) plan.resolution.check = { ...plan.resolution.check, bonus: { value: bonus, type: "circumstance" } };
+    return { ...plan, ...base(item, { traits: plan.traits }), targeting: plan.targeting, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
+}
+
+// Stoke the Flames (2026-10-11, batch 52): "The dragon intensifies nearby fires. Every foe within 60 feet that is taking persistent fire
+// damage takes @Damage[5d6[fire]] damage." → that damage on each foe within that distance taking persistent fire damage
+// (targeting.foes, targeting.taking: "fire"); live play: the GM's targets, with that as a reminder. null otherwise.
+function stokeFlames(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html).replace(/\s+/g, " ").trim();
+    const match = /^(?:(?:The )?[^.@]+? intensifies nearby fires\. )?Every foe within (\d+) feet that is taking persistent (\w+) damage takes @Damage\[([^\]]+\])\] damage\.$/i.exec(plain);
+    const tags = inlineTags(html, "Damage");
+    if (!match || tags.length !== 1) return null;
+    const hit = { damage: { mode: "formulas", formulas: [{ formula: readDamage(tags[0]) }], rollScope: "outcome" }, effects: [] };
+    return {
+        ...base(item),
+        targeting: { target: null, range: null, area: { type: "emanation", value: Number(match[1]) }, foes: true, taking: match[2].toLowerCase() },
+        trigger: { event: "use" },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: hit, failure: none(), criticalFailure: none() }, reminders: [`Only foes taking persistent ${match[2].toLowerCase()} damage.`] }
+    };
+}
+
 // A trap's fall (2026-10-11, batch 50; the user's choice: its card where the text allows): "Trigger A creature walks onto the trapdoor.
 // Effect The triggering creature falls in and takes falling damage (typically @Damage[10[bludgeoning]] damage) as well as
 // @Damage[2d6[piercing]] damage from falling on to the knives. That creature can use the Grab an Edge reaction to avoid falling." → the
@@ -2009,7 +2050,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? trapFall(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
@@ -2057,6 +2098,8 @@ export function readReactionTrigger(text) {
         return { event: "hit-by", reaction: true, melee, ...(unarmed ? { unarmed: true } : {}), ...(critical ? { critical: true } : {}), ...(damageTypes ? { damageTypes } : {}), ...(distance ? { within: distance } : {}) };
     };
     if (new RegExp(String.raw`^${SELF} (?:is reduced to 0 (?:Hit Points|HP)|dies|is (?:killed|destroyed|slain))$`).test(trigger)) return { event: "death", reaction: true };
+    // Downing a creature itself (batch 52, You're Next): "The prisoner reduces a creature to 0 hit points".
+    if (new RegExp(String.raw`^${SELF} reduces (?:a creature|an enemy|a foe) to 0 (?:HP|[Hh]it [Pp]oints)$`).test(trigger)) return { event: "downs", reaction: true };
     // A creature near it losing a condition (batch 46, Consume Fear): "A creature within 60 feet loses the Frightened condition".
     const lost = /^(?:An?|Any) creature within (\d+) feet loses the (\w+) condition$/i.exec(trigger);
     if (lost) return { event: "condition-lost", reaction: true, condition: lost[2].toLowerCase(), within: Number(lost[1]) };

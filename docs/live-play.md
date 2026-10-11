@@ -914,3 +914,13 @@ The user's choice (2026-10-11): a GM button for each way; the simulator picks th
   - **The simulator** (B78): a Strike now readies every follow-up it allows (each way), and the planner weighs each; after a jaws hit it usually still prefers a second Strike.
 - **Not yet:** Kharostan's (a trigger, Doomed too), Pike and Strike (moving the target or a second Strike: the simulator's ways are saves and checks).
 
+## You're Next and Stoke the Flames (2026-10-11, batch 52)
+
+- **You're Next** (9): "Trigger The prisoner reduces a creature to 0 hit points. Effect The prisoner attempts an Intimidation check with a +2 circumstance bonus to Demoralize a single creature it can see and that can see them." (also "attempts to Demoralize a single creature he can see. He gains a +2 circumstance bonus to this check", "a creature within 60 feet, with a +2 circumstance bonus", a first sentence that only tells it) → a new trigger, { event: "downs" }, with PF2e's Demoralize and its bonus (check.bonus, batch 41's).
+  - **The simulator** (B79): as it downs a creature, its reaction: Demoralize at another foe, one in its Melee first.
+  - **Live play:** as a creature drops to 0 Hit Points, the monster that last damaged it (the core's damage memory, the last ten seconds) gets its reaction offer, "downed Dummy A"; Use it posts Demoralize's card, "Intimidation (+2 circumstance) against each target's Will DC", for the GM's target.
+- **Stoke the Flames** (9): "The dragon intensifies nearby fires. Every foe within 60 feet that is taking persistent fire damage takes @Damage[5d6[fire]] damage." → that damage on those foes (targeting.foes, targeting.taking: "fire").
+  - **The simulator** (B79): the foes taking persistent fire damage.
+  - **Live play:** the card finds them itself: the tokens within 60 feet of another disposition with a persistent fire damage condition.
+- **Checked live in pftest** (PFTEST SIM B52 Prisoner from NPC Core, Cinder Dragon (Young) from Monster Core 2, three dummies on the party's side, in an encounter; deleted afterwards): the Prisoner's Shiv taking a dummy to 0: the offer, then the Demoralize card with its +2; Stoke the Flames with one dummy taking persistent fire: its card on that dummy only. (A dummy NPC's disposition follows its alliance: set to the party's.)
+

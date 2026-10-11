@@ -50,6 +50,8 @@ export function setUpReactions({ compileItem }) {
     });
     Hooks.on("updateActor", (actor, changed, options) => {
         if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) serially("down", () => onDown(actor));
+        // (A creature a monster downed: its reaction to that, You're Next; batch 52.)
+        if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) serially("downed", () => onDowned(actor));
         // PF2e's damage, with the amount it applied (not its undo).
         if (isActiveGM() && options?.damageTaken > 0 && !options.damageUndo) serially("damaged", () => onDamaged(actor, options.damageTaken));
     });
@@ -355,6 +357,21 @@ async function onConditionGained(item) {
     const left = Number(entry.item.system?.frequency?.value);
     if (Number.isFinite(left) && left <= 0) return;
     await offer({ kind: "negate", item: entry.item, monster: token, actor: mine.actor, target: null, trigger: `it would be ${item.name}`, negate: { itemId: item.id, name: item.name } });
+}
+
+// A creature a monster downed (You're Next, batch 52): that monster's reaction offer, its card at the GM's target. The monster: the
+// source of the damage the core remembered for the creature, in the last ten seconds.
+async function onDowned(actor) {
+    const source = game.modules.get("pf2e-resolution-core")?.api?.patches?.damage?.lastSource(actor.uuid);
+    if (!source?.actor || Date.now() - (source.at ?? 0) > 10000) return;
+    for (const token of actor.getActiveTokens(false, true)) {
+        const scene = token.parent;
+        const combat = scene && runningCombat(scene);
+        if (!combat) continue;
+        const mine = reactors(scene, combat).find((entry) => entry.actor.uuid === source.actor);
+        const entry = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "downs");
+        if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: null, trigger: `downed ${token.name}`, free: !!entry.plan.trigger.free });
+    }
 }
 
 // A creature losing a condition within a monster's distance (Consume Fear, batch 46): the monster's reaction, on itself.

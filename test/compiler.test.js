@@ -1476,3 +1476,14 @@ test("Wicked Bite: a GM button for each way, each a save after the jaws hit (202
     assert.match(blood.resolution.reminders[0], /regains 5 HP \(10 on a critical failure\)/);
     assert.deepEqual([vitality.resolution.outcomes.failure.effects[0].slug, vitality.resolution.outcomes.failure.effects[0].duration?.unit, vitality.resolution.outcomes.criticalFailure.effects[0].value], ["enfeebled", "hours", 2]);
 });
+
+test("You're Next and Stoke the Flames (2026-10-11, batch 52)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const item = (name, html, type) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const next = compileMonsterAbility(item("You're Next", "<p><strong>Trigger</strong> The test prisoner reduces a creature to 0 hit points.</p><hr /><p><strong>Effect</strong> The test prisoner attempts an Intimidation check with a +2 circumstance bonus to [[/act demoralize options=youre-next]] a single creature it can see and that can see them.</p>", "reaction"), { basicActions });
+    assert.deepEqual([next?.trigger, next?.resolution?.check?.statistic, next?.resolution?.check?.bonus], [{ event: "downs", reaction: true }, "intimidation", { value: 2, type: "circumstance" }]);
+    const free = compileMonsterAbility(item("You're Next", "<p><strong>Trigger</strong> Test Brute reduces an enemy to 0 Hit Points</p><hr /><p><strong>Effect</strong> Test Brute attempts to [[/act demoralize]] a single creature he can see. He gains a +2 circumstance bonus to this check.</p>", "free"), { basicActions });
+    assert.deepEqual(free?.trigger, { event: "downs", reaction: true, free: true });
+    const stoke = compileMonsterAbility(item("Stoke the Flames", "<p>The test dragon intensifies nearby fires. Every foe within 60 feet that is taking persistent fire damage takes @Damage[4d6[fire]] damage.</p>", "action"));
+    assert.deepEqual([stoke?.targeting?.foes, stoke?.targeting?.taking, stoke?.targeting?.area?.value, stoke?.resolution?.outcomes?.success?.damage?.formulas?.[0]?.formula], [true, "fire", 60, "4d6[fire]"]);
+});

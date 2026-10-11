@@ -140,8 +140,11 @@ async function cardForAbility(message) {
     if (plan?.resolution && (plan.trigger?.event ?? "use") === "use" && cardCheck(plan)) {
         // On itself (Go Dark, batch 26): its own token; on its allies around it: those in its emanation; otherwise the GM's targets.
         const area = plan.targeting?.allies && plan.targeting.area?.type === "emanation" ? Number(plan.targeting.area.value) || 0 : 0;
+        // (Stoke the Flames, batch 52: its foes within its distance taking persistent damage of that type.)
+        const taking = plan.targeting?.taking && sourceToken ? Number(plan.targeting.area?.value) || 0 : 0;
         const tokens = plan.targeting?.target === "self" ? (sourceToken ? [sourceToken.object ?? sourceToken] : [])
             : area && sourceToken ? tokensAround(sourceToken, area).filter((token) => (token.document ?? token).disposition === sourceToken.disposition)
+            : taking ? tokensAround(sourceToken, taking).filter((token) => (token.document ?? token).disposition !== sourceToken.disposition && (token.actor?.itemTypes?.condition ?? []).some((condition) => condition.slug === "persistent-damage" && condition.system?.persistent?.damageType === plan.targeting.taking))
             : [...game.user.targets];
         await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens, warning });
         return;
