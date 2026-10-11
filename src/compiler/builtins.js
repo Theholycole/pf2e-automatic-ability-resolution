@@ -76,6 +76,8 @@ export function readMultiStrikes(text) {
     // (Links as their labels, batch 23: "can attempt to @UUID[…]{Grab} the target" read as "Grab".)
     let body = String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").trim();
     let oncePerTurn = false;
+    // (Batch 42: what it wields, "Requirements The test slayer is wielding two melee weapons, each in a different hand Effect".)
+    body = body.replace(/(^|Frequency once per (?:turn|round) )Requirements? (?:The |You )?[^.]+? (?:is wielding|are wielding|wields) two melee weapons, each in a different hand\.? Effect /i, (_all, before) => (before ? `${before}Effect ` : ""));
     const frequency = /^Frequency (.+?) Effect /i.exec(body);
     if (frequency) {
         if (!/^once per (?:turn|round)$/i.test(frequency[1].trim())) return null;
@@ -84,6 +86,9 @@ export function readMultiStrikes(text) {
     }
     if (/^(?:Requirements?|Trigger|Prerequisites?)\b/i.test(body)) return null;
     const sentences = body.replace(/,? which (?:it|they) can make in any order\./i, ".").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 42: a first sentence that only tells what it does, "The test slayer swiftly attacks their prey with both weapons,
+    // potentially combining their damage into a single devastating attack.")
+    if (sentences.length > 1 && !/^(?:Frequency|Requirements?|Trigger|Prerequisites?)\b/i.test(sentences[0]) && !/\bStrikes?\b|\d|@|\b(?:save|DC|damage|bonus|penalty|Grab|Grabbed|Prone|Stunned|Frightened|condition)\b/i.test(sentences[0].replace(/, potentially combining their damage into a single devastating attack\.$/i, ".")) && /\bStrikes\b/.test(sentences[1])) sentences.shift();
     let first = sentences.shift() ?? "";
     let sameMap = false;
     let sameTarget = false;
@@ -100,6 +105,13 @@ export function readMultiStrikes(text) {
             return "";
         })
         .replace(/ at any point during (?:that|its|their|the) movement/i, "")
+        // (Batch 42: "two fist Strikes, applying her multiple attack penalty as normal", "two Strikes, each of which must be an unarmed
+        // Strike or temple bell Strike", "two unarmed Strikes, or one unarmed Strike and a dueling pistol Strike": its best melee
+        // Strikes; "thrashes wildly with its wings, making wing Strikes against up to three adjacent foes".)
+        .replace(/, applying (?:its|their|his|her) multiple attack penalty as normal(?=\.$)/i, "")
+        .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
+        .replace(/(Strikes), or one [\w' -]+? Strike and an? [\w' -]+? Strike(?=\.$)/i, "$1")
+        .replace(/, making ([\w' -]+? Strikes against )/i, " and makes $1")
         .replace(/ (?:within|in) (?:the|its|their|his|her) [\w' -]+?(?:'s)? first range increment/i, "")
         .replace(/; no more than (?:two|one) can be against the same target/i, "")
         .replace(/ against (?:a|the) creature (?:it|they|he|she) (?:has|have) Grabbed(?: or Restrained)?/i, () => {
@@ -137,6 +149,11 @@ export function readMultiStrikes(text) {
         // "They make one Strike with each of their two melee weapons, both against the same target": its best melee Strikes.
         for (let index = 0; index < count(match[1]); index++) strikes.push(null);
         if (/same (?:target|creature)/i.test(first)) sameTarget = true;
+    } else if ((match = /^(?:(?:The )?[^.]+? makes?|Make) two Strikes against (?:(?:its|their|his|her|your) (?:hunted prey|target)|a creature|[^.]+?'s hunted prey), one with each of the required weapons\.$/i.exec(first))) {
+        // (Twin Takedown, batch 42: "They make two Strikes against their hunted prey, one with each of the required weapons": its best
+        // melee Strikes, at one creature.)
+        strikes.push(null, null);
+        sameTarget = true;
     } else if ((match = /^(?:The )?[^.]+? makes (two) Strikes(?: against the same target)?, one with (?:its|their|his|her) ([\w' -]+?) and (?:one|the other) with (?:its|their|his|her) ([\w' -]+?)\.$/i.exec(first))) {
         strikes.push(named(match[2]), named(match[3]));
         if (/same target/i.test(first)) sameTarget = true;
@@ -155,7 +172,7 @@ export function readMultiStrikes(text) {
         }
         if (/\bmultiple attack penalty\b[^.]*\b(?:as normal|normally)\b|\bcount(?:s)? toward (?:its|their|his|her|the [\w' -]+?'s) multiple attack penalty(?: as normal)?\.$|^Apply the multiple attack penalty to these Strikes normally\.$/i.test(sentence)) continue;
         // Damage combined against resistances, and nothing more ("…, and the creature must succeed at a save" isn't).
-        if (/\bcombine(?:s|d)? (?:their|the) damage\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
+        if (/\bcombine(?:s|d)? (?:their|the) damages?\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
         if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) {
             each = true;
             continue;
@@ -207,13 +224,17 @@ export function readMultiStrikes(text) {
 // → { strike, max }, or null.
 export function readSwipe(text) {
     const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 42: a first sentence that only tells what it does, "The test draugr lashes out at every foe it can reach.")
+    if (sentences.length > 1 && !/\bStrikes?\b|\d|@/.test(sentences[0]) && /\bcompares the attack roll\b/i.test(sentences[1])) sentences.shift();
     // (Batch 38, Wide Swing: "makes a single greataxe Strike and compares the attack roll result to the ACs of up to two foes within
-    // its reach".)
-    const match = /^(?:The )?[^.]+? makes (?:a single |an? )(?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|ACs|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's) (?:melee )?reach(?: and adjacent to each other)?| within (?:its|their|his|her) reach)?\.$/i.exec(sentences.shift() ?? "");
+    // its reach"; batch 42: "within the guard captain's melee reach and adjacent to the other".)
+    const match = /^(?:The )?[^.]+? makes (?:a single |an? )(?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|ACs|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's|the [\w' -]+?'s) (?:melee )?reach(?: and adjacent to (?:each other|the other))?| within (?:its|their|his|her) reach)?\.$/i.exec(sentences.shift() ?? "");
     if (!match) return null;
     for (const sentence of sentences) {
-        if (/^(?:Roll|(?:It|They|He|She) rolls?) (?:the )?damage only once(?:,)? and appl(?:y|ies) it to each creature (?:hit|it hits|they hit|he hits|she hits)\.$/i.test(sentence)) continue;
-        if (/^(?:An? |The )?[\w' -]+? counts as (?:two|three) attacks (?:for|when calculating) [^.]*multiple attack penalty\.$/i.test(sentence)) continue;
+        if (/^(?:Roll|(?:It|They|He|She) rolls?) (?:the )?damage (?:only )?once(?:,)? and appl(?:y|ies) it to each creature (?:hit|(?:it|they|he|she|the [\w' -]+?) hits?)\.$/i.test(sentence)) continue;
+        if (/^(?:(?:An?|The|This) )?(?:[\w' -]+? )?counts as (?:two|three) attacks (?:for|when calculating|toward) [^.]*multiple attack penalty(?:, (?:but|though) the penalty (?:does not|doesn't) increase until after (?:both|all) attacks are resolved)?\.$/i.test(sentence)) continue;
+        // (The sweep trait's +1 on the second: the simulation's numbers leave it out.)
+        if (/^The (?:modifier of a weapon with a sweep trait|sweep bonus of (?:the [\w' -]+?'s|its|their|his|her) [\w' -]+?) applies to (?:all|these|both) attacks\.$/i.test(sentence)) continue;
         return null;
     }
     const strike = match[1] && !/^(?:melee|weapon|unarmed)$/i.test(match[1]) ? match[1].replace(/^(?:melee|ranged)\s+|\s+(?:melee|ranged)$/gi, "").toLowerCase() : null;
@@ -223,7 +244,8 @@ export function readSwipe(text) {
 // "The guard Strides twice. If it ends its movement within melee reach of at least one enemy, it makes a melee Strike against
 // that enemy." (Sudden Charge; 2026-10-10) → "The guard Strides twice and makes a melee Strike." for the charge readers.
 export function chargeSentences(text) {
-    return String(text).replace(/\b(Strides twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)\.\s+If (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement (?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that|the) (?:enemy|foe|creature|target)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
+    // (Batch 42: "They Stride or Swim twice; if they end their movement …, they can make a melee Strike against it.")
+    return String(text).replace(/\b(Strides? twice|Strides? or Swims? twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)[.;]\s+[Ii]f (?:it|they|he|she|the [\w' -]+?) ends? (?:its|their|his|her) movement (?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that (?:enemy|foe|creature|target)|the (?:enemy|foe|creature|target)|it)\./gi, (_whole, move, strike) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice")} and makes a ${strike}Strike.`);
 }
 
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
@@ -285,7 +307,8 @@ export function readCharge(text) {
     // ("Frequency once per turn Effect The knight Strides twice. …": its Effect, batch 38.)
     const sentences = chargeSentences(String(text).replace(/^Frequency once per (?:turn|round) Effect /, "")).trim().split(/(?<=\.)\s+/);
     // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
-    if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^The [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
+    // (Batch 42: "With a quick sprint, the test warrior dashes up to their foe and swings.", "… with jets of energy from its feet, …".)
+    if (sentences.length > 1 && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|\d+ feet|Hit Points|@\w+\[)\b/i.test(sentences[0]) && /^(?:[A-Z][^,.]*, (?=the ))?[Tt]he [\w' -]+? [a-z]+s\b/.test(sentences[0]) && moveThenStrike(sentences[1] ?? "")) sentences.shift();
     const match = /^The [^.]+? Strides( twice)? and (?:then )?makes an? (?:([\w' -]+?) )?Strike(?: at the end of that movement)?\.$/i.exec(sentences[0] ?? "");
     // Other moves and wordings (2026-10-10): "Flies up to double its fly Speed and then makes a talon Strike".
     const other = match ? null : moveThenStrike(sentences[0] ?? "");
@@ -806,11 +829,17 @@ export function readSelfGuard(item) {
 // precision damage. …" → { builtin: "hunt-prey", edge: "precision", dice, die }; with only the bonuses to Seek and Track and the
 // range increment (no damage), nothing for the fight's numbers. null when it isn't Hunt Prey.
 function readHuntPrey(text) {
-    if (!/\bdesignates? (?:a single|one) creature\b[^.]*\bas (?:its|their|his|her|your) prey\b|\bdesignates? as (?:its|their|his|her) prey (?:a single|one) creature\b/i.test(text)) return null;
-    const edge = /\bThe first time (?:the [\w' -]+?|an? [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) hits? (?:the|its|their|his|her) (?:designated|hunted) prey in a round, (?:it|they|he|she|the [\w' -]+?) deals? (?:an additional (\d+)d(\d+)|(\d+)d(\d+) additional) precision damage\./i.exec(text);
+    // (Batch 42: "designates one or two targets he can see or hear as his prey", "designates a single creature he can see or hear, and
+    // gains a +2 circumstance bonus to Perception checks to Seek and Track that prey".)
+    if (!/\bdesignates? (?:a single|one|one or two) (?:creature|targets?)\b[^.]*\bas (?:its|their|his|her|your) prey\b|\bdesignates? as (?:its|their|his|her) prey (?:a single|one) creature\b|\bdesignates? a single creature (?:it|they|he|she) can see or hear, and gains a \+2 circumstance bonus to Perception checks to Seek and Track that prey\b/i.test(text)) return null;
+    const edge = /\bThe first time (?:the [\w' -]+?|an? [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) hits? (?:the|its|their|his|her) (?:(?:designated|hunted) )?prey in a round, (?:it|they|he|she|the [\w' -]+?) (?:deals?|inflicts?) (?:an additional (\d+)d(\d+)|(\d+)d(\d+) additional) precision damage\./i.exec(text)
+        // (The same edge with "each round" before the hit and "with a Strike" after it; "she deals 1d8 precision damage to her prey the
+        // first time she hits her prey each round".)
+        ?? /\bThe first time each round that (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) hits? (?:its|their|his|her) prey with a Strike, (?:it|they|he|she) deals? an additional (\d+)d(\d+) precision damage\./i.exec(text)
+        ?? /\b(?:it|they|he|she) deals? (\d+)d(\d+) precision damage to (?:its|their|his|her) prey the first time (?:it|they|he|she) hits? (?:its|their|his|her) prey each round\./i.exec(text);
     if (edge) return { builtin: "hunt-prey", edge: "precision", dice: Number(edge[1] ?? edge[3]), die: Number(edge[2] ?? edge[4]) };
-    // (Its other words: the Seek and Track bonuses, the range increment, how long it lasts.)
-    const rest = text.split(/(?<=\.)\s+(?=[A-Z])/).filter((sentence) => !/\bdesignates?\b|\bcircumstance bonus to (?:Perception|Survival)\b|\bsecond range increment\b|\b(?:These effects|This effect|The effects?) lasts? until\b|\bcan have only one (?:creature|prey) designated\b|\bmust be able to see or hear the prey\b/i.test(sentence));
+    // (Its other words: the Seek and Track bonuses, the range increment, how long it lasts, a new prey in place of the old.)
+    const rest = text.split(/(?<=\.)\s+(?=[A-Z])/).filter((sentence) => !/\bdesignates?\b|\bcircumstance bonus to (?:Perception|Survival)\b|\bsecond range increment\b|\b(?:These effects|This effect|The effects?) lasts? until\b|\bcan (?:have only|only have) one (?:creature|prey)(?: so)? designated\b|\bmust be able to see(?:,| or) (?:or )?hear\b|\bloses the designation\b|\bdesignation lasts\b/i.test(sentence));
     return rest.length ? null : { builtin: "no-effect" };
 }
 
@@ -890,6 +919,20 @@ function readSafeMove(text) {
 // Strides with a bonus to its Speed (Gallop). true or false.
 function readNoCombatEffect(text) {
     const said = String(text).replace(/’/g, "'").trim();
+    // (Batch 42: a statue or a corpse until it acts — "Until the next time it acts, the gargoyle appears to be a statue. It has an
+    // automatic result of 32 on Deception checks and DCs to pass as a statue." — not with more for it, such as fast healing while it
+    // stays still; a web line it descends on; a move and a reload, which the simulation does with its own Interact.)
+    const sentences = said.split(/(?<=\.)\s+(?=[A-Z])/);
+    const disguise = sentences.findIndex((sentence) => /^Until the next time (?:it|they|he|she) (?:acts?|uses? an action), (?:the )?[^.]+? appears to be (?:a statue|an ordinary corpse)\.$/i.test(sentence));
+    if (disguise >= 0) {
+        return sentences.every((sentence, index) => index === disguise
+            || /\bhas an automatic result of \d+ on Deception checks and DCs to pass as (?:a statue|an ordinary corpse)\.$|\bhave an automatic result of \d+ on Deception checks and DCs to pass as (?:a statue|an ordinary corpse)\.$/i.test(sentence)
+            || /^A creature must succeed at a @Check\[perception[^\]]*\] check to figure out that the statue is really a creature\.$/i.test(sentence)
+            || (index < disguise && /, falls Prone, and lies completely still\.$/i.test(sentence))
+            || (index > disguise && !/@|\d|\b(?:fast healing|regeneration|damage|Hit Points|HP|bonus|penalty|Strikes?|saves?|DC|conditions?)\b/i.test(sentence)));
+    }
+    if (/^(?:The )?[^.]+? moves straight down up to \d+ feet, suspended by a web line\. (?:It|They) can hang from the web or drop off\. The distance (?:it|they) Descends? on a Web (?:doesn't|does not) count (?:when calculating|for) falling damage\./i.test(said)) return true;
+    if (/^(?:The )?[^.]+? Strides?, Steps,? or Sneaks,? (?:and )?then Interacts to reload(?: (?:its|his|her|their) [\w' -]+)?\.?$/i.test(said)) return true;
     if (/@|\bTrigger\b(?! A [\w' -]+ ally ends a move action adjacent to)/.test(said) && !/^Trigger A [\w' -]+ ally ends a move action adjacent to [^.]+\.? Effect (?:The )?[^.]+? Steps\.$/.test(said)) return false;
     if (/^Trigger A [\w' -]+ ally ends a move action adjacent to [^.]+\.? Effect (?:The )?[^.]+? Steps\.$/.test(said)) return true;
     // (A disguise: its numbers stay as they are.)
@@ -906,9 +949,9 @@ function readNoCombatEffect(text) {
 // Strike, after which the boomerang returns to its hand", "makes a Strike with his fist and increases his reach by 5 feet for this
 // Strike". Live play: the Strike from the sheet; nothing more to apply. true or false.
 function readStrikeOnly(text) {
-    const sentences = String(text).trim().split(/(?<=\.)\s+(?=[A-Z])/);
-    // (A first sentence that only tells what it does.)
-    if (sentences.length === 2 && !/\b(?:damage|bonus|penalty|save|check|DC|feet|Hit Points|HP|Grab|Prone)\b|\d/.test(sentences[0])) sentences.shift();
+    const sentences = String(text).trim().replace(/^Frequency once per (?:turn|round) Effect /i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (A first sentence that only tells what it does; batch 42: "The hunter's feet and weapons move in tandem.")
+    if (sentences.length === 2 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Grab|Prone)\b|\d/.test(sentences[0])) sentences.shift();
     if (sentences.length !== 1) return false;
     const [sentence] = sentences;
     const who = String.raw`^(?:The |An? )?[^.]+?`;
@@ -916,5 +959,7 @@ function readStrikeOnly(text) {
     const reload = new RegExp(String.raw`${who} reloads (?:its|his|her|their) [\w' -]+? and makes an? (?:[\w' -]+? )?Strike\.$`, "i");
     const returning = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike, after which the [\w' -]+? returns to (?:its|his|her|their|the [\w' -]+?'s) hand\.$`, "i");
     const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet)\.$`, "i");
-    return [draw, reload, returning, reach].some((pattern) => pattern.test(sentence));
+    // (Batch 42, Skirmish Strike: "The hunter can Step and then Strike, or Strike and then Step.")
+    const skirmish = new RegExp(String.raw`${who} (?:can )?(?:either )?Steps? and then Strikes?,? or Strikes? and then Steps?\.$`, "i");
+    return [draw, reload, returning, reach, skirmish].some((pattern) => pattern.test(sentence));
 }
