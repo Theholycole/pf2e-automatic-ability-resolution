@@ -691,3 +691,13 @@ For the simulator (in live play the GM rolls these Strikes from the sheet as bef
   - Not one with another requirement ("A creature within its scent range is taking bleed damage"), a trigger, confusion, a weakness, or allies.
 - **Live play:** unchanged: most link PF2e's own Rage effect, which PF2e's card applies.
 - **The simulator** (B64): a self-effect with those modifiers, temporary Hit Points and extra dice on its melee Strikes, for 1 minute; no concentrate actions while it lasts.
+
+## Triggered rages and frenzies, for the simulator (2026-10-10, batch 33)
+
+- **Read now** (13, all PF2e): batch 32's rages with the triggers the simulator plays:
+  - "The sea devil deals bleed damage to a living creature" (Blood Frenzy, a free action);
+  - "The Tiger Lord suffers damage that reduces its Hit Points to 100 or less" (Vengeful Rage, a reaction);
+  - "Hymmir damages a living creature with his jaws Strike" (Hungry Rage, a reaction).
+  - Not one that also attacks its allies ("continue to attack bystanders and allies afterward"), or that confuses it.
+- **Live play:** unchanged (PF2e's linked Rage effect, the GM's when the trigger comes).
+- **The simulator** (B65): when the trigger comes, once a fight, the reaction spent when it's one. Blood Frenzy needs bleed the simulation sees: a Strike's own bleed damage (the sea devils' and bunyip's come from a passive or the text, so it's rarely set off).

@@ -483,13 +483,28 @@ export function readGolemAntimagic(text) {
 // This effect lasts for 1 minute, …" → { builtin: "self-effect", actions, model: { name, rounds, modifiers, tempHp }, extraDice?,
 // noConcentrate? }. Temporary Hit Points "equal to its level plus its Constitution modifier" from the creature. Not one with a
 // trigger, nor one that also confuses it or names a weakness. PF2e's linked effect (Effect: Rage) stays live play's.
+// (Batch 33: a trigger it plays: "The sea devil deals bleed damage to a living creature" (deals-bleed), "The young rage dragon is
+// 200 Hit Points or below and takes damage", "The Tiger Lord suffers damage that reduces its Hit Points to 100 or less"
+// (hp-at-most), "Hymmir damages a living creature with his jaws Strike" (own-hit).)
+const RAGE_SELF = String.raw`(?:[Tt]he [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)`;
+function rageTrigger(trigger) {
+    const said = String(trigger).trim().replace(/\.$/, "");
+    let match;
+    if (new RegExp(String.raw`^${RAGE_SELF} deals bleed damage to a living creature$`).test(said)) return { kind: "deals-bleed" };
+    if ((match = new RegExp(String.raw`^${RAGE_SELF} is (\d+) Hit Points or below and takes damage$`).exec(said)) || (match = new RegExp(String.raw`^${RAGE_SELF} suffers damage that reduces its Hit Points to (\d+) or less$`).exec(said))) return { kind: "hp-at-most", value: Number(match[1]) };
+    if ((match = new RegExp(String.raw`^${RAGE_SELF} damages a living creature with (?:its|his|her|their) ([\w' -]+?) Strike$`).exec(said))) return { kind: "own-hit", strike: match[1].toLowerCase() };
+    return null;
+}
+
 export function readRage(item, actor = null) {
     const type = item?.system?.actionType?.value;
-    if (!["action", "free"].includes(type)) return null;
+    if (!["action", "free", "reaction"].includes(type)) return null;
     const text = htmlToPlainText(String(item?.system?.description?.value ?? "")).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|br|gmr) \{?([^\]}#]+?)\}?(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll).replace(/\s+/g, " ");
-    if (!/\b(?:rage|raging|frenzy|frenzied|enraged)\b/i.test(`${item.name} ${text}`) || /\bTrigger\b/.test(text) || /\b(?:Confused|weakness|each ally|allies|all [\w ]+ within)\b/i.test(text)) return null;
+    const triggerText = /\bTrigger (.+?) (?:Effect|Requirements?|Frequency)\b/.exec(text)?.[1] ?? null;
+    const trigger = triggerText ? rageTrigger(triggerText) : null;
+    if (!/\b(?:rage|raging|frenzy|frenzied|enraged)\b/i.test(`${item.name} ${text}`) || (/\bTrigger\b/.test(text) && !trigger) || (type === "reaction" && !trigger) || /\b(?:Confused|weakness|each ally|allies|all [\w ]+ within)\b/i.test(text)) return null;
     // (A requirement the simulator can't check: not read; "isn't Fatigued or raging" it can.)
-    const requires = /\bRequirements? (.+?) (?:Effect|You tap|The [\w' -]+? (?:taps|flies|begins))\b/i.exec(text)?.[1] ?? "";
+    const requires = /\bRequirements? (.+?) (?:Effect|Trigger|You tap|The [\w' -]+? (?:taps|flies|begins))\b/i.exec(text)?.[1] ?? "";
     // ("has taken damage", Fanatical Frenzy's: when it's hurt.)
     const hurt = /\bhas taken damage and\b/i.test(requires);
     const rest = requires.trim().replace(/\bhas taken damage and /i, "");
@@ -515,10 +530,11 @@ export function readRage(item, actor = null) {
     const extraDice = dice ? (/d/.test(dice[1]) ? `${dice[1]}[${dice[2].toLowerCase()}]` : `${dice[1]}[${dice[2].toLowerCase()}]`) : null;
     return {
         builtin: "self-effect",
-        actions: Number(item.system?.actions?.value) || (type === "free" ? 0 : 1),
+        actions: trigger ? 0 : Number(item.system?.actions?.value) || (type === "free" ? 0 : 1),
         model: { name: item.name, rounds, modifiers, tempHp },
         ...(extraDice ? { extraDice } : {}),
         ...(hurt ? { whenHurt: true } : {}),
+        ...(trigger ? { trigger: { ...trigger, ...(type === "reaction" ? { reaction: true } : {}) } } : {}),
         ...(/\bconcentrate\b/i.test(text) ? { noConcentrate: true } : {})
     };
 }

@@ -1127,3 +1127,15 @@ test("a rage or frenzy on itself, for the simulator (2026-10-10, batch 32)", () 
     // Not with a requirement it can't check, nor with a trigger.
     assert.equal(compileMonsterAbility(action("Scent of Blood", "<p><strong>Requirements</strong> A creature within the test beast's scent range is taking bleed damage</p><p><strong>Effect</strong> The test beast flies into a frenzy, gaining 10 temporary HP for 1 minute and a +4 status bonus to damage rolls.</p>"))?.builtin, undefined);
 });
+
+test("triggered rages and frenzies (2026-10-10, batch 33)", () => {
+    const item = (name, html, type) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const frenzy = compileMonsterAbility(item("Blood Frenzy", "<p><strong>Requirements</strong> The test shark is not Fatigued or already in a frenzy.</p><p><strong>Trigger</strong> The test shark deals bleed damage to a living creature.</p><p><strong>Effect</strong> The test shark flies into a frenzy that lasts 1 minute. While frenzied, the test shark gains a +4 status bonus to damage rolls with its jaws, gains 8 temporary HP that go away at the end of the frenzy, and takes a -2 penalty to AC.</p>", "free"));
+    assert.deepEqual([frenzy.builtin, frenzy.actions, frenzy.trigger, frenzy.model.tempHp], ["self-effect", 0, { kind: "deals-bleed" }, 8]);
+    const vengeful = compileMonsterAbility(item("Vengeful Rage", "<p><strong>Requirements</strong> The test chieftain is not Fatigued or already in a rage</p><p><strong>Trigger</strong> The test chieftain suffers damage that reduces its Hit Points to 100 or less.</p><p><strong>Effect</strong> The test chieftain flies into a rage that lasts 1 minute. While raging, the test chieftain gains a +1 status bonus to attack rolls, gains a +2 status bonus to damage rolls, and takes a -2 status penalty to AC.</p>", "reaction"));
+    assert.deepEqual(vengeful.trigger, { kind: "hp-at-most", value: 100, reaction: true });
+    const hungry = compileMonsterAbility(item("Hungry Rage", "<p><strong>Trigger</strong> The test ogre damages a living creature with his jaws Strike</p><p><strong>Effect</strong> The taste of blood throws the test ogre into a violent rage. He gains 9 temporary Hit Points, deals an additional 2 damage with melee Strikes, and takes a -1 penalty to AC for 1 minute.</p>", "reaction"));
+    assert.deepEqual(hungry.trigger, { kind: "own-hit", strike: "jaws", reaction: true });
+    // Not one that also attacks its allies, nor another trigger.
+    assert.equal(compileMonsterAbility(item("Test Rage", "<p><strong>Trigger</strong> The test dragon is 200 Hit Points or below and takes damage.</p><p><strong>Effect</strong> The test dragon becomes enraged. It gains 35 temporary Hit Points. It attacks bystanders and allies afterward.</p>", "free"))?.builtin, undefined);
+});
