@@ -13,7 +13,7 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
-import { chargeSentences, compileBuiltin, moveThenStrike, readRage, readSelfGuard, readStrikeBuff } from "./builtins.js";
+import { chargeSentences, compileBuiltin, countWord, moveThenStrike, readRage, readSelfGuard, readStrikeBuff } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 import { castSpell } from "./casts.js";
@@ -1209,6 +1209,87 @@ function automaticEffect(item, actor = null, { rider = false } = {}) {
 
 // The item as the readers see it: one written in older inline syntax (other publishers' monsters)
 // with its text in PF2e's current form; PF2e's own items unchanged.
+// A hydra's heads (2026-10-11, batch 43): "A hydra ordinarily has five heads." (Head Regrowth), "Alkoasha has ten heads." → 5, 10;
+// null when no ability of the creature says.
+export function headCount(actor) {
+    for (const other of actor?.items ?? []) {
+        const match = /\b(?:ordinarily |typically |usually )?has (\w+) heads\b/i.exec(htmlToPlainText(other.system?.description?.value ?? ""));
+        if (match && countWord(match[1]) > 1) return countWord(match[1]);
+    }
+    return null;
+}
+
+// Storm of Jaws (batch 43): "makes a number of Strikes up to its number of heads" with the creature's heads, "makes up to 5 Strikes".
+function withHeads(item, actor) {
+    const html = item.system?.description?.value;
+    const words = /\ba number of Strikes up to (?:its|their|his|her) number of heads\b/gi;
+    if (typeof html !== "string" || !words.test(html)) return item;
+    const heads = headCount(actor ?? item.actor ?? item.parent);
+    return heads ? withDescription(item, html.replace(words, `up to ${heads} Strikes`)) : item;
+}
+
+// Focused Assault (batch 43): one Strike for all its heads, leaves or weapons. "The hydra Strikes with its fangs. On a successful
+// attack, the hydra deals damage from its fangs Strike to the target, plus an additional 1d6 damage for every head it has beyond the
+// first. On a failure (but not a critical failure), the hydra deals the damage from one fangs Strike to the target creature. This
+// Strike counts as a number of attacks equal to the number of heads the hydra has toward the hydra's multiple attack penalty." → a
+// Strike activity: that many more dice on a hit (of the Strike's type unless it names one), the Strike's damage on a failure
+// (failureDamage), counted as that many attacks. How many: the text's ("all four of its leaves", "both its two leaves", "four
+// stalks", "typically 5d8 slashing damage") or the creature's heads. null otherwise.
+function focusedAssault(item, actor) {
+    const text = readableText(item.system?.description?.value ?? "");
+    const extra = /\bplus an additional (\d+)d(\d+) (?:([a-z]+) )?damage for every (\w+)(?: (?:it|they|he|she) (?:has|wields?))? beyond the first(?: \(typically (\d+)d\d+ [a-z ]*?damage\))?\./i.exec(text);
+    if (!extra) return null;
+    const things = String.raw`(?:heads|leaves|stalks|longswords|weapons|arms|tentacles)`;
+    const number = String.raw`(two|three|four|five|six|seven|eight)`;
+    const stated = new RegExp(String.raw`\b(?:all|both) (?:${number} of )?(?:its|their|his|her) (?:${number} )?${things}\b|\bwith ${number} ${things}\b`, "i").exec(text);
+    const count = extra[5] ? Number(extra[5]) / Number(extra[1]) + 1 : stated?.slice(1).find(Boolean) ? countWord(stated.slice(1).find(Boolean)) : /^head$/i.test(extra[4]) ? headCount(actor ?? item.actor ?? item.parent) : null;
+    if (!count || count < 2) return null;
+    let strike;
+    let failure = false;
+    let counted = false;
+    for (const sentence of text.split(/(?<=\.)\s+(?=[A-Z])/)) {
+        let match;
+        if (sentence === extra[0] || sentence.includes(extra[0])) {
+            if (!/^On a (?:success|successful attack), /i.test(sentence)) return null;
+            continue;
+        }
+        if ((match = /^(?:The )?[^.]+? attacks a single target with [^.,]+?(?:, (?:overwhelming (?:its|their|his|her|the) (?:foe|target) with multiple attacks and leaving almost nowhere to dodge|making one ([\w' -]+?) Strike))?\.$/i.exec(sentence))) {
+            if (match[1]) strike = match[1].toLowerCase();
+            continue;
+        }
+        if ((match = /^(?:The )?[^.]+? (?:Strikes with (?:its|their|his|her) ([\w' -]+?)(?: or (?:its|their|his|her) [\w' -]+?)?|makes (?:a|an|one) ([\w' -]+?) Strike)\.$/i.exec(sentence))) {
+            strike = (match[1] ?? match[2]).toLowerCase();
+            continue;
+        }
+        if (/^(?:Even on a failed attack|On a failure(?: \(but not a critical failure\))?),? (?:the [\w' -]+?|it|they|he|she) deals? the damage (?:from|of) one [\w' -]+?(?: Strike)?(?: to the target(?: creature)?)?(?:, (?:though (?:it|they|he|she) still miss(?:es)? completely on a critical failure|but (?:it|they) can't use Improved Grab))?\.$/i.test(sentence)) {
+            failure = true;
+            continue;
+        }
+        if (/^(?:It|They|He|She) deals? no damage on a critical failure\.$/i.test(sentence)) continue;
+        if (/^This (?:Strike )?counts (?:as a number of attacks equal to the number of \w+ [^.]*? toward [^.]*multiple attack penalty|toward [^.]*multiple attack penalty as a number of attacks equal to the number of \w+ [^.]*?)\.$/i.test(sentence)) {
+            counted = true;
+            continue;
+        }
+        return null;
+    }
+    if (!strike || !failure || !counted) return null;
+    const dice = Number(extra[1]) * (count - 1);
+    return {
+        builtin: "strike-activity",
+        actions: Number(item.system?.actions?.value) || 2,
+        strides: 0,
+        strike: /^(?:melee|weapon)$/i.test(strike) ? null : strike,
+        attackBonus: 0,
+        damageBonus: 0,
+        offGuard: false,
+        requires: null,
+        oncePerFight: false,
+        countsAs: count,
+        failureDamage: true,
+        onHit: { conditions: [], critical: null, push: null, damage: [`${dice}d${extra[2]}[${extra[3] ? extra[3].toLowerCase() : "strike"}]`], save: null, size: null }
+    };
+}
+
 function modernItem(item) {
     const html = item.system?.description?.value;
     if (typeof html !== "string") return item;
@@ -1808,7 +1889,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(item, slug) ?? (item.system?.actionType?.value === "action" ? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

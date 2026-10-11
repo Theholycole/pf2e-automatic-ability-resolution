@@ -215,6 +215,8 @@ async function cardForAbility(message) {
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its prey` : "its prey is the creature it named"}. The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`]);
         return;
     }
+    // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
+    if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
@@ -380,6 +382,8 @@ async function cardsForRiders(message) {
     else if (pending && strikeMatches(pending.plan, strike)) {
         pendingActivities.delete(actor.uuid);
         if (hit && target?.actor) await activityCard(message, pending, { actor, strike, target, targetToken, context });
+        // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
+        else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${strike.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
     }
     // Its passives its own Strike sets off ("When the gunmarshal makes a critical hit with a firearm, …"; batch 19): on the
     // creature it hit.

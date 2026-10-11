@@ -823,3 +823,18 @@ Compiler readings only; live play uses what each builtin already does (nothing t
 - **Sudden Charge** (6): "They Stride or Swim twice; if they end their movement within melee reach of at least one enemy, they can make a melee Strike against it", after "With a quick sprint, the lizardfolk warrior dashes up to their foe and swings".
 - **Left for later** (they need the simulator): Twin Feint (the second attack against an off-guard target), Three-Headed Strike (a different Strike at each creature, counted as one attack), Focused Assault (extra dice on a hit, the Strike's damage on a failure), Feign Death as a reaction, Unnerving Prowess.
 
+## Twin Feint, Three-Headed Strike, Storm of Jaws, Focused Assault (2026-10-11, batch 43)
+
+Several Strikes with more to them, which the simulator now plays (B74).
+
+- **Twin Feint** (8): "makes one Strike with each of their two melee weapons, both against the same target. The target is automatically Off-Guard against the second attack" (after a first sentence that only tells what it does; "one with their shortsword and one with their dagger"; "each of his short swords"). The simulator: the target off-guard against the second Strike. Live play: a note for the GM as it's used, "the target is off-guard against the second Strike (−2 AC for that roll)".
+- **Three-Headed Strike** (7): "makes a Strike with its dragon jaws, lion jaws, and goat horns, each at a -2 penalty and targeting a different creature. These Strikes count as only one attack for the chimera's multiple attack penalty …" (or "with each of its heads", three of its best Strike; "count as two attacks"). The simulator: a different Strike at each creature, each at −2, counted as one attack (or two). The four-fanged maharaja's "count as only one attack" now counts as one too.
+- **Storm of Jaws and its kin** (12, 1 Battlezoo): "makes a number of Strikes up to its number of heads, each against a different target", with the heads its Head Regrowth names ("A hydra ordinarily has five heads", "has ten heads"); not without them. Also larger numbers: "up to six claw Strikes", "up to 12 jaws Strikes", "five Strikes", and several named Strikes each at a different creature (Slithering Attack, Two-Headed Assault).
+- **Focused Assault** (10): "The hydra Strikes with its fangs. On a successful attack, the hydra deals damage from its fangs Strike …, plus an additional 1d6 damage for every head it has beyond the first. On a failure (but not a critical failure), the hydra deals the damage from one fangs Strike … This Strike counts as a number of attacks equal to the number of heads …" → a Strike activity: that many more dice on a hit (4d6 for five heads; 3d8 for "all four of its leaves"; 5d8 for the marilith's "typically 5d8"; the Strike's own type unless it names one), the Strike's damage on a failure, counted as that many attacks.
+  - **Live play:** the hit's card with the extra dice (doubled on a critical hit); on a failure, a note for the GM: "a failure still deals one Fangs Strike's damage to Ezren. Roll the Strike's damage from its attack card (not the extra dice)".
+  - Live play compiles an ability with no actor given, so the heads come from the item's own creature.
+- **Left out:** Sharkskin's Twin Feint (its own wording), the giant pirate skeleton's Focused Assault ("doesn't use this ability if there is more than one creature within its reach"), Storm of Blades (its move).
+- **Checked live in pftest** (PFTEST SIM B43 Bugbear Tormentor and Hydra from Monster Core, at Ezren; deleted afterwards):
+  - Twin Feint: the GM's note;
+  - Focused Assault with a natural 3 (19 against AC 20): the failure's note; with a natural 10 (26): its card, 4d6 piercing (2×(4d6) on a critical hit).
+

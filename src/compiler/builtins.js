@@ -16,7 +16,10 @@
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { readableText } from "./inline.js";
 
-const NUMBERS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4 };
+const NUMBERS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+// "four", "4" → 4; 0 when it isn't a number (batch 43: "up to six claw Strikes", "up to 12 jaws Strikes").
+export const countWord = (word) => NUMBERS[String(word ?? "").toLowerCase()] ?? (Number(word) || 0);
+const COUNT = String.raw`(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)`;
 
 // DamageDice predicates the simulator can judge, as the condition it checks.
 const EXTRA_WHEN = new Map([
@@ -88,7 +91,7 @@ export function readMultiStrikes(text) {
     const sentences = body.replace(/,? which (?:it|they) can make in any order\./i, ".").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 42: a first sentence that only tells what it does, "The test slayer swiftly attacks their prey with both weapons,
     // potentially combining their damage into a single devastating attack.")
-    if (sentences.length > 1 && !/^(?:Frequency|Requirements?|Trigger|Prerequisites?)\b/i.test(sentences[0]) && !/\bStrikes?\b|\d|@|\b(?:save|DC|damage|bonus|penalty|Grab|Grabbed|Prone|Stunned|Frightened|condition)\b/i.test(sentences[0].replace(/, potentially combining their damage into a single devastating attack\.$/i, ".")) && /\bStrikes\b/.test(sentences[1])) sentences.shift();
+    if (sentences.length > 1 && !/^(?:Frequency|Requirements?|Trigger|Prerequisites?)\b/i.test(sentences[0]) && !/\bStrikes?\b|\d|@|\b(?:save|DC|damage|bonus|penalty|Grab|Grabbed|Prone|Stunned|Frightened|condition)\b/i.test(sentences[0].replace(/, potentially combining their damage into a single devastating attack\.$/i, ".")) && /\bStrikes?\b/.test(sentences[1])) sentences.shift();
     let first = sentences.shift() ?? "";
     let sameMap = false;
     let sameTarget = false;
@@ -121,7 +124,7 @@ export function readMultiStrikes(text) {
         });
     const after = [];
     const strikes = [];
-    const count = (word) => NUMBERS[String(word).toLowerCase()] ?? 0;
+    const count = countWord;
     // "scimitar or fangs": the first; "melee", "unarmed", "ranged" or none: the best (null).
     const named = (name) => {
         const plain = String(name ?? "").trim().replace(/\s+or\s+.*$/i, "");
@@ -135,7 +138,7 @@ export function readMultiStrikes(text) {
     // Against different creatures ("up to four tentacle Strikes, each against a different target", "tail Strikes against two
     // different creatures within reach"): a Strike at each of that many enemies in its Melee (2026-10-10).
     let each = false;
-    if ((match = new RegExp(String.raw`^(?:The )?[^.]+? makes (?:up to )?(a|an|one|two|three|four) (?:([\w' -]+?) )??Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: with (?:its|their|his|her) ([\w' -]+?))?(?: in (?:any|either) order)?(${WHO})(?:,? one (?:Strike )?(?:with each of (?:its|their|his|her) [\w' -]+|per weapon))?\.$`, "i").exec(first))) {
+    if ((match = new RegExp(String.raw`^(?:The )?[^.]+? makes (?:up to )?(${COUNT}) (?:([\w' -]+?) )??Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: with (?:its|their|his|her) ([\w' -]+?))?(?: in (?:any|either) order)?(${WHO})(?:,? one (?:Strike )?(?:with each of (?:its|their|his|her) [\w' -]+|per weapon))?\.$`, "i").exec(first))) {
         for (const [number, name] of [[match[1], match[2] ?? match[5]], [match[3], match[4]]]) for (let index = 0; index < count(number ?? 0); index++) strikes.push(named(name));
         if (/single|same|one (?:creature|target|foe|enemy)/i.test(match[6] ?? "")) sameTarget = true;
         if (/different|two (?:creatures|targets|foes|enemies)/i.test(match[6] ?? "")) each = true;
@@ -149,12 +152,26 @@ export function readMultiStrikes(text) {
         // "They make one Strike with each of their two melee weapons, both against the same target": its best melee Strikes.
         for (let index = 0; index < count(match[1]); index++) strikes.push(null);
         if (/same (?:target|creature)/i.test(first)) sameTarget = true;
+    } else if ((match = /^(?:The )?[^.]+? makes a Strike with (?:its|their|his|her) ([\w' -]+?), ([\w' -]+?),? and ([\w' -]+?) and targeting a different creature\.$/i.exec(first))) {
+        // (Three-Headed Strike, batch 43: "makes a Strike with its dragon jaws, lion jaws, and goat horns, each at a -2 penalty and
+        // targeting a different creature": a different Strike at each.)
+        strikes.push(named(match[1]), named(match[2]), named(match[3]));
+        each = true;
+    } else if ((match = /^(?:The )?[^.]+? makes a Strike with each of (?:its|their|his|her) heads and targeting a different creature\.$/i.exec(first)) && (match = /\ball (two|three|four|five) attacks\b/i.exec(body))) {
+        // ("… with each of its heads …, until after it has made all three attacks": that many, its best melee Strike each.)
+        for (let index = 0; index < count(match[1]); index++) strikes.push(null);
+        each = true;
+    } else if ((match = /^(?:The )?[^.]+? makes? one Strike with each of (?:its|their|his|her) (?!two |three )[\w' -]+?, both against the same (?:target|creature)\.$/i.exec(first))) {
+        // (Twin Feint, batch 43: "He makes one Strike with each of his short swords, both against the same target": its best melee
+        // Strike twice.)
+        strikes.push(null, null);
+        sameTarget = true;
     } else if ((match = /^(?:(?:The )?[^.]+? makes?|Make) two Strikes against (?:(?:its|their|his|her|your) (?:hunted prey|target)|a creature|[^.]+?'s hunted prey), one with each of the required weapons\.$/i.exec(first))) {
         // (Twin Takedown, batch 42: "They make two Strikes against their hunted prey, one with each of the required weapons": its best
         // melee Strikes, at one creature.)
         strikes.push(null, null);
         sameTarget = true;
-    } else if ((match = /^(?:The )?[^.]+? makes (two) Strikes(?: against the same target)?, one with (?:its|their|his|her) ([\w' -]+?) and (?:one|the other) with (?:its|their|his|her) ([\w' -]+?)\.$/i.exec(first))) {
+    } else if ((match = /^(?:The )?[^.]+? makes (two) Strikes(?: against the same target)?, one with (?:its|their|his|her) ([\w' -]+?) and (?:one|the other) with (?:its|their|his|her) ([\w' -]+?)(?:, both against the same (?:target|creature))?\.$/i.exec(first))) {
         strikes.push(named(match[2]), named(match[3]));
         if (/same target/i.test(first)) sameTarget = true;
     } else if ((match = /^(?:The )?[^.]+? makes (two|three|four) ([\w' -]+?) Strikes, ignoring the multiple attack penalty until after (?:both|all|the (?:second|last)) (?:Strikes|attacks|Strike|attack)\.$/i.exec(first)) || (match = /^(?:The )?[^.]+? makes (one|a) ([\w' -]+?) Strike and (?:one|a) ([\w' -]+?) Strike, ignoring the multiple attack penalty until after (?:both|the second) (?:Strikes|Strike)\.$/i.exec(first))) {
@@ -164,8 +181,22 @@ export function readMultiStrikes(text) {
     } else return null;
     if (strikes.length < 2) return null;
     // What may follow: the order, the attack penalty, damage combined against resistances, who it's against.
+    let secondOffGuard = null;
+    let countsAs = null;
     for (const sentence of sentences) {
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
+        // (Twin Feint, batch 43: "The target is automatically Off-Guard against the second attack.")
+        if (/^The target is automatically Off-Guard against the second attack\.$/i.test(sentence) && strikes.length === 2) {
+            secondOffGuard = true;
+            continue;
+        }
+        // (Three-Headed Strike: "These Strikes count as only one attack for the chimera's multiple attack penalty, and the penalty
+        // doesn't increase until after it has made all three attacks", "… count as two attacks …".)
+        if ((match = /^These Strikes count as (only one attack|two attacks|three attacks) for [^.]*multiple attack penalty, and the penalty (?:doesn't|does not) increase until (?:after )?(?:it|he|she|they) (?:has|have) made all (?:two|three|four|five) attacks\.?$/i.exec(sentence))) {
+            sameMap = true;
+            countsAs = /one/i.test(match[1]) ? 1 : count(match[1].split(" ")[0]);
+            continue;
+        }
         if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty (?:doesn't|does not) increase until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
             sameMap = true;
             continue;
@@ -213,9 +244,8 @@ export function readMultiStrikes(text) {
         if (grab && /^(?:It|They|He|She|The [\w' -]+?) can have up to (?:two|three|four|\w+) creatures Grabbed\b/i.test(sentence)) continue;
         return null;
     }
-    // (A Strike at each of several creatures: all with its first Strike.)
-    if (each && new Set(strikes).size > 1) return null;
-    return { strikes, sameMap, sameTarget, oncePerTurn, ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}) };
+    // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
+    return { strikes, sameMap, sameTarget, oncePerTurn, ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}) };
 }
 
 // One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
@@ -743,7 +773,7 @@ export function compileBuiltin(item, slug) {
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
     const multi = readMultiStrikes(text);
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}) };
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
