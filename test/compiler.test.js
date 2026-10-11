@@ -1877,3 +1877,13 @@ test("a worse condition for a creature that already has the first: slowed, then 
     assert.deepEqual([readEscalation("<p>If a creature is already slowed when it fails its save, it becomes Paralyzed for 1 round.</p>")].map((entry) => [entry.if, entry.slug, entry.duration?.value, entry.duration?.unit]), [["slowed", "paralyzed", 1, "rounds"]]);
     assert.equal(readEscalation("<p>When a creature already slowed by the test thorns fails its Fortitude save, it becomes Petrified for 1 minute but is turned to wood instead of stone.</p>")?.duration?.unit, "minutes");
 });
+
+test("a save to avoid or resist becoming a condition; a critical failure's condition for good (2026-10-11, batch 76)", () => {
+    const item = (description, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: 1 }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } });
+    const rows = (description, type) => { const outcomes = compileMonsterAbility(item(description, type), { basicActions: {} })?.resolution?.outcomes; return ["failure", "criticalFailure"].map((degree) => outcomes?.[degree]?.effects?.map((effect) => [effect.slug, effect.value, effect.duration?.value ?? null])); };
+    assert.deepEqual(rows("The test sprite tickles a creature within reach, which must succeed at a @Check[fortitude|dc:20] save to avoid becoming Sickened 1 (Sickened 2 on a critical failure)."), [[["sickened", 1, null]], [["sickened", 2, null]]]);
+    // An aura's: "When a creature ends its turn in the aura, it must succeed at a … save to resist becoming Slowed 1".
+    assert.deepEqual(rows("30 feet. When a creature ends its turn in the aura, it must succeed at a @Check[will|dc:31] save to resist becoming Slowed 1 (Slowed 2 on a critical failure).", "passive"), [[["slowed", 1, null]], [["slowed", 2, null]]]);
+    // "(or Blinded permanently on a critical failure)": not the failure's minute.
+    assert.deepEqual(rows("All creatures within 120 feet must succeed at a @Check[fortitude|dc:40] save to resist becoming Dazzled for 1 minute (or Blinded permanently on a critical failure)."), [[["dazzled", null, 1]], [["blinded", null, null]]]);
+});

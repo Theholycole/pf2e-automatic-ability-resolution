@@ -526,7 +526,10 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     const checkAt = sentences[index].search(/@Check\[/i);
     if (components.length && !/@Damage\[/i.test(sentences[index].slice(0, checkAt))) components = [];
     // "must succeed at a … save or be …" (since 2026-10-10 also "must succeed a … saving throw or fall Prone").
-    const legacy = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? null;
+    // (Batch 76: "… must succeed at a … save to avoid becoming Sickened 1 (Sickened 2 on a critical failure)", "… save to resist becoming
+    // Slowed 1", "… save to avoid being knocked Prone": what it avoids is the failure's.)
+    const legacy = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1]
+        ?? /succeed at an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) to (?:avoid|resist) (?:becoming|being) (.+)$/i.exec(sentences[index])?.[1] ?? null;
     let failure = legacy ?? /(?:succeed(?: at)?|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1]
         // "becomes Frightened 1 unless they succeed at a @Check[will|dc:28] save (Frightened 2 on a critical failure)":
         // the brackets after the save are the failure's too.
@@ -631,7 +634,9 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     const lasting = failEffects.find((effect) => effect.duration)?.duration ?? null;
     // Not a fixed time for frightened, which fades by its own rule ("As failure, but Frightened 3" after
     // "…Fascinated until the end of its next turn"); "as long as it remains in the aura" still carries over.
-    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || effect.slug === "prone" || (["frightened", "sickened"].includes(effect.slug) && lasting.mode === "fixed") || (effect.slug === "stunned" && Number.isFinite(effect.value)) ? effect : { ...effect, duration: lasting }));
+    // (Batch 76: not one "permanently", "(or Blinded permanently on a critical failure)".)
+    const forGood = Boolean(critical) && /\bpermanently\b/i.test(htmlToPlainText(String(critical)));
+    const timed = (effects) => effects.map((effect) => (effect.duration || !lasting || forGood || effect.slug === "prone" || (["frightened", "sickened"].includes(effect.slug) && lasting.mode === "fixed") || (effect.slug === "stunned" && Number.isFinite(effect.value)) ? effect : { ...effect, duration: lasting }));
     // "(1 minute on a critical failure)", "(2d4 rounds on a critical failure)", "on a critical failure, the duration is
     // 1 minute": the failure's conditions, for longer.
     const time = critical && !criticalAdds ? htmlToPlainText(critical).trim().replace(/^(?:the duration is|for)\s+/i, "") : null;

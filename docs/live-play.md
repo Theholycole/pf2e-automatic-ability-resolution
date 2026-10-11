@@ -1132,3 +1132,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Also:** what batch 74 marks (a condition that grows) and this now reach the plans the later readers make (Focus Gaze, Paralytic Secretion, Energy Drain), not only the first ones.
 - **The core** passes the escalation on; **live play** applies the worse condition to a creature that already has the first ("was already slowed: petrified (until it's restored)"), timed when it says so; **the simulator** (B103) the same, petrified playing as paralyzed.
 - **Checked live in pftest** (PFTEST SIM B75 Basilisk and a party Guard; deleted afterwards): the first failed Petrifying Gaze → Slowed 1; the second → Petrified.
+
+## A save to avoid becoming a condition (2026-10-11, batch 76)
+
+- **The wording:** "… must succeed at a … save to avoid becoming Sickened 1 (Sickened 2 on a critical failure)", "… save to resist becoming Slowed 1", "… save to avoid being knocked Prone (and Stunned 1 on a critical failure)" → what it avoids is the failure's result, as "… save or become …" is (17 PF2e, 2 Battlezoo). The Wild Hunt's Wild Gaze auras (5) compile with it, and through them their Focus Gazes (5, batch 39's reader), which also carry batch 75's "already slowed by the wild gaze → Paralyzed for 1 round"; the bandersnatches' Pain rider; hazards' Erupting Burst, Break Your Fast, Listen to Your Own Decay, You Will Know My Name!
+- **"Permanently":** "Dazzled for 1 minute (or Blinded permanently on a critical failure)" — the critical failure's condition no longer takes the failure's minute.
+- Live play and the simulator: their cards and plans as any save's.
