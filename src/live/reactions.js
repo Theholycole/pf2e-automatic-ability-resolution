@@ -97,7 +97,9 @@ export function offerHTML(state) {
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the better</button>`);
         if (state.kind === "boost") buttons.push(`<button type="button" data-aar-reaction="use">Use it: one degree better</button>`);
         if (state.kind === "negate") buttons.push(`<button type="button" data-aar-reaction="use">Use it: negate ${escape(state.negate?.name ?? "it")}</button>`);
-        if (state.kind === "flat") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.dc == null ? "Use it" : `Roll the DC ${escape(state.attack?.dc)} flat check`}</button>`);
+        // (The attacker's choice, batch 58: a normal hit, or the critical hit and a condition.)
+        if (state.kind === "flat" && state.attack?.or) buttons.push(`<button type="button" data-aar-reaction="use">A normal hit</button>`, `<button type="button" data-aar-reaction="keep">The critical hit, ${escape(state.attack.or.label)}</button>`);
+        else if (state.kind === "flat") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.dc == null ? "Use it" : `Roll the DC ${escape(state.attack?.dc)} flat check`}</button>`);
         // Retributive Strike: the ally's resistance, then a Strike at the foe if it's in reach.
         if (state.kind === "retribution") {
             for (const strike of state.strikes ?? []) buttons.push(`<button type="button" data-aar-reaction="strike" data-slug="${escape(strike.slug)}">Resist, then ${escape(strike.label)}</button>`);

@@ -503,6 +503,10 @@ export function readReaction(item, text) {
     if (ac && /\bAC against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
         return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted" };
     }
+    // Distracting Whisper (batch 58): "Trigger The dragon is targeted with an attack Effect A mysterious voice whispers something
+    // disconcerting in the triggering creature's ear, inflicting a –2 circumstance penalty to the triggering attack." → as +2 AC against it.
+    const whisper = /^(?:The )?[^.]+? is targeted (?:with|by) an attack\.?$/i.test(trigger.trim()) ? /\binflicting an? [–-](\d+) circumstance penalty to the triggering attack\.(?:\s*Effect: [\w' -]+)?$/i.exec(effect.trim()) : null;
+    if (whisper) return { builtin: "ac-reaction", value: Number(whisper[1]), when: "targeted" };
     const dodge = acDodge(text, trigger, effect);
     if (dodge) return dodge;
     if (/\btargeted by an attack\b/i.test(trigger) && /rolls the triggering attack twice and uses the worse result/i.test(effect)) return { builtin: "attack-misfortune" };
@@ -535,6 +539,11 @@ export function readReaction(item, text) {
         const collapse = /\bImmobilized\b[^.]*\bOff-Guard\b|\bOff-Guard\b[^.]*\bImmobilized\b/i.test(effect) && /\bre-?form\w*\b[^.]*\baction\b/i.test(effect);
         return { builtin: "crit-downgrade", dc: null, ...(item?.system?.actionType?.value === "free" ? { uses: Number(frequency?.max) || 1 } : {}), ...(collapse ? { collapse: true } : {}) };
     }
+    // The attacker's choice (batch 58, Unbidden Thoughts): "Trigger The dragon is critically hit with a weapon or unarmed attack Effect The
+    // attacker's mind fills with visions of their worst fears …, and they must choose one of the following results: either the triggering
+    // attack becomes a normal success, or the critical hit is unaffected but the triggering creature becomes Frightened 2."
+    const choice = /\bis critically hit\b/i.test(trigger) && !/\bRequirements?\b/i.test(text) ? /\bmust choose one of the following results: either the triggering attack becomes a normal (?:success|hit), or the critical hit is unaffected but the triggering creature becomes (Frightened|Sickened|Enfeebled|Clumsy|Stupefied) (\d+)\.$/i.exec(effect.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").trim()) : null;
+    if (choice) return { builtin: "crit-downgrade", dc: null, or: { slug: choice[1].toLowerCase(), value: Number(choice[2]) } };
     // Concealment against the triggering attack (2026-10-10): "gains concealment against the triggering attack" (a DC 5 flat check
     // for the attacker), "The attacker must succeed at a DC 11 flat check … as if the drake were Hidden" (DC 11), "must attempt a
     // DC 11 flat check; on a failure, the attack passes harmlessly through". Ranged attacks only when the trigger says so.

@@ -323,7 +323,9 @@ async function defend(message, context, scene, combat, attacker) {
             return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: text, attack: { messageId: message.id, dc: null, text } });
         }
         // (No check, batch 29: Collapse, Twist Fate: the critical hit becomes a normal hit; Collapse leaves it immobilized and off-guard.)
-        if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: plan.dc == null ? `The critical hit becomes a normal hit${plan.collapse ? "; it collapses, Immobilized and Off-Guard until it re-forms (an action)" : ""}.` : "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc ?? null, free: item.system?.actionType?.value === "free", collapse: Boolean(plan.collapse) } });
+        // (Batch 58, Unbidden Thoughts: the attacker chooses, a normal hit or the critical hit and Frightened 2; a button for each.)
+        const or = plan.or ? `${plan.or.slug.replace(/^\w/, (letter) => letter.toUpperCase())} ${plan.or.value}` : null;
+        if (plan.builtin === "crit-downgrade" && context.outcome === "criticalSuccess") return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "critically hit it", note: or ? `${attacker.name} chooses: the critical hit becomes a normal hit, or it stands and ${attacker.name} is ${or}.` : plan.dc == null ? `The critical hit becomes a normal hit${plan.collapse ? "; it collapses, Immobilized and Off-Guard until it re-forms (an action)" : ""}.` : "On a success, the critical hit becomes a normal hit.", attack: { messageId: message.id, dc: plan.dc ?? null, free: item.system?.actionType?.value === "free", collapse: Boolean(plan.collapse), ...(plan.or ? { or: { ...plan.or, label: or } } : {}) } });
         // Concealment against the attack (Shadow Evade): offered on a hit, the attacker's flat check; a failure misses (2026-10-10).
         if (plan.builtin === "conceal-reaction" && hit && (!plan.ranged || ranged)) {
             return offer({ kind: "flat", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, note: `${attacker.name} rolls a DC ${plan.dc} flat check (${plan.dc === 11 ? "as if it were Hidden" : "concealment"}); on a failure, the attack misses.`,
@@ -653,7 +655,13 @@ async function use(message, action, slug) {
         await game.pf2e.Check.rerollFromMessage(attack, { keep: "lower" });
         result = `${state.ability.name}: the attack is rerolled, keeping the worse.`;
     } else if (state.kind === "flat") {
-        if (state.attack.dc == null) {
+        if (state.attack.or && action === "keep") {
+            // The attacker keeps the critical hit and takes the condition (Unbidden Thoughts, batch 58).
+            const attacker = state.target ? await fromUuid(state.target.tokenUuid) : null;
+            if (!attacker?.actor) throw new Error(`${state.target?.name ?? "The attacker"} isn't there any more.`);
+            await attacker.actor.increaseCondition(state.attack.or.slug, { value: state.attack.or.value });
+            result = `The critical hit stands; ${state.target.name} is ${state.attack.or.label}.`;
+        } else if (state.attack.dc == null) {
             // No check (Collapse, Twist Fate): a normal hit; Collapse's conditions on the monster.
             if (state.attack.collapse) for (const slug of ["immobilized", "off-guard"]) if (!actor.hasCondition?.(slug)) await actor.increaseCondition(slug);
             result = state.attack.text ?? `The critical hit becomes a normal hit; apply the attack's normal damage.${state.attack.collapse ? ` ${state.monster.name} is Immobilized and Off-Guard until it re-forms (an action).` : ""}`;

@@ -71,3 +71,11 @@ test("a reaction to a hit on the monster: which attack rolls set it off, and its
     const html = offerHTML({ kind: "card", ability: { name: "Shrapnel Splash" }, monster: { name: "Dragon" }, target: { name: "Valeros" }, trigger: "rolled a critical hit against it", status: "open" });
     assert.match(html, /data-aar-reaction="use">Use it</);
 });
+
+test("the attacker's choice on the offer card: a normal hit, or the critical hit and a condition (2026-10-11, batch 58)", () => {
+    const state = { kind: "flat", ability: { name: "Unbidden Thoughts" }, monster: { name: "Despair Dragon" }, target: { name: "Valeros" }, trigger: "critically hit it", note: "Valeros chooses.", attack: { messageId: "x", dc: null, or: { slug: "frightened", value: 2, label: "Frightened 2" } }, status: "open", result: null };
+    const html = offerHTML(state);
+    assert.match(html, /data-aar-reaction="use">A normal hit</);
+    assert.match(html, /data-aar-reaction="keep">The critical hit, Frightened 2</);
+    assert.doesNotMatch(html, />Use it</);
+});

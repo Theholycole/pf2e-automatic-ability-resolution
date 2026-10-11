@@ -1565,3 +1565,16 @@ test("Jeer at Failure: PF2e's Demoralize at a foe that falls prone or critically
     const plan = compileMonsterAbility(item, { basicActions });
     assert.deepEqual([plan?.trigger, plan?.targeting?.target, plan?.resolution?.check?.statistic], [{ event: "foe-mishap", reaction: true, within: 90 }, "the attacker", "intimidation"]);
 });
+
+test("Breath of Loss's unmarked basic save, Distracting Whisper, Unbidden Thoughts (2026-10-11, batch 58)", () => {
+    const item = (name, html, type = "action", actions = 2) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    // A damage save its words don't mark basic, whose critical failure is "also" worse: a basic save, with that on a critical failure.
+    const breath = compileMonsterAbility(item("Breath of Loss", "<p>The test dragon breathes a wistful mist, dealing @Damage[14d6[mental]|options:area-damage] damage in a @Template[type:cone|distance:40] (@Check[will|dc:34] save). A creature that critically fails its save is also lost in memory and is @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}. The test dragon can't use Breath of Loss again for [[/gmr 1d4 #Recharge Breath of Loss]]{1d4 rounds}.</p>"));
+    const rows = breath?.resolution?.outcomes ?? {};
+    assert.deepEqual([breath?.resolution?.check?.basic, rows.success?.damage?.multiplier, rows.criticalFailure?.damage?.multiplier, rows.criticalFailure?.effects?.map((effect) => `${effect.slug} ${effect.value}`), breath?.trigger?.recharge?.formula], [true, 0.5, 2, ["stunned 1"], "1d4"]);
+    // Not without that sentence: a save against damage alone stays unread.
+    assert.equal(compileMonsterAbility(item("Test Breath", "<p>The test dragon breathes, dealing @Damage[14d6[mental]|options:area-damage] damage in a @Template[type:cone|distance:40] (@Check[will|dc:34] save).</p>"))?.resolution?.check?.basic ?? null, null);
+    const reaction = (name, trigger, effect) => item(name, `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction");
+    assert.deepEqual(compileMonsterAbility(reaction("Distracting Whisper", "The test dragon is targeted with an attack", "A voice whispers in the triggering creature's ear, inflicting a –2 circumstance penalty to the triggering attack. @UUID[Compendium.pf2e.bestiary-effects.Item.qsvSWxRqVQofjDdH]{Effect: Distracting Whisper}")), { builtin: "ac-reaction", value: 2, when: "targeted" });
+    assert.deepEqual(compileMonsterAbility(reaction("Unbidden Thoughts", "The test dragon is critically hit with a weapon or unarmed attack", "The attacker sees their worst fears, and they must choose one of the following results: either the triggering attack becomes a normal success, or the critical hit is unaffected but the triggering creature becomes @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 2}.")), { builtin: "crit-downgrade", dc: null, or: { slug: "frightened", value: 2 } });
+});

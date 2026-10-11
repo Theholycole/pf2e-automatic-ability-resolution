@@ -1936,6 +1936,20 @@ function downsDemoralize(item, basicActions) {
     return { ...plan, ...base(item, { traits: plan.traits }), targeting: plan.targeting, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
 }
 
+// Breath of Loss (2026-10-11, batch 58): "dealing @Damage[14d6[mental]] damage in a @Template[cone|distance:40] (@Check[will|dc:34] save).
+// A creature that critically fails its save is also consumed with the memory of the moment and is Stunned 1." — a save against damage
+// its words don't mark basic, but whose critical failure is "also" worse: a basic save, as PF2e's area damage is. Only that wording
+// (one damage, one save in brackets right after its area, no degrees of its own): the item with "basic" added to the check, or null.
+function unmarkedBasic(item) {
+    const html = String(item.system?.description?.value ?? "");
+    if (inlineTags(html, "Damage").length !== 1 || inlineTags(html, "Check").length !== 1 || /\bbasic\b/i.test(html)) return null;
+    if (/<strong>\s*(?:Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/i.test(html)) return null;
+    const plain = htmlToPlainText(html).replace(/\s+/g, " ");
+    if (!/@Damage\[(?:[^[\]]|\[[^\]]*\])*\] damage in an? @Template\[[^\]]*\] \(@Check\[(?:type:)?(?:fortitude|reflex|will)\|[^\]]*\] save\)\./i.test(plain)) return null;
+    if (!/\bA creature that critically fails its save is also\b/i.test(plain)) return null;
+    return withDescription(item, html.replace(/\(@Check\[([^\]]*)\]/, "(@Check[$1|basic]"));
+}
+
 // Scattershot (2026-10-11, batch 56): "The dragon exhales a cloud of small balls of pure energy that deal @Damage[(11d4+11)[force]] damage in
 // a @Template[type:cone|distance:60] with no save. The dragon can't use Scattershot again for 1d4 rounds." → that damage on everyone in
 // the area, no roll; its recharge. null otherwise.
@@ -2115,7 +2129,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? noSaveArea(item) ?? inlineSave(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
