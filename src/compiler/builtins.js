@@ -453,6 +453,29 @@ export function readReaction(item, text) {
     // triggering creature and one against another adjacent creature." → a reaction Strike at it as it's damaged (and a second at another).
     const thrash = /^An? adjacent enemy damages (?:the [\w' -]+?|it|him|her|them)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes one or two ([\w' -]+?) Strikes(?:\s*[-\u2013\u2014]\s*one against the triggering creature and one against another adjacent creature|, each against a different adjacent creature)\.$/i.exec(effect.trim()) : null;
     if (thrash) return { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: thrash[1].toLowerCase(), penalty: 0, disrupts: false, second: true };
+    // Batch 66: +AC for an ally as an attack comes at it — Hammer Block's "Trigger An ally within the bramble champion's reach is targeted
+    // by an attack, and the bramble champion can see the attacker Effect … giving the ally a +2 circumstance bonus to AC against the
+    // triggering attack.", Stygian Guardian's "A creature or object within the sarglagon's reach is targeted by an attack … giving the
+    // creature or object Standard Cover against the attack (+2 circumstance bonus to AC)", Wind Shell's "An ally within 60 feet is
+    // targeted by a physical ranged attack … a +4 status bonus to AC against physical ranged attacks", Reactive Defense's "A creature
+    // within reach attacks the garrholdion's ally … It then makes a melee Strike against the triggering creature." → { builtin:
+    // "ally-ac-reaction", value, within ("reach" or feet), ranged?, strike? }.
+    const guardedBy = /^(?:A creature or object|An? (?:[\w' -]+ )?ally) within (?:(?:the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s|its|their) reach|(\d+) feet(?: of (?:the [\w' -]+?|it|them))?) is targeted (?:by|with) (?:an? )?(?:(physical ranged|ranged or melee|melee or ranged|ranged|melee) )?attack(?: or offensive troop ability)?(?: (?:by|from) an attacker (?:she|he|it|they|the [\w' -]+?) can see)?(?:, and (?:the [\w' -]+?|it|they) can see the attacker)?\.?$/i.exec(trigger.trim())
+        ?? /^An adjacent (?:[\w' -]+ )?ally is targeted by an? (?:melee or ranged|ranged or melee) attack from an attacker (?:the [\w' -]+?|it|they|she|he) can see\.?$/i.exec(trigger.trim())
+        ?? /^A creature within reach attacks (?:the [\w' -]+?['’]s|its|their) ally\.?$/i.exec(trigger.trim());
+    // (A troop's "giving the target standard cover against the attack": +2 circumstance.)
+    const guardValue = guardedBy ? /\+(\d+) (circumstance|status) bonus to (?:its |their )?AC\b/i.exec(effect) ?? (/\bstandard cover against the attack\b/i.test(effect) ? [null, "2", "circumstance"] : null) : null;
+    if (guardedBy && guardValue && !/\b(?:save|damage|Grab|Prone|condition)\b/i.test(effect)) {
+        const within = /^An adjacent/i.test(trigger.trim()) ? 5 : guardedBy[1] ? Number(guardedBy[1]) : "reach";
+        const strikesBack = /\b(?:It|They|The [\w' -]+?) then makes? a melee Strike against the triggering creature\./i.test(effect);
+        return { builtin: "ally-ac-reaction", value: Number(guardValue[1]), type: guardValue[2].toLowerCase(), within, ...(/physical ranged|^ranged$/i.test(guardedBy[2] ?? "") ? { ranged: true } : {}), ...(strikesBack ? { strike: "melee" } : {}) };
+    }
+    // Counterattack (batch 66): "Trigger The shae is targeted by an attack from an adjacent creature that misses due to the shae being
+    // Concealed Requirements The shae is aware of the attack Effect The shae makes a Strike against the attacker." → triggers
+    // ["concealed-miss"], its best melee Strike.
+    if (/^(?:The )?[^.]+? is targeted by an attack from an adjacent creature that misses due to (?:the [\w' -]+?|her|him|it|them|[A-Z][\w'-]+) being Concealed(?: Requirements? (?:The )?[^.]+? is aware of the attack)?\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? makes a Strike against the attacker\.$/i.test(effect.trim())) {
+        return { builtin: "reaction-strike", triggers: ["concealed-miss"], strike: "melee", penalty: 0, disrupts: false };
+    }
     // Batch 65: a Strike at a creature it holds that fails to Escape, Savage's "Trigger A creature Grabbed by the wyvern critically fails a
     // skill check to Escape Effect The wyvern makes a stinger Strike against the triggering creature." → triggers ["escape-failed"] or
     // ["escape-critical-failure"].

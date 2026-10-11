@@ -31,7 +31,7 @@ import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } fr
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -211,6 +211,7 @@ async function onMessage(message) {
         if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach", "ranged");
         if (ranged) await provokeTrigger(scene, combat, token, "ranged", "made a ranged attack");
         await defend(message, context, scene, combat, token);
+        await guardAlly(message, context, scene, combat, token);
         await ownStrike(message, context, scene, combat, token);
         await strikeAnswers(context, scene, combat, token);
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
@@ -254,12 +255,14 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
                 : !skill && triggers.includes("attacked") && onIt ? "made a Strike against it"
                 : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it"
                 // (Batch 63: a failed or critically failed one.)
-                : !skill && triggers.includes("missed") && onIt && ["failure", "criticalFailure"].includes(context.outcome) ? `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it` : null;
+                : !skill && triggers.includes("missed") && onIt && ["failure", "criticalFailure"].includes(context.outcome) ? `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it`
+                // (Batch 66, Counterattack: an attack from beside it while it's concealed; the GM checks the flat check failed.)
+                : !skill && triggers.includes("concealed-miss") && onIt && (actor.hasCondition?.("concealed") || actor.hasCondition?.("hidden")) ? "attacked it while it's concealed" : null;
             if (!why) continue;
             const distance = distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid);
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
             if (!strikes.length) continue;
-            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : null });
+            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
             break;
         }
     }
@@ -313,6 +316,29 @@ async function reachTrigger(scene, combat, token, trigger, kind = null) {
         const distance = distanceFeet(box(monster, grid.size), box(token, grid.size), grid);
         const strikes = meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name).filter((strike) => distance <= strike.reach);
         if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: entry.plan.criticalTrip ? CRITICAL_TRIP : null });
+    }
+}
+
+// An attack roll on a monster's ally (batch 66: Hammer Block, Stygian Guardian): the monster's +AC for it, offered when that changes the
+// result; Reactive Defense's Strike after it, a note.
+async function guardAlly(message, context, scene, combat, attacker) {
+    const targetToken = context.target?.token ? fromUuidSync(context.target.token) : null;
+    if (!targetToken || !inEncounter(combat).has(targetToken.id) || !["success", "criticalSuccess"].includes(context.outcome)) return;
+    const roll = message.rolls?.[0];
+    const dc = context.dc?.value;
+    if (!Number.isFinite(dc)) return;
+    const options = context.options ?? [];
+    const ranged = options.includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
+    const grid = gridOf(scene);
+    for (const { token: guard, actor, reactions } of reactors(scene, combat)) {
+        if (guard.id === targetToken.id || guard.disposition !== targetToken.disposition || !isFoe(guard, attacker)) continue;
+        const entry = reactions.find(({ plan }) => plan.builtin === "ally-ac-reaction" && (!plan.ranged || ranged));
+        if (!entry) continue;
+        const within = entry.plan.within === "reach" ? provokeRadius(actor) : Number(entry.plan.within) || 5;
+        if (distanceFeet(box(guard, grid.size), box(targetToken, grid.size), grid) > within) continue;
+        const change = higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, entry.plan.value);
+        if (!change) continue;
+        return offer({ kind: "ac", item: entry.item, monster: guard, actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against ${targetToken.name}`, note: entry.plan.strike ? "Then its melee Strike at the attacker: roll it from its sheet." : null, attack: { messageId: message.id, value: entry.plan.value, ...change } });
     }
 }
 
