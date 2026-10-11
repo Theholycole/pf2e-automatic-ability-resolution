@@ -2028,6 +2028,25 @@ function downsDemoralize(item, basicActions) {
     return { ...plan, ...base(item, { traits: plan.traits }), targeting: plan.targeting, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
 }
 
+// Shoo! (2026-10-11, batch 73): "Trigger An enemy within 15 feet damages the dragon Effect The dragon teleports the creature up to 45 feet
+// away. The destination must be on the ground and in a space with no hazards." → no roll: the creature moved that far away (the
+// simulator's push and live play's, the teleport's own rules a note for the GM). null otherwise.
+function teleportFoe(item) {
+    if (!["reaction", "free"].includes(item.system?.actionType?.value)) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const effect = /\bEffect (.+)$/.exec(plain)?.[1] ?? "";
+    const match = /^(?:The )?[^.]+? teleports the (?:triggering )?(?:creature|enemy|foe) up to (\d+) feet away\.(?: (The destination must be [^.]+\.))?$/i.exec(effect);
+    if (!match) return null;
+    const distance = Number(match[1]);
+    const note = `{target} is teleported up to ${distance} feet away rather than pushed: move the token through anything in the way${match[2] ? `; ${match[2].replace(/^The destination must be /i, "the destination must be ").replace(/\.$/, "")}` : ""}.`;
+    return {
+        ...base(item),
+        targeting: { target: "1 creature", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: { ...none(), forcedMovement: { kind: "push", distance, upTo: true, optional: false, direction: "away" }, manualInstructions: [note] }, failure: none(), criticalFailure: none() } }
+    };
+}
+
 // Breath of Loss (2026-10-11, batch 58): "dealing @Damage[14d6[mental]] damage in a @Template[cone|distance:40] (@Check[will|dc:34] save).
 // A creature that critically fails its save is also consumed with the memory of the moment and is Stunned 1." — a save against damage
 // its words don't mark basic, but whose critical failure is "also" worse: a basic save, as PF2e's area damage is. Only that wording
@@ -2221,7 +2240,7 @@ export function compileMonsterAbility(source, { basicActions = {}, actor = null 
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

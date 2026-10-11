@@ -388,7 +388,8 @@ export function readCharge(text) {
     // ("Frequency once per turn Effect The knight Strides twice. …": its Effect, batch 38.)
     // (Batch 70: what only tells the move — "…, ignoring difficult terrain caused by rubble", "…, during which it attempts a High Jump or a
     // Long Jump" — and "Strides twice, Leaps twice, or Strides once and Leaps once. It then makes a jaws Strike at the end of the movement".)
-    const told = chargeSentences(String(text).replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1"))
+    // (Batch 73: "Requirements The namorrodor has nothing in its hands Effect …" — its natural attacks need no hands.)
+    const told = chargeSentences(String(text).replace(/^Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect /i, "").replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1"))
         .replace(/\b((?:Strides|Flies|Swims)(?: or (?:Strides|Flies|Swims))? (?:twice|up to (?:double|twice) (?:its|their|his|her) Speed)),? (?:ignoring (?:any )?difficult terrain(?: caused by [^.;]+?)?|during which (?:it|they|he|she) attempts a High Jump or a Long Jump)(?=[.;])/i, "$1")
         .replace(/\bStrides twice, Leaps twice, or Strides once and Leaps once\. (?:It|They|He|She) then makes an? ([\w' -]+?) Strike at the end of the movement\./i, "Strides twice and makes a $1 Strike.");
     const sentences = told.trim().split(/(?<=\.)\s+/);
@@ -803,9 +804,10 @@ export function readReaction(item, text) {
     const moving = /\buses a move action\b|\bleaves a square during a move action\b|\battempts to move away from [^.]+? during a move action\b/i.test(trigger);
     const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
     if (moving && struck) return { builtin: "reaction-strike", triggers: ["move", ...(/\bwith a ranged attack\b/i.test(trigger) ? ["ranged"] : [])], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect), ...(/\bOn a critical (?:success|hit), [^.]*? can also attempt an Athletics check to Trip the triggering creature\./i.test(effect) ? { criticalTrip: true } : {}) };
-    if (/^The [^.]+? is reduced to 0 Hit Points\.?$/i.test(trigger.trim())) {
+    // (Batch 73, Final Blow: "Berleth is reduced to 0 HP", "Berleth makes a final shovel Strike before dying.")
+    if (/^(?:The )?[^.]+? is reduced to 0 (?:Hit Points|HP)\.?$/i.test(trigger.trim())) {
         // (Batch 61, Death Slam: "Before it's knocked out, the argorth makes a tail Strike against a random creature within reach.")
-        const last = /^The [^.]+? makes an? (?:([\w' -]+?) )?Strike before (?:dying|being destroyed)\./i.exec(effect) ?? /^Before (?:it|they)['’](?:s| are) knocked out, the [^.]+? makes an? (?:([\w' -]+?) )?Strike against a random creature within (?:(?:its|their) )?reach\.$/i.exec(effect.trim());
+        const last = /^(?:The )?[^.]+? makes an? (?:final |last )?(?:([\w' -]+?) )?Strike before (?:dying|being destroyed)\./i.exec(effect) ?? /^Before (?:it|they)['’](?:s| are) knocked out, the [^.]+? makes an? (?:([\w' -]+?) )?Strike against a random creature within (?:(?:its|their) )?reach\.$/i.exec(effect.trim());
         if (last) return { builtin: "death-strike", strike: last[1] ? last[1].toLowerCase() : null };
     }
     return null;
@@ -1143,6 +1145,23 @@ export function compileBuiltin(item, slug) {
     const quickened = readQuickenedCasting(text);
     if (quickened) return quickened;
     if (readSpellstrike(item, text)) return { builtin: "spellstrike", actions };
+    // (Batch 73: PF2e's Raise a Shield copied onto the sheet under its own name — "Raise a Shield (Wing Only)": the basic action, which the
+    // simulator plays for a creature with a shield and PF2e plays live.)
+    if (!item.system?.slug && /^Raise a Shield\b/i.test(item.name ?? "") && /\bposition your shield to protect yourself\b/i.test(text)) return { builtin: "no-effect" };
+    // (Batch 73: two Strides for two actions, as two Stride actions are — a Speed bonus for them, ignoring difficult terrain, the terrain
+    // it leaves: the GM's. "The horse Strides twice, with its Speed increased by 10 feet.", "The manta ray Swims twice. It has a +10-foot
+    // circumstance bonus to its Speed during these actions.", "The pegasus uses 2 move actions, each of which can be either Stride or Fly.")
+    if (actions === 2 && (/^(?:The )?(?:(?!\band\b|\bRaises?\b|\buses?\b)[^.])+? (?:Strides|Swims|Flies) twice(?:,? with (?:its|their|his|her) Speed increased by \d+ feet)?\.(?: (?:It|They|He|She) (?:has|have|gains?) an? \+\d+-foot circumstance bonus to (?:its|their|his|her) Speeds? during (?:these|this|the) (?:Strides|actions|Swims)(?:, ignoring difficult terrain caused by [^.]+)?\.?)?(?: Difficult terrain doesn't slow (?:its|his|her|their) movement\. Any space [^.]+? enters becomes normal terrain rather than difficult terrain(?: \([^)]*\))? until the start of (?:its|his|her|their) next turn\.)?$/i.test(text.trim())
+        || /^(?:The )?[^.]+? uses 2 move actions, each of which can be either Stride or Fly\. (?:It|They) gains? an? \+\d+-foot circumstance bonus to (?:its|their) Speeds during an? [\w' -]+?\.$/i.test(text.trim()))) return { builtin: "no-effect" };
+    // (Batch 73: one action for two moves without a daily count — "Frequency once per round Effect The rift chameleon Strides twice. During this
+    // movement, it flits …, gaining resistance 5 to physical damage." (once a round), "The tenome Strides twice, Steps twice, or Steps and
+    // Strides (in either order). It cannot use Burst of Speed again for 1d4 rounds." (its recharge): Speed Surge's kin.)
+    if (actions === 1) {
+        const dash = /^Frequency once per round Effect (?:The )?[^.]+? Strides twice\. During this movement, [^.]+?, gaining resistance \d+ to physical damage\.$/i.test(text.trim());
+        const burst = /^(?:The )?[^.]+? Strides twice, Steps twice, or Steps and Strides \(in either order\)\. (?:It|They|He|She) can(?:not|'t) use [\w' -]+? again for (\d+d\d+|\d+) rounds?\.$/i.exec(text.trim().replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1"));
+        if (dash) return { builtin: "speed-surge", actions, uses: null, oncePerRound: true };
+        if (burst) return { builtin: "speed-surge", actions, uses: null, recharge: burst[1] };
+    }
     // Speed Surge (batch 41; the user's choice: a one-action double move, three a fight): "Frequency three times per day Effect The drake
     // Strides or Flies twice", "… moves up to twice its Speed. It can do this three times per day."
     const moves = String.raw`(?:Strides|Flies|Swims|Burrows|Climbs|moves)(?: or (?:Strides|Flies|Swims|Burrows|Climbs))?`;

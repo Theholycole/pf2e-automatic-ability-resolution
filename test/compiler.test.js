@@ -1830,3 +1830,22 @@ test("its own turn beginning as a trigger, Demoralize as the fight starts, and w
     plan = ability("The test fireworks begin its turn.", "The test fireworks explode, dealing @Damage[6d8[fire]] damage (@Check[reflex|dc:25|basic]) save to all creatures within 15 feet.", "reaction", { actor: { type: "hazard", name: "Test Fireworks", items: [] } });
     assert.notEqual(plan?.trigger?.event, "own-turn-start");
 });
+
+test("plain double moves, Speed Surge's kin, a final Strike, Raise a Shield under its own name, a foe teleported away (2026-10-11, batch 73)", () => {
+    const item = (description, { type = "action", actions = null, name = "Test", slug = null } = {}) => ({ type: "action", name, system: { slug, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } });
+    const compile = (description, options) => compileMonsterAbility(item(description, options), { basicActions: {} });
+    // Two Strides for two actions (its Speed bonus and terrain the GM's); not one joined to another action.
+    for (const text of ["<p>The test horse Strides twice, with its Speed increased by 10 feet.</p>", "<p>The test ray Swims twice. It has a +10-foot circumstance bonus to its Speed during these actions.</p>", "<p>The test pegasus uses 2 move actions, each of which can be either Stride or Fly. It gains a +20-foot circumstance bonus to its Speeds during a Gallop.</p>"]) assert.deepEqual(compile(text, { actions: 2 }), { builtin: "no-effect" }, text);
+    assert.notDeepEqual(compile("<p>The test warrior Raises a Shield and Strides twice.</p>", { actions: 2 }), { builtin: "no-effect" });
+    // One action for two moves: once a round, or a recharge.
+    assert.deepEqual(compile("<p><strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test chameleon Strides twice. During this movement, it flits between planes, gaining resistance 5 to physical damage.</p>", { actions: 1 }), { builtin: "speed-surge", actions: 1, uses: null, oncePerRound: true });
+    assert.deepEqual(compile("<p>The test tenome Strides twice, Steps twice, or Steps and Strides (in either order). It cannot use Burst of Speed again for [[/gmr 1d4 #Recharge]]{1d4 rounds}.</p>", { actions: 1 }), { builtin: "speed-surge", actions: 1, uses: null, recharge: "1d4" });
+    // A final Strike as it drops, its name before "is reduced to 0 HP".
+    assert.deepEqual(compile("<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> Test Berleth is reduced to 0 HP</p><hr /><p><strong>Effect</strong> Test Berleth makes a final shovel Strike before dying.</p>", { type: "reaction" }), { builtin: "death-strike", strike: "shovel" });
+    // PF2e's Raise a Shield under its own name, with no slug: the basic action.
+    assert.deepEqual(compile("<p><strong>Requirements</strong> You are wielding a shield.</p><p>You position your shield to protect yourself. When you have Raised a Shield, you gain its listed circumstance bonus to AC.</p>", { actions: 1, name: "Raise a Shield (Wing Only)" }), { builtin: "no-effect" });
+    // A foe teleported away: a push for the simulator and the card, the teleport's rules a note.
+    const plan = compile("<p><strong>Trigger</strong> An enemy within 15 feet damages the test dragon</p><hr /><p><strong>Effect</strong> The test dragon teleports the creature up to 45 feet away. The destination must be on the ground and in a space with no hazards.</p>", { type: "reaction" });
+    assert.deepEqual([plan?.trigger?.event, plan?.trigger?.within, plan?.targeting?.target, plan?.resolution?.outcomes?.success?.forcedMovement?.distance], ["hit-by", 15, "the attacker", 45]);
+    assert.match(plan.resolution.outcomes.success.manualInstructions[0], /teleported up to 45 feet away rather than pushed/);
+});
