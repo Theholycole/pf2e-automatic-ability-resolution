@@ -2642,3 +2642,18 @@ test("what a Strike leaves on itself, a sweep in a frenzy, a dodge against a Str
     const absorb = ability("<p><strong>Trigger</strong> The test glutton reduces a creature it can smell with its true sin scent to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test glutton regains @Damage[4d6[healing]] Hit Points.</p>", "free");
     assert.deepEqual([absorb.trigger.event, absorb.trigger.free, absorb.targeting.target, absorb.resolution.kind], ["downs", true, "self", "healing"]);
 });
+
+test("maneuvers in their own words with more on a success; a Stride and a maneuver in fewer words (2026-10-12, batch 141)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const action = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const condemn = action("<p>The test judge [[/act demoralize]]{Demoralizes}. On a success, the target is Stunned with a value equal to its Frightened condition.</p>");
+    assert.deepEqual([condemn.resolution.check.statistic, condemn.resolution.outcomes.success.effects.map((effect) => `${effect.slug} ${effect.value}`), condemn.resolution.outcomes.criticalSuccess.effects.map((effect) => `${effect.slug} ${effect.value}`)], ["intimidation", ["frightened 1", "stunned 1"], ["frightened 2", "stunned 2"]]);
+    const shove = action("<p>The test bully [[/act shove]]{Shoves} a creature, gaining a +2 circumstance bonus to their Athletics check if the target is Prone. If the Shove succeeds, the target takes @Damage[2d8[bludgeoning]] damage (double damage on a critical success).</p>");
+    assert.deepEqual([shove.resolution.outcomes.success.damage.formulas, shove.resolution.outcomes.criticalSuccess.damage.formulas, shove.notes.length], [[{ formula: "2d8[bludgeoning]" }], [{ formula: "2*2d8[bludgeoning]" }], 1]);
+    const strangle = action("<p><strong>Requirements</strong> The test cutthroat must have two free hands or be wielding a garrote</p><hr /><p><strong>Effect</strong> The test cutthroat attempts an Athletics check to Grapple with a +2 circumstance bonus. On a success, the target also takes @Damage[(1d4+3)[bludgeoning]] damage and can't speak (including to Cast a Spell) as long as they're Grabbed or Restrained.</p>");
+    assert.deepEqual([strangle.resolution.check.bonus, strangle.resolution.outcomes.success.damage.formulas.length, strangle.notes.length], [{ value: 2, type: "circumstance" }, 1, 1]);
+    const fray = action("<p>The test charger Strides then [[/act demoralize]]{Demoralizes} an adjacent Medium or smaller creature. When it does, Demoralize loses the auditory trait and gains the visual trait, and it doesn't take a penalty for the test charger not speaking a language.</p>", 2);
+    assert.deepEqual([fray.approach, fray.notes.length, fray.requires], [{ strides: 1 }, 3, undefined]);
+    const advance = action("<p><strong>Requirements</strong> The test sergeant has their shield raised</p><hr /><p><strong>Effect</strong> The test sergeant pushes ahead behind the shield. The test sergeant Strides and [[/act shove]]{Shoves}, in either order. The multiple attack penalty doesn't apply to this Shove, though the Shove does count toward the test sergeant's multiple attack penalty.</p>");
+    assert.deepEqual([advance.approach, advance.requires], [{ strides: 1 }, "requirement"]);
+});

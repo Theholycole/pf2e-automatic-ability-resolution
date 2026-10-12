@@ -1416,3 +1416,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Punishing Strike → a Strike activity with an extra weapon die, a 5-foot push and `selfAfter: [{ slug: "off-guard", until: "own-turn-start" }]`, counted as two attacks; Defensive Slam → `selfAfter: [{ ac: 2, type: "circumstance" }]` (PF2e's linked effect is the bonus); Hateful Tide → a sweep with `requires: "requirement"`; Ghost Dodge → `ac-reaction` with its notes; Absorb Sin → the self-heal with `trigger: { event: "downs", free, note }`.
 - **Live:** the Strike activities' notes go to the GM when used ("It's Off-Guard until the start of its next turn.", "After the Strike, it gains a +2 circumstance bonus to AC until the start of its next turn."); Absorb Sin is offered as batch 52's downs reactions are, now with its note ("Only a creature it can smell with its true sin scent."). Not run in pftest: the only live change is that note on an existing offer.
 - **Simulator:** the Off-Guard or the guard after the Strike, until its next turn, and the planner weighs it (B139); the self-heal when it downs a foe, only when it's hurt (B140).
+
+## Maneuvers with more on a success; a Stride and a maneuver in fewer words (2026-10-12, batch 141)
+
+- **Compiled:** Condemn → PF2e's Demoralize with Stunned 1 on a success and Stunned 2 on a critical success; Stampeding Shove → PF2e's Shove with `2d10[bludgeoning]` on a success and `2*2d10[bludgeoning]` on a critical success; Strangle → PF2e's Grapple at +2 with `(1d6+6)[bludgeoning]` on its successes; Into the Fray and Shielded Advance → `approach: { strides: 1 }` with their notes (Shielded Advance `requires: "requirement"`).
+- **Live:** no new live code: their cards are the maneuver cards of batches 125 and 134, the notes on them.
+- **Simulator:** the doubled formula ("2*2d10") resolves as twice the roll (B141).

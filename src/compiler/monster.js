@@ -2514,7 +2514,17 @@ function variedManeuver(item, basicActions = {}) {
     // (Batch 126: an emanation's template as its distance, "each creature within @Template[emanation|distance:30]{30 feet}".)
     const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/(?:an? )?@Template\[[^\]]*?(?:emanation|burst)[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "$1 feet")).replace(/\s+/g, " ").trim();
     // (Deadly Display's "Requirements Ordulf is wielding a melee weapon": always so; any other requirement or a frequency isn't read.)
-    const told = plain.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 141: Strangle's "Requirements The dero must have two free hands or be wielding a spiked chain" — what it holds; "… to Grapple with a +2
+    // circumstance bonus." and Condemn's "The grand inquisitor Demoralizes." — at a creature; Stampeding Shove's "…, gaining a +2 circumstance
+    // bonus to their Athletics check if the target is Prone" — a note.)
+    const extra = [];
+    const told = plain.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? must have two free hands or be wielding an? [\w' -]+?\.? Effect /i, "")
+        .replace(/\b(to Grapple) with a \+(\d) circumstance bonus\./i, "$1 a creature, with a +$2 circumstance bonus.")
+        .replace(/^((?:The )?[^.]+? (?:Demoralizes|Feints))\.(?=\s|$)/i, "$1 a creature.")
+        .replace(/, gaining a \+(\d) circumstance bonus to (?:its|their|his|her) Athletics check if the target is Prone\./i, (_all, value) => {
+            extra.push(`+${value} circumstance bonus to the check if the target is Prone.`);
+            return ".";
+        }).split(/(?<=\.)\s+(?=[A-Z])/);
     const sentences = told.length > 1 && !/^(?:Requirements?|Frequency|Trigger|Cost)\b/.test(told[0]) && !/\d|@|\b(?:Demoraliz\w*|Disarm\w*|Trip\w*|Shove\w*|Grappl\w*|checks?|damage|save|bonus|penalty)\b/i.test(told[0]) ? told.slice(1) : told;
     const action = String.raw`(Demoralize|Disarm|Trip|Shove|Grapple)`;
     // (Batch 126: "all living creatures within 60 feet that can hear the durnolith", "all enemies within 30 feet", "… and applies the result to
@@ -2534,7 +2544,8 @@ function variedManeuver(item, basicActions = {}) {
     if (!basic?.resolution?.check) return null;
     let bonus = Number(first[12]) || 0;
     let immune = false;
-    const extra = [];
+    const added = [];
+    const damaged = [];
     for (const sentence of sentences.slice(1)) {
         // (Batch 126: a bonus in some case, a penalty more on those frightened — the GM's, notes; PF2e's effect link.)
         if (/^If the targets [^.]+?, (?:the [\w' -]+?|it|they|he|she) gains? a \+\d circumstance bonus to this check\.$|^Creatures that become frightened as a result also take an? [–-]\d circumstance penalty to [^.]+\.$/i.test(sentence)) {
@@ -2558,9 +2569,29 @@ function variedManeuver(item, basicActions = {}) {
         }
         // (Batch 126: no penalty for an unshared language, however it's said; Demoralize's own immunity said again; one roll for all.)
         if (/^These checks take no penalty for not sharing a language\.$|^This Intimidation check (?:doesn't|does not) take the [–-]4 circumstance penalty for [^.]+? not speaking a language\.$|^As usual for Demoralize, affected (?:enemies|creatures) are then temporarily immune for 10 minutes\.$|^Roll once and apply the results? to all (?:creatures|targets)\.$/i.test(sentence)) continue;
+        // (Batch 141: Condemn's "On a success, the target is Stunned with a value equal to its Frightened condition." — Stunned 1, or 2 on a critical
+        // success (Demoralize's Frightened); Stampeding Shove's "If the Shove succeeds, the target takes 2d10 bludgeoning damage (double damage on a
+        // critical success)."; Strangle's "On a success, the target also takes 1d6+6 bludgeoning damage and can't speak (…) as long as they're
+        // Grabbed or Restrained." — the speech a note.)
+        if (slug === "demoralize" && /^On a success, the target is Stunned with a value equal to its Frightened condition\.$/i.test(sentence)) {
+            added.push(["success", { kind: "condition", slug: "stunned", value: 1, duration: null }], ["criticalSuccess", { kind: "condition", slug: "stunned", value: 2, duration: null }]);
+            continue;
+        }
+        const hurt = /^(?:If the (?:Shove|Grapple|Trip) succeeds|On a success), the target (?:also )?takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage(?: \((double damage) on a critical success\)| and (can't speak \(including to Cast a Spell\) as long as (?:they're|it's|it is|they are) Grabbed or Restrained))?\.$/i.exec(sentence);
+        if (hurt) {
+            const formula = readDamage(/^@Damage\[((?:[^[\]]|\[[^\]]*\])*)\]/.exec(hurt[1])[1]);
+            damaged.push(["success", formula], ["criticalSuccess", hurt[2] ? `2*${formula}` : formula]);
+            if (hurt[3]) extra.push(`On a success, the target also ${hurt[3]}.`);
+            continue;
+        }
         return null;
     }
     const plan = structuredClone(basic);
+    for (const [degree, effect] of added) plan.resolution.outcomes[degree].effects = [...plan.resolution.outcomes[degree].effects, effect];
+    for (const [degree, formula] of damaged) {
+        const row = plan.resolution.outcomes[degree];
+        row.damage = row.damage?.mode === "formulas" ? { ...row.damage, formulas: [...row.damage.formulas, { formula }] } : { mode: "formulas", formulas: [{ formula }], rollScope: "target" };
+    }
     if (bonus) plan.resolution.check = { ...plan.resolution.check, bonus: { value: (Number(plan.resolution.check.bonus?.value) || 0) + bonus, type: "circumstance" } };
     const radius = Number(first[8] ?? first[10]) || 0;
     const reach = Number(first[7]) || null;
@@ -2586,6 +2617,7 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
     // movement doesn't trigger reactions. At the end of the movement, it attempts an Intimidation check to Demoralize a target within 5 feet of
     // it."; Stop in the Name of the Law!'s "Strides twice and then Demoralizes".)
     const extra = [];
+    let raised = false;
     const told = plain
         .replace(/^((?:The )?[\w' -]+? Strides twice)\. If (?:they|he|she|it) ends? (?:their|his|her|its) movement within melee reach of an enemy, (?:they|he|she|it) can (Feint|Demoralize)\./i, "$1 and then attempts to $2 a creature.")
         .replace(/^((?:The )?[\w' -]+? Strides up to half (?:its|their|his|her) Speed) and attempts a (Feint), in either order\./i, (_all, moves, act) => {
@@ -2596,9 +2628,21 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
             extra.push("This movement doesn't trigger reactions.");
             return `${who} Strides up to half ${owner} Speed and then attempts to Demoralize a creature.`;
         })
-        .replace(/^((?:The )?[\w' -]+? Strides twice) and then Demoralizes\./i, "$1 and then attempts to Demoralize a creature.");
+        .replace(/^((?:The )?[\w' -]+? Strides twice) and then Demoralizes\./i, "$1 and then attempts to Demoralize a creature.")
+        // (Batch 141: Into the Fray's "Strides then Demoralizes an adjacent Medium or smaller creature" — one Stride, the size a note; Shielded
+        // Advance's "Requirements … has their shield raised Effect … presses forward, using their shield to push back foes. The captain Strides
+        // and Shoves, in either order." — the raised shield the GM's.)
+        .replace(/^((?:The )?[\w' -]+?) Strides then (Demoralizes|Trips|Shoves) an adjacent (Small|Medium|Large) or smaller creature\./i, (_all, who, act, size) => {
+            extra.push(`Only at a ${size} or smaller creature.`);
+            return `${who} Strides once and then attempts to ${act.replace(/s$/, "")} a creature.`;
+        })
+        .replace(/^Requirements? (?:The )?[\w' -]+? has (?:its|their|his|her) shield raised Effect (?:[^.]+\. )?((?:The )?[\w' -]+?) Strides and Shoves, in either order\./i, (_all, who) => {
+            extra.push("Only with its shield raised; it can Shove first and Stride after.");
+            raised = true;
+            return `${who} Strides once and then attempts to Shove a creature.`;
+        });
     const sentences = told.split(/(?<=\.)\s+(?=[A-Z])/);
-    const first = /^(?:The )?[\w' -]+? (Strides twice|Strides up to (?:10|15|20) feet|Strides up to (?:twice|half) (?:its|their|his|her) (?:normal )?Speed(?: in a straight line)?|Leaps to a square adjacent to a creature),? (?:and )?(?:then )?(?:attempts to (Grapple|Trip|Shove|Feint|Demoralize) a creature(?: in its reach)?( that can't see them and doesn't know where they are| (?:they're|she's|he's|it's) [Uu]ndetected by)?|(Shoves) that creature)\.$/i.exec(sentences[0] ?? "");
+    const first = /^(?:The )?[\w' -]+? (Strides twice|Strides once|Strides up to (?:10|15|20) feet|Strides up to (?:twice|half) (?:its|their|his|her) (?:normal )?Speed(?: in a straight line)?|Leaps to a square adjacent to a creature),? (?:and )?(?:then )?(?:attempts to (Grapple|Trip|Shove|Feint|Demoralize) a creature(?: in its reach)?( that can't see them and doesn't know where they are| (?:they're|she's|he's|it's) [Uu]ndetected by)?|(Shoves) that creature)\.$/i.exec(sentences[0] ?? "");
     if (!first) return null;
     const slug = (first[2] ?? first[4]).toLowerCase().replace(/^shoves$/, "shove");
     const basic = basicActions[slug];
@@ -2634,6 +2678,18 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
         }
         // (Aggressive Rush: no language penalty — the module has none; Stop in the Name of the Law!: Slowed as much as it's Frightened, while it is.)
         if (/^This Intimidation check (?:doesn't|does not) take the [-\u2013]4 circumstance penalty for [^.]+? not speaking a language\.$/i.test(sentence)) continue;
+        // (Into the Fray: "When it does, Demoralize loses the auditory trait and gains the visual trait, and it doesn't take a penalty for the veteran
+        // war horse not speaking a language." — the GM's.)
+        if (slug === "demoralize" && /^When it does, Demoralize loses the auditory trait and gains the visual trait, and it (?:doesn't|does not) take a penalty for [^.]+? not speaking a language\.$/i.test(sentence)) {
+            notes.push("Demoralize is visual here, not auditory, with no penalty for language.");
+            continue;
+        }
+        // (Shielded Advance: "The multiple attack penalty doesn't apply to this Shove, though the Shove does count toward the captain's multiple attack
+        // penalty.")
+        if (slug === "shove" && /^The multiple attack penalty (?:doesn't|does not) apply to this Shove, though the Shove does count toward [^.]+? multiple attack penalty\.$/i.test(sentence)) {
+            notes.push("The Shove ignores its multiple attack penalty, but counts toward it.");
+            continue;
+        }
         if (slug === "demoralize" && /^On a success, the target is Slowed with a value equal to its Frightened value until it is no longer frightened\.$/i.test(sentence)) {
             for (const degree of ["success", "criticalSuccess"]) {
                 const fear = rows[degree].effects.find((effect) => effect.slug === "frightened");
@@ -2650,7 +2706,7 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
     }
     const unseen = Boolean(first[3]);
     if (unseen) notes.push("Only at a creature it's undetected by.");
-    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "1 creature", range: "touch" }, approach: { strides, ...short }, notes, ...(unseen ? { requires: "requirement" } : {}) };
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "1 creature", range: "touch" }, approach: { strides, ...short }, notes, ...(unseen || raised ? { requires: "requirement" } : {}) };
 }
 
 // A Grapple as a reaction to damage of a type (2026-10-12, batch 132, Electric Reflexes): "Trigger The golem takes electricity damage and a
