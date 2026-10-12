@@ -168,7 +168,8 @@ async function cardForAbility(message) {
             : area && sourceToken ? tokensAround(sourceToken, area).filter((token) => (token.document ?? token).disposition === sourceToken.disposition)
             : taking ? tokensAround(sourceToken, taking).filter((token) => (token.document ?? token).disposition !== sourceToken.disposition && (token.actor?.itemTypes?.condition ?? []).some((condition) => condition.slug === "persistent-damage" && condition.system?.persistent?.damageType === plan.targeting.taking))
             : [...game.user.targets];
-        await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens, warning });
+        // (Batch 119: its notes for the GM on the card — Double Breath's second area, a lingering gas.)
+        await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens, warning: [warning, ...(plan.notes ?? [])].filter(Boolean).join(" ") || null });
         return;
     }
     // A PF2e effect on itself, its allies or a target (Battle Cry, Fiery Rhetoric): the card applies it. Not its own

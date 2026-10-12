@@ -2354,3 +2354,10 @@ test("a reaction that uses another of its abilities: that ability's results with
     const plan = compileMonsterAbility(fury, { basicActions: {}, actor: { name: "Test", items: [fury, roar] } });
     assert.deepEqual([plan?.source?.name, plan?.trigger?.event, plan?.trigger?.damageTypes, plan?.targeting?.area?.value, plan?.notes?.length], ["Test Fury", "damaged", ["cold", "fire"], 30, 2]);
 });
+
+test("an action that uses its breath twice: that breath's plan, this cost and recharge (2026-10-12, batch 119)", () => {
+    const breath = { type: "action", name: "Test Spit", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: ["acid"] }, description: { value: "<p>The test wyrm spits acid in a @Template[line|distance:60], dealing @Damage[6d6[acid]|options:area-damage] damage (@Check[reflex|dc:25|basic|options:area-effect] save). It can't use Test Spit again for [[/gmr 1d4 #Recharge Test Spit]]{1d4 rounds}.</p>" } } };
+    const twice = { type: "action", name: "Test Double Spit", system: { slug: null, actionType: { value: "action" }, actions: { value: 3 }, traits: { value: [] }, description: { value: "<p>The test wyrm uses Test Spit twice. A creature attempts only one save and can take damage only once.</p><p>The test wyrm can't use Test Spit or Test Double Spit again for [[/br 2d4 #Recharge]]{2d4 rounds}.</p>" } } };
+    const plan = compileMonsterAbility(twice, { basicActions: {}, actor: { name: "Test", items: [breath, twice] } });
+    assert.deepEqual([plan?.source?.name, plan?.activation?.time, plan?.targeting?.area?.type, plan?.trigger?.recharge?.formula, plan?.notes?.length], ["Test Double Spit", "3", "line", "2d4", 2]);
+});
