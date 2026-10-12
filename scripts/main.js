@@ -10,6 +10,7 @@ import { setUpSwallow } from "./swallow.js";
 import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
 import { setUpHazards } from "./hazards.js";
+import { actorData, watchActors } from "./actor-data.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -32,6 +33,17 @@ async function loadBasicActions() {
     resolveLoaded();
 }
 
+// An ability compiled with its creature, as offline (scripts/actor-data.js); without it if a reading fails on the world's data.
+const compileWithActor = (item) => {
+    try {
+        return compileAbility(item, { basicActions, actor: actorData(item?.actor) });
+    } catch (error) {
+        console.warn(`${MODULE_ID} | ${item?.name} didn't compile with its creature.`, error);
+        return compileAbility(item, { basicActions });
+    }
+};
+watchActors();
+
 // Registered when the script loads, so the order modules load in doesn't matter.
 Hooks.once("pf2eResolutionCoreReady", (core) => {
     core.registry.registerCompiler({
@@ -47,7 +59,7 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
         // Waits for the basic actions, which the riders (Grab, Knockdown, Push) are built on.
         compile: async (item) => {
             await loaded;
-            return compileAbility(item, { basicActions });
+            return compileWithActor(item);
         }
     });
 });
@@ -55,7 +67,7 @@ Hooks.once("pf2eResolutionCoreReady", (core) => {
 // Live play: the confirmation cards (scripts/live.js), the monsters' auras
 // (scripts/auras.js) and Swallow Whole over the turns (scripts/swallow.js).
 Hooks.once("ready", () => {
-    const compileItem = (item) => compileAbility(item, { basicActions });
+    const compileItem = compileWithActor;
     setUpLivePlay({ compileItem, basicActions: () => basicActions, loaded });
     setUpAuras({ compileItem, loaded });
     setUpSwallow();
@@ -67,5 +79,5 @@ Hooks.once("ready", () => {
 Hooks.once("ready", async () => {
     await loadBasicActions();
     const module = game.modules.get(MODULE_ID);
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: (item) => compileAbility(item, { basicActions }) });
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor });
 });
