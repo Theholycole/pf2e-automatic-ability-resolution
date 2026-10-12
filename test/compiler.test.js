@@ -1969,3 +1969,19 @@ test("a second Strike after a hit; berserk; an effect on its own critical hit; a
     const embrace = compile("<p>The test charmer attempts to [[/act grapple skill=diplomacy]]{Grapple} a creature using their Diplomacy bonus instead of Athletics. If the creature is willing, the test charmer automatically succeeds.</p>", 1, "action", { grapple });
     assert.deepEqual([embrace?.source?.name, embrace?.resolution?.check?.statistic, embrace?.traits], ["Test", "diplomacy", ["attack"]]);
 });
+
+test("only a Strike; a Strike at every creature in reach; a distant Strike; damage on a Prone creature; four Strikes at their penalties (2026-10-11, batch 83)", () => {
+    const action = (description, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } });
+    const compile = (description, actions) => compileMonsterAbility(action(description, actions), { basicActions: {} });
+    const strikeOnly = { builtin: "no-effect", strikeOnly: true };
+    assert.deepEqual(compile("<p><strong>Requirements</strong> Test Vela is holding an unloaded hand crossbow</p><hr /><p><strong>Effect</strong> Test Vela Interacts to reload the hand crossbow and Strikes with it.</p>"), strikeOnly);
+    assert.deepEqual(compile("<p>The test beetle makes a mandibles Strike; if the Strike hits, the target's armor takes the damage and the acid damage bypasses the armor's Hardness.</p>"), strikeOnly);
+    assert.deepEqual(compile("<p>The test mantis makes a mandibles Strike against a creature it has Grabbed. If that Strike hits and the creature is wearing armor with Hardness 10 or lower, the armor is broken. This Strike doesn't further damage armor that's already broken.</p>"), strikeOnly);
+    assert.deepEqual(compile("<p>The test squid spins about. The test squid makes a tentacle Strike against every creature within its reach.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: ["tentacle"], each: true });
+    const portal = compile("<p>The test dragon opens a small rift and makes a claw Strike against a creature within 100 feet. The target is Off-Guard to the Strike.</p>", 2);
+    assert.deepEqual([portal?.builtin, portal?.strike, portal?.offGuard], ["strike-activity", "claw", true]);
+    const stomp = compile("<p>The test cap Strides up to half its Speed and makes a boot Strike at any point during that movement. If the boot Strike hits a Prone creature, it deals an extra @Damage[2d6[bleed]].</p>");
+    assert.deepEqual([stomp?.strides, stomp?.strike, stomp?.onHit?.damage, stomp?.onHit?.proneDamage], [1, "boot", [], ["2d6[bleed]"]]);
+    assert.deepEqual(compile("<p><strong>Requirements</strong> The test rivka has not attacked yet this turn</p><hr /><p><strong>Effect</strong> The test rivka slashes with its claws. It makes four Strikes: the first at its highest attack bonus, the next two with a -4 penalty to their attack rolls, and the last one with a -8 penalty. This ability counts as four Strikes for the purpose of its multiple attack penalty.</p>", 2),
+        { builtin: "multi-strike", actions: 2, strikes: [null, null, null, null], sameTarget: true, sameMap: true, penalties: [0, 4, 4, 8], countsAs: 4, requires: "first-attack" });
+});

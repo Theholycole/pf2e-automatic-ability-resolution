@@ -244,11 +244,13 @@ async function cardForAbility(message) {
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
     // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round" — for the GM to apply.)
     if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if both Strikes hit the same creature, ${bothHitText(plan.bothHit)}.`]);
+    // (Batch 83, Eviscerate: each Strike's own penalty.)
+    if (plan?.builtin === "multi-strike" && plan.penalties?.some(Boolean)) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.penalties.map((value, index) => `Strike ${index + 1} ${value ? `at −${value}` : "at its full bonus"}`).join(", ")}${plan.requires === "first-attack" ? "; only before any other attack this turn" : ""}.`]);
     // (Batch 82, Pike and Strike: the second Strike only after a hit, at the same penalty; or instead the move, the GM's choice.)
     if (plan?.builtin === "multi-strike" && plan.ifFirstHits) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: only if the ${plan.strikes?.[0] ?? "first"} Strike hits, the ${plan.strikes?.[1] ?? "second"} Strike at the same multiple attack penalty${plan.instead ? `, or instead ${plan.instead}` : ""}.`]);
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
-    if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
+    if (plan?.builtin === "strike-activity" && activityRider(plan, { targetProne: true })) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
     if (plan?.builtin === "cast-spell") {
         const spell = await fromUuid(plan.spell.uuid).catch(() => null);
@@ -685,7 +687,7 @@ export function tokensAround(token, radius) {
 async function activityCard(message, pending, { actor, strike, target, targetToken, context }) {
     // (Extra dice of the Strike's own type: the type of the Strike that hit, batch 27.)
     const strikeType = Object.values(strike.system?.damageRolls ?? {})[0]?.damageType ?? null;
-    const rider = activityRider(pending.plan, { strikeType });
+    const rider = activityRider(pending.plan, { strikeType, targetProne: Boolean(target?.actor?.hasCondition?.("prone")) });
     if (!rider) return;
     const sourceToken = message.token ?? pending.token ?? null;
     if (rider.plan) await activityResults(message, pending, rider, { actor, strike, target, targetToken, context, sourceToken });

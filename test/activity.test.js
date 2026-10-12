@@ -170,3 +170,9 @@ test("what a resistance reaction leaves on the monster: the resistance for a whi
     assert.deepEqual([ac.name, ac.system.rules, ac.system.duration.unit], ["Chipping Scales (AC)", [{ key: "FlatModifier", selector: "ac", type: "untyped", value: -2, label: "Chipping Scales" }], "days"]);
     assert.deepEqual(resistEffects({ builtin: "resist-damage", value: 5, on: ["piercing"], types: ["piercing"] }, { name: "Pincushion" }), []);
 });
+
+test("more damage on a creature already Prone (2026-10-11, batch 83)", () => {
+    const stomp = { builtin: "strike-activity", source: { name: "Test Stomp" }, onHit: { conditions: [], damage: [], proneDamage: ["2d6[bleed]"] } };
+    assert.equal(activityRider(stomp), null, "not on a creature standing");
+    assert.deepEqual(activityRider(stomp, { targetProne: true }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "2d6[bleed]" }]);
+});
