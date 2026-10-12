@@ -2149,3 +2149,35 @@ test("a save succeeded on, or made successfully (2026-10-11, batch 96)", () => {
     const fear = compile("<p>Test figures appear. All living creatures in the test hall must make a successful @Check[will|dc:20] save or become @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1} (Frightened 3 on a critical failure).</p>");
     assert.deepEqual([fear?.resolution?.outcomes?.failure?.effects?.[0]?.value, fear?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], [1, 3]);
 });
+
+test("the creature that dealt the triggering Strike saves; a Strike that deals damage (2026-10-11, batch 97)", () => {
+    const compile = (type, actions, description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const growl = compile("reaction", null, "<p><strong>Trigger</strong> The test cat is critically hit by a Strike</p><hr /><p><strong>Effect</strong> The creature that dealt the triggering Strike must succeed at a @Check[will|dc:30] save or become Frightened 1 (Frightened 2 on a critical failure).</p>");
+    assert.deepEqual([growl?.resolution?.outcomes?.failure?.effects?.[0]?.slug, growl?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], ["frightened", 2]);
+    const shot = compile("action", 2, "<p>The test guard makes a ranged Strike. If the Strike deals damage, the target must succeed at a @Check[reflex|dc:20|options:inflicts:prone] saving throw or fall Prone.</p>");
+    assert.deepEqual([shot?.builtin, shot?.strike, shot?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["strike-activity", "ranged", "prone"]);
+});
+
+test("a reaction that moves it off as a creature comes beside it or attacks it (2026-10-11, batch 98)", () => {
+    const reaction = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const both = (trigger, effect) => reaction(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`);
+    assert.deepEqual(both("A creature misses the test beetle with a melee Strike", "The test beetle Steps."), { builtin: "withdraw", on: "missed", melee: true, move: "Step", safe: true });
+    assert.deepEqual(both("The test hermit takes damage from a Strike", "The test hermit Steps away from the source of the Strike."), { builtin: "withdraw", on: "damaged", move: "Step", safe: true });
+    assert.deepEqual(both("The test vole is hit with a melee attack", "The test vole takes a step after the effects of the triggering attack are resolved."), { builtin: "withdraw", on: "hit", melee: true, move: "Step", safe: true });
+    assert.deepEqual(both("A creature enters the test sprite's space or an adjacent square", "The test sprite Flies 10 feet away from the triggering creature."), { builtin: "withdraw", on: "approach", enters: true, move: "Fly", feet: 10, safe: false });
+    assert.deepEqual(both("A creature ends its movement adjacent to the test eel or within the test eel's space.", "The test eel Strides or Swims up to 10 feet (or up to the relevant Speed, if that Speed is less than 10 feet). It must end its movement in a location that isn't within 5 feet of a foe. This movement doesn't trigger reactions."), { builtin: "withdraw", on: "approach", move: "Stride", feet: 10, safe: true });
+    assert.deepEqual(both("A dazzled or blinded creature, or a creature with light blindness, ends its move adjacent to Test Ulo", "Test Ulo Steps."), { builtin: "withdraw", on: "approach", foe: ["dazzled", "blinded"], move: "Step", safe: true });
+    assert.deepEqual(reaction("<p>If a creature ends its movement adjacent to the test asp, the test asp can use its reaction to Stride or Climb up to 10 feet. This movement doesn't trigger reactions.</p>"), { builtin: "withdraw", on: "approach", move: "Stride", feet: 10, safe: true });
+    // Not one that drops what it holds first, or does more.
+    assert.notEqual(both("The test rodent takes damage from a melee Strike", "The test rodent drops any items held in its hands, then Climbs or Strides up to 15 feet.")?.builtin, "withdraw");
+    assert.notEqual(both("A creature misses the test frog with a melee Strike", "The test frog Steps. It gains a +2 circumstance bonus to AC until the end of its next turn.")?.builtin, "withdraw");
+});
+
+test("a reaction that follows a foe moving away and keeps it in reach (2026-10-11, batch 99)", () => {
+    const both = (trigger, effect) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    assert.deepEqual(both("An enemy within reach of the test warden attempts to move away", "The test warden Strides up to their Speed, following the enemy and keeping the enemy in reach throughout its movement until the enemy stops moving or the test warden moves their full Speed."), { builtin: "follow", move: "Stride" });
+    assert.deepEqual(both("A foe within Test Ama's reach attempts to move away from her", "Test Ama keeps pace with the triggering foe. Test Ama Strides up to her Speed, following that foe and keeping it in reach throughout its movement until it stops moving or Test Ama has moved their full Speed."), { builtin: "follow", move: "Stride" });
+    assert.deepEqual(both("An adjacent foe moves away.", "Test Oru can Stride up to his speed, following the triggering creature and keeping it in reach throughout its movement until it stops moving or Test Oru has moved his full Speed."), { builtin: "follow", move: "Stride" });
+    assert.deepEqual(both("The test stalker's hunted prey is within their reach and attempts to move away from them", "The test stalker Climbs or Strides up to their Speed, following their hunted prey and keeping it in reach throughout its movement until it stops moving or the test stalker has moved their full Speed."), { builtin: "follow", move: "Stride", prey: true });
+    assert.deepEqual(both("A foe within reach attempts to move away from the test lynx", "The test lynx Strides up to its Speed, following the foe and keeping it in reach. If the test lynx ends its move within reach of the foe, it can Strike it."), { builtin: "follow", move: "Stride", strike: true });
+});

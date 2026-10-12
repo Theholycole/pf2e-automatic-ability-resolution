@@ -520,7 +520,8 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     // (A reaction set off by a hit, its own or a foe's, reads from its Effect on: the hit is its trigger's; batch 69.)
     const upTo = htmlToPlainText(sentences.slice(0, index + 1).join(" ")).replace(triggered ? /^[\s\S]*?\bEffect\b/ : /^(?!)/, "");
     // A save that follows a Strike's hit ("On a hit, …", "struck by this attack") or a death ("When the dancer dies"): not an action of its own.
-    if (!afterHit && !riders && /\bStrike\b|\bOn a (?:hit|success)\b|\bstruck by\b|\bhits\b/i.test(upTo)) return null;
+    // (Batch 97: "The creature that dealt the triggering Strike must succeed at …" names the trigger's Strike, not one of its own.)
+    if (!afterHit && !riders && /\bStrike\b|\bOn a (?:hit|success)\b|\bstruck by\b|\bhits\b/i.test(upTo.replace(/\b(?:dealt|made) the triggering Strike\b/gi, ""))) return null;
     if (/\bWhen (?:a creature (?:slays|kills)|(?:the|this|a|an) [\w' -]+? (?:dies|is (?:killed|destroyed|slain))|killed)\b/i.test(upTo)) return null;
     // Damage before the save counts only in the save's own sentence ("dealing 6d6 damage in a cone (Will save)").
     const checkAt = sentences[index].search(/@Check\[/i);
@@ -832,7 +833,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
     let opened = false;
     let flavorSkipped = false;
     // "If it hits", "If the Strike hits and deals damage", "If they hit and deal damage", "If Alak hits".
-    const hit = "^(?:If|When) (?:it|he|she|they|the (?:Strike|attack|strike)|this (?:Strike|attack)|the [\\w' -]+?|[A-Z][\\w'-]+) hits?(?: and deals? damage)?, ";
+    // (Batch 97: "If the Strike deals damage, …" too.)
+    const hit = "^(?:If|When) (?:it|he|she|they|the (?:Strike|attack|strike)|this (?:Strike|attack)|the [\\w' -]+?|[A-Z][\\w'-]+) (?:hits?(?: and deals? damage)?|deals? damage), ";
     const conditions = (text) => readConditions(text, { plain: STAGE_CONDITIONS }).map((effect) => ({ slug: effect.slug, value: effect.value, duration: effect.duration }));
     for (const sentence of sentences) {
         // Linked names as words ("@UUID[…]{Grabbed}" → "Grabbed"); @Check and @Damage are read from the sentence itself.

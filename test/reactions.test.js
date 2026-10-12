@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 
 test("which Strike a reaction allows", () => {
     assert.equal(onlyStrike("Reactive Strike (Tail Only)"), "tail");
@@ -110,4 +110,17 @@ test("a resistance reaction's offer gives back what it resisted (2026-10-11, bat
     const html = offerHTML({ kind: "resist", ability: { name: "Liquefy" }, monster: { name: "Sea Dragon" }, target: null, trigger: "It took 31 damage", note: "Only against fire damage.", retribution: { restore: 20 }, status: "open" });
     assert.match(html, /Use it: 20 HP back/);
     assert.match(html, /Not now/);
+});
+
+test("a reaction that moves it off: its button and the GM's note (2026-10-11, batch 98)", () => {
+    assert.deepEqual(withdrawMove({ move: "Step", on: "missed", safe: true }), { label: "Step away", note: "It Steps 5 feet away: move its token." });
+    assert.deepEqual(withdrawMove({ move: "Fly", feet: 10, on: "approach", safe: false }), { label: "Fly away", note: "It Flies up to 10 feet away from the creature beside it: move its token." });
+    assert.equal(withdrawMove({ move: "Stride", feet: 10, on: "approach", safe: true }).note, "It Strides up to 10 feet away from the creature beside it: move its token. This movement doesn't trigger reactions.");
+    assert.equal(withdrawMove({ move: "Step", on: "hit", safe: true }).note, "It Steps 5 feet away: move its token. After the attack's effects.");
+    assert.match(offerHTML({ kind: "move", ability: { name: "Test Skitter" }, monster: { name: "Test Beetle" }, target: { name: "Ezren" }, trigger: "missed it", move: { label: "Step away" }, status: "open" }), /Use it: Step away/);
+});
+
+test("a reaction that follows a foe moving away: its note (2026-10-11, batch 99)", () => {
+    assert.deepEqual(followMove({ move: "Stride" }), { label: "Follow", note: "It Strides up to its Speed after the creature, keeping it in reach: move its token beside it." });
+    assert.equal(followMove({ move: "Stride", prey: true, strike: true }).note, "Only if the creature is its hunted prey. It Strides up to its Speed after the creature, keeping it in reach: move its token beside it. If it ends in reach, it can make a Strike: roll it from its sheet.");
 });

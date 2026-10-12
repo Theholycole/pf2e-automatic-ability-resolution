@@ -63,6 +63,8 @@ export function strikeMatches(activity, strike) {
     const wanted = String(activity?.strike ?? "").toLowerCase();
     const name = String(strike?.name ?? "").toLowerCase();
     if (!wanted) return !strike?.isRanged;
+    // (Batch 97: "makes a ranged Strike" — any of its ranged Strikes.)
+    if (wanted === "ranged" && !name.includes("ranged")) return !!strike?.isRanged;
     return name === wanted || name.startsWith(wanted) || wanted.startsWith(name) || name.includes(wanted);
 }
 

@@ -21,10 +21,12 @@
 //   its ally and the creature whose turn it is (taken as the attacker) is a foe,
 //   both within 15 feet. Using it gives the ally back what its resistance
 //   (2 + the monster's level) would have kept off, then Strikes if in reach.
+// - Skitter, Scurry, Flit Back and the like (batch 98): a foe missing, hitting or damaging it, or coming beside it; using it
+//   tells the GM how far to move its token. No Escape and the like (batch 99): a foe in its reach moving away, followed.
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
@@ -32,7 +34,7 @@ import { isActiveGM, postCard, postEffectCard, postSkillCard, targetedEvent, tar
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -142,6 +144,27 @@ async function onMove(token, movement) {
     const squares = path.length - 1;
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
+        // Scurry, Flit Back (batch 98): a foe ending its move beside it, or coming beside it; Opportune Step's only if dazzled or blinded.
+        const off = reactions.find(({ plan }) => plan.builtin === "withdraw" && plan.on === "approach" && (!plan.foe || plan.foe.some((slug) => token.actor?.hasCondition?.(slug))));
+        if (off) {
+            const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= 5);
+            if (!insides[0] && (off.plan.enters ? insides.some(Boolean) : insides.at(-1))) {
+                const move = withdrawMove(off.plan);
+                await offer({ kind: "move", item: off.item, monster, actor, target: token, trigger: off.plan.enters ? "came beside it" : "ended its move beside it", note: move.note, move: { label: move.label } });
+                continue;
+            }
+        }
+        // No Escape (batch 99): a foe that started in its reach and moved away from it.
+        const chase = reactions.find(({ plan }) => plan.builtin === "follow");
+        if (chase) {
+            const reach = Math.max(5, ...meleeStrikes(actor, null).map((strike) => strike.reach));
+            const distances = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid));
+            if (distances[0] <= reach && distances.at(-1) > distances[0]) {
+                const move = followMove(chase.plan);
+                // (Its Reactive Strike's offer too, below: the GM picks one.)
+                await offer({ kind: "move", item: chase.item, monster, actor, target: token, trigger: "moved away from it", note: move.note, move: { label: move.label } });
+            }
+        }
         // Tentacle Trip, Ectoplasmic Filaments, Entangling Train: leaving a square within its distance, moving within it, or
         // coming into it (batch 22).
         const own = reactions.find(({ plan }) => {
@@ -222,6 +245,7 @@ async function onMessage(message) {
         await ownStrike(message, context, scene, combat, token);
         await strikeAnswers(context, scene, combat, token);
         await allyHitAnswers(context, scene, combat, token);
+        await withdrawAnswers(context, scene, combat, token);
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
     }
@@ -296,6 +320,19 @@ async function allyHitAnswers(context, scene, combat, attacker) {
         const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`).filter((strike) => distance <= strike.reach);
         if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target, strikes, penalty: entry.plan.penalty ?? 0, trigger: `was hit by ${attacker.name}` });
     }
+}
+
+// A melee Strike on it that misses, hits, or is made at all (batch 98: Skitter, Skittish, Bolt): its offer to move off.
+async function withdrawAnswers(context, scene, combat, attacker) {
+    if ((context.options ?? []).includes("item:ranged")) return;
+    const target = context.target?.token ? fromUuidSync(context.target.token) : null;
+    const mine = target ? reactors(scene, combat).find((entry) => entry.token.id === target.id) : null;
+    if (!mine || !isFoe(mine.token, attacker)) return;
+    const hit = ["success", "criticalSuccess"].includes(context.outcome);
+    const entry = mine.reactions.find(({ plan }) => plan.builtin === "withdraw" && (plan.on === "attacked" || (plan.on === "hit" && hit) || (plan.on === "missed" && ["failure", "criticalFailure"].includes(context.outcome))));
+    if (!entry) return;
+    const move = withdrawMove(entry.plan);
+    await offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: entry.plan.on === "missed" ? "missed it with a melee Strike" : hit ? "hit it with a melee Strike" : "made a melee Strike against it", note: move.note, move: { label: move.label } });
 }
 
 // A creature a monster holds failing to Escape (batch 65: Savage, Gnashing Bite): the monster's Strike or card at it. The monster: the
@@ -645,6 +682,13 @@ async function onDamaged(actor, amount) {
             const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
             await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger), free: !!own.plan.trigger.free });
         }
+        // Skittish (batch 98): damage from a Strike, the creature whose turn it is taken as the attacker; the GM checks it was a Strike.
+        const off = mine?.reactions.find(({ plan }) => plan.builtin === "withdraw" && plan.on === "damaged");
+        if (off) {
+            const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
+            const move = withdrawMove(off.plan);
+            await offer({ kind: "move", item: off.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: `Only if the damage came from a${off.plan.melee ? " melee" : ""} Strike. ${move.note}`, move: { label: move.label } });
+        }
         // Liquefy, Chipping Scales (batch 71): its resistance against that damage, given back as Hit Points (the GM checks the type);
         // an enemy's damage only when it says so; while it has a use left.
         // (The damage's types from its damage roll when there is one: no offer when none of them sets it off; the resistance off each type.)
@@ -702,7 +746,7 @@ async function onDamaged(actor, amount) {
 }
 
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null, move = null }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -722,6 +766,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         ...(negate ? { negate } : {}),
         ...(survive ? { survive } : {}),
         ...(skill ? { skill } : {}),
+        ...(move ? { move } : {}),
         ...(free ? { free: true } : {}),
         status: "open",
         result: null
@@ -795,6 +840,9 @@ async function use(message, action, slug) {
         }
         if (action === "strike") lines.push(await rollStrike(state, actor, slug));
         result = lines.join(" ") || "Nothing to resist.";
+    } else if (state.kind === "move") {
+        // (Batch 98: where it goes is the GM's.)
+        result = `${state.monster.name} uses ${state.ability.name}: ${state.note ?? "move its token."}`;
     } else if (state.kind === "skill") {
         // (Batch 88: PF2e's maneuver as a card on the creature, its penalty or bonus on the check.)
         const item = await fromUuid(state.ability.uuid);

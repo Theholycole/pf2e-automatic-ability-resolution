@@ -44,6 +44,9 @@ test("which Strike is the activity's, and who fits its save", () => {
     assert.equal(strikeMatches({ strike: "jaws" }, { name: "Claw" }), false);
     assert.equal(strikeMatches({ strike: null }, { name: "Claw", isRanged: false }), true);
     assert.equal(strikeMatches({ strike: null }, { name: "Javelin", isRanged: true }), false);
+    // "makes a ranged Strike" (batch 97).
+    assert.equal(strikeMatches({ strike: "ranged" }, { name: "Crossbow", isRanged: true }), true);
+    assert.equal(strikeMatches({ strike: "ranged" }, { name: "Fist", isRanged: false }), false);
     assert.equal(fitsSize("med", "medium"), true);
     assert.equal(fitsSize("lg", "medium"), false);
     assert.equal(fitsSize("huge", null), true);

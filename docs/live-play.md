@@ -1271,3 +1271,21 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 ## A save succeeded on, or made successfully (2026-10-11, batch 96)
 
 - **Wordings:** "Creatures within the chamber must succeed on a @Check[fortitude|dc:30] save or become Stupefied 1 (Stupefied 2 on a critical failure)" and "All living creatures in area B7 must make a successful @Check[will|dc:28] save or become Frightened 1 (Frightened 3 on a critical failure)" read as "must succeed at a … save or …": a save card (6 PF2e: a trap's gas, a haunt, a beetle's saliva rider, a thrown rock's damage, a fall Prone, a critical hit's Drained; 4 Battlezoo).
+
+## The creature that dealt the triggering Strike; a Strike that deals damage (2026-10-11, batch 97)
+
+- **Reactions:** "Trigger The hellcat is critically hit by any Strike. Effect … The creature that dealt the triggering Strike must succeed at a @Check[will|dc:37] save or become Frightened 2 (Frightened 4 on a critical failure)": the Strike named is the trigger's, not one of its own, so the save reads as the reaction's, on the attacker (the hit-by reaction card of batch 69). Its other ability recharging is left for the GM.
+- **Strike activities:** "makes a ranged Strike. If the Strike deals damage, the target must succeed at a @Check[reflex|dc:26] saving throw or fall Prone": "deals damage" reads as a hit, and "ranged" means any of its ranged Strikes (live: the next ranged Strike it rolls; simulator: its first ranged Strike).
+
+## Reactions that move it off (2026-10-11, batch 98)
+
+- **Compiled** → `{ builtin: "withdraw", on, melee, enters, foe, move, feet, safe }`: "Trigger A creature misses the necrohusk with a melee Strike Effect The necrohusk Steps." (on "missed"), "… takes damage from a Strike Effect … Steps away from the source of the Strike." ("damaged"), "… is hit with a melee attack Effect … takes a step after the effects of the triggering attack are resolved." ("hit"), an attack with a melee weapon ("attacked"), and a foe ending its move beside it or coming beside it ("approach": Scurry, Slink, Skitter Away, Run Away!, Flinch Back, Flit Back; Opportune Step's only for a dazzled or blinded one). A Step, or a move that "doesn't trigger reactions", is safe; "It must end its movement in a location that isn't within 5 feet of a foe" is part of where it goes. Not one that drops what it holds, changes form, gains a bonus, or does more besides.
+- **Live:** an offer card (the attack roll, PF2e's damage, or Foundry's movement path), "Use it: Step away"; using it marks its reaction used and says how far to move the token (where is the GM's).
+- **Simulator:** it leaves the Melee it shares with the foe, while that foe still has actions to spend this turn (or it has a ranged Strike, or it's fleeing), and not while it holds a creature; a move that isn't safe is a Stride out of the Melee (its reactions).
+
+## Reactions that follow a foe moving away (2026-10-11, batch 99)
+
+- **Compiled** → `{ builtin: "follow", move, prey, strike }`: "Trigger An enemy within reach of the guard attempts to move away Effect The guard Strides up to their Speed, following the enemy and keeping the enemy in reach throughout its movement until the enemy stops moving or the guard moves their full Speed." and its kin ("A foe within Horba's reach …", "An adjacent foe moves away.", "keeps pace with the triggering foe" first, "Climbs or Strides", "Flies up to its fly Speed"; "the ochiastis's hunted prey" only; a Strike after when it ends in reach).
+- **Live:** a foe that started in its reach and moved away gets a "Follow" offer (its Reactive Strike's offer too: the GM picks); using it says to move its token beside the creature, and its Strike to roll from the sheet where it has one.
+- **Simulator:** after a Stride or Step out of its Melee (not a move that triggers no reactions), it Strides after the creature into its Melee when its Speed is at least the creature's and it holds no one; then its Strike, where it has one.
+

@@ -650,6 +650,83 @@ export function readMomentum(text) {
     return { recharges: named ? [named.trim()] : [] };
 }
 
+// Moving off as a creature comes beside it or attacks it (2026-10-11, batch 98): "Trigger A creature misses the necrohusk with a melee
+// Strike Effect The necrohusk Steps.", "… takes damage from a Strike Effect … Steps away from the source of the Strike.", an attack on it
+// with a melee weapon (once the attack is done, a Step or a Stride away), "A creature ends its movement adjacent to Kolo Effect Kolo
+// Steps.", "A creature enters the harmona's space or an adjacent square Effect The harmona Flies 10 feet away from the triggering
+// creature.", "… Strides up to 10 feet (or his Speed, if that Speed is less than 10 feet). He must end his movement in a location that isn't
+// within 5 feet of a foe. This movement doesn't trigger reactions." (and the viper's older "If a creature ends its movement adjacent to the
+// viper …, the viper can use its reaction to Stride, Climb, or Swim up to 10 feet.") → { builtin: "withdraw", on: "missed" | "damaged" |
+// "attacked" | "hit" | "approach", melee, enters, foe (conditions the creature must have), move ("Step" | "Stride" | "Fly"), feet, safe }.
+// Not one that drops what it holds, changes its form or does more.
+export function readWithdraw(text) {
+    const body = String(text).trim();
+    const subject = "(?:the [\\w' -]+?|it|[A-Z][\\w'-]+(?: [A-Z][\\w'-]+)*)";
+    const legacy = new RegExp(`^If an? (?:creature|enemy|foe) ends its movement adjacent to ${subject}(?: or within ${subject}['’]s space)?, ${subject} can use (?:its|their|his|her) reaction to (Step|Stride)(?:, Climb,? or Swim| or (?:Climb|Swim))?(?: up to (\\d+) feet)?\\.((?: [^.]+\\.)*)$`, "i").exec(body);
+    const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(body);
+    if (!legacy && !split) return null;
+    let on = null;
+    let melee = false;
+    let enters = false;
+    let foe = null;
+    if (legacy) on = "approach";
+    else {
+        const trigger = split[1].trim();
+        if (new RegExp(`^An? (?:creature|enemy|foe) misses ${subject} with a melee Strike$`, "i").test(trigger)) [on, melee] = ["missed", true];
+        else if (/^(?:The )?[\w' -]+? takes damage from an? (?:melee )?Strike$/i.test(trigger)) [on, melee] = ["damaged", /\bmelee Strike$/i.test(trigger)];
+        else if (/^(?:The )?[\w' -]+? is attacked with a melee weapon$/i.test(trigger)) [on, melee] = ["attacked", true];
+        else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
+        else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
+        else if (new RegExp(`^An? (?:creature|enemy|foe) (?:enters ${subject}['’]s space or an adjacent square|moves into an adjacent space)$`, "i").test(trigger)) [on, enters] = ["approach", true];
+        else if (new RegExp(`^A dazzled or blinded creature, or a creature with light blindness, ends its move(?:ment)? adjacent to ${subject}$`, "i").test(trigger)) [on, foe] = ["approach", ["dazzled", "blinded"]];
+    }
+    if (!on) return null;
+    const sentences = legacy ? (legacy[3] ?? "").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean) : split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    let move;
+    let feet = null;
+    if (legacy) [move, feet] = [legacy[1].toLowerCase() === "step" ? "Step" : "Stride", legacy[2] ? Number(legacy[2]) : null];
+    else {
+        // ("… takes a step after the effects of the triggering attack are resolved.")
+        if (/^(?:The )?[\w' -]+? takes a step after the effects of the triggering attack are resolved\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Steps.";
+        const first = /^(?:After resolving the attack, )?(?:The )?[\w' -]+? (?:quickly takes advantage of the attacker['’]s error and )?(Steps(?: or Strides)?|Strides(?:,? (?:Climbs|Swims),? or (?:Climbs|Swims)| or (?:Climbs|Swims))?|Climbs or Strides|Flies)(?: (?:up to )?(\d+) feet)?(?: \((?:or (?:up to )?(?:the relevant|its|his|her|their) Speed)[^)]*\))?(?: away(?: from (?:the source of the Strike|the triggering creature))?)?\.$/i.exec(sentences.shift() ?? "");
+        if (!first) return null;
+        move = /^Steps/i.test(first[1]) ? "Step" : /^Flies/i.test(first[1]) ? "Fly" : "Stride";
+        feet = first[2] ? Number(first[2]) : null;
+    }
+    let safe = move === "Step";
+    for (const sentence of sentences) {
+        if (/^This movement (?:doesn't|does not) trigger reactions\.$/i.test(sentence)) safe = true;
+        else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$/i.test(sentence)) return null;
+    }
+    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), move, ...(feet ? { feet } : {}), safe };
+}
+
+// Following a foe that moves away (2026-10-11, batch 99): "Trigger An enemy within reach of the guard attempts to move away Effect The guard
+// Strides up to their Speed, following the enemy and keeping the enemy in reach throughout its movement until the enemy stops moving or the
+// guard moves their full Speed." (No Escape, Reactive Pursuit; "A foe within Horba's reach …", "An adjacent foe moves away.", "… keeps pace
+// with the triggering foe." first, "Climbs or Strides", a flight; the hunted prey's only; a Strike at the creature after, when it ends the
+// move within reach of it) → { builtin: "follow", move ("Stride" | "Fly"), prey, strike }.
+export function readFollow(text) {
+    const split = /^Trigger (.+?)\.? Effects? (.+)$/.exec(String(text).trim());
+    if (!split) return null;
+    const subject = "(?:the [\\w' -]+?|it|[A-Z][\\w'-]+(?: [A-Z][\\w'-]+)*)";
+    const pronoun = "(?:it|them|him|her)";
+    const trigger = split[1].trim();
+    const prey = new RegExp(`^${subject}['’]s hunted prey is within (?:its|their|his|her) reach and attempts to move away from ${pronoun}$`, "i").test(trigger);
+    const near = new RegExp(`^An? (?:adjacent (?:enemy|foe|creature)|(?:enemy|foe|creature) within (?:(?:the )?reach(?: of ${subject})?|${subject}['’]s reach)) (?:attempts to move|moves) away(?: from (?:${subject}|${pronoun}))?$`, "i").test(trigger);
+    if (!prey && !near) return null;
+    const sentences = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    if (new RegExp(`^${subject} keeps pace with the (?:triggering|retreating) (?:foe|enemy|creature)\\.$`, "i").test(sentences[0] ?? "")) sentences.shift();
+    const main = new RegExp(`^${subject} (?:can )?(Strides?(?: or (?:Climbs?|Fl(?:ies|y)))?|Climbs or Strides|Flies) up to (?:its|their|his|her) (?:fly )?[Ss]peed, following (?:the (?:triggering creature|enemy|foe|retreating foe)|that foe|(?:its|their|his|her) hunted prey) and keeping (?:it|the enemy|the foe) in reach(?: throughout (?:its|this) movement)?(?: until (?:it|the enemy|the foe) stops moving or ${subject} (?:has moved|moves) (?:its|their|his|her) full (?:fly )?Speed)?\\.$`, "i").exec(sentences.shift() ?? "");
+    if (!main) return null;
+    let strike = false;
+    for (const sentence of sentences) {
+        if (new RegExp(`^If ${subject} ends (?:its|their|his|her) (?:movement|move) (?:in|within) reach of (?:the triggering creature|that creature|the foe),? (?:it|they|he|she) can (?:make a Strike|Strike it)\\.$`, "i").test(sentence)) strike = true;
+        else return null;
+    }
+    return { builtin: "follow", move: /^Flies$/i.test(main[1]) ? "Fly" : "Stride", ...(prey ? { prey } : {}), ...(strike ? { strike } : {}) };
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -666,6 +743,8 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
+    const withdraw = readWithdraw(text) ?? readFollow(text);
+    if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a
     // jaws Strike against that creature".)

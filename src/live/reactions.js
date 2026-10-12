@@ -90,6 +90,24 @@ export function damageNote(trigger) {
     return `Only on ${types.length > 1 ? `${types.slice(0, -1).join(", ")} or ${types.at(-1)}` : types[0]} damage.`;
 }
 
+// A reaction that moves it off (batch 98: Skitter, Scurry, Flit Back): its button and what the GM does. plan: { move, feet, safe, on }.
+export function withdrawMove(plan) {
+    const verb = { Step: "Step", Fly: "Fly", Stride: "Stride" }[plan?.move] ?? "Stride";
+    const how = plan?.feet ? `up to ${plan.feet} feet` : verb === "Step" ? "5 feet" : "up to its Speed";
+    return {
+        label: `${verb} away`,
+        note: [`It ${verb === "Fly" ? "Flies" : `${verb}s`} ${how} away${plan?.on === "approach" ? " from the creature beside it" : ""}: move its token.`, plan?.safe && verb !== "Step" ? "This movement doesn't trigger reactions." : null, ["attacked", "hit"].includes(plan?.on) ? "After the attack's effects." : null].filter(Boolean).join(" ")
+    };
+}
+
+// One that follows a foe moving away (batch 99: No Escape, Reactive Pursuit). plan: { move, prey, strike }.
+export function followMove(plan) {
+    return {
+        label: "Follow",
+        note: [plan?.prey ? "Only if the creature is its hunted prey." : null, `It ${plan?.move === "Fly" ? "Flies" : "Strides"} up to its Speed after the creature, keeping it in reach: move its token beside it.`, plan?.strike ? "If it ends in reach, it can make a Strike: roll it from its sheet." : null].filter(Boolean).join(" ")
+    };
+}
+
 // The offer card. state: { kind, ability, monster, target, trigger, strikes, note, attack, status, result }.
 export function offerHTML(state) {
     const who = state.target ? `${escape(state.target.name)} ${escape(state.trigger)}` : escape(state.trigger);
@@ -101,6 +119,8 @@ export function offerHTML(state) {
         // (Batch 67: Ferocity's kin, "half its HP", "25 HP", "4d10 HP".)
         if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at ${escape(state.survive?.hp === "half" ? "half its" : String(state.survive?.hp ?? 1))} HP</button>`);
         if (state.kind === "card") buttons.push(`<button type="button" data-aar-reaction="use">Use it</button>`);
+        // (Batch 98: "Use it: Step away".)
+        if (state.kind === "move") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.move?.label ?? "move away")}</button>`);
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
