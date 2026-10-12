@@ -608,6 +608,12 @@ export function readMultiStrikes(text) {
             .replace(/^An? (?:creature|target|enemy) hit by both (?:[\w' -]+? )?(?:Strikes|attacks) (?:also )?takes /i, "If both Strikes hit the same target, the target takes ")
             // (Batch 138, Sanguine Mauling: "If it hits with both claws, the target takes 1d6 bleed.")
             .replace(/^If (?:the [\w' -]+?|it|they|he|she) hits? (?:the same (?:creature|target) )?with both [\w' -]+?, the (?:target|creature) /i, "If both Strikes hit the same target, the target ");
+        // (Batch 198, Gory Rend: "If both hit, the creature takes @Damage[2d10[bleed]] and is exposed to piscovenom." — its affliction too, by name.)
+        let exposed = null;
+        if (/^If (?:they )?both (?:Strikes |attacks )?hit\b/i.test(sentence)) sentence = sentence.replace(/,? and is exposed to ([a-z][\w' -]+?)(?=\.$)/i, (_all, name) => {
+            exposed = name.trim();
+            return "";
+        });
         const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
         if (both) {
             // (Batch 124, Barbed Limbs: "… is Grabbed until the end of the mantis's next turn" — for a round.)
@@ -620,7 +626,7 @@ export function readMultiStrikes(text) {
             // (Nothing else in it: not an exposure to a poison, a Disarm, temporary Hit Points.)
             const left = rest.replace(new RegExp(String.raw`\b(?:${BOTH_CONDITIONS})(?: \d+)?(?: for \d+ rounds?)?\b`, "gi"), "").replace(/\b(?:and|also|knocked|is|the target|becomes|dealt|takes|an additional|an extra)\b|[,\s]/gi, "");
             if ((conditions.length || damage.length) && !left) {
-                bothHit = { conditions, damage };
+                bothHit = { conditions, damage, ...(exposed ? { affliction: exposed.toLowerCase() } : {}) };
                 continue;
             }
         }

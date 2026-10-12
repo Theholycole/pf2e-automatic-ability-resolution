@@ -1022,6 +1022,45 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 return "[told]";
             })
             .replace(/^((?:The )?[^.]+?) attempts a Strike as (?:its|their) armor flashes with [^.]+\.$/i, "$1 makes a Strike.")
+            // (Batch 198: Toxic Bite's "If it hits, it injects additional poison, causing its venom to gain the virulent trait."; Tooth Grind's "makes a
+            // bludgeoning jaws Strike against the creature he's grabbing. On a hit, the creature also takes … damage and becomes Wounded 1, or increases its
+            // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
+            // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
+            // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            .replace(/^If it hits, it injects additional poison, causing its venom to gain the virulent trait\.$/i, () => {
+                (activity.notes ??= []).push("On a hit, its venom gains the virulent trait.");
+                return "[told]";
+            })
+            .replace(/\b(makes an?) (bludgeoning|piercing|slashing) ([\w' -]+? Strike) against the creature (?:he's|she's|it's|they're|it is) grabbing(?=\.$)/i, (_all, made, type, strike) => {
+                (activity.notes ??= []).push(`Its ${strike} deals ${type.toLowerCase()} damage.`);
+                return `${made} ${strike} against the grabbed creature`;
+            })
+            .replace(/^On a critical hit, the creature instead becomes wounded (\d)(?=, or increases its wounded value by \d if already wounded\.$)/i, "On a critical hit, the creature is Wounded $1 instead")
+            .replace(/, or increases its wounded value by (\d) if already wounded(?=\.$)/i, (_all, value) => {
+                (activity.notes ??= []).push(`A creature already wounded has its wounded value increased by ${value} instead.`);
+                return "";
+            })
+            // (The heal's "HP; this is a healing effect." comes as a sentence of its own after its tag.)
+            .replace(/^(?:HP|Hit Points); this is a healing effect\.$/i, (all) => (activity.notes?.some((note) => /\(a healing effect\)\.$/.test(note)) ? "[told]" : all))
+            .replace(/^If a creature dies from [A-Z][\w' -]+?, (?:the [\w' -]+?|[A-Z][\w'-]+) regains (@Damage\[(?:[^[\]]|\[[^\]]*\])*\])(?: (?:HP|Hit Points); this is a healing effect)?\.?$/i, (_all, heal) => {
+                (activity.notes ??= []).push(`If the creature dies from it, it regains ${heal.replace(/@Damage\[\(?([^\[\]()]+)\)?(?:\[[^\]]*\])?\]/, "$1")} Hit Points (a healing effect).`);
+                return "[told]";
+            })
+            .replace(/^In addition, if the target is wearing armor with Hardness \d+ or lower, the armor becomes Broken\.$|^If this Strike breaks a creature's armor or damages a creature that is unarmored or wearing broken armor, the target also takes @Damage\[[^\]]*\]\]?\.$|^This Strike doesn't further damage armor that's already broken\.$/i, (said) => {
+                (activity.notes ??= []).push(htmlToPlainText(said.replace(/@Damage\[\(?([^\[\]()]+)\)?\[([a-z,]+)\]\]/g, "$1 $2 damage")));
+                return "[told]";
+            })
+            .replace(/^((?:The )?[^.]+?) makes a melee Strike trailing a wave of shadowy illusions\.$/i, "$1 makes a melee Strike.")
+            .replace(/^If the Strike is successful, (?:the [\w' -]+?|it|they) increases the number of damage dice by one, and the target must attempt a (@Check\[[^\]]*\]) save\.$/i, (_all, check) => {
+                activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + 1;
+                const save = (/\b(fortitude|reflex|will)\b/i.exec(check)?.[1] ?? "").replace(/^\w/, (letter) => letter.toUpperCase());
+                (activity.notes ??= []).push(`On a hit, the target also attempts a ${save} save (DC ${/dc:(\d+)/i.exec(check)?.[1] ?? "?"}); its results are the GM's.`.replace("  ", " "));
+                return "[told]";
+            })
+            .replace(/^(?:On )?a failure, the target becomes Invisible, inaudible, and otherwise imperceptible to its allies for \d+ rounds, and it likewise can't see, hear, or otherwise perceive those allies\.$|^(?:Regardless )?of the outcome, the creature is temporarily immune to [A-Z][\w' -]+? for 24 hours\.$/i, (said) => {
+                (activity.notes ??= []).push(said.replace(/^a failure/i, "On a failure").replace(/^of the outcome/i, "Whatever the outcome"));
+                return "[told]";
+            })
             // (Batch 173, Hunter's Aim: "makes a ranged weapon Strike against her hunted prey" — only at its prey; Dmiri's "When Dmiri focuses on aiming,
             // her attack becomes particularly accurate. Make a ranged weapon Strike against her hunted prey.")
             .replace(/^When [^,.]+? focuses on aiming, (?:her|his|its|their) attack becomes particularly accurate\.$/i, "[told]")

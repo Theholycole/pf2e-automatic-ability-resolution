@@ -1920,7 +1920,8 @@ test("two Strikes and what both hits bring; Terrifying Smite, Pierce Armor, Drag
     assert.deepEqual(compile("The test centaur kicks wildly. They make two hoof Strikes against the same target. The test centaur's multiple attack penalty doesn't increase until after it makes both attacks. If both attacks hit, the target is also knocked Prone.", 2)?.bothHit, { conditions: [{ slug: "prone", value: null, rounds: null }], damage: [] });
     assert.deepEqual(compile("Test Okoa makes two claw Strikes at the same target, each using her current multiple attack penalty. If both attacks hit, the target is also dealt @Damage[1d8[persistent,bleed]] damage.")?.bothHit, { conditions: [], damage: ["1d8[persistent,bleed]"] });
     // Not one that brings more than it reads (an exposure to a poison).
-    assert.equal(compile("The test daemon makes two claw Strikes against the same creature. If both hit, the creature takes @Damage[2d10[bleed]] and is exposed to test venom.")?.bothHit, undefined);
+    // (Batch 198: its affliction read too.)
+    assert.deepEqual(compile("The test daemon makes two claw Strikes against the same creature. If both hit, the creature takes @Damage[2d10[bleed]] and is exposed to test venom.")?.bothHit, { conditions: [], damage: ["2d10[bleed]"], affliction: "test venom" });
     // An enemy with one of its allies beside it; the armor it breaks the GM's; a drag the GM's.
     const smite = compile("The test rekhep makes a Strike against an enemy that has one of the test rekhep's allies within its reach. On a hit, the target takes an additional 2d8 mental damage and is Frightened 2. The extra damage and frightened value are doubled on a critical hit.", 2);
     assert.deepEqual([smite?.builtin, smite?.requires, smite?.onHit?.conditions?.[0]?.value, smite?.onHit?.critical?.[0]?.value], ["strike-activity", "ally-adjacent", 2, 4]);
@@ -3248,4 +3249,14 @@ test("multi-Strikes on the move, each strand, arms then a beak; a Strike as it g
     const embrace = compileMonsterAbility(item("action", "<p>The test kraken makes up to three arm Strikes, each with a different arm and against a different target. The test kraken then makes a beak Strike against one creature that it Grabbed during Test Embrace. Each arm Strike counts separately for the test kraken's multiple attack penalty, but the penalty doesn't increase until the test kraken has made all of its arm Strikes; the beak Strike uses the multiple attack penalty as normal.</p>"), {});
     assert.deepEqual([embrace.strikes, embrace.sameMap, embrace.notes.length], [["arm", "arm", "arm"], true, 1]);
     assert.deepEqual(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test mantis Grabs a creature with its claw.</p><hr /><p><strong>Effect</strong> The test mantis pulls the creature adjacent to it, then makes a jaws Strike against the creature.</p>"), {}), { builtin: "reaction-strike", triggers: ["grabs"], strike: "jaws", penalty: 0, disrupts: false, note: "It pulls the creature adjacent to it first." });
+});
+
+test("both hits with an affliction; Strikes at a grabbed creature with wounds, venom and armor notes; a Strike with a save after (2026-10-12, batch 198)", () => {
+    const item = (html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const rend = compileMonsterAbility(item("<p>The test fiend makes two talon Strikes against the same creature. If both hit, the creature takes @Damage[2d6[bleed]] and is exposed to test venom.</p>", 2), {});
+    assert.deepEqual(rend.bothHit, { conditions: [], damage: ["2d6[bleed]"], affliction: "test venom" });
+    const grind = compileMonsterAbility(item("<p><strong>Requirements</strong> The test brute is grabbing a creature</p><hr /><p><strong>Effect</strong> The test brute makes a piercing jaws Strike against the creature it's grabbing. On a hit, the creature also takes @Damage[1d6[bleed]] damage and becomes Wounded 1, or increases its wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or increases its wounded value by 2 if already wounded.</p>"), {});
+    assert.deepEqual([grind.requires, grind.onHit.conditions[0].slug, grind.onHit.critical[0].value, grind.onHit.damage], ["grabbed", "wounded", 2, ["1d6[bleed]"]]);
+    const bite = compileMonsterAbility(item("<p><strong>Requirements</strong> The test eel has a creature Grabbed</p><hr /><p><strong>Effect</strong> The test eel makes a fang Strike against the grabbed creature. If it hits, it injects additional poison, causing its venom to gain the virulent trait.</p>"), {});
+    assert.deepEqual([bite.strike, bite.requires, bite.notes.length], ["fang", "grabbed", 1]);
 });

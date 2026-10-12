@@ -1744,3 +1744,14 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** when a monster's card grabs a creature and the monster has Deadly Mandibles, the GM gets a note: its mandibles Strike at that creature, to roll from its sheet. The multi-Strikes are cards as before. Not run in pftest.
 - **Simulator:** see B197 in its ability decisions.
 
+## Both hits with an affliction; Strikes at the creature it holds (2026-10-12, batch 198)
+
+- **Compiled:**
+  - Gory Rend → its two claws at the same creature; `bothHit` with the bleed and `affliction: "piscovenom"`.
+  - Tooth Grind → its jaws Strike at the creature it holds (`requires: "grabbed"`): bleed and Wounded 1 on a hit, Wounded 2 on a critical hit. Notes cover its bludgeoning damage, the wounded increase, and the healing when the creature dies.
+  - Toxic Bite → its beak Strike at the creature it holds, with a note that the venom gains the virulent trait.
+  - Gnaw Metal → its jaws Strike at the creature it holds: Prone if Medium or smaller, with notes for the broken armor and the bleed after.
+  - Isolating Lash → a melee Strike with one extra weapon die and its own Off-Guard until its next turn. The Will save on a hit and its results are notes for the GM.
+- **Live:** Gory Rend's note to the GM now names the affliction ("it is exposed to piscovenom (its card from the sheet)"). The rest are cards and notes as before. Not run in pftest.
+- **Simulator:** see B198 in its ability decisions.
+
