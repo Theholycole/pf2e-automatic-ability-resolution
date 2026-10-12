@@ -3740,3 +3740,25 @@ test("a follow-up to its most recent action; a fly-Speed bonus only; pulling int
     const shed = plan("<p>The test troll tears its armor away. They immediately heal @Damage[40[healing]]{40 Hit Points} in a surge of regeneration as they grow new limbs. Without their armor, the test troll's AC drops to 20. Putting the armor back on takes 10 minutes, and this ability can't be used again until 1 hour has passed.</p>");
     assert.deepEqual([shed.resolution.native.healing.components[0].formula, shed.oncePerFight, shed.notes.length], ["40", true, 3]);
 });
+
+test("a disease shed on everything beside it; jaws for each of the heads its notes count; a bite that names an Escape (2026-10-12, batch 231)", () => {
+    const item = (html, name = "Test", type = "action", actions = 2) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const pox = item("<p><strong>Saving Throw</strong> @Check[fortitude|dc:16]</p><hr /><p><strong>Stage 1</strong> @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (1 day)</p>", "Test Pox", "passive", null);
+    const scratch = item("<p>The test hound scratches itself hard, exposing all adjacent creatures to test pox.</p>", "Test Scratch");
+    const shed = compileMonsterAbility(scratch, { basicActions: {}, actor: { name: "Test Hound", items: [scratch, pox] } });
+    assert.deepEqual([shed.targeting.area, shed.resolution.check.against.value], [{ type: "emanation", value: 5 }, 16]);
+    const jaws = item("<p>The test troll makes a number of jaws Strikes up to their number of heads, each against a different target. These attacks count toward the troll's multiple attack penalty, but the penalty doesn't increase until after the test troll makes all of these attacks.</p>", "Test Jaws");
+    const many = compileMonsterAbility(jaws, { basicActions: {}, actor: { name: "Test Troll", items: [jaws], system: { details: { publicNotes: "<p>Test trolls are huge, seven-headed brutes.</p>" } } } });
+    assert.deepEqual([many.builtin, many.strikes.length, many.each], ["multi-strike", 7, true]);
+    const gullet = compileMonsterAbility(item("<p><strong>Requirements</strong> The test eel has a creature @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} in its jaws</p><hr /><p><strong>Effect</strong> The test eel deals @Damage[(1d6+2)[piercing]] damage to the grabbed creature and gains a +2 circumstance bonus to the DC for the creature to [[/act escape]].</p>", "Test Gullet", "action", 1), { basicActions: {} });
+    assert.deepEqual([gullet.targeting.grabbed, gullet.resolution.sharedDamage.components[0].formula], [true, "(1d6+2)[piercing]"]);
+    assert.match(gullet.resolution.outcomes.success.manualInstructions[0], /to Escape\.$/);
+});
+
+test("an older roll with its damage type as the flavour; a Strike at all within reach with a penalty on each roll and a push for each hit (2026-10-12, batch 231)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: html } } });
+    const oven = compileMonsterAbility(item("<p>The test oven belches heat, dealing [[/r 3d4 #fire]]{3d4 fire damage} to every creature caught in a @Template[type:emanation|distance:10] (@Check[type:reflex|dc:20]{basic Reflex} save).</p>"), { basicActions: {} });
+    assert.deepEqual([oven.targeting.area, oven.resolution.check.basic, oven.resolution.sharedDamage.components[0].formula], [{ type: "emanation", value: 10 }, true, "3d4[fire]"]);
+    const sweep = compileMonsterAbility(item("<p>The test ogre makes a club Strike against all creatures within reach, with a –1 penalty to each attack roll. These attacks count toward the test ogre's multiple attack penalty, but the multiple attack penalty doesn't increase until after it makes all its attacks. Additionally, it can use Improved Knockdown on each creature it hits.</p>"), { basicActions: {} });
+    assert.deepEqual([sweep.builtin, sweep.strikes, sweep.penalty, sweep.notes], ["multi-strike", ["club"], 1, ["It can use Improved Knockdown on each creature it hits."]]);
+});

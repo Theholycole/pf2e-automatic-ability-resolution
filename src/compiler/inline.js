@@ -67,6 +67,13 @@ export function modernInline(html) {
             const formula = roll.trim().replace(/^\{([\s\S]*)\}$/, "$1").trim();
             // No type, but labelled as damage ("[[/r {1d8 + 8}]]{1d8 + 8 damage}"): untyped damage.
             if (!formula.includes("#") && /^[\dd\s+\-*()]+$/i.test(formula) && /\dd\d/i.test(formula) && label && /\bdamage\s*$/i.test(label)) return `@Damage[(${formula.replace(/\s+/g, "")})[untyped]] damage`;
+            // (Batch 231: its damage type as the roll's flavour, "[[/r 2d10 #cold]]{2d10 cold damage}".)
+            const flavoured = /^([\dd\s+\-()]+?)\s*#\s*(acid|bludgeoning|cold|electricity|fire|force|mental|piercing|poison|slashing|sonic|vitality|void|spirit|bleed|positive|negative|precision)\s*$/i.exec(formula);
+            if (flavoured && /\dd\d/i.test(flavoured[1])) {
+                const dice = flavoured[1].replace(/\s+/g, "");
+                const type = { positive: "vitality", negative: "void" }[flavoured[2].toLowerCase()] ?? flavoured[2].toLowerCase();
+                return `@Damage[${/[+-]/.test(dice) ? `(${dice})` : dice}[${type}]]${label && /\bdamage\s*$/i.test(label) ? " damage" : ""}`;
+            }
             if (formula.includes("#") || !/[\d)}]\s*\[[a-z]+(?:,\s*[a-z]+)*\]/i.test(formula)) return match;
             return `@Damage[${formula}]${label && /\bdamage\s*$/i.test(label) ? " damage" : ""}`;
         });

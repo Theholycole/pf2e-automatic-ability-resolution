@@ -1034,6 +1034,13 @@ export function readSweep(text) {
         // (So many Strikes, never twice at one creature; one Strike at up to so many different creatures; so many Strikes, each at its own target.)
         .replace(/^((?:The )?[^.]+?) makes (up to )?(two|three|four|five|six) ([\w' -]+?) Strikes, (?:attacking a given creature no more than once|never the same creature twice|each (?:of which must be )?aimed at a (?:different|separate) target)\./i, "$1 makes $2$3 $4 Strikes, each against a different target.")
         .replace(/^((?:The )?[^.]+?) makes an? ([\w' -]+?) Strike against up to (two|three|four|five|six) different creatures\./i, "$1 makes up to $3 $2 Strikes, each against a different target.")
+        // (Batch 231, Battlezoo: a sweep of everything in its reach with each roll at a penalty — its penalty; a push or a grab it may add to each
+        // creature it hits, a note.)
+        .replace(/\b(Strike against all creatures within (?:its |their )?reach), (?:taking a [-\u2013\u2212](\d+) penalty on the attack rolls|with a [-\u2013\u2212](\d+) penalty to each attack roll)\./i, (_all, strike, minus, minus2) => `${strike}. Each attack takes a -${minus ?? minus2} circumstance penalty.`)
+        .replace(/(?<=\.\s{1,3})Additionally, (?:it|they|he|she) can use (Improved Push|Improved Knockdown|Knockdown|Push|Improved Grab|Grab) on (?:every|each) (?:target|creature) (?:it|they|he|she) hits?\./i, (_all, rider) => {
+            notes.push(`It can use ${rider} on each creature it hits.`);
+            return "";
+        })
         // (Batch 156, Slagblade Storm: "Temperbrand Strikes all creatures within her reach with a slagblade Strike.")
         .replace(/^((?:The )?[^.]+?) Strikes all creatures within (?:its|their|his|her) reach with an? ([\w' -]+?) Strike\./i, "$1 makes a $2 Strike against all creatures within reach.")
         // (Batch 150, Whirlwind Strike: "Ordulf Strikes each enemy within his reach.")

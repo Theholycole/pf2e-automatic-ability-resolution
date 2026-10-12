@@ -2214,3 +2214,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** cards as for these kinds. Not run in pftest.
 - **Simulator:** see B230 in its ability decisions.
 
+## Diseases shed, many-headed jaws, gullets, flavoured rolls and sweeps at a penalty (2026-10-12, batch 231)
+
+- **Compiled:**
+  - **Scratch** → its own disease's save on every creature beside it (a 5-foot emanation).
+  - **Ravenous Jaws** → one jaws Strike per head, each at a different creature. When no ability states the count, its heads come from the creature's notes ("nine-headed").
+  - **Pharyngeal Jaws** → its damage on the creature it holds. The bonus to Swallow Whole and to the Escape DC is a note. The automatic-effect reading now lets through an Escape named only as a DC with a bonus or penalty (a reaction that holds a creature "until it Escapes" stays the GM's).
+  - **Flavoured rolls** (Battlezoo's older syntax): "[[/r 2d10 #cold]]{2d10 cold damage}" is typed damage. Eight Battlezoo area saves written this way now compile, and some affliction stages gained their damage.
+  - **A sweep of everything in its reach, each roll at a penalty** → a sweep with `penalty`. A push it can use on each creature hit is a note.
+- **Live:** cards as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+

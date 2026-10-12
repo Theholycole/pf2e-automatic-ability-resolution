@@ -2114,7 +2114,9 @@ function automaticEffect(item, actor = null, { rider = false } = {}) {
     // (A passive its Strikes list, as their rider: "A creature hit by the frog's tongue becomes Grabbed".)
     if (!["action", "reaction", "free", ...(rider ? ["passive"] : [])].includes(item.system?.actionType?.value)) return null;
     const html = String(item.system?.description?.value ?? "");
-    if (/@Check\[|\bhealing\b|\bregains?\b|\bone of the following\b/i.test(html) || (/\[\[\/act /i.test(html) && !(rider && !/\[\[\/act (?!escape)/i.test(html)))) return null;
+    // (Batch 231, Pharyngeal Jaws: a bonus "to the DC for the creature to [[/act escape]]" — not an action of its own; a rider's Escape DC as before.)
+    const escapeOnly = !/\[\[\/act (?!escape\b)/i.test(html) && (rider || /\b(?:bonus|penalty) to [^.]*?\bDC for the creature to \[\[\/act escape\b/i.test(html));
+    if (/@Check\[|\bhealing\b|\bregains?\b|\bone of the following\b/i.test(html) || (/\[\[\/act /i.test(html) && !escapeOnly)) return null;
     const effect = html.split(/<strong>\s*Effect\s*<\/strong>/i).at(-1).replace(/<strong>\s*(?:Frequency|Requirements?|Trigger|Cost)\s*<\/strong>[^]*?(?=<strong>|$)/gi, "");
     const words = htmlToPlainText(effect);
     // A save, check or Strike in it (one without an inline check: "must attempt a Reflex save"), a choice, or a next action's.
@@ -2172,7 +2174,7 @@ function automaticEffect(item, actor = null, { rider = false } = {}) {
         }
         effects.push(...conditions);
         // More in the same sentence ("…, and its resistances to physical damage are reduced by 5"): the sentence for the GM.
-        if (/\b(?:resistances?|weakness|penalty|bonus|can't|cannot|Speeds?|exposed|immune)\b/i.test(plain)) notes.push(readableText(sentence.replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")));
+        if (/\b(?:resistances?|weakness|penalty|bonus|can't|cannot|Speeds?|exposed|immune)\b/i.test(plain)) notes.push(readableText(sentence.replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug[0].toUpperCase() + slug.slice(1))));
     }
     if (!components.length && !effects.length) return null;
     const plain = htmlToPlainText(html);
@@ -2208,12 +2210,14 @@ export function headCount(actor) {
         const match = /\b(?:ordinarily |typically |usually )?has (\w+) heads\b/i.exec(htmlToPlainText(other.system?.description?.value ?? ""));
         if (match && countWord(match[1]) > 1) return countWord(match[1]);
     }
-    return null;
+    // (Batch 231, the jotund troll: "gigantic, nine-headed horrors" in its notes.)
+    const headed = /\b(\w+)-headed\b/i.exec(htmlToPlainText(actor?.system?.details?.publicNotes ?? ""));
+    return headed && countWord(headed[1]) > 1 ? countWord(headed[1]) : null;
 }
 
 // Storm of Jaws (batch 43): "makes a number of Strikes up to its number of heads" with the creature's heads, "makes up to 5 Strikes".
 // (Batch 203, Ravenous Jaws: "makes a number of jaws Strikes up to their number of heads" — its name kept, the count in words.)
-const HEAD_WORDS = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight" };
+const HEAD_WORDS = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten" };
 function withHeads(item, actor) {
     const html = item.system?.description?.value;
     const words = /\ba number of ((?:[\w' -]+? )?)Strikes up to (?:its|their|his|her) number of heads\b/gi;
@@ -3128,6 +3132,12 @@ function areaExposure(item, actor) {
     const wait = String.raw`(?: (?:The )?[^.]+? can(?:'t|not) (?:use )?(?:its |their )?[\w' -]+? again for (\d+d\d+|\d+) rounds?\.)?`;
     const gas = new RegExp(String.raw`^(?:The )?[^.]+? (?:exhales|emits|breathes out|sprays) (?:a cloud of )?(?:poisonous|toxic|noxious) gas in an? @T(?: centered on (?:the corner of )?one of (?:the [\w' -]+?['’]s|its|their) squares)?\. The gas persists (?:for 1 round|until the start of (?:the [\w' -]+?['’]s|its|their) next turn)\. Any creature in the area \(or that later enters the area\) is exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
     const area = gas ? null : new RegExp(String.raw`^(?:[^.@]+\. )?(?:Each|Every|All)(?: living)? creatures? within an? @T (?:is|are) exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
+    // (Batch 230, Scratch: "The goblin dog vigorously scratches itself, exposing all adjacent creatures to goblin pox." — the creatures beside it.)
+    const beside = gas || area ? null : /^(?:The )?[^.]+?, exposing all adjacent creatures to ([^.]+?)\.$/i.exec(plain);
+    if (beside) {
+        const poison = ownAffliction(item, actor, beside[1].toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, ""));
+        return poison ? { ...poison, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] }, targeting: { target: null, range: null, area: { type: "emanation", value: 5 } }, trigger: { event: "use" } } : null;
+    }
     const one = gas || area ? null : /^(?:The )?[^.]+? (?:an adjacent|a) (?:living )?creature(?: (?:that(?:'s| is)|who is) ([^,]+?))?, exposing (?:it|them) to ([^.]+?)\.$/i.exec(plain)
         ?? /^(?:The )?[^.]+? (?:on|at) a single creature within (\d+) feet\. The target is exposed to ([^.]+?)\.$/i.exec(plain);
     if (!gas && !area && !one) return null;
