@@ -2954,3 +2954,8 @@ test("a check of its own compared with every creature sharing its space (2026-10
     const plan = compileMonsterAbility({ type: "action", name: "Test Grind", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p>The test gravel swarm attempts an @Check[athletics] check and compares the result to the Reflex DC of each creature in its space. This counts as two attacks for the test gravel swarm's multiple attack penalty.</p><hr /><p><strong>Critical Success</strong> The creature falls Prone and takes @Damage[2d4[bludgeoning]] damage.</p><p><strong>Success</strong> The creature falls Prone.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.resolution.check.statistic, plan.resolution.check.against.statistic, plan.targeting.target, plan.notes.length], ["athletics", "reflex", "every creature sharing its space", 2]);
 });
+
+test("extra precision damage on its next attack only (2026-10-12, batch 166)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Trick", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p>The test rogue picks one of their weapons. The next attack with that weapon deals an extra 1d8 precision damage. In addition, the test rogue can Interact to draw the weapon.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.damage, plan.nextStrike, plan.notes[0]], ["self-effect", ["1d8[precision]"], true, "Only its next attack with that weapon (this turn): remove the effect after it."]);
+});

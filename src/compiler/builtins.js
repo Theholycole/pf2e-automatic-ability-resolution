@@ -2105,6 +2105,8 @@ export function readStrikeBuff(item) {
         .replace(/(, (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)['’]s) ([a-z][\w -]+?) deals an (additional|extra) /, (all, owner, weapon, more) => (/\bStrikes?\b/i.test(weapon) ? all : `${owner} ${weapon} Strikes deal an ${more} `))
         // (Batch 155: a Battlezoo rage dragon's extra fire on its natural attacks for as long as its fury lasts — its melee Strikes while it rages.)
         .replace(/\bAll of (the [\w' -]+?['’]s) melee unarmed attacks deal an (additional|extra) ((?:\u0001\d+\u0001|\d+d\d+ [a-z]+)) damage until (?:the [\w' -]+?['’]s|its|their) rage ends\./, "Until its rage ends, $1 melee Strikes deal an $2 $3 damage.")
+        // (Batch 166, Trick Attack: "The next attack with that weapon this turn deals an additional 2d6 precision damage." — its next Strike only.)
+        .replace(/\bThe next attack with that weapon(?: this turn)? deals an (?:extra|additional) (\d+d\d+) precision damage\./, "Until the end of its turn, its Strikes deal an additional $1 precision damage. Next Strike only.")
         // (Batch 152, Demon-Touched Weapon: "Until the end of her next turn, Shenga deals 1d6 bleed damage with her melee Strikes.")
         .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) next turn), (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) deals? (\d+d\d+(?:\s*[+-]\s*\d+)? [a-z]+) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./, "$1, its $3Strikes deal an additional $2 damage.")
         .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
@@ -2175,12 +2177,14 @@ export function readStrikeBuff(item) {
     const notes = [];
     for (const [at, sentence] of sentences.entries()) {
         if (at === index) continue;
+        if (sentence === "Next Strike only.") continue;
         if (at < index && !/\u0001|\d|\b(?:damage|bonus|penalty|save|check|Hit Points|HP|Strikes?|resistance|weakness|immun\w*)\b/i.test(sentence)) continue;
         if (/^Effect: /.test(sentence)) continue;
         notes.push(readableText(sentence.replace(/\u0001(\d+)\u0001/g, (_all, mark) => `@Damage[${formulas[Number(mark)]}]`)));
     }
     const other = rest.replace(/^ on a successful attack, or [^.,]+? on a critical (?:hit|success)/i, "").replace(/^,? and gains? the [a-z]+ trait/i, "").replace(/^, and /, "").trim();
     if (other) notes.unshift(other[0].toUpperCase() + other.slice(1) + ".");
+    if (sentences.includes("Next Strike only.")) notes.unshift("Only its next attack with that weapon (this turn): remove the effect after it.");
     const name = found[6] && !/^(?:weapon|unarmed)$/i.test(found[6]) ? found[6].toLowerCase() : null;
     return {
         builtin: "self-effect",
@@ -2192,6 +2196,7 @@ export function readStrikeBuff(item) {
         duration,
         ...(stance ? { stance: true } : {}),
         ...(castFirst ? { requires: "after-cast", ...(castFirst[1] ? { nonCantrip: true } : {}) } : enraged ? { requires: "raging" } : {}),
+        ...(sentences.includes("Next Strike only.") ? { nextStrike: true } : {}),
         ...(notes.length ? { notes } : {})
     };
 }
