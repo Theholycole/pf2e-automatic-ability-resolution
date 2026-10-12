@@ -691,6 +691,9 @@ export function readCharge(text) {
     // (Batch 70: what only tells the move — "…, ignoring difficult terrain caused by rubble", "…, during which it attempts a High Jump or a
     // Long Jump" — and "Strides twice, Leaps twice, or Strides once and Leaps once. It then makes a jaws Strike at the end of the movement".)
     // (Batch 73: "Requirements The namorrodor has nothing in its hands Effect …" — its natural attacks need no hands.)
+    // (Batch 145, Implacable Advance: "…; they can ignore difficult terrain during these Strides if they advance toward their murderer. If they
+    // Strike and Grab their murderer this turn, they can Constrict as a free action immediately after the Grab." — the GM's.)
+    text = String(text).replace(/(Strike); (?:they|it|he|she) can ignore difficult terrain during these Strides if (?:they|it|he|she) advances? toward (?:their|its|his|her) murderer\./i, "$1.").replace(/\s*If (?:they|it|he|she) Strikes? and Grabs? (?:their|its|his|her) murderer this turn, (?:they|it|he|she) can Constrict as a free action immediately after the Grab\.$/i, "");
     const told = chargeSentences(String(text).replace(/^Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect /i, "").replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1"))
         .replace(/\b((?:Strides|Flies|Swims)(?: or (?:Strides|Flies|Swims))? (?:twice|up to (?:double|twice) (?:its|their|his|her) Speed)),? (?:ignoring (?:any )?difficult terrain(?: caused by [^.;]+?)?|during which (?:it|they|he|she) attempts a High Jump or a Long Jump)(?=[.;])/i, "$1")
         .replace(/\bStrides twice, Leaps twice, or Strides once and Leaps once\. (?:It|They|He|She) then makes an? ([\w' -]+?) Strike at the end of the movement\./i, "Strides twice and makes a $1 Strike.");
@@ -1205,6 +1208,8 @@ export function readReaction(item, text) {
     // can use their reaction to make a claw Strike against that creature.")
     const below = /^If (?:the )?[\w' -]+? is flying and a creature moves into an adjacent square below (?:it|them|him|her), (?:the )?[\w' -]+? can use (?:its|their|his|her) reaction to make an? ([\w' -]+?) Strike against that creature\.$/i.exec(text.trim());
     if (below) return { builtin: "reaction-strike", triggers: ["approach"], strike: below[1].toLowerCase(), penalty: 0, disrupts: false, while: "flying" };
+    // (Batch 145: a riposte's trigger with no "Effect" label, "Trigger A creature within your reach critically fails to Strike you. A clever parry …".)
+    text = text.replace(/^Trigger (A creature within your reach critically fails (?:a melee Strike against|to Strike) you)\.\s+(?!Effect\b)/i, "Trigger $1 Effect ");
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
@@ -1341,6 +1346,15 @@ export function readReaction(item, text) {
     if (/^An? (?:foe|enemy) within (?:your|(?:the )?[\w' -]+?['’]s) reach critically fails (?:on )?a Strike against (?:you|him|her|them|it)$/i.test(trigger.trim().replace(/\.$/, ""))
         && /^(?:You take advantage of an opening from your enemy's fumbled attack\. )?(?:You|(?:The )?[\w' -]+?) either makes? a melee Strike against the triggering (?:foe|enemy) or attempts? to Disarm (?:it|them|him|her) of the weapon (?:(?:it|they|he|she) )?used for the Strike\.(?: If (?:he|she|they|it) succeeds, (?:he|she|they|it) gains panache\.)?$/i.test(effect.trim())) {
         return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, note: "Or it can Disarm the attacker of that weapon instead." };
+    }
+    // (Batch 145: Twin Riposte's "Trigger A creature within Ilora's reach critically fails a melee Strike against her Requirements Ilora is
+    // benefiting from Twin Parry Effect Ilora attempts a melee Strike or uses a Disarm action against the triggering opponent." — its stance the
+    // GM's (requires); "A creature within your reach critically fails to Strike you … Make a melee Strike or Disarm action against the triggering
+    // opponent.")
+    const riposte = /^A creature within (?:your|(?:the )?[\w' -]+?['’]s) reach critically fails (?:a melee Strike against (?:you|him|her|them|it)|to Strike (?:you|him|her|them|it))$/i.test(trigger.trim().replace(/\s*Requirements? .*$/i, "").replace(/\.$/, ""));
+    const parried = /\bRequirements? (?:The )?[\w' -]+? is benefiting from ([A-Z][\w' -]+?)\.? Effect\b/i.exec(text)?.[1] ?? null;
+    if (riposte && /^(?:A clever parry with one weapon leaves your opponent open to an attack with the other weapon\. )?(?:(?:The )?[\w' -]+? attempts a melee Strike or uses a Disarm action|Make a melee Strike or Disarm action) against the triggering opponent\.$/i.test(effect.trim())) {
+        return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, note: `${parried ? `Only while it benefits from ${parried}. ` : ""}Or it can Disarm the attacker instead.`, ...(parried ? { requires: "requirement" } : {}) };
     }
     // (Batch 103: Retaliatory Strike — "Trigger A creature within reach of the frost drake's tail successfully damages the frost drake with a
     // Strike Effect The frost drake attempts to Strike with their tail. If the Strike hits, it deals an additional 1d6 damage." → its tail
@@ -1605,6 +1619,8 @@ export function readReaction(item, text) {
         const name = back ? (back[1] ?? back[2] ?? back[3]).toLowerCase() : null;
         if (back && (!back[5] || lash)) return { builtin: "reaction-strike", triggers: lash ? ["strike", "skill"] : avenge ? ["ally-attacked"] : ["critical-hit"], strike: name, penalty: Number(back[4] ?? 0), disrupts: false, ...(back[5] ? { hinders: Number(back[5]) } : {}) };
     }
+    // (Batch 145, Pack Ambush: "Trigger Another dromornis within 10 feet Strides. Effect The dromornis Strides up to half its Speed." — the same.)
+    if (/^Another [\w' -]+? within \d+ feet Strides\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to half (?:its|their|his|her) Speed\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // (A Step when an ally moves next to it, Goblin Scuttle, batch 38: nothing for the fight's numbers.)
     if (/^An? (?:[\w' -]+ )?ally ends a move action adjacent to [^.]+\.?$/.test(trigger.trim()) && /^(?:The )?[^.]+? Steps\.$/.test(effect.trim())) return { builtin: "no-effect" };
     // Fast Swallow (2026-10-10, batch 38): "Trigger The worm Grabs a creature (with its maw); Effect The worm uses Swallow Whole."
@@ -1980,6 +1996,10 @@ export function compileBuiltin(item, slug) {
     // deal damage, the target takes extra damage equal to one claw Strike." → both at its full bonus; both hits, a claw's damage more.)
     const rake = along.length >= 2 ? /^(?:The )?[\w' -]+? (?:rears back on (?:its|their|his|her) hind legs and )?makes two ([\w' -]+?) Strikes at the same target, using the same attack bonus as (?:its|their|his|her) highest melee attack\.$/i.exec(along.at(-2)) : null;
     if (rake && along.length === 2 && new RegExp(String.raw`^If both attacks deal damage, the target takes extra damage equal to one ${rake[1]} Strike\.$`, "i").test(along[1])) return { builtin: "multi-strike", actions, strikes: [rake[1].toLowerCase(), rake[1].toLowerCase()], sameTarget: true, noMap: true, bothHit: { conditions: [], damage: [], strikeDamage: rake[1].toLowerCase() } };
+    // (Batch 145, Dual-Weapon Blitz: "Requirements Pr'rall is wielding two one-handed melee weapons, each in a different hand Effect Pr'rall attacks
+    // as he dashes among foes. He Strides up to his Speed. At any point during this movement, he can Strike once with each of the two required
+    // weapons. These Strikes can be against the same or different targets, as he sees fit." → its best two melee Strikes after a Stride.)
+    if (/^(?:Requirements? [^.]+? is wielding two one-handed melee weapons, each in a different hand\.? Effect )?(?:[^.]+? attacks as (?:he|she|it|they) dash(?:es)? among foes\. )?(?:The [\w' -]+?|He|She|It|They) Strides up to (?:its|their|his|her) Speed\. At any point during this movement, (?:he|she|it|they) can Strike once with each of the two required weapons\.(?: These Strikes can be against the same or different targets, as (?:he|she|it|they) sees? fit\.)?$/i.test(text.trim())) return { builtin: "multi-strike", actions, strikes: [null, null], strides: 1 };
     const blitz = /^(?:The )?[\w' -]+? Strides up to (?:its|their|his|her) Speed, Striking once with each of (?:its|their|his|her) ([\w' -]+?)s at any point during the movement\.$/i.exec(text.trim());
     if (blitz) return { builtin: "multi-strike", actions, strikes: [blitz[1].toLowerCase(), blitz[1].toLowerCase()], sameTarget: true, strides: 1 };
     // (Batch 83, Eviscerate: "Requirements The rivka has not attacked yet this turn Effect … It makes four Strikes: the first at its highest
@@ -2241,7 +2261,8 @@ function readRetreat(text) {
 // (Jet), "Strides up to his Speed and does not trigger reactions during this movement". Only the move: not with a Strike, a check
 // or a condition on where it goes ("but must begin and end in dim light"). true or false.
 function readSafeMove(text) {
-    const sentences = String(text).replace(/’/g, "'").trim().split(/(?<=[.;])\s+(?=[A-Z])/);
+    // (Batch 145, Shadow Step: "…, but the svartalfar killer must begin and end in an area of dim light or darkness" — the GM's.)
+    const sentences = String(text).replace(/’/g, "'").trim().replace(/, but (?:the [\w' -]+?|it|they|he|she) must begin and end in an area of dim light or darkness(?=\.)/i, "").split(/(?<=[.;])\s+(?=[A-Z])/);
     if (sentences.length === 3 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strike)\b|\d/.test(sentences[0])) sentences.shift();
     const said = sentences.join(" ");
     if (/\b(?:Strikes?|checks?|saves?|damage|but|if|unless|Grab|Prone|Interacts?)\b|@/i.test(said) || /\b(?:Requirements?|Trigger)\b/.test(said)) return false;
@@ -2258,16 +2279,18 @@ function readSafeMove(text) {
 function readPlainMove(text) {
     // (Batch 136, Sprint: "Frequency once per minute Effect The terror bird Strides three times in a straight line" — its frequency the GM's, no
     // final period.)
-    const sentences = String(text).replace(/’/g, "'").trim().replace(/^Frequency once per (?:minute|10 minutes|hour|day) Effect /i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 145: Trudge's "The zombie desecrator moves mindlessly forward without fear of pain." — it only tells it.)
+    const sentences = String(text).replace(/’/g, "'").trim().replace(/^Frequency once per (?:minute|10 minutes|hour|day) Effect /i, "").replace(/^(?:The )?[\w' -]+? moves mindlessly forward without fear of pain\.\s+/i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/);
     if (sentences.length > 1 && !/\d|@|\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strikes?|Requirements?|Trigger|Frequency|moves?|jumps?)\b/i.test(sentences[0]) && !/\b(?:Strides?|Steps?|Fl(?:y|ies)|Swims?|Climbs?|Burrows?|Leaps?)\b/.test(sentences[0])) sentences.shift();
     const verb = String.raw`(?:Strides|Steps|Flies|Swims|Climbs|Burrows|Leaps|moves|jumps)`;
     const far = String.raw`(?: (?:up to )?(?:\d+ feet|(?:half |twice |double |three times |four times |five times )?(?:its|their|his|her) (?:\w+ )?Speed|once|twice|three times))?`;
     // (Batch 144, Slither: "Strides, Climbs, or Swims up to half its Speed, pulling any creatures it has grabbed with it.")
-    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically)?))*(?:,? (?:ignoring difficult terrain(?: during this movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?|pulling any creatures (?:it|they|he|she) (?:has|have) [Gg]rabbed with (?:it|them|him|her)))?`;
+    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically)?))*(?:,? (?:ignoring (?:any )?difficult terrain(?: during (?:this|its|their|his|her) movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?|pulling any creatures (?:it|they|he|she) (?:has|have) [Gg]rabbed with (?:it|them|him|her)))?(?: and fitting through tight spaces as though (?:it|they|he|she) were a Tiny creature)?`;
     const move = new RegExp(String.raw`^(?:The |An? )?(?:(?!\b(?:and|then|uses?|Interacts?|Raises?|Hides?|Feints?)\b)[^.;])+? ${verb}(?:, ${verb})*(?:(?:,? or|,? and then| then) ${verb})*(?:,? or Steps and then Strides|,? or Strides and then Steps)?${far}${how}\.$`, "i");
-    const safe = /^(?:This|The|Its|Their) movement (?:doesn't|does not) (?:trigger|provoke) (?:any )?reactions(?: based on movement)?\.$/i;
+    // (Batch 145, Shadow Step: "…, but the svartalfar killer must begin and end in an area of dim light or darkness" — the GM's.)
+    const safe = /^(?:This|The|Its|Their) movement (?:doesn't|does not) (?:trigger|provoke) (?:any )?reactions(?: based on movement)?(?:, but (?:the [\w' -]+?|it|they|he|she) must begin and end in an area of dim light or darkness)?\.$/i;
     const through = /^(?:It|They|He|She) can (?:pass|move) through (?:other )?creatures' spaces during this movement(?:, though (?:it|they|he|she) must end (?:its|their|his|her) movement in an unoccupied space)?\.$/i;
-    const longer = /^(?:It|They|He|She) can increase the number of actions for this activity to \d in order to (?:Stride|move) up to [^.]+? instead\.$/i;
+    const longer = /^(?:It|They|He|She) can increase the number of actions for this activity to \d in order to (?:Stride|move) up to [^.]+? instead\.$|^At the end of its movement, the [\w' -]+? takes @Damage\[\d+d\d+\[bludgeoning\]\] damage for each square of difficult terrain it entered while [A-Z][\w' -]+?\.$|^(?:It|They|He|She) can(?:'t|not) use any actions other than [A-Z][\w' -]+? until (?:it|they|he|she) occupies an area large enough for (?:its|their|his|her) normal form\.$/i;
     if (!sentences.length || !move.test(sentences[0])) return null;
     const rest = sentences.slice(1);
     if (!rest.every((sentence) => safe.test(sentence) || through.test(sentence) || longer.test(sentence))) return null;
