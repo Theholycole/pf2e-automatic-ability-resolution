@@ -1414,14 +1414,24 @@ function modernItem(item) {
 // one of two ways": Flame, Weakening Gas; Powerful Utterance; Halo Pulse) → { builtin: "modes", actions, modes: [{ name,
 // plan }] }: each way compiled on its own with what comes before the list (the area, the recharge); a way that compiles
 // to nothing has plan null (the GM's). null when the text isn't one of these, or no way compiles.
-const MODES = /\bin one of (?:two|three|four) ways\b|\bone of (?:two|three|four) effects\b|\bone of the following (?:ways|modes|forms)\b|\bchooses? one effect\b/i;
+// (Batch 101: "breathes a blast of energy from one of its three heads", "has one of the effects below", "chooses one of the four options listed
+// below".)
+const MODES = /\bin one of (?:two|three|four) ways\b|\bone of (?:two|three|four) effects\b|\bone of the following (?:ways|modes|forms)\b|\bchooses? one effect\b|\bfrom one of (?:its|their) (?:two|three|four|five) heads\b|\bone of the (?:effects|(?:two|three|four) options)(?: listed)? below\b/i;
 function compileModes(item, options) {
     const html = item.system?.description?.value ?? "";
     if (!MODES.test(htmlToPlainText(html))) return null;
     const start = html.search(/<ul\b/i);
     const end = html.search(/<\/ul>/i);
     if (start < 0 || end < start) return null;
-    const preamble = html.slice(0, start).replace(new RegExp(MODES.source, "gi"), "");
+    // (Batch 101: its recharge sentence, "The mukradi can't Breathe Energy again for 1d4 rounds.", after each way's own words, so the
+    // save and the way's damage stay together.)
+    // (Only when the save is there, before the list.)
+    const waits = [];
+    const opening = html.slice(0, start).replace(new RegExp(MODES.source, "gi"), "");
+    const preamble = /@Check\[/i.test(opening) ? opening.replace(/(^|<p>|\.\s+)((?:The |It |They )?[^.<>]*?\bcan(?:'|’)?t (?:use )?[^.<>]*? again for [^.<>]*\.)/gi, (all, before, sentence) => {
+        waits.push(`<p>${sentence}</p>`);
+        return before;
+    }) : opening;
     // Results written after the list belong to its last way (a duel dragon's Demoralizing Cry).
     const after = html.slice(end + "</ul>".length);
     const parts = html.slice(start, end).split(/<li\b[^>]*>/i).slice(1).map((part) => part.replace(/<\/li>\s*$/i, ""));
@@ -1429,8 +1439,11 @@ function compileModes(item, options) {
     const modes = parts.map((part, index) => {
         const name = /^\s*(?:<p>)?\s*<strong>([^<]+)<\/strong>/i.exec(part)?.[1]?.trim();
         if (!name) return null;
-        const body = part.replace(/^\s*(?:<p>)?\s*<strong>[^<]+<\/strong>\s*(?:\([^)]*\))?\s*;?\s*/i, "");
-        const description = { ...(item.system?.description ?? {}), value: `${preamble}<p>${body}</p>${index === parts.length - 1 ? after : ""}` };
+        // (Batch 101: its traits kept when its words start with the area, "(fire) @Template[cone|distance:60] of fire dealing …", so they
+        // read on from the save before them.)
+        const bare = part.replace(/^\s*(?:<p>)?\s*<strong>[^<]+<\/strong>\s*/i, "");
+        const body = /^\([^)]*\)\s*@Template\[/i.test(bare) ? bare : bare.replace(/^(?:\([^)]*\))?\s*;?\s*/i, "");
+        const description = { ...(item.system?.description ?? {}), value: `${preamble}<p>${body}</p>${waits.join("")}${index === parts.length - 1 ? after : ""}` };
         const system = new Proxy(item.system, { get: (target, key) => (key === "description" ? description : key === "slug" ? null : Reflect.get(target, key)) });
         const way = new Proxy(item, { get: (target, key) => (key === "system" ? system : key === "name" ? `${item.name} (${name})` : Reflect.get(target, key)) });
         let plan = null;

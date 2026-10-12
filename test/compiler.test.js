@@ -2181,3 +2181,17 @@ test("a reaction that follows a foe moving away and keeps it in reach (2026-10-1
     assert.deepEqual(both("The test stalker's hunted prey is within their reach and attempts to move away from them", "The test stalker Climbs or Strides up to their Speed, following their hunted prey and keeping it in reach throughout its movement until it stops moving or the test stalker has moved their full Speed."), { builtin: "follow", move: "Stride", prey: true });
     assert.deepEqual(both("A foe within reach attempts to move away from the test lynx", "The test lynx Strides up to its Speed, following the foe and keeping it in reach. If the test lynx ends its move within reach of the foe, it can Strike it."), { builtin: "follow", move: "Stride", strike: true });
 });
+
+test("a critical hit on it recharges its breath, used at once; its hit made a critical one (2026-10-11, batch 100)", () => {
+    const compile = (type, description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const both = (type, trigger, effect, frequency = "") => compile(type, `${frequency}<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`);
+    assert.deepEqual(both("reaction", "The test hound is critically hit by any Strike", "The test hound's Smoke Breath recharges. They can immediately use it as part of this reaction."), { builtin: "crit-recharge", recharges: "Smoke Breath" });
+    assert.deepEqual(both("reaction", "A creature scores a critical hit on the test wyrm", "The test wyrm's Breath Weapon recharges. It can use its Breath Weapon immediately as part of this reaction. It can't use this reaction again until it recharges its Breath Weapon naturally."), { builtin: "crit-recharge", recharges: "Breath Weapon", untilNatural: true });
+    assert.deepEqual(both("free", "The test giant succeeds at an attack roll.", "The attack becomes a critical success.", "<p><strong>Frequency</strong> once per day, and recharges when the test giant uses Ferocity.</p>"), { builtin: "crit-upgrade", perDay: 1, ferocityRecharges: true, free: true });
+});
+
+test("ways from one of its heads; the recharge sentence before the list; a way that starts with its area (2026-10-11, batch 101)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Blast", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p>The test hydra breathes a blast of energy from one of its two heads; each creature in the area must attempt a @Check[reflex|dc:30|basic|options:area-effect] save.</p><p>The test hydra can't Test Blast again for [[/gmr 1d4 #Recharge Test Blast]]{1d4 rounds}.</p><ul><li><strong>Cold Head</strong> (cold) 10-foot-wide, @Template[line|distance:60|width:10] of cold dealing @Damage[10d6[cold]|options:area-damage] damage.</li><li><strong>Fire Head</strong> (fire) @Template[cone|distance:30] of fire dealing @Damage[10d6[fire]|options:area-damage] damage.</li></ul>" } } }, { basicActions: {} });
+    assert.equal(plan?.builtin, "modes");
+    assert.deepEqual(plan.modes.map((mode) => [mode.name, mode.plan?.targeting?.area?.type, mode.plan?.trigger?.recharge?.formula, mode.plan?.resolution?.sharedDamage?.components?.[0]?.formula]), [["Cold Head", "line", "1d4", "10d6[cold]"], ["Fire Head", "cone", "1d4", "10d6[fire]"]]);
+});

@@ -28,13 +28,14 @@
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
 import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
+import { endRecharge } from "./recharge.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
 import { isActiveGM, postCard, postEffectCard, postSkillCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -246,6 +247,7 @@ async function onMessage(message) {
         await strikeAnswers(context, scene, combat, token);
         await allyHitAnswers(context, scene, combat, token);
         await withdrawAnswers(context, scene, combat, token);
+        await critAnswers(context, scene, combat, token);
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
     }
@@ -333,6 +335,18 @@ async function withdrawAnswers(context, scene, combat, attacker) {
     if (!entry) return;
     const move = withdrawMove(entry.plan);
     await offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: entry.plan.on === "missed" ? "missed it with a melee Strike" : hit ? "hit it with a melee Strike" : "made a melee Strike against it", note: move.note, move: { label: move.label } });
+}
+
+// A critical hit on it (batch 100: Hellish Revenge, Spitting Rage), its breath recharged; its own hit (Flash of Brutality), made a critical one.
+async function critAnswers(context, scene, combat, attacker) {
+    const target = context.target?.token ? fromUuidSync(context.target.token) : null;
+    const found = reactors(scene, combat);
+    const hurt = context.outcome === "criticalSuccess" && target ? found.find((entry) => entry.token.id === target.id) : null;
+    const revenge = hurt && isFoe(hurt.token, attacker) ? hurt.reactions.find(({ plan }) => plan.builtin === "crit-recharge") : null;
+    if (revenge) await offer({ kind: "recharge", item: revenge.item, monster: hurt.token, actor: hurt.actor, target: attacker, trigger: "critically hit it", note: `${revenge.plan.recharges} recharges; it can use it at once, as part of this reaction: use it from its sheet.${revenge.plan.untilNatural ? ` Not again until ${revenge.plan.recharges} recharges on its own.` : ""}`, move: { label: `recharge ${revenge.plan.recharges}`, recharges: revenge.plan.recharges } });
+    const own = context.outcome === "success" && target ? found.find((entry) => entry.token.id === attacker.id) : null;
+    const flash = own && isFoe(own.token, target) ? own.reactions.find(({ plan, item }) => plan.builtin === "crit-upgrade" && !(Number(item.system?.frequency?.value) <= 0)) : null;
+    if (flash) await offer({ kind: "upgrade", item: flash.item, monster: own.token, actor: own.actor, target, trigger: "was hit", note: "The hit becomes a critical hit: roll its critical damage from the attack card.", free: true });
 }
 
 // A creature a monster holds failing to Escape (batch 65: Savage, Gnashing Bite): the monster's Strike or card at it. The monster: the
@@ -840,6 +854,16 @@ async function use(message, action, slug) {
         }
         if (action === "strike") lines.push(await rollStrike(state, actor, slug));
         result = lines.join(" ") || "Nothing to resist.";
+    } else if (state.kind === "recharge") {
+        // (Batch 100: its recharge effect gone, the ability ready.)
+        const ended = await endRecharge(actor, state.move?.recharges ?? "");
+        result = `${state.ability.name}: ${state.move?.recharges ?? "it"} ${ended ? "recharges" : "is ready"}; use it now from its sheet.`;
+    } else if (state.kind === "upgrade") {
+        // (A free action: a use of its frequency, not its reaction.)
+        const item = await fromUuid(state.ability.uuid);
+        const left = Number(item?.system?.frequency?.value);
+        if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
+        return settle(message, state, "used", `${state.ability.name}: the hit is a critical hit; roll its critical damage from the attack card.`);
     } else if (state.kind === "move") {
         // (Batch 98: where it goes is the GM's.)
         result = `${state.monster.name} uses ${state.ability.name}: ${state.note ?? "move its token."}`;

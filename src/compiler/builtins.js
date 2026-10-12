@@ -727,6 +727,38 @@ export function readFollow(text) {
     return { builtin: "follow", move: /^Flies$/i.test(main[1]) ? "Fly" : "Stride", ...(prey ? { prey } : {}), ...(strike ? { strike } : {}) };
 }
 
+// A critical hit on it recharging its breath, used at once (2026-10-11, batch 100): "Trigger The greater hell hound is critically hit by any
+// Strike Effect The greater hell hound's Hellfire Breath recharges. They can immediately use it as part of this reaction." (Hellish
+// Revenge), "Trigger A creature scores a critical hit on the mukradi Effect The mukradi's Breathe Energy recharges. It can use Breathe
+// Energy immediately as part of this reaction. It can't use this reaction again until it recharges Breathe Energy naturally." (Spitting
+// Rage) → { builtin: "crit-recharge", recharges, untilNatural }.
+export function readCritRecharge(text) {
+    const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
+    if (!split) return null;
+    if (!/^(?:(?:The )?[\w' -]+? is critically hit by (?:any Strike|an? (?:Strike|attack)(?: or spell attack)?)|An? creature scores a critical hit on (?:the )?[\w' -]+?)$/i.test(split[1].trim())) return null;
+    const sentences = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const named = /^(?:The )?[\w' -]+?['’]s? ([A-Z][\w'-]+(?: [A-Z][\w'-]+)*) recharges\.$/.exec(sentences.shift() ?? "");
+    if (!named) return null;
+    const name = named[1];
+    const use = new RegExp(`^(?:They|It|He|She) can (?:immediately use it|use (?:its |their )?${name} immediately) as part of this reaction\\.$`);
+    if (!use.test(sentences.shift() ?? "")) return null;
+    const natural = new RegExp(`^(?:It|They|He|She) can't use this reaction again until (?:it|they|he|she) recharges? (?:its |their )?${name} naturally\\.$`);
+    let untilNatural = false;
+    for (const sentence of sentences) {
+        if (natural.test(sentence)) untilNatural = true;
+        else return null;
+    }
+    return { builtin: "crit-recharge", recharges: name, ...(untilNatural ? { untilNatural } : {}) };
+}
+
+// Its own hit made a critical one (2026-10-11, batch 100): "Frequency once per day, and recharges when the great cyclops uses Ferocity.
+// Trigger The great cyclops succeeds at an attack roll. Effect The attack becomes a critical success." (Flash of Brutality) →
+// { builtin: "crit-upgrade", perDay, ferocityRecharges }.
+export function readCritUpgrade(text) {
+    const match = /^Frequency once per day(, and recharges when (?:the )?[\w' -]+? uses Ferocity)?\.? Trigger (?:The )?[\w' -]+? succeeds at an attack roll\.? Effect The attack becomes a critical success\.$/i.exec(String(text).trim());
+    return match ? { builtin: "crit-upgrade", perDay: 1, ...(match[1] ? { ferocityRecharges: true } : {}), free: true } : null;
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -743,7 +775,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a

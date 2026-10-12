@@ -124,3 +124,8 @@ test("a reaction that follows a foe moving away: its note (2026-10-11, batch 99)
     assert.deepEqual(followMove({ move: "Stride" }), { label: "Follow", note: "It Strides up to its Speed after the creature, keeping it in reach: move its token beside it." });
     assert.equal(followMove({ move: "Stride", prey: true, strike: true }).note, "Only if the creature is its hunted prey. It Strides up to its Speed after the creature, keeping it in reach: move its token beside it. If it ends in reach, it can make a Strike: roll it from its sheet.");
 });
+
+test("the recharge and critical-hit offers' buttons (2026-10-11, batch 100)", () => {
+    assert.match(offerHTML({ kind: "recharge", ability: { name: "Test Revenge" }, monster: { name: "Test Hound" }, target: { name: "Valeros" }, trigger: "critically hit it", move: { label: "recharge Smoke Breath" }, status: "open" }), /Use it: recharge Smoke Breath/);
+    assert.match(offerHTML({ kind: "upgrade", ability: { name: "Test Flash" }, monster: { name: "Test Giant" }, target: { name: "Valeros" }, trigger: "was hit", free: true, status: "open" }), /Use it: a critical hit/);
+});

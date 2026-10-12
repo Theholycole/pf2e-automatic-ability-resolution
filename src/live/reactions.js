@@ -121,6 +121,9 @@ export function offerHTML(state) {
         if (state.kind === "card") buttons.push(`<button type="button" data-aar-reaction="use">Use it</button>`);
         // (Batch 98: "Use it: Step away".)
         if (state.kind === "move") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.move?.label ?? "move away")}</button>`);
+        // (Batch 100: "Use it: recharge Hellfire Breath", "Use it: a critical hit".)
+        if (state.kind === "recharge") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.move?.label ?? "recharge")}</button>`);
+        if (state.kind === "upgrade") buttons.push(`<button type="button" data-aar-reaction="use">Use it: a critical hit</button>`);
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);

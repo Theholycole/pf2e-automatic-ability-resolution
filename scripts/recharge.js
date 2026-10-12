@@ -28,6 +28,13 @@ export const rechargeFormula = (item, plan = compile(item)) => plan?.trigger?.re
 
 const recharging = (actor, name) => (actor?.itemTypes?.effect ?? []).filter((effect) => effect.flags?.[MODULE_ID]?.recharging?.key === rechargeKey(name));
 
+// Ends the ability's recharge (batch 100, Hellish Revenge): whether one was running.
+export async function endRecharge(actor, name) {
+    const running = recharging(actor, name);
+    if (running.length) await actor.deleteEmbeddedDocuments("Item", running.map((effect) => effect.id));
+    return running.length > 0;
+}
+
 // The card's warning while the ability still recharges, or null.
 export function rechargeWarning(actor, name) {
     // PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
