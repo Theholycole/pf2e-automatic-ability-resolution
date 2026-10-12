@@ -2466,3 +2466,8 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the jeer offer comes only for a critical miss at that monster (the attack's target).
 - **Simulator:** see B252 in its ability decisions.
 
+## Vortexes and sanctuaries (2026-10-12, batch 253)
+
+- **Compiled** (2 new in PF2e, 4 in Battlezoo; after every reading fails): **the GM's** (`gm: "state"`) for a trigger "in the … vortex" (the bronze dragon's Vortex Pull) and a teleport "to any location within its sanctuary" — areas the simulator can't see.
+- **Live / simulator:** the GM's, as before.
+

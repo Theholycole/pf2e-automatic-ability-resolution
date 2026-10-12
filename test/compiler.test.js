@@ -4037,3 +4037,11 @@ test("A Demoralize when a foe critically misses it, a Shove after a hit with its
     const fly = compileMonsterAbility(flyBy, { basicActions, actor: { name: "Test Dragon", items: [frenzy, flyBy] } });
     assert.deepEqual([fly?.builtin, fly?.strikes?.length, fly?.strides, fly?.each, fly?.actions], ["multi-strike", 3, 1, true, 3]);
 });
+
+test("A swim in its vortex and a teleport within its sanctuary to the GM (2026-10-12, batch 253)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const gm = { builtin: "no-effect", gm: "state" };
+    assert.deepEqual(plan("<p><strong>Trigger</strong> A creature in the test drake's vortex tries to swim away</p><hr /><p><strong>Effect</strong> The current drags it back toward the test drake.</p>", "reaction"), gm);
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Effect</strong> The test drake teleports to any location within its sanctuary.</p>"), gm);
+});
