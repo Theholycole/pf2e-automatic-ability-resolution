@@ -254,6 +254,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 - **Lost Omens' Defensive Coil, Deadly Pursuit and kin** (2026-10-12, batch 208): 5 new. Defensive Coil gives resistance 20 to physical attacks until its next turn. Deadly Pursuit follows a creature that moves away and Strikes it. Viper Tail Strikes a creature that moves off near it. Good Fortune lets the pixiu or an ally roll a save twice. Determined Trudge is a move.
 - **Battlezoo dragons' guards, healing split and states** (2026-10-12, batch 209): 32 new across Battlezoo (8 dragons each), and 2 more PF2e abilities moved to the GM's state category. A guard of the one it's sworn to protect Strikes the attacker (or gives that one AC). A share of a foe's nearby healing goes to the dragon as temporary Hit Points. Two abilities behind a state it can't show the simulator are the GM's: a story it spun that day, and a fresh corpse it killed beside it.
 - **A Battlezoo dragon's teleporting charge** (2026-10-12, batch 210): 4 new. A teleport next to a creature it can see, then its horn Strike with extra piercing damage on a hit. The teleport and a penalty to that creature's save against another of its abilities are notes.
+- **More states the simulator can't see** (2026-10-12, batch 211): 92 PF2e and 65 Battlezoo abilities newly the GM's (`gm: "state"`), and 60 already the GM's for another reason now say "state". Their requirements cover:
+  - something held, stored or carried (an instrument, a lantern, a soul gem, water in a tank);
+  - a named mode, form or stance of its own, or being merged with or riding something;
+  - where it stands (a desert, cold water, a treetop, magical darkness, another plane, hanging from a rope);
+  - what it senses (speech, a hidden creature).
+  A Grabbed creature or its last action stays the simulator's to see.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -1894,3 +1894,17 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a card as for Strike activities. Not run in pftest.
 - **Simulator:** nothing new.
 
+## More states the simulator can't see (2026-10-12, batch 211)
+
+- **Compiled:** more requirement wordings are now unseen states, giving `{ builtin: "no-effect", gm: "state" }` once every reading has failed:
+  - something it holds, stores or carries (not a weapon it Strikes with): an instrument, a lantern, a soul gem, a stored potion, water in a tank, a breath held;
+  - a named mode, form, posture or stance of its own; something it's merged with, possesses, rides or partners;
+  - where it stands: a desert, cold water, a treetop, lava, magical darkness, another plane, hanging from a rope, flying high above;
+  - things around it: a corpse, metal, a book;
+  - what it senses: speech, a spell's words, a hiding or undetected creature.
+- **Numbers:** 92 new in PF2e and 65 in Battlezoo; 59 PF2e abilities that were already the GM's as adventure creatures' (and one Battlezoo one, as out of combat) now say `"state"`.
+- **Test flip:** one batch-88 case, a reaction behind a defensive mode of its own, was `null` and is now the GM's.
+- **Still the simulator's:** a Grabbed creature, its last action, its Hit Points and conditions.
+- **Live:** the GM's card, as for every `no-effect`. Not run in pftest.
+- **Simulator:** nothing new; these abilities play no part.
+

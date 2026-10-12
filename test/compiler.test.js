@@ -2064,7 +2064,8 @@ test("a basic maneuver back in place of a Strike (2026-10-11, batch 88)", () => 
     assert.deepEqual(reaction("The test cleric takes damage from a melee attack", "The test cleric swears revenge and attempts to Demoralize the triggering creature."), answer(["damaged-adjacent"], "demoralize"));
     // Not with a condition it adds, a requirement, or a choice of a Strike.
     assert.equal(reaction("A creature hits the test bruiser with a melee Strike", "The test bruiser attempts to Shove the creature. On a success or a critical success, the target is also knocked Prone."), null);
-    assert.equal(reaction("A creature makes a melee weapon Strike against the test ape and misses", "The test ape attempts to Disarm the attacker of the triggering weapon.", "The test ape is benefiting from its Defensive Slam"), null);
+    // (Behind a mode of its own the simulator can't see: the GM's since batch 211.)
+    assert.deepEqual(reaction("A creature makes a melee weapon Strike against the test ape and misses", "The test ape attempts to Disarm the attacker of the triggering weapon.", "The test ape is benefiting from its Defensive Slam"), { builtin: "no-effect", gm: "state" });
 });
 
 test("summoned steeds and summoning traps; Strikes at different creatures; two Strikes, both at full bonus, a third's damage when both land (2026-10-11, batch 89)", () => {
@@ -3386,4 +3387,14 @@ test("a teleport next to a creature, then a Strike with extra damage on a hit (2
     const item = { type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p>The test unicorn flashes away. It blinks next to a creature it can see within 45 feet, then makes a tusk Strike against it. The Strike deals an additional 3d6 cold damage.</p>" } } };
     const charge = compileMonsterAbility(item, {});
     assert.deepEqual([charge.builtin, charge.strides, charge.strike, charge.onHit.damage, charge.notes.length], ["strike-activity", 1, "tusk", ["3d6[cold]"], 1]);
+});
+
+test("more states the simulator can't see: what it holds or stores, a mode of its own, where it is, what it senses (2026-10-12, batch 211)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const odd = "<hr /><p><strong>Effect</strong> The test thing does something nobody has written a reading for, vividly.</p>";
+    for (const requirement of ["The test owl is holding a silver bell", "The test crab is in its Turtle Posture", "The test wisp has at least 2 gallons in its tank", "The test elk is in a frozen forest", "A creature has spoken aloud since the test moth's last turn", "The test ghost is merged with a creature", "The test lynx is on the Ethereal Plane"]) {
+        assert.deepEqual(compileMonsterAbility(item(`<p><strong>Requirements</strong> ${requirement}</p>${odd}`), {}), { builtin: "no-effect", gm: "state" }, requirement);
+    }
+    // Not a state it can't show: a Grabbed creature is the simulator's to see.
+    assert.equal(compileMonsterAbility(item(`<p><strong>Requirements</strong> The test owl has a creature Grabbed</p>${odd}`), {}), null);
 });
