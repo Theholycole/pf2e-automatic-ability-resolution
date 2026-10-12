@@ -2528,6 +2528,64 @@ function otherSkillManeuver(item, basicActions = {}) {
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }) };
 }
 
+// A basic maneuver, then a Strike at the same creature (2026-10-12, batch 146): Noble's Ruse's "The noble Feints. On a success, the noble
+// Strikes the target.", Feinting Strike's "Feints, then Strikes the target of his Feint", Slippery Fighter's "moves up to his Speed, attempts
+// to Feint a creature within his reach, then makes a melee Strike against that creature", Distracting Trick's "… to Feint, then makes a beak
+// Strike against the same target. If the Feint succeeds, the Strike deals an additional 1d6 precision damage.", Bully's "Shoves a creature,
+// and Strides after it into the nearest adjacent square if successful. It then makes a tentacle Strike against the creature, using the same
+// multiple attack penalty.", Sacrificial Takedown's "attempts an Athletics check to Trip a creature. If she succeeds, she then makes a melee
+// Strike against the target, granting her weapon the fatal d10 trait …", Terrorizing Swing's "attempts to Demoralize a foe within its melee
+// reach, then makes a melee Strike against that foe. If the creature is Frightened and takes damage, it takes an additional 2d10 damage and is
+// knocked Prone. This counts as two attacks …" → PF2e's maneuver with `then: { strike, onSuccess?, sameMap?, follow?, successDamage?, fatal?,
+// ifFrightened? }` (the simulator's Strike after it; a note on the card live), approach when it moves first.
+function maneuverThenStrike(item, actor, basicActions = {}) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase())).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim()
+        .replace(/^Frequency once per (?:round|turn) (?:Requirements? (?:The )?[^.]+? is within melee reach of an enemy\.? )?Effect /i, "")
+        .replace(/^Requirements? (?:The )?[^.]+? is wielding cards or dice\.? Effect /i, "");
+    const who = String.raw`(?:The )?[\w' -]+?`;
+    const pronoun = String.raw`(?:he|she|it|they|the [\w' -]+?)`;
+    let match;
+    let slug = null;
+    let then = null;
+    let approach = null;
+    const notes = [];
+    if ((match = new RegExp(String.raw`^${who} (Feints|Demoralizes)\. On a success, ${pronoun} Strikes the target\.$`, "i").exec(plain))) {
+        slug = match[1].toLowerCase().replace(/s$/, "").replace(/^demoralize$/, "demoralize");
+        then = { strike: null, onSuccess: true };
+    } else if ((match = new RegExp(String.raw`^${who} Feints, then Strikes the target of (?:his|her|its|their) Feint\.$`, "i").exec(plain))) {
+        slug = "feint";
+        then = { strike: null };
+    } else if ((match = new RegExp(String.raw`^${who} moves up to (?:his|her|its|their) Speed, attempts to Feint a creature within (?:his|her|its|their) reach, then makes a melee Strike against that creature\.$`, "i").exec(plain))) {
+        slug = "feint";
+        then = { strike: null };
+        approach = { strides: 1 };
+        notes.push("It moves up to its Speed first: move its token.");
+    } else if ((match = new RegExp(String.raw`^${who} performs [^.]+? to Feint, then makes an? ([\w' -]+?) Strike against the same target\. If the Feint succeeds, the Strike deals an additional (\d+d\d+) precision damage\.$`, "i").exec(plain))) {
+        slug = "feint";
+        then = { strike: match[1].toLowerCase(), successDamage: `${match[2]}[precision]` };
+        notes.push(`If the Feint succeeds, the Strike deals ${match[2]} more precision damage.`);
+    } else if ((match = new RegExp(String.raw`^${who} Shoves a creature, and Strides after it into the nearest adjacent square if successful\. It then makes an? ([\w' -]+?) Strike against the creature, using the same multiple attack penalty\.$`, "i").exec(plain))) {
+        slug = "shove";
+        then = { strike: match[1].toLowerCase(), sameMap: true, follow: true };
+        notes.push("On a success it Strides after the creature: move its token.");
+    } else if ((match = new RegExp(String.raw`^${who} attempts an Athletics check to Trip a creature\. If (?:he|she|it|they) succeeds?, (?:he|she|it|they) then makes a melee Strike against the target, granting (?:his|her|its|their) weapon the fatal (d\d+) trait until the end of (?:his|her|its|their) turn\. Both attacks count toward (?:his|her|its|their) multiple attack penalty, but the penalty (?:doesn't|does not) increase until after (?:he|she|it|they) makes? both (?:of them|attacks)\.$`, "i").exec(plain))) {
+        slug = "trip";
+        then = { strike: null, onSuccess: true, sameMap: true, fatal: Number(match[1].slice(1)) };
+        notes.push(`The Strike after it has fatal ${match[1]}.`);
+    } else if ((match = new RegExp(String.raw`^${who} attempts to Demoralize a foe within (?:its|his|her|their) melee reach, then makes a melee Strike against that foe\. If the creature is Frightened and takes damage, it takes an additional (\d+d\d+) damage and is knocked Prone\. This counts as two attacks toward (?:the [\w' -]+?['’]s|its|his|her|their) multiple attack penalty\.$`, "i").exec(plain))) {
+        slug = "demoralize";
+        then = { strike: null, sameMap: true, ifFrightened: { damage: match[1], prone: true } };
+        notes.push(`If the creature is Frightened and the Strike damages it, it takes ${match[1]} more damage and is knocked Prone.`);
+    }
+    if (!slug || !then) return null;
+    const basic = basicActions[slug];
+    if (!basic?.resolution?.check) return null;
+    const plan = structuredClone(basic);
+    const strikeNote = `Then it ${then.strike ? `makes a ${then.strike} Strike` : "Strikes"} at the same creature${then.onSuccess ? " if this succeeds" : ""}${then.sameMap ? ", at the same multiple attack penalty" : ""}.`;
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "1 creature", range: "touch" }, then, ...(approach ? { approach } : {}), notes: [strikeNote, ...notes] };
+}
+
 // A basic maneuver in its own words (2026-10-12, batch 125): "The casino bouncer attempts to Demoralize a creature with a mere glance. The
 // casino bouncer doesn't take a penalty to their Intimidation check if the target doesn't speak the same language.", "… as it attempts to
 // Demoralize a creature. It gains a +2 circumstance bonus to this Intimidation check, and the attempt is not penalized if the target can't
@@ -3189,7 +3247,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

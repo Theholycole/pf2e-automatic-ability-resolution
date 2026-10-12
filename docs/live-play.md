@@ -1440,3 +1440,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Opportune Riposte → `{ builtin: "reaction-strike", triggers: ["critical-miss"], note }`; Raise Shields → a self-effect (+2 AC and Reflex) until its next turn; Slither → a plain move; Right This Way → PF2e's Reposition with Clumsy 1 / 2 and notes; Trident of Dis → a Strike.
 - **Live:** a reaction Strike's offer now carries its plan's note (Opportune Riposte: "Or it can Disarm the attacker of that weapon instead."); the rest use existing cards and effects. Not run in pftest: the only live change is that note.
 - **Simulator:** nothing new: the critical-miss reaction Strike, the guard, the Reposition card's conditions are played as before.
+
+## A maneuver, then a Strike at the same creature (2026-10-12, batch 146)
+
+- **Compiled:** PF2e's Feint, Shove, Trip or Demoralize with `then` (the Strike after it) and notes; Slippery Fighter with `approach: { strides: 1 }`.
+- **Live:** the maneuver's card, with "Then it Strikes at the same creature if this succeeds." (and the rest: the precision dice, the fatal trait, the Frightened bonus) as its note line; the GM rolls the Strike from the sheet. Checked in pftest (a noble's Noble's Ruse).
+- **Simulator:** after the maneuver resolves, the Strike at the same creature (only on a success when it says so), at the same multiple attack penalty when it says so, the bully's Stride after a Shove that succeeds, the extra dice; the planner counts the Strike's expected damage (half of it when the maneuver must succeed) (B146).

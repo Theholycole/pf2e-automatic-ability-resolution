@@ -2702,3 +2702,20 @@ test("ripostes with and without a stance, moves in more words, a blitz with two 
     assert.deepEqual(ability("<p>The test revenant Strides twice and makes a claw Strike; they can ignore difficult terrain during these Strides if they advance toward their murderer. If they Strike and Grab their murderer this turn, they can Constrict as a free action immediately after the Grab.</p>"), { builtin: "charge", actions: 2, strides: 2, strike: "claw" });
     assert.deepEqual(ability("<p><strong>Trigger</strong> Another test bird within 10 feet Strides.</p><hr /><p><strong>Effect</strong> The test bird Strides up to half its Speed.</p>", "reaction"), { builtin: "no-effect" });
 });
+
+test("a maneuver, then a Strike at the same creature (2026-10-12, batch 146)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const action = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const ruse = action("<p><strong>Frequency</strong> Once per round</p><hr /><p><strong>Effect</strong> The test courtier [[/act feint]]{Feints}. On a success, the test courtier Strikes the target.</p>");
+    assert.deepEqual([ruse.resolution.check.statistic, ruse.then, ruse.notes.length], ["deception", { strike: null, onSuccess: true }, 1]);
+    const slip = action("<p>The test rogue moves up to his Speed, attempts to Feint a creature within his reach, then makes a melee Strike against that creature.</p>", 2);
+    assert.deepEqual([slip.then, slip.approach], [{ strike: null }, { strides: 1 }]);
+    const trick = action("<p><strong>Requirements</strong> The test parrot is wielding cards or dice</p><hr /><p><strong>Effect</strong> The test parrot performs a quick shuffle with the cards or dice to Feint, then makes a beak Strike against the same target. If the Feint succeeds, the Strike deals an additional 1d4 precision damage.</p>", 2);
+    assert.deepEqual(trick.then, { strike: "beak", successDamage: "1d4[precision]" });
+    const bully = action("<p>The test brute Shoves a creature, and Strides after it into the nearest adjacent square if successful. It then makes a fist Strike against the creature, using the same multiple attack penalty.</p>", 2);
+    assert.deepEqual([bully.resolution.check.statistic, bully.then], ["athletics", { strike: "fist", sameMap: true, follow: true }]);
+    const takedown = action("<p>The test zealot attempts an Athletics check to Trip a creature. If she succeeds, she then makes a melee Strike against the target, granting her weapon the fatal d8 trait until the end of her turn. Both attacks count toward her multiple attack penalty, but the penalty doesn't increase until after she makes both attacks.</p>", 2);
+    assert.deepEqual(takedown.then, { strike: null, onSuccess: true, sameMap: true, fatal: 8 });
+    const swing = action("<p>The test ogre attempts to Demoralize a foe within its melee reach, then makes a melee Strike against that foe. If the creature is Frightened and takes damage, it takes an additional 2d8 damage and is knocked Prone. This counts as two attacks toward the test ogre's multiple attack penalty.</p>", 2);
+    assert.deepEqual([swing.resolution.check.statistic, swing.then], ["intimidation", { strike: null, sameMap: true, ifFrightened: { damage: "2d8", prone: true } }]);
+});
