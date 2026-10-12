@@ -2003,3 +2003,26 @@ test("any object a creature disguises itself as; a mythic reroll; a Stride and t
     assert.deepEqual(compile("<p>The test troll lopes forward, Striding and then making two claw Strikes.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: ["claw", "claw"], sameTarget: true, strides: 1 });
     assert.deepEqual(compile("<p>The test beast Strides, ignoring difficult terrain, then makes two claw Strikes at the end of its movement.</p>", 2)?.strides, 1);
 });
+
+test("a hazard that only rolls initiative; a form shift as the fight starts; charges after a distance; a Stride with Strikes along the way (2026-10-11, batch 85)", () => {
+    const item = (description, actions = 1, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } });
+    const compile = (description, actions, type) => compileMonsterAbility(item(description, actions, type), { basicActions: {} });
+    const reaction = (trigger, effect, type = "reaction") => compile(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, null, type);
+    const none = { builtin: "no-effect" };
+    assert.deepEqual(reaction("A creature enters the test crypt", "Ghostly whispers fill the air, and the haunt rolls initiative."), none);
+    assert.deepEqual(reaction("A creature opens the test vault", "The hazard rolls initiative as the water surges forth."), none);
+    assert.deepEqual(reaction("A creature steps into the test ring", "A test sprite emerges from the ring to defend it, and the hazard then rolls initiative."), none);
+    assert.notDeepEqual(reaction("A creature steps into the test hall", "The trap makes an acid dart Strike against the triggering creature. The trap then rolls initiative."), none);
+    assert.notDeepEqual(reaction("A creature enters the test deck", "The ship pitches on the waves. The hazard rolls initiative and performs its routine as a free action.", "free"), none);
+    assert.deepEqual(reaction("Test Vela rolls initiative", "Test Vela's instincts take over. Test Vela uses Change Shape to enter her hybrid form.", "free"), none);
+    // A charge's extra after a distance; a Stride up to its Speed into reach; a critical hit's condition.
+    const horn = compile("<p>The test unicorn Strides up to double its Speed in a straight line and then makes a horn Strike. If the test unicorn moved at least 20 feet, it deals an additional 2d6 damage on a hit.</p>", 2);
+    assert.deepEqual([horn?.builtin, horn?.strike, horn?.onHit?.damage], ["strike-activity", "horn", ["2d6[strike]"]]);
+    assert.equal(compile("<p>The test roast Strides up to double its speed in a straight line and then makes a slam Strike. If it moved at least 10 feet, it gains a +1 circumstance bonus to its attack roll.</p>", 2)?.attackBonus, 1);
+    const skull = compile("<p>The test dinosaur Strides up to its Speed. If it ends its movement within melee reach of a target, it can make a skull Strike against that target. If the test dinosaur critically hits with this Strike, the creature hit is @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}.</p>", 2);
+    assert.deepEqual([skull?.strides, skull?.strike, skull?.onHit?.critical], [1, "skull", [{ slug: "stunned", value: 1, duration: null }]]);
+    // Strikes at different creatures along a Stride.
+    assert.deepEqual(compile("<p>The test beast Strides up to its Speed. It can make up to four claw Strikes at any point during this movement, each against a different target. These attacks count toward the test beast's multiple attack penalty, but the multiple attack penalty doesn't increase until after the test beast makes all of its attacks.</p>", 3),
+        { builtin: "multi-strike", actions: 3, strikes: ["claw"], each: true, max: 4, strides: 1, sameMap: true });
+    assert.deepEqual(compile("<p>The test giant Strides up to their Speed, Striking once with each of their scimitars at any point during the movement.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: ["scimitar", "scimitar"], sameTarget: true, strides: 1 });
+});
