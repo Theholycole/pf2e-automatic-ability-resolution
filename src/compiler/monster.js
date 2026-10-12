@@ -902,6 +902,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 206, Goring Charge: "Strides twice and makes an antlers Strike after either Stride." — two Strides and the Strike, after either a note.)
+        .replace(/\b((?:The )?[\w' -]+?) Strides twice and makes an? ([\w' -]+?) Strike after either Stride\./i, "$1 Strides twice and makes a $2 Strike. [after either stride]")
         // (Batch 204: Water Sprint's "Strides up to three times in a straight line across smooth water. They can make a single Strike against a creature at
         // the end of this movement." — only on smooth water, the GM's; Hurl Weapon's "makes a hurled weapon Strike without using their hands.")
         .replace(/\b((?:The )?[\w' -]+?) Strides up to three times in a straight line across smooth water\. (?:It|They) can make a single Strike against a creature at the end of this movement\./i, "$1 Strides three times and makes a Strike. [smooth water]")
@@ -1047,6 +1049,23 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
             // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
             // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            // (Batch 206: Goring Charge's "If the Strike hits, the blooming guardian deals an extra 2d12 bludgeoning damage, and the target takes a –2
+            // circumstance penalty to its next Fortitude save against blossom siphon."; Scorpion Sting's "Strikes an Off-Guard creature with its stinger. The
+            // attack injects venom deeply, dealing an additional 4d8 poison damage and giving the target a –2 circumstance penalty to their initial save
+            // against the poison." — the extra damage on a hit; the penalty to the save a note.)
+            .replace(/^If the Strike hits, (?:the [\w' -]+?|it|they) deals an extra (\d+d\d+) (\w+) damage, and the target takes a [-\u2013\u2212](\d+) circumstance penalty to its next (\w+) save against ([\w' -]+?)\.$/i, (_all, dice, type, penalty, save, against) => {
+                (activity.notes ??= []).push(`On a hit, the target also takes a –${penalty} circumstance penalty to its next ${save} save against ${against}.`);
+                return `On a hit, the target takes @Damage[${dice}[${type.toLowerCase()}]] damage.`;
+            })
+            .replace(/^((?:The )?[^.]+?) Strikes an Off-Guard creature with (?:its|their) ([\w' -]+?)\.$/i, (_all, who, name) => {
+                (activity.notes ??= []).push("Only at an Off-Guard creature.");
+                activity.requires = "off-guard";
+                return `${who} makes a ${name} Strike.`;
+            })
+            .replace(/^The attack injects venom deeply, dealing an additional (\d+d\d+) (\w+) damage and giving the target a [-\u2013\u2212](\d+) circumstance penalty to (?:its|their) initial save against the poison\.$/i, (_all, dice, type, penalty) => {
+                (activity.notes ??= []).push(`On a hit, the target takes a –${penalty} circumstance penalty to its first save against the poison.`);
+                return `On a hit, the target takes @Damage[${dice}[${type.toLowerCase()}]] damage.`;
+            })
             // (Batch 204, the narwhal's Impaling Charge: "If it moved at least 20 feet from its starting position, the narwhal deals an extra 1d10 damage on this
             // Strike. A target damaged by Impaling Charge is Grabbed until the start of the narwhal's next turn unless it Escapes before then (DC 20). The
             // narwhal can't Grapple to extend the duration of this grab.")
@@ -1525,6 +1544,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         if (text === "[boat boarding]") {
             activity.requires = "requirement";
             (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
+            continue;
+        }
+        if (text === "[after either stride]") {
+            (activity.notes ??= []).push("The Strike after either Stride.");
             continue;
         }
         if (text === "[smooth water]") {

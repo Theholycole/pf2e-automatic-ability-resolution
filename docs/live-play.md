@@ -1834,3 +1834,15 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** the downs-heal and turn-start offers, as for batches 140 and 72. Not run in pftest.
 - **Simulator:** nothing new; the level and the first turn are notes.
 
+## Charges, a sting, flights and a retreat (2026-10-12, batch 206)
+
+- **Compiled:**
+  - Goring Charge → two Strides and an antlers Strike, 2d12 bludgeoning on a hit, with notes for the Strike after either Stride and the save penalty.
+  - Scorpion Sting → a stinger Strike with `requires: "off-guard"`, 4d8 poison on a hit, and a note for the save penalty.
+  - Razor-Edged Flight → two flights and two wing Strikes at different creatures, 2d6 persistent bleed on a critical hit.
+  - Paired Spikes → two spike Strikes at different creatures counted as one attack; the one-creature way and its electricity weakness are notes (PF2e's linked effect).
+  - Panicked Withdrawal → `withdraw` when damaged by a melee Strike, 15 feet, with a note that it drops what it holds.
+  - Stone Bolt and Phantom Step → `no-effect` (moves).
+- **Live:** cards and offers as for their kinds. Not run in pftest.
+- **Simulator:** see B206 in its ability decisions.
+

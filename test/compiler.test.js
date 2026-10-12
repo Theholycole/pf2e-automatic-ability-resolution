@@ -2171,8 +2171,8 @@ test("a reaction that moves it off as a creature comes beside it or attacks it (
     assert.deepEqual(both("A creature ends its movement adjacent to the test eel or within the test eel's space.", "The test eel Strides or Swims up to 10 feet (or up to the relevant Speed, if that Speed is less than 10 feet). It must end its movement in a location that isn't within 5 feet of a foe. This movement doesn't trigger reactions."), { builtin: "withdraw", on: "approach", move: "Stride", feet: 10, safe: true });
     assert.deepEqual(both("A dazzled or blinded creature, or a creature with light blindness, ends its move adjacent to Test Ulo", "Test Ulo Steps."), { builtin: "withdraw", on: "approach", foe: ["dazzled", "blinded"], move: "Step", safe: true });
     assert.deepEqual(reaction("<p>If a creature ends its movement adjacent to the test asp, the test asp can use its reaction to Stride or Climb up to 10 feet. This movement doesn't trigger reactions.</p>"), { builtin: "withdraw", on: "approach", move: "Stride", feet: 10, safe: true });
-    // Not one that drops what it holds first, or does more.
-    assert.notEqual(both("The test rodent takes damage from a melee Strike", "The test rodent drops any items held in its hands, then Climbs or Strides up to 15 feet.")?.builtin, "withdraw");
+    // (Batch 206: one that drops what it holds first, the drop a note.)
+    assert.deepEqual(both("The test rodent takes damage from a melee Strike", "The test rodent drops any items held in its hands, then Climbs or Strides up to 15 feet.")?.notes, ["It drops whatever it holds first."]);
     assert.notEqual(both("A creature misses the test frog with a melee Strike", "The test frog Steps. It gains a +2 circumstance bonus to AC until the end of its next turn.")?.builtin, "withdraw");
 });
 
@@ -3336,4 +3336,16 @@ test("Bestiaries: Hit Points back as it kills a living creature of a level; Quic
     const quick = compileMonsterAbility(item("free", "<p><strong>Frequency</strong> Once per day</p><hr /><p><strong>Trigger</strong> The test golem's turn begins. It can't trigger this free action on the first turn of combat.</p><hr /><p><strong>Effect</strong> The test golem becomes @UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened} for 1 minute.</p>"), {});
     assert.deepEqual([quick.trigger.event, quick.notes, quick.resolution.outcomes.success.effects[0].slug], ["own-turn-start", ["Not on its first turn of the combat."], "quickened"]);
     assert.deepEqual(compileMonsterAbility(item("free", "<p><strong>Trigger</strong> The test devil hits a creature with a spear Strike.</p><hr /><p><strong>Effect</strong> The test devil moves the creature 5 feet in any direction. The destination square must be within reach of the test devil's spear. This movement doesn't trigger reactions.</p>"), {}), { builtin: "no-effect" });
+});
+
+test("Howl of the Wild: a charge with extra damage, a sting at an Off-Guard creature, a flight with two Strikes, a retreat when hurt, moves (2026-10-12, batch 206)", () => {
+    const item = (type, html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const gore = compileMonsterAbility(item("action", "<p>The test stag Strides twice and makes an antlers Strike after either Stride. If the Strike hits, the test stag deals an extra 1d12 bludgeoning damage, and the target takes a –1 circumstance penalty to its next Will save against test spores.</p>"), {});
+    assert.deepEqual([gore.strides, gore.onHit.damage, gore.notes.length], [2, ["1d12[bludgeoning]"], 2]);
+    const sting = compileMonsterAbility(item("action", "<p>The test wasp Strikes an Off-Guard creature with its stinger. The attack injects venom deeply, dealing an additional 2d6 poison damage and giving the target a –1 circumstance penalty to their initial save against the poison.</p>"), {});
+    assert.deepEqual([sting.strike, sting.requires, sting.onHit.damage], ["stinger", "off-guard", ["2d6[poison]"]]);
+    const flight = compileMonsterAbility(item("action", "<p>The test eagle glides violently forward, Flying twice. It makes a talon Strike at any point during the movement against up to two different targets; if either of these attacks is a critical hit, the target also takes 1d6 persistent bleed damage.</p>"), {});
+    assert.deepEqual([flight.strikes, flight.strides, flight.critical.damage], [["talon", "talon"], 2, ["1d6[persistent,bleed]"]]);
+    const flee = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test critter takes damage from a melee Strike</p><hr /><p><strong>Effect</strong> The test critter drops any items held in their hands, then Climbs or Strides up to 10 feet.</p>"), {});
+    assert.deepEqual([flee.builtin, flee.on, flee.feet, flee.notes.length], ["withdraw", "damaged", 10, 1]);
 });

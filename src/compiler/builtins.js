@@ -242,6 +242,20 @@ export function readMultiStrikes(text) {
         earlyNotes.push(`It High Jumps or Long Jumps; two ${name} Strikes only if it jumps at least ${up} feet up or ${across} feet across (else one).`);
         return `${who} makes two ${name} Strikes against the same target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
     });
+    // (Batch 206: Paired Spikes' "flings two spikes from their tail, targeting up to two creatures within 20 feet of each other. They make a separate
+    // ranged Strike against each creature, which counts as a single Strike for the barded manticore's multiple attack penalty, and the penalty doesn't
+    // increase until they've made both Strikes. …" (its one-creature way a note); Razor-Edged Flight's "glides violently forward, Flying twice. It makes a
+    // wing Strike at any point during the movement against up to two different targets; if either of these attacks is a critical hit, the target also
+    // takes 2d6 persistent bleed damage.")
+    body = body.replace(/^((?:The )?[^.]+?) flings two spikes from (?:its|their) tail, targeting up to two creatures within (\d+) feet of each other\. (?:It|They) makes? a separate ranged Strike against each creature, which counts as a single Strike for (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, and the penalty doesn't increase until (?:it's|they've) made both Strikes\.((?: [^.]+\.)*)(?:\s*Effect: [\w' -]+)?$/i, (_all, who, feet, rest) => {
+        earlyNotes.push(`The two creatures within ${feet} feet of each other.`, ...rest.trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
+        return `${who} makes two spike Strikes, each against a different target. This counts as one attack when calculating its multiple attack penalty.`;
+    })
+        .replace(/^((?:The )?[^.]+?) glides violently forward, Flying twice\. (?:It|They) makes? an? ([\w' -]+?) Strike at any point during the movement against up to two different targets; if either of these attacks is a critical hit, the target also takes (\d+d\d+) persistent (\w+) damage\./i, (_all, who, name, dice, type) => {
+            movesFirst = 2;
+            earlyNotes.push("It Flies twice, making the Strikes at any point along the way.");
+            return `${who} makes two ${name} Strikes, each against a different target. On a critical hit, the target takes @Damage[${dice}[persistent,${type.toLowerCase()}]] damage.`;
+        });
     // (Batch 204: Skittering Assault's "Strides three times. Once per Stride, it can attempt a leg Strike against a creature in its reach at any point
     // during the Stride; it must make each attack against a different creature, but it doesn't apply its multiple attack penalty until after making all
     // its Strikes. If any of the Strikes result in a critical failure, Skittering Assault ends."; Spike Volley's two spikes at two creatures within 20 feet
@@ -1289,12 +1303,19 @@ export function readWithdraw(text) {
     const sentences = legacy ? (legacy[3] ?? "").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean) : split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
     let move;
     let feet = null;
+    let dropsHeld = false;
     if (legacy) [move, feet] = [legacy[1].toLowerCase() === "step" ? "Step" : "Stride", legacy[2] ? Number(legacy[2]) : null];
     else {
         // ("… takes a step after the effects of the triggering attack are resolved.")
         if (/^(?:The )?[\w' -]+? takes a step after the effects of the triggering attack are resolved\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Steps.";
         // (Batch 191, Skittering Reposition: "The gogiteth moves 10 feet." — a Stride that far.)
         if (/^(?:The )?[\w' -]+? moves \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*moves (\d+) feet\.$/i, "It Strides up to $1 feet.");
+        // (Batch 206, Panicked Withdrawal: "The marp drops any items held in their hands, then Climbs or Strides up to 15 feet." — the move; what it drops
+        // a note.)
+        if (/^(?:The )?[\w' -]+? drops any items held in (?:its|their) hands, then Climbs or Strides up to \d+ feet\.$/i.test(sentences[0] ?? "")) {
+            sentences[0] = sentences[0].replace(/^.*then (Climbs or Strides up to \d+ feet)\.$/i, "It $1.");
+            dropsHeld = true;
+        }
         // (Batch 136, Crumble: "… crumbles into the ground, Burrowing down 10 feet." — a Burrow.)
         if (/^(?:The )?[\w' -]+? crumbles into the ground, Burrowing down \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*Burrowing down (\d+) feet\.$/i, "It Burrows $1 feet.");
         // (Batch 133, Slip: "… teleports to a clear space adjacent to another creature she can see within 30 feet" — away, triggering no reactions.)
@@ -1313,7 +1334,7 @@ export function readWithdraw(text) {
         else if (/^(?:The [\w' -]+?|It|They) can(?:'t|not) [\w' -]+? again for (?:\[\[\/\w+ (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.test(sentence)) recharge = /(\d+d\d+)/.exec(sentence)[1];
         else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$/i.test(sentence)) return null;
     }
-    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}) };
+    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}), ...(dropsHeld ? { notes: ["It drops whatever it holds first."] } : {}) };
 }
 
 // Following a foe that moves away (2026-10-11, batch 99): "Trigger An enemy within reach of the guard attempts to move away Effect The guard
@@ -2291,6 +2312,9 @@ export function readReaction(item, text) {
     }
     // (Batch 145, Pack Ambush: "Trigger Another dromornis within 10 feet Strides. Effect The dromornis Strides up to half its Speed." — the same.)
     if (/^Another [\w' -]+? within \d+ feet Strides\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to half (?:its|their|his|her) Speed\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 206, Stone Bolt: "Trigger The stony goat loses the Petrified condition Effect The stony goat's first instinct is to escape. It Strides with a
+    // +20 circumstance bonus to its Speed." — a move.)
+    if (/^(?:The )?[^.]+? loses the Petrified condition\.?$/i.test(trigger.trim()) && /^(?:[^.]+\. )?(?:It|They|The [\w' -]+?) Strides with a \+\d+ circumstance bonus to (?:its|their) Speed\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // (Batch 205: Reposition's "Trigger The devil hits a creature with a glaive Strike. Effect The devil moves the creature 5 feet in any direction. The
     // destination square must be within reach of the devil's glaive. This movement doesn't trigger reactions."; Limb Extension's "Trigger The yellow musk
     // thrall is reduced to 4 HP or fewer Effect … The thrall's melee reach increases by 5 feet." — where creatures stand, and its reach.)
@@ -3252,6 +3276,9 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 206, Phantom Step: "Frequency once per round Effect The ghost ape moves quickly, passing through the Ethereal Plane. They teleport up to a
+    // distance equal to twice their Speed within their line of sight." — a move.)
+    if (/^(?:Frequency once per (?:round|turn) Effect )?(?:The )?[^.]+? moves quickly, passing through the Ethereal Plane\. (?:It|They) teleports? up to a distance equal to twice (?:its|their) Speed within (?:its|their) line of sight\.$/i.test(said)) return true;
     // (Batch 203: Surge of Speed's "Strides three times, but it's Off-Guard until the start of its next turn."; Take Prisoner's "Interacts to pick up a Medium or
     // smaller Unconscious creature within its reach, then Strides."; Scuttle Away's "Trigger The ostovite's bone chariot is destroyed Effect The ostovite
     // within Steps or Strides." — moves.)
