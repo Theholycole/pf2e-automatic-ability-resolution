@@ -1933,3 +1933,26 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
     - Not when it also lets go of a creature it holds.
 - **Live:** cards as for multi-Strikes. The GM's whisper now says "if 2 or more of its Strikes hit the same creature" for `atLeast`. Not run in pftest.
 - **Simulator:** `bothHit.atLeast` gives the rider once at least that many Strikes hit the creature (B212). It's logged as "2 Strikes hit …".
+
+## Sweeps in a line, damage on a miss, Frightened per hit, reach and Speeds (2026-10-12, batch 213)
+
+- **Compiled:**
+  - **Spearing Tail** → a sweep over "each creature in a @Template[line|distance:20]", with one attack roll for all of them (a note):
+    - "Any creature hit takes 4d6 bleed (2× on a critical hit)" → `extraDamage: ["4d6[persistent,bleed]"]`;
+    - "This counts as two attacks for … multiple attack penalty" → `countsAs: 2`.
+    - Gaze Upon's "every creature in a cone" reads the same, but its recharge keeps it uncovered.
+  - **Hundred-Handed Whirlwind** → a sweep at each foe in reach. "Even on a failed attack (but not a critical failure), the titan deals 24 force damage" → `missDamage: ["24[force]"]`; it counts as three attacks.
+  - "This counts as N attacks …, but the penalty doesn't increase until …" now keeps N in `countsAs`. Wide Cleave and Staff Swipe gained it, and an adventure creature's cone sweep now plays.
+  - **Frightening Flurry** → three Strikes at one target and `bothHit: { conditions: [frightened], atLeast: 1, perHit: true }`: Frightened as many as the Strikes that hit.
+  - **Mend Soul** → healing itself. "Or an incorporeal creature it has Grabbed" becomes a note.
+  - **No-effect:** an action that only lengthens its reach ("from 5 to 10 feet", "gaining 10-foot reach") or gives it a climb, fly or swim Speed for a while, with no reaction, bonus, damage or condition. This covers Coil, Pull Arm, Extend Vines, Mobile Morph, Jump Jets, Inflate, Crystalline Dust Form, and two Battlezoo ones.
+- **Live:**
+  - For Frightening Flurry, the GM's whisper gives the value per hit.
+  - For `missDamage`, a whisper says a creature it fails to hit (not a critical failure) still takes that damage.
+  - The bleed rides on the Strikes' damage effect as persistent.
+  - Not run in pftest.
+- **Simulator (B213):**
+  - `missDamage` on each failed Strike of a sweep;
+  - `perHit` sets the condition's value to the number of hits;
+  - `withExtraDamage` reads `[persistent,type]` and makes bleed persistent.
+

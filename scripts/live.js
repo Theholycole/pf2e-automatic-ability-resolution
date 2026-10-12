@@ -297,7 +297,11 @@ async function cardForAbility(message) {
     }
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
     // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round" — for the GM to apply.)
-    if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if ${plan.bothHit.atLeast ? `${plan.bothHit.atLeast} or more of its Strikes` : "both Strikes"} hit the same creature, ${bothHitText(plan.bothHit)}.`]);
+    // (Batch 213, Frightening Flurry: the value as many as the Strikes that hit.)
+    if (plan?.builtin === "multi-strike" && plan.bothHit?.perHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: the target becomes ${plan.bothHit.conditions.map((entry) => entry.slug.replace(/^\w/, (letter) => letter.toUpperCase())).join(" and ")} with a value equal to the number of its Strikes that hit it.`]);
+    else if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if ${plan.bothHit.atLeast ? `${plan.bothHit.atLeast} or more of its Strikes` : "both Strikes"} hit the same creature, ${bothHitText(plan.bothHit)}.`]);
+    // (Batch 213, Hundred-Handed Whirlwind: damage even on a failed attack.)
+    if (plan?.builtin === "multi-strike" && plan.missDamage?.length) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: a creature it fails to hit (not a critical failure) still takes ${plan.missDamage.map((formula) => formula.replace(/\[(\w+)\]/, " $1")).join(" + ")} damage.`]);
     // (Batch 89, Claw Rake: both Strikes at its highest attack bonus.)
     if (plan?.builtin === "multi-strike" && plan.noMap) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: each Strike at its highest attack bonus (no multiple attack penalty).`]);
     // (Batch 83, Eviscerate: each Strike's own penalty.)

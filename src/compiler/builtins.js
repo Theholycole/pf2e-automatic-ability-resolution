@@ -728,6 +728,12 @@ export function readMultiStrikes(text) {
             // (Batch 138, Sanguine Mauling: "If it hits with both claws, the target takes 1d6 bleed.")
             .replace(/^If (?:the [\w' -]+?|it|they|he|she) hits? (?:the same (?:creature|target) )?with both [\w' -]+?, the (?:target|creature) /i, "If both Strikes hit the same target, the target ");
         // (Batch 198, Gory Rend: "If both hit, the creature takes @Damage[2d10[bleed]] and is exposed to piscovenom." — its affliction too, by name.)
+        // (Batch 213, Frightening Flurry: "The target becomes Frightened with a condition value equal to the number of Strikes that hit it, to a maximum of
+        // frightened 3 if all three Strikes hit." — the value its hits.)
+        if (/^The target becomes Frightened with a condition value equal to the number of Strikes that hit it(?:, to a maximum of frightened \d if all (?:two|three|four) Strikes hit)?\.$/i.test(sentence) && sameTarget) {
+            bothHit = { conditions: [{ slug: "frightened", value: null, rounds: null }], damage: [], atLeast: 1, perHit: true };
+            continue;
+        }
         // (Batch 212, a Battlezoo creature's bites: a condition for a creature at least two of the three hit, not only when all hit.)
         let atLeast = null;
         sentence = sentence.replace(/^If two or more (?:attacks|Strikes) hits? the same (target|creature), (?:it|that (?:target|creature)) (becomes|is|takes) /i, (_all, who, verb) => {
@@ -1007,8 +1013,11 @@ export function readSweep(text) {
         // (Batch 150, Whirlwind Strike: "Ordulf Strikes each enemy within his reach.")
         .replace(/^((?:The )?[^.]+?) Strikes each (enemy|creature|foe) within (?:its|their|his|her) reach\./i, "$1 makes a Strike against each $2 within reach.")
         // (Batch 200, Staff Swipe: "They attempt a bo staff Strike against each enemy in a @Template[type:cone|distance:15]." — each enemy in that cone.)
-        .replace(/\b(attempts?|makes?) an? ([\w' -]+?) Strike against each enemy in an? @Template\[type:(cone|emanation|burst)\|distance:(\d+)\](?:\{[^}]*\})?\./i, (_all, made, name, shape, feet) => {
+        // (Batch 213: Gaze Upon's "every creature in a @Template[type:cone|distance:120]", Spearing Tail's "each creature in a @Template[line|distance:20],
+        // rolling the attack roll once and applying the result to each target" — one roll, a note.)
+        .replace(/\b(attempts?|makes?) an? ([\w' -]+?) Strike against (?:each|every) (?:enemy|creature) in an? @Template\[(?:type:)?(cone|emanation|burst|line)\|distance:(\d+)\](?:\{[^}]*\})?(, rolling the attack roll once and applying the result to each target)?\./i, (_all, made, name, shape, feet, once) => {
             notes.push(`Each enemy in a ${feet}-foot ${shape.toLowerCase()}.`);
+            if (once) notes.push("One attack roll for all of them.");
             return `${made} a ${name} Strike against each enemy within reach.`;
         }).split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 102: "makes three jaws Strikes, each against a different target", "makes up to six longsword Strikes, each against a different
@@ -1028,7 +1037,31 @@ export function readSweep(text) {
     if (match?.[3] && !required) return null;
     let sameMap = false;
     let penalty = 0;
+    let countsAs = null;
+    const extraDamage = [];
+    const missDamage = [];
+    const tag = (said) => /^@Damage\[((?:[^[\]]|\[[^\]]*\])*)\]/.exec(said)?.[1].split("|")[0] ?? null;
     for (const sentence of sentences) {
+        // (Batch 213, Spearing Tail: "Any creature hit takes @Damage[4d6[bleed]] (@Damage[(2*4d6)[bleed]] on a critical hit)." — on each hit, doubled on a
+        // critical as Strike damage is; bleed persistent, as PF2e's is.)
+        const hitTakes = /^Any creature hit takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\])(?:\{[^}]*\})?(?: \(@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})? on a critical hit\))?\.$/i.exec(sentence);
+        if (hitTakes && tag(hitTakes[1])) {
+            extraDamage.push(tag(hitTakes[1]).replace(/\[bleed\]$/i, "[persistent,bleed]"));
+            continue;
+        }
+        // (Hundred-Handed Whirlwind: "Even on a failed attack (but not a critical failure), the titan deals @Damage[24[force]] damage to the target.")
+        const failed = /^Even on a failed attack \(but not a critical failure\), (?:the [\w' -]+?|it|they|he|she) deals? (@Damage\[(?:[^[\]]|\[[^\]]*\])*\])(?:\{[^}]*\})? damage to the target\.$/i.exec(sentence);
+        if (failed && tag(failed[1])) {
+            missDamage.push(tag(failed[1]));
+            continue;
+        }
+        // (Spearing Tail: "This counts as two attacks for the dragon's multiple attack penalty." — all at the same penalty, then up by two.)
+        const counted2 = /^This counts as (two|three|four) attacks (?:for|toward) [^.]*multiple attack penalty(?:, but the penalty (?:doesn't|does not) increase until [^.]*)?\.$/i.exec(sentence);
+        if (counted2) {
+            sameMap = true;
+            countsAs = COUNTS[counted2[1].toLowerCase()];
+            continue;
+        }
         // (Which Strikes: "It can attempt up to one jaws Strike and any number of leg Strikes", "It can make one of these Strikes with
         // each of its maws, one with its tail lash, and the rest with its legs": its best one played.)
         if (/^(?:It|They) can (?:attempt|make) up to one [\w' -]+? Strike(?:, up to one [\w' -]+? Strike)*,? and any number of [\w' -]+? Strikes\.$|^(?:It|They) can make one of these Strikes with each of (?:its|their) [\w' -]+?, one with (?:its|their) [\w' -]+?, and the rest with (?:its|their) [\w' -]+?\.$|^(?:It|They|The [\w' -]+?) can Strike up to once with each [\w' -]+?, once with (?:its|their) [\w' -]+?, and any number of times with (?:its|their) [\w' -]+?\.$/i.test(sentence)) continue;
@@ -1052,8 +1085,11 @@ export function readSweep(text) {
         if (/^The first (?:enemy|creature) (?:it|they|he|she) damages? is subject to [A-Z][\w' -]+\.$/.test(sentence)) continue;
         // "It can Strike up to once with its jaws and any number of times with its body": its Strikes, the best one played.
         if (/^(?:It|They) can Strike up to once with (?:its|their) [\w' -]+(?:, up to once with (?:its|their) [\w' -]+)*,? and any number of times with (?:its|their) [\w' -]+\.$/i.test(sentence)) continue;
-        if (/^This counts as (?:two|three|four|\w+) attacks (?:for|toward) [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.test(sentence)) {
+        const countedUntil = /^This counts as (two|three|four|\w+) attacks (?:for|toward) [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.exec(sentence);
+        if (countedUntil) {
             sameMap = true;
+            // (Batch 213: how many it counts as, for the penalty after.)
+            if (COUNTS[countedUntil[1].toLowerCase()]) countsAs = COUNTS[countedUntil[1].toLowerCase()];
             continue;
         }
         if (/^Make only one attack roll, and roll damage once for all targets\.$/i.test(sentence)) {
@@ -1066,7 +1102,7 @@ export function readSweep(text) {
     const said = counted ? counted[2] : match[1];
     const name = said && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(said.trim()) ? said.trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
     const max = counted ? COUNTS[counted[1].toLowerCase()] ?? Number(counted[1]) : null;
-    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: raging ? "raging" : "requirement" } : {}), ...(strides ? { strides } : {}), ...(noMomentum ? { noMomentum } : {}), ...(notes.length ? { notes } : {}) };
+    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(countsAs ? { countsAs } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(missDamage.length ? { missDamage } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: raging ? "raging" : "requirement" } : {}), ...(strides ? { strides } : {}), ...(noMomentum ? { noMomentum } : {}), ...(notes.length ? { notes } : {}) };
 }
 
 // "X Flies up to double its fly Speed and then makes a talon Strike." and other moves before one Strike (2026-10-10):
@@ -2912,7 +2948,7 @@ export function compileBuiltin(item, slug) {
     const flourish = (item.system?.traits?.value ?? []).includes("flourish");
     if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(flourish ? { flourish: true } : {}), ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}), ...(multi.critical ? { critical: multi.critical } : {}), ...(multi.extraDamage ? { extraDamage: multi.extraDamage } : {}), ...(multi.then ? { then: multi.then } : {}), ...(multi.strides ? { strides: multi.strides } : {}), ...(multi.oncePerFight ? { oncePerFight: true } : {}) };
     const sweep = readSweep(text);
-    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}) };
+    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.countsAs ? { countsAs: sweep.countsAs } : {}), ...(sweep.extraDamage ? { extraDamage: sweep.extraDamage } : {}), ...(sweep.missDamage ? { missDamage: sweep.missDamage } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
     const swipe = readSwipe(text);
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true, ...(swipe.bonus ? { penalty: -swipe.bonus } : {}), ...(swipe.oncePerTurn ? { oncePerTurn: true } : {}), ...(swipe.bonus || swipe.notes ? { notes: [...(swipe.bonus ? [`A +${swipe.bonus} circumstance bonus to the attack roll.`] : []), ...(swipe.notes ?? [])] } : {}) };
@@ -3370,6 +3406,11 @@ function readFormShift(item, text) {
 // Strides with a bonus to its Speed (Gallop). true or false.
 function readNoCombatEffect(text) {
     const said = String(text).replace(/’/g, "'").trim();
+    // (Batch 213: only its reach or a Speed for a while — Coil's "increasing its reach with its fangs from 5 to 10 feet. After the goblin snake Strikes
+    // with its fangs, it becomes uncoiled.", Pull Arm, Extend Vines, Mobile Morph's "they gain a climb, fly, or swim Speed of 40 feet", Jump Jets — the
+    // simulation's Melee already reaches; not with a reaction, a bonus, damage or a condition.)
+    if ((/\b(?:increasing|increases?|gaining|gains?) (?:its|their|his|her) reach\b[^.]*\bfrom \d+ to \d+ feet\b|\bgaining \d+-foot reach\b|\bhas an? \d+-foot reach\b|\bgains? an? (?:(?:climb|fly|swim|burrow),? (?:or )?)+[Ss]peed of \d+ feet\b/i.test(said))
+        && !/@|\b(?:damage|saves?|DC|bonus|penalty|Off-Guard|Reactive Strike|reactions?|Strikes? (?:against|at)|makes? an? [\w' -]+? Strike|Grabbed|Prone|Frightened|Stunned|Immobilized|Restrained|Clumsy|Enfeebled|Slowed|Quickened|Hidden|Invisible|Concealed)\b/i.test(said)) return true;
     // (Batch 55: gliding; moving a creature it holds closer; a troop's Change Formation; a Stride in dim light; befouling water; adamantine
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;

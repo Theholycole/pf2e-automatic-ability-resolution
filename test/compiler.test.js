@@ -3434,3 +3434,22 @@ test("Strikes at many in more words; a Stride with Strikes along it; two or more
     // Two or more hits on one creature.
     assert.deepEqual(plan("The test wolf makes three jaws Strikes, applying her multiple attack penalty as normal. If two or more Strikes hit the same creature, that creature becomes @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}.").bothHit, { conditions: [{ slug: "frightened", value: 1, rounds: null }], damage: [], atLeast: 2 });
 });
+
+test("a Strike at each creature in a line with one roll, bleed on a hit; damage on a failed attack; Frightened per hit; reach or a Speed only; healing itself or one it holds (2026-10-12, batch 213)", () => {
+    const item = (html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, actions) => compileMonsterAbility(item(html, actions), {});
+    const tail = plan("<p>The test drake lashes out with its spiked tail. It makes a tail Strike against each creature in a @Template[line|distance:30], rolling the attack roll once and applying the result to each target. Any creature hit takes @Damage[2d6[bleed]] (@Damage[(2*2d6)[bleed]] on a critical hit). This counts as two attacks for the drake's multiple attack penalty.</p>");
+    assert.deepEqual([tail.builtin, tail.strikes, tail.each, tail.sameMap, tail.countsAs, tail.extraDamage, tail.notes], ["multi-strike", ["tail"], true, true, 2, ["2d6[persistent,bleed]"], ["Each enemy in a 30-foot line.", "One attack roll for all of them."]]);
+    const whirl = plan("<p>The test giant spins. They make one fist Strike against each foe within reach. Even on a failed attack (but not a critical failure), the giant deals @Damage[10[force]] damage to the target. This counts as two attacks for the giant's multiple attack penalty, but the penalty doesn't increase until all attacks have been made.</p>");
+    assert.deepEqual([whirl.strikes, whirl.each, whirl.countsAs, whirl.missDamage], [["fist"], true, 2, ["10[force]"]]);
+    const flurry = plan("<p>The test demon makes one horn Strike and two claw Strikes against a single target, in any order. The target becomes Frightened with a condition value equal to the number of Strikes that hit it, to a maximum of frightened 3 if all three Strikes hit.</p>");
+    assert.deepEqual([flurry.strikes, flurry.sameTarget, flurry.bothHit], [["horn", "claw", "claw"], true, { conditions: [{ slug: "frightened", value: null, rounds: null }], damage: [], atLeast: 1, perHit: true }]);
+    // Its reach or a Speed only: nothing for the fight's numbers.
+    assert.deepEqual(plan("<p>The test serpent coils, increasing its reach with its fangs from 5 to 10 feet. After the test serpent Strikes with its fangs, it becomes uncoiled.</p>", 1), { builtin: "no-effect" });
+    assert.deepEqual(plan("<p>The test blob grows paddles. Until the end of its turn, it gains a climb or swim Speed of 30 feet.</p>", 1), { builtin: "no-effect" });
+    // Not with a reaction or a bonus that comes with it.
+    assert.notDeepEqual(plan("<p>The test viper coils. While coiled, the reach of its fangs is 10 feet and it has the Reactive Strike reaction, increasing its reach with its fangs from 5 to 10 feet.</p>", 1), { builtin: "no-effect" });
+    // Healing itself, or a creature it holds instead (a note).
+    const mend = plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test spirit restores @Damage[12[healing]] HP to itself or an incorporeal creature it has Grabbed.</p>", 1);
+    assert.deepEqual([mend.resolution.kind, mend.notes], ["healing", ["Or it heals an incorporeal creature it has Grabbed instead."]]);
+});

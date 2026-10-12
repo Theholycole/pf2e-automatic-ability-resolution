@@ -4406,7 +4406,13 @@ function selfHeal(item) {
     const effect = plain.replace(/^(?:Frequency .+?\s+)?(?:Requirements? .+?\s+)?Effect\s+/, "").replace(/^Frequency .+?\s+Effect\s+/i, "").replace(/^(?:Frequency [^.]*?\s+)?Requirements? .+?\s+(?=(?:The |It |They ))/, "");
     // (Batch 56, Feed on Fear: "The will-o'wisp feeds on the creature's terror. It regains 2d4 Hit Points, and if it has Gone Dark, its glow
     // reignites." — the first sentence only tells it, the glow is the GM's.)
-    const sentences = effect.replace(/,? and (?:if (?:it has|they've|they have) Gone Dark, (?:its|their) glow reignites|its Glow reignites if it had been extinguished)\./i, ". If it has Gone Dark, its glow reignites.").replace(/^They regains\b/, "They regain").split(/(?<=\.)\s+/)
+    // (Batch 213, Mend Soul: "restores 25 HP to itself or an incorporeal creature it has Grabbed" — itself, the creature it holds a note.)
+    let orHeld = null;
+    const sentences = effect.replace(/,? and (?:if (?:it has|they've|they have) Gone Dark, (?:its|their) glow reignites|its Glow reignites if it had been extinguished)\./i, ". If it has Gone Dark, its glow reignites.").replace(/^They regains\b/, "They regain")
+        .replace(/ (HP|Hit Points) to itself or (an? [\w' -]+? creature) it has Grabbed\./i, (_all, unit, whom) => {
+            orHeld = `Or it heals ${whom.toLowerCase()} it has Grabbed instead.`;
+            return ` ${unit} to itself.`;
+        }).split(/(?<=\.)\s+/)
         .filter((sentence) => !/^(?:The )?[^.]+? feeds on the creature's (?:terror|fear)\.$/i.test(sentence));
     const at = sentences.findIndex((sentence) => /\u0000/.test(sentence));
     // (A wait on another of its abilities is that one's, kept as a note: Voidglutton's "It cannot use Consume Light again for 1d4 rounds".)
@@ -4436,6 +4442,7 @@ function selfHeal(item) {
         if (/@|\u0000|\b(?:If|When|Whenever|Unless|While|Until)\b/.test(sentence) || /\b(?:damage|save|Strike|Grabbed|Frightened|Stunned|Slowed|Quickened|bonus|penalty|ally|allies|each|creatures?)\b/i.test(sentence)) return null;
         notes.push(sentence);
     }
+    if (orHeld) notes.push(orHeld);
     const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
     const recharge = elsewhere ? null : readRecharge(html);
     // (Feed on Fear's requirement, for the simulator: "An enemy is under a fear effect or Dying within 15 feet of the will-o'-wisp".)

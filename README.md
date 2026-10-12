@@ -266,6 +266,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a Stride with Strikes at any point during it;
   - three Strikes where two or more hitting one creature frighten it (`bothHit.atLeast`, played by the simulator);
   - disguises with a lead-in sentence, or with the automatic Deception result in the disguise's own sentence.
+- **Monster Core 2 sweeps, flurries, reach and Speeds** (2026-10-12, batch 213): 12 new in PF2e and 2 in Battlezoo; 2 PF2e sweeps now count as two or three attacks. Covered:
+  - Spearing Tail: one roll for each creature in a line, with persistent bleed on a hit;
+  - Hundred-Handed Whirlwind: force damage even on a failed attack;
+  - Frightening Flurry: Frightened as many as the Strikes that hit;
+  - Mend Soul: healing itself;
+  - actions that only lengthen its reach or give it a climb, fly or swim Speed for a while are no-effect.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
