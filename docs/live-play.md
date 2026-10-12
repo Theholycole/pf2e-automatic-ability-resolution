@@ -2177,3 +2177,19 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
     - Valeros's shortbow Strike at a Braincase 20 feet away offered "Use it: Demoralize" with the immunity note. His ammunition was assigned for the test and restored after.
 - **Simulator:** see B227 in its ability decisions.
 
+## Battlezoo guards, lunges, kin follow-ups and unseen states (2026-10-12, batch 228)
+
+- **Compiled** (Battlezoo; wordings paraphrased here):
+  - **Resistance to the triggering damage type for a minute** → `resist-damage` with `types: ["triggering"]` and `lasts: 10`. A new use replacing the last, and cold iron getting through, are a note.
+  - **An ally's Strike taken in its place** → `intercept` (`ward: "ally"`, `share: 1`, `strikes`).
+  - **A critical hit beside it shared half and half** → `intercept` with `share: 0.5` and `critical`. That both take the hit's effects, and neither takes the critical hit's, is a note.
+  - **A Strike back at a creature Striking it**, at the cost of 2 AC against that Strike → `reaction-strike` `attacked` with `selfAcPenalty`. When it can use it again is a note.
+  - **Another of its kind's bite followed up** → `reaction-strike` `ally-hit` with `kin` and `allyStrike`. Only one answer per Strike.
+  - **The GM's** (`gm: "state"`): a pose held by an ability; its chosen victim; an area its ability made; an ability active; a count of its limbs; a creature attached to it; being out of water; a broken keepsake; a light in its space; a teleport into distant darkness. A fallen ally raised as undead is a summon (no-effect). A sound illusion seen through with Perception is narrative (`gm: "out-of-combat"`).
+- **Live:**
+  - The intercept offer carries its plan's note.
+  - The ally-hit offer checks the kin (the same actor name) and the Strike (the `item:slug:` roll option), and carries the note.
+  - The lunge's AC note goes on its Strike offer.
+  - Not run in pftest.
+- **Simulator:** see B228 in its ability decisions.
+

@@ -3680,3 +3680,24 @@ test("a Trip at a creature moving away nearby (2026-10-12, batch 227)", { skip: 
     const plan = compileMonsterAbility(roots, { basicActions });
     assert.deepEqual([plan.trigger, plan.resolution.check.statistic, plan.targeting.target], [{ event: "provoke", reaction: true, triggers: ["leave"], within: 15 }, "athletics", "the attacker"]);
 });
+
+test("resistance to the triggering type for a minute; an ally's Strike taken whole, or a critical hit shared; a lunge that bares its guard; a kin's bite followed up; more states, a raising and an illusion to the GM (2026-10-12, batch 228)", () => {
+    const item = (html, type = "reaction") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (trigger, effect, type = "reaction") => compileMonsterAbility(item(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type), { basicActions: {}, pack: "battlezoo-bestiary-pf2e" });
+    assert.deepEqual(plan("The test chameleon takes damage", "The test chameleon's scales ripple. For the next minute, the test chameleon has resistance 10 to the triggering damage type (its pick if several). A new use swaps out the old resistance. Cold iron weapons get through it."), { builtin: "resist-damage", value: 10, on: null, types: ["triggering"], lasts: 10, note: "Not against cold iron weapons' damage. A new use replaces the last one." });
+    assert.deepEqual(plan("An ally of the test drake is struck by a Strike that the test drake was also in range of", "The test drake suffers that Strike's results in its place."), { builtin: "intercept", ward: "ally", share: 1, strikes: true });
+    assert.deepEqual(plan("A creature critically hits a creature adjacent to the test seal", "The triggering Strike's damage is split evenly between the test seal and the struck creature. Both take the Strike's hit effects, and neither takes its critical-hit-only ones.").share, 0.5);
+    const lunge = plan("A creature in the test crab's reach Strikes at it", "The test crab lowers its guard by 2 for that Strike, then makes a pincer Strike against the triggering creature.");
+    assert.deepEqual([lunge.triggers, lunge.strike, lunge.selfAcPenalty, lunge.melee], [["attacked"], "pincer", 2, true]);
+    const duo = plan("Another test otter's bite Strike hits a foe in this test otter's reach", "The test otter makes a bite Strike against the same foe.");
+    assert.deepEqual([duo.triggers, duo.strike, duo.kin, duo.allyStrike], [["ally-hit"], "bite", true, "bite"]);
+    const gm = { builtin: "no-effect", gm: "state" };
+    assert.deepEqual(plan("A creature touches the test log while the test log is Prone using Test Slump", "The test log makes a jaws Strike against the triggering creature."), gm);
+    assert.deepEqual(plan("The test stalker hits its victim with a claw Strike", "The victim is @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}, or Frightened 2 if the hit was critical."), gm);
+    assert.deepEqual(plan("The test shell would take damage while Inhabiting a husk", "The husk takes the first 10 damage."), gm);
+    assert.deepEqual(plan("The test hydra has fewer than five heads and takes fire damage", "A new head sprouts from the stump."), gm);
+    assert.deepEqual(plan("A creature attached to the test vine tries to attack it", "The test vine disrupts the action."), gm);
+    assert.deepEqual(plan("The test slug is removed from water", "The test slug sprays slime on adjacent creatures."), gm);
+    assert.deepEqual(plan("A goblin ally beside the test boss is slain", "The test boss calls the corpse back. The ally rises as a Small-sized Test Bones, acting at its place in the initiative order."), { builtin: "no-effect" });
+    assert.deepEqual(plan("A creature comes within 30 feet of the test ghost", "The test ghost creates an auditory illusion: a far-off scream. A @Check[perception|dc:15] check reveals the trick.", "free"), { builtin: "no-effect", gm: "out-of-combat" });
+});

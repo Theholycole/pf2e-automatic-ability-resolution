@@ -379,9 +379,12 @@ async function allyHitAnswers(context, scene, combat, attacker) {
         if (monster.id === attacker.id || monster.disposition !== attacker.disposition || !isFoe(monster, target)) continue;
         const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("ally-hit"));
         if (!entry) continue;
+        // (Batch 228: only after another of its kind's Strike of that name — the same actor name, the Strike's item slug.)
+        const slugs = (context.options ?? []).filter((option) => option.startsWith("item:slug:"));
+        if (entry.plan.kin && (String(attacker.actor?.name ?? "").replace(/\s*\(\d+\)$/, "") !== String(actor.name ?? "").replace(/\s*\(\d+\)$/, "") || (entry.plan.allyStrike && slugs.length && !slugs.some((option) => option.includes(entry.plan.allyStrike))))) continue;
         const distance = distanceFeet(box(monster, grid.size), box(target, grid.size), grid);
         const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`).filter((strike) => distance <= strike.reach);
-        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target, strikes, penalty: entry.plan.penalty ?? 0, trigger: `was hit by ${attacker.name}` });
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target, strikes, penalty: entry.plan.penalty ?? 0, trigger: `was hit by ${attacker.name}`, note: entry.plan.note ?? null });
     }
 }
 
@@ -1048,7 +1051,7 @@ async function onDamaged(actor, amount) {
             if (guard && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) <= (guard.plan.within ?? 5)) {
                 const taken = guard.plan.share >= 1 ? amount : Math.floor(amount / 2);
                 const ward = { boss: "its boss", master: "its master", liege: "its liege", ward: "its ward" }[guard.plan.ward] ?? null;
-                await offer({ kind: "intercept", item: guard.item, monster, actor: monsterActor, target: attacker, trigger: `damaged ${token.name} (${amount})`, note: [ward ? `Only if ${token.name} is ${ward}.` : null, guard.plan.strikes ? "Only a Strike's damage." : guard.plan.attacks ? "Only a Strike's or a spell attack's damage." : null, guard.plan.swap ? "It Strides beside the ally and they switch places: move both tokens." : null].filter(Boolean).join(" ") || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore: taken, taken, unreduced: !!guard.plan.unreduced } });
+                await offer({ kind: "intercept", item: guard.item, monster, actor: monsterActor, target: attacker, trigger: `damaged ${token.name} (${amount})`, note: [ward ? `Only if ${token.name} is ${ward}.` : null, guard.plan.strikes ? "Only a Strike's damage." : guard.plan.attacks ? "Only a Strike's or a spell attack's damage." : null, guard.plan.swap ? "It Strides beside the ally and they switch places: move both tokens." : null, guard.plan.note ?? null].filter(Boolean).join(" ") || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore: taken, taken, unreduced: !!guard.plan.unreduced } });
             }
             // (Batch 143: Glimpse of Redemption, Liberating Step — the ally's resistance, and what the foe chooses or the ally gets, for the GM.)
             const other = reactions.find(({ plan }) => plan.builtin === "champion-reaction" && !plan.self);

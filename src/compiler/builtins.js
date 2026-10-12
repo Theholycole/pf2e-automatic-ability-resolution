@@ -1380,6 +1380,7 @@ function readResistDamage(text, trigger, effect) {
     // (Batch 217, a Battlezoo thief's dream: resistance to all damage but one type against what set it off, and a short teleport — the type left out a
     // note.)
     let except = null;
+    let replaces = false;
     const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")
         .replace(/\bresistance (\d+) (?:all|to all damage) \(except ([a-z]+)\)/i, (_all, value, kind) => {
             except = kind.toLowerCase();
@@ -1394,6 +1395,14 @@ function readResistDamage(text, trigger, effect) {
             return "";
         })
         .replace(/\s*If the triggering effect deals multiple damage types, (?:the [\w' -]+?|it|they) chooses? which type to resist\./i, (all) => (triggering ? "" : all))
+        // (Batch 228, Battlezoo: resistance to the triggering damage type for a minute, a new use replacing the last, never against cold iron — a note.)
+        .replace(/^(?:The )?[^.]+?\. For the next minute, (?:the [\w' -]+?|it|they) (?:has|have) resistance (\d+) (?:against|to) the triggering damage type(?: \([^)]*\))?\. (?:If (?:it|they) uses? this ability again, (?:it|they) loses? (?:its|their) previous resistance from [A-Z][\w' -]+? and replaces? it with the new (?:one|resistance)|A new use swaps out the old resistance)\. (?:This resistance never applies to damage from cold iron weapons\b[^.]*|Cold iron weapons get through it)\.$/i, (_all, value) => {
+            triggering = true;
+            minute = true;
+            except = "cold iron weapons'";
+            replaces = true;
+            return `It gains resistance ${value} against the triggering damage.`;
+        })
         .split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
     const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports (?:to an adjacent (?:space|square)|up to \d+ feet in any direction)| and (?:Flies|Strides|Steps) away from the attacker)?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
     // (Batch 150, Clot: "… forms a clot around the wound, reducing the damage taken by 5 (to a minimum of 0)." — resistance 5 to it.)
@@ -1424,7 +1433,7 @@ function readResistDamage(text, trigger, effect) {
         on,
         types: triggering ? ["triggering"] : named ? [named.toLowerCase()] : null,
         ...(minute ? { lasts: 10 } : {}),
-        ...(except ? { note: `Not against ${except} damage.` } : {}),
+        ...(except ? { note: `Not against ${except} damage.${replaces ? " A new use replaces the last one." : ""}` } : {}),
         ...(attack ? { attack: true } : {}),
         ...(foe ? { foe: true } : {}),
         ...(/until the end of (?:its|their|his|her) next turn/i.test(read[0]) && !minute ? { lasts: 1 } : {}),
@@ -1804,7 +1813,7 @@ function strikeBack(sentences) {
 //   perDay }.
 export function readGuardian(text) {
     const body = String(text).trim().replace(/@Damage\[\(?([^\]\[]+?)\)?\[healing\]\](?:\{[^}]*\})?/g, "$1").replace(/\s*Effect: [^.]+$/i, "");
-    const split = /^(?:Frequency (once per day) )?(?:Trigger )?(.+?)\.? Effect (.+)$/.exec(body);
+    const split = /^(?:Frequency (once per day) )?(?:Trigger )?(.+?)[.;]? Effect (.+)$/.exec(body);
     if (!split) return null;
     const [, perDay, trigger, effect] = split;
     const said = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
@@ -1816,6 +1825,16 @@ export function readGuardian(text) {
     if (master && /\btaking half the damage of the attack \(before applying any weaknesses or resistances\)\./i.test(effect) && /\btakes the remaining damage, applying any weaknesses or resistances as normal\.$/i.test(effect)) return { builtin: "intercept", ward: "master", share: 0.5, attacks: true };
     if (new RegExp(String.raw`^A ward within (?:the [\w' -]+?['’]s|its|their) reach would take damage from a Strike, and ${who} is within the attacker's reach$`, "i").test(trigger)
         && said.length === 2 && /^(?:The )?[^.]+? blocks the attack with (?:their|its|his|her) own body, taking the triggering attack's damage\.$/i.test(said[0]) && /^The ward takes no damage\.$/i.test(said[1])) return { builtin: "intercept", ward: "ward", share: 1, strikes: true };
+    // (Batch 228, Battlezoo: an ally's Strike damage taken in its place, when the Strike could have been aimed at it — the whole of it; a critical hit on a
+    // creature beside it shared half and half, both taking the hit's effects but not the critical hit's — critical.)
+    if (new RegExp(String.raw`^(?:One of ${who}['’]s allies|An ally of ${who}) is hit by a Strike that could (?:also )?have targeted ${who}$|^An ally of ${who} is struck by a Strike that ${who} was also in range of$`, "i").test(trigger)
+        && said.length === 1 && /^(?:The )?[^.]+? takes the effects of the (?:successful|triggering) Strike instead\.$|^(?:The )?[^.]+? suffers that Strike's results in (?:its|their) place\.$/i.test(said[0])) return { builtin: "intercept", ward: "ally", share: 1, strikes: true };
+    if (new RegExp(String.raw`^A creature (?:rolls a critical hit to Strike|critically hits) a creature adjacent to ${who}$`, "i").test(trigger)) {
+        const shared = said.filter((sentence) => !/^(?:The )?[^.]+? (?:boldly )?intercepts the attack\.$/i.test(sentence));
+        const halves = /^(?:Damage dealt by the triggering Strike is divided evenly between|The triggering Strike's damage is split evenly between) (?:the [\w' -]+?|it) and the struck creature\.$/i.test(shared[0] ?? "");
+        const effects = shared.slice(1).every((sentence) => /^(?:The [\w' -]+?|It) and the struck creature are both affected by any effects that the triggering Strike would normally apply on a hit, but neither defender takes any effects that apply on only a critical hit\.$|^Both take the Strike's hit effects, and neither takes its critical-hit-only ones\.$/i.test(sentence));
+        if (halves && effects) return { builtin: "intercept", ward: "ally", share: 0.5, strikes: true, critical: true, note: "Only a critical hit. Both take the Strike's effects on a hit, and neither takes those only a critical hit brings." };
+    }
     const near = new RegExp(String.raw`^An ally within (\d+) feet of ${who} would take damage$`, "i").exec(trigger);
     if (near && /^(?:The )?[^.]+? Strides\. This movement does not trigger reactions, and [^.]+? must end the Stride in a space adjacent to the ally\. (?:The )?[^.]+? then switches places with the ally, taking all damage and associated effects instead of the ally\.$/i.test(effect.trim())) return { builtin: "intercept", ward: "ally", share: 1, within: Number(near[1]), swap: true };
     const dropping = /^An allied creature within (\d+) feet would be reduced to 0 Hit Points$|^A creature within (\d+) feet would drop to 0 Hit Points$/i.exec(trigger);
@@ -2090,7 +2109,8 @@ export function readReaction(item, text) {
     // (Batch 177: creatures that come as it falls — Final Spite's "blows a battered war horn before being destroyed. The unnerving blast summons
     // reinforcements, raising 1d4 corpses … as Wights.", the cobbled bruiser's "A Cobbleswarm spawns in the space …" — the GM's, as summons are
     // (the user's choice of 2026-10-11).)
-    if (/\bsummons reinforcements, raising [^.]*? corpses\b/i.test(effect) || /^An? (?:Weakened )?[A-Z][\w'-]+ spawns in the space (?:the [\w' -]+?|it) previously occupied\b/.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 228, Battlezoo: a fallen ally raised as an undead creature — a summon too.)
+    if (/\bsummons reinforcements, raising [^.]*? corpses\b/i.test(effect) || /^An? (?:Weakened )?[A-Z][\w'-]+ spawns in the space (?:the [\w' -]+?|it) previously occupied\b/.test(effect.trim()) || /\b(?:rises|stands up) as an? (?:[\w-]+-sized )?[A-Z][\w' -]+?,/.test(effect)) return { builtin: "no-effect" };
     // (Batch 86: Counterspell's kin — a spell or effect that sets it off, and an attempt to counteract it: "Trigger The nullifier is the target
     // of a spell Effect The nullifier attempts to counteract the triggering spell …", "Trigger A creature within 30 feet casts a divine spell
     // … attempts to counteract the triggering spell …". The GM's, as Counterspell is (the user's choice of 2026-10-11).)
@@ -2347,6 +2367,19 @@ export function readReaction(item, text) {
         const rest = said.slice(1).every((sentence) => /^Demoralize loses the auditory trait and gains the visual trait\b[^.]*\.$|^If the Intimidation check critically succeeds, [^.]*disrupts? the triggering action\.$/i.test(sentence));
         if (glance && rest) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, melee: true };
     }
+    // (Batch 228, Battlezoo: a Strike at it in its reach answered with its own Strike first, its AC lower against the triggering Strike — selfAcPenalty; a
+    // later use only after another of its abilities, a note.)
+    if (/^A creature within (?:the [\w' -]+?['’]s|its) reach makes a Strike against (?:it|them|the [\w' -]+?),?$|^A creature (?:within|in) (?:the [\w' -]+?['’]s|its) reach Strikes at (?:it|them)$/i.test(trigger.trim().replace(/\.$/, ""))) {
+        const lunge = /^(?:The )?[^.]+? (?:takes a [–-](\d+) circumstance penalty to (?:its|their) AC against the triggering Strike and then|lowers (?:its|their) guard by (\d+) for that Strike, then) makes an? ([\w' -]+?) Strike against the (?:attacking|triggering) creature\.( (?:The )?[^.]+? can(?:'t|not) use [A-Z][\w' -]+? again until (?:it|they) uses? ([A-Z][\w' -]+?)\.)?$/i.exec(effect.trim());
+        if (lunge) lunge.splice(1, 2, lunge[1] ?? lunge[2]);
+        if (lunge) return { builtin: "reaction-strike", triggers: ["attacked"], strike: lunge[2].toLowerCase(), penalty: 0, disrupts: false, melee: true, selfAcPenalty: Number(lunge[1]), note: `Its AC is ${lunge[1]} lower against the triggering Strike.${lunge[4] ? ` Not again until it uses ${lunge[4]}.` : ""}` };
+    }
+    // (Batch 228, Battlezoo: another of its kind hitting a foe in its reach with a named Strike, its own Strike of that name at the same foe — kin,
+    // allyStrike; one answer to a Strike, and its Strike sets off no other.)
+    const duo = /^Another ([\w' -]+?) (?:succeeds on|hits with) an? ([\w' -]+?) Strike against an enemy within this \1['’]s reach$/i.exec(trigger.trim().replace(/\.$/, ""))
+        ?? /^Another ([\w' -]+?)['’]s ([\w' -]+?) Strike hits a (?:foe|enemy) in this \1['’]s reach$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const duoStrike = duo ? new RegExp(String.raw`^(?:The )?[^.]+? makes an? ${duo[2]} Strike against the same (?:enemy|foe|creature)\.( Only one [^.]+ can use [A-Z][\w' -]+? from a single triggering [\w' -]+? Strike, and the [\w' -]+? Strike made with [A-Z][\w' -]+? can(?:'t|not) trigger any additional [^.]+ reactions\.)?$`, "i").exec(effect.trim()) : null;
+    if (duoStrike) return { builtin: "reaction-strike", triggers: ["ally-hit"], strike: duo[2].toLowerCase(), penalty: 0, disrupts: false, kin: true, allyStrike: duo[2].toLowerCase(), note: `Only after another ${duo[1]}'s ${duo[2]} Strike hits. One answer to that Strike, and this Strike sets off no other.` };
     // (Batch 227, Battlezoo: a ranged attack at it answered with a Demoralize at the attacker; that Demoralize's immunity neither stops it nor follows
     // from it, a note — rangedAttack: only a ranged attack.)
     if (/^(?:The )?[^.]+? is the target of a ranged attack$/i.test(trigger.trim().replace(/\.$/, ""))) {
