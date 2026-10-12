@@ -3126,3 +3126,11 @@ test("two Strikes one with each weapon; two at separate targets then a Swim; two
     const ravage = compile(3, "The test brain makes two claw Strikes against a Paralyzed, Restrained, or Unconscious creature, using the same attack modifier as its highest attack modifier. These Strikes gain the death trait.");
     assert.deepEqual([ravage.noMap, ravage.requires, ravage.sameTarget], [true, "helpless", true]);
 });
+
+test("a drawn weapon's Strike off-guard with extra bleed; a hit that grabs and pulls (2026-10-12, batch 187)", () => {
+    const compile = (html) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    const blow = compile("<p>The test duelist Interacts to draw a melee weapon without triggering reactions and makes a Strike with that weapon. The target is Off-Guard against this Strike. The test duelist deals an extra @Damage[1d6[bleed]] with the Strike.</p>");
+    assert.deepEqual([blow.offGuard, blow.onHit.damage, blow.notes.length], [true, ["1d6[bleed]"], 1]);
+    const drop = compile("<p>The test bat makes a claw Strike. On a hit, the Strike deals an additional @Damage[1d4[slashing]] damage and the test bat immediately Grabs the target and pulls it to a space adjacent to the test bat.</p>");
+    assert.deepEqual([drop.onHit.damage, drop.onHit.conditions.map((entry) => entry.slug)], [["1d4[slashing]"], ["grabbed"]]);
+});

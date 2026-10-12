@@ -946,6 +946,23 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 activity.onHit.damage.push(`${persistent}[persistent,${kind.toLowerCase()}]`);
                 return `${who} makes a ${weapon} Strike`;
             })
+            // (Batch 187: Swift Blow's "Interacts to draw a melee weapon without triggering reactions and makes a Strike with that weapon.", "The target is
+            // Off-Guard against this Strike.", "The weapon master deals an extra @Damage[2d8[bleed]] with the Strike."; Attack from Above's "On a hit, the Strike
+            // deals an additional 1d6 slashing damage and the asanbosam immediately Grabs the target and pulls it to a space adjacent to the asanbosam.")
+            .replace(/^((?:The )?[^.]+?) Interacts to draw a melee weapon without triggering reactions and makes a Strike with that weapon(?=\.$)/i, (_all, who) => {
+                (activity.notes ??= []).push("It draws the weapon first (an Interact that triggers no reactions).");
+                return `${who} makes a melee Strike`;
+            })
+            .replace(/^The target is Off-Guard against this Strike\.$/i, () => {
+                activity.offGuard = true;
+                return "[told]";
+            })
+            .replace(/^(?:The [\w' -]+?|It|They|He|She) deals an extra (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) (?:damage )?with the Strike\.$/i, (_all, tag) => `If it hits, it deals an additional ${tag} damage.`)
+            .replace(/^On a hit, the Strike deals an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage and (?:the [\w' -]+?|it) immediately Grabs the target and pulls it to a space adjacent to (?:the [\w' -]+?|it|itself)\.$/i, (_all, tag) => {
+                activity.onHit.conditions.push({ slug: "grabbed", value: null, duration: null });
+                (activity.notes ??= []).push("On a hit, it pulls the target to a space beside it.");
+                return `If it hits, it deals an additional ${tag} damage.`;
+            })
             // (Batch 173, Hunter's Aim: "makes a ranged weapon Strike against her hunted prey" — only at its prey; Dmiri's "When Dmiri focuses on aiming,
             // her attack becomes particularly accurate. Make a ranged weapon Strike against her hunted prey.")
             .replace(/^When [^,.]+? focuses on aiming, (?:her|his|its|their) attack becomes particularly accurate\.$/i, "[told]")

@@ -1633,3 +1633,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Ravage → a multi-Strike with `noMap`, at one creature, `requires: "helpless"`, its death trait and Body Thief as notes. Thrashing Retreat → two Strikes at different creatures, the Swim after a note. Graceful Double Slice ("one with each kukri, using her current multiple attack penalty") → its two Strikes at one creature, counted as one attack.
 - **Live:** no new live code: the multi-Strike notes. Not run in pftest.
 - **Simulator:** Ravage only at a Paralyzed, Restrained or Unconscious creature (B186); the others as before.
+
+## A drawn weapon's Strike; a hit that grabs and pulls (2026-10-12, batch 187)
+
+- **Compiled:** Swift Blow → a Strike activity, off-guard, with 2d8 bleed on a hit and a note for the draw. Attack from Above → its claw Strike (its reach a note), extra damage and Grabbed on a hit, and a note for the pull. Both are behind requirements the GM checks.
+- **Live:** no new live code. Not run in pftest.
+- **Simulator:** nothing new; they aren't planned (their requirements).
