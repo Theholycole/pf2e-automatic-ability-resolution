@@ -2127,7 +2127,9 @@ function automaticEffect(item, actor = null, { rider = false } = {}) {
         // (Also "… sucks blood from that target, dealing 2d4 damage".)
         // (Batch 65: "The lizard's jaws deal 1d6 piercing damage and 1d6 acid damage to the triggering creature".)
         // (Batch 69: "dealing an additional 1d8 sonic damage to the creature struck".)
-        const deals = /\b(?:deal(?:s|ing)?|dealing an (?:additional|extra)) @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim|triggering creature)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain));
+        const deals = /\b(?:deal(?:s|ing)?|dealing an (?:additional|extra)) @D(?: damage)? to (?:the (?:target|creature|grabbed creature|restrained creature|victim|triggering creature)|each (?:creature|enemy|foe)|all (?:creatures|enemies|foes))\b/i.test(plain) || (/\b(?:that|the) (?:target|creature|foe|victim)\b[^.]*?\bdealing @D(?: damage)?\b/i.test(plain) && !/\bdealing @D(?: damage)? to\b/i.test(plain))
+            // (Batch 225, Shell Shock: "… inflicting 7d6 electricity damage to the creature attacking it".)
+            || /\binflicting @D(?: damage)? to the creature attacking (?:it|them|him|her)\b/i.test(plain);
         const conditions = readConditions(sentence).filter((entry) => entry.recipient !== "self");
         const is = (AUTO_SUBJECT.test(plain) || deals) && conditions.length > 0;
         // (What it only tells: "This is in addition to the normal sonic damage from the antler Strike".)
@@ -3054,6 +3056,41 @@ function ownAffliction(item, actor, phrase) {
     }
 }
 
+// A bite at a creature it holds as that creature tries to get free (2026-10-12, batch 225): "Trigger A creature Grabbed by the giant monitor
+// lizard's jaws fails a check to Escape. Effect The giant monitor lizard's jaws deal 1d6 piercing damage and the triggering creature is exposed
+// to monitor lizard venom." (its own affliction's save, the damage on every result), "Trigger A creature Grabbed or Restrained by the
+// allosaurus's jaws succeeds at an Escape check Effect As the enemy wriggles away, the allosaurus clamps down with its jagged teeth, dealing 2d6
+// slashing damage." → the damage on that creature, with the trigger "escape-failed" or "escaped".
+function escapeBite(item, actor) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (!["escape-failed", "escaped"].includes(trigger?.event) || tags.length !== 1 || /\bhealing\b/i.test(tags[0])) return null;
+    const bite = /^(?:As the (?:enemy|creature|foe) (?:wriggles|squirms|pulls) (?:away|free), )?(?:The )?[^.]+? (?:deals?|dealing) @D damage(?: to (?:the triggering creature|it|them))?(?: and the triggering creature is exposed to ([^.]+?))?\.$/i.exec(split[2].trim());
+    if (!bite) return null;
+    const rewritten = withDescription(item, `<p><strong>Trigger</strong> ${split[1].trim()}</p><hr /><p><strong>Effect</strong> It deals @Damage[${tags[0]}] damage to the triggering creature.</p>`);
+    if (!bite[1]) {
+        const plan = automaticEffect(rewritten, actor);
+        return plan ? reactionTrigger(rewritten, plan, actor) : null;
+    }
+    const poison = ownAffliction(item, actor, bite[1].toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, ""));
+    if (!poison?.resolution?.outcomes) return null;
+    const formula = readDamage(tags[0]);
+    if (!formula || /@/.test(formula)) return null;
+    for (const row of Object.values(poison.resolution.outcomes)) row.damage = { mode: "formulas", formulas: [{ formula }], rollScope: "target" };
+    return {
+        ...poison,
+        source: base(item).source,
+        activation: { time: "reaction", traits: poison.activation?.traits ?? [] },
+        targeting: { target: "the attacker", range: "touch", area: null },
+        trigger: { ...trigger, reaction: true },
+        notes: [...(poison.notes ?? []), `It deals ${formula.replace(/\[(\w+)\]/g, " $1").replace(/[()]/g, "")} damage whatever the save.`]
+    };
+}
+
 function areaExposure(item, actor) {
     if (item.system?.actionType?.value === "reaction") return exposureReaction(item, actor);
     if (item.system?.actionType?.value !== "action") return null;
@@ -3835,6 +3872,9 @@ function provokedStrike(item) {
         if (/^If (?:it|the Strike|the attack|this attack|the Strike) hits, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts (?:the (?:creature's|triggering) action|that action|the action)\.$|^On a success the target's action is interrupted;/i.test(sentence)) disrupts = true;
         else if (/^If (?:the attack|this attack|the Strike|it) is a critical hit(?: and the trigger was a move action)?, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts? (?:that|the triggering|the) action\.$/i.test(sentence)) disrupts ||= "critical";
         else if (/^This Strike (?:doesn't|does not) contribute to (?:his|her|its|their) multiple attack penalty, and (?:his|her|its|their) multiple attack penalty (?:doesn't|does not) apply to this Strike\.$/i.test(sentence)) continue;
+        // (Batch 225: Disruptive Screech's "This disrupts a triggering concentrate action if the Strike is a critical hit.", Clinch Victory's "On a
+        // critical success, this Strike also disrupts the triggering action.")
+        else if (/^This disrupts (?:a|the) triggering (?:concentrate )?action if the Strike is a critical hit\.$|^On a critical (?:success|hit), this Strike also disrupts the triggering action\.$/i.test(sentence)) disrupts ||= "critical";
         // (Root In Place's "If the creature was Flying when its action was disrupted, it falls.": the GM's.)
         else if (/^If the creature was Flying when its action was disrupted, it falls\.$/i.test(sentence)) continue;
         else return null;
@@ -4269,7 +4309,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -4296,7 +4336,9 @@ export function readReactionTrigger(text) {
     // Batch 22: Reactive Strike's triggers, with results of its own (on the whole text: its ", or …" are its triggers).
     const provoked = provokeTrigger(String(text ?? "").trim().replace(/[.;]\s*$/, ""));
     if (provoked) return provoked;
-    const trigger = String(text ?? "").trim().replace(/[.;]\s*$/, "").replace(/, or\b.*$/i, "");
+    // (Batch 225, Shell Shock: "A lightning turtle is hit by …" — the monster, by its kind.)
+    const trigger = String(text ?? "").trim().replace(/[.;]\s*$/, "").replace(/, or\b.*$/i, "")
+        .replace(/^An? ([a-z][\w' -]+?) (?=is (?:hit|critically hit) by\b)/, (all, kind) => (/\b(?:creature|enemy|foe|ally|allies|target|object)\b/.test(kind) ? all : `The ${kind} `));
     const types = (words) => {
         const found = [...String(words ?? "").matchAll(DAMAGE_WORDS)].map((match) => match[1].toLowerCase());
         return found.length ? [...new Set(found)] : null;
@@ -4306,7 +4348,8 @@ export function readReactionTrigger(text) {
         // (Not one of several triggers: "A creature damages the door, fails to Force Open the door, or …".)
         if (refused(how) || how.includes(",") || refused(within.replace(/\bwithin \d+ feet\b/i, ""))) return null;
         const melee = adjacent || /\b(?:melee|unarmed|reach)\b/i.test(`${how} ${within}`);
-        const unarmed = /\bunarmed\b/i.test(how) && !/\bmelee (?:weapon|attack|Strike)s?\b|\bweapons?\b/i.test(how.replace(/\bmelee unarmed\b/gi, "unarmed").replace(/\bunarmed melee\b/gi, "unarmed"));
+        // (Batch 225, Shell Shock's "a melee or an unarmed attack": any melee attack.)
+        const unarmed = /\bunarmed\b/i.test(how) && !/\bmelee or (?:an )?unarmed\b/i.test(how) && !/\bmelee (?:weapon|attack|Strike)s?\b|\bweapons?\b/i.test(how.replace(/\bmelee unarmed\b/gi, "unarmed").replace(/\bunarmed melee\b/gi, "unarmed"));
         const distance = Number(/\bwithin (\d+) feet\b/i.exec(within)?.[1]) || null;
         // ("… that deals slashing or piercing damage", "with a piercing or slashing Strike".)
         const damageTypes = types(/\bdamage\b|\b(?:bludgeoning|piercing|slashing)(?: or \w+)? (?:Strike|attack|weapon)/i.test(how) ? how : "");
@@ -4319,6 +4362,8 @@ export function readReactionTrigger(text) {
     // creature Grabbed or Restrained by the wyvern critically fails a skill check to Escape".
     const escaping = new RegExp(String.raw`^An? creature (?:Grabbed|grabbed)(?: or Restrained)? by ${SELF}(?:['’]s [\w' -]+?)? (critically fails|fails) an? (?:skill )?check to Escape$`).exec(trigger);
     if (escaping) return { event: "escape-failed", reaction: true, ...(/^critically/i.test(escaping[1]) ? { critical: true } : {}) };
+    // (Batch 225, Serrated Teeth: "A creature Grabbed or Restrained by the allosaurus's jaws succeeds at an Escape check" — one it held getting free.)
+    if (new RegExp(String.raw`^An? creature (?:Grabbed|grabbed)(?: or Restrained)? by ${SELF}(?:['’]s [\w' -]+?)? succeeds at an? (?:Escape check|(?:skill )?check to Escape)$`).test(trigger)) return { event: "escaped", reaction: true };
     // A foe's mishap near it (batch 57, Jeer at Failure): "A foe within 90 feet becomes Prone or critically fails on a Strike".
     const mishap = /^An? (?:foe|enemy) within (\d+) feet becomes Prone or critically fails on a Strike$/i.exec(trigger);
     if (mishap) return { event: "foe-mishap", reaction: true, within: Number(mishap[1]) };
@@ -4724,6 +4769,10 @@ function provokeTrigger(text) {
             within ??= "reach";
         }
         else if (/^makes? a ranged attack$/i.test(part)) triggers.add("ranged");
+        // (Batch 225: "uses an auditory action", Auditory Swipe's and Disruptive Screech's; "uses an action that would restore Hit Points", Clinch
+        // Victory's — a healing action.)
+        else if (/^uses? an? auditory action$/i.test(part)) triggers.add("auditory");
+        else if (/^uses? an action that would restore Hit Points$/i.test(part)) triggers.add("healing");
         else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during (?:a|its|their) move action)?$/i.test(part)) triggers.add("leave");
         else if (/^Strides$/.test(part)) triggers.add("move");
         else if (new RegExp(String.raw`^enters ${SELF}'s? reach$`).test(part)) {

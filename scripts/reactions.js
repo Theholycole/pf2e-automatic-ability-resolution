@@ -311,6 +311,14 @@ async function onMessage(message) {
     if (castTraits?.includes("concentrate") || (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("concentrate"))) {
         await provokeTrigger(scene, combat, token, "concentrate", castTraits ? "cast a concentrate spell" : "used a concentrate action");
     }
+    // (Batch 225: an auditory action — a spell with the trait, or a check with it, Demoralize — and a healing one, a spell or Battle Medicine: the
+    // reaction Strikes that say so (Auditory Swipe, Disruptive Screech, Clinch Victory), not Reactive Strike.)
+    const checkTraits = context?.type === "skill-check" ? (context.traits ?? []).map((trait) => trait?.name ?? trait) : [];
+    for (const [kind, words] of [["auditory", "used an auditory action"], ["healing", "used a healing action"]]) {
+        if (!castTraits?.includes(kind) && !checkTraits.includes(kind)) continue;
+        await reachTrigger(scene, combat, token, words, kind, { own: true });
+        await provokeTrigger(scene, combat, token, kind, words);
+    }
 }
 
 // Tail Lash, Avenging Bite, Violent Retort (batch 38): a Strike in its reach (or a skill check that's an attack), an attack on one of
@@ -460,6 +468,9 @@ async function escapeAnswers(message, context, scene, combat, escaper) {
             const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("escaped"));
             const strikes = entry ? meleeStrikes(actor, `(${entry.plan.strike} only)`) : [];
             if (strikes.length) return offer({ kind: "strike", item: entry.item, monster, actor, target: escaper, strikes, trigger: "escaped its hold" });
+            // (Batch 225, Serrated Teeth: its card, the damage on the creature getting free.)
+            const card = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "escaped");
+            if (card) return offer({ kind: "card", item: card.item, monster, actor, target: escaper, trigger: "escaped its hold", free: !!card.plan.trigger.free });
         }
         return;
     }
@@ -496,19 +507,21 @@ async function provokeTrigger(scene, combat, token, kind, words) {
 }
 
 // Reactive Strike against a creature in reach that made a ranged attack or cast a manipulate spell.
-async function reachTrigger(scene, combat, token, trigger, kind = null) {
+async function reachTrigger(scene, combat, token, trigger, kind = null, { own = false } = {}) {
     const grid = gridOf(scene);
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
         // (Batch 64: a reaction Strike its trigger sets off on a ranged attack in its reach, Tail Smash's; the GM checks it was at it.)
-        const entry = reactions.find(({ plan }) => plan.builtin === "reactive-strike" || (kind && plan.builtin === "reaction-strike" && plan.triggers?.includes(kind)));
+        // (own, batch 225: only a reaction Strike that names the kind.)
+        const entry = reactions.find(({ plan }) => (!own && plan.builtin === "reactive-strike") || (kind && plan.builtin === "reaction-strike" && plan.triggers?.includes(kind)));
         if (!entry) continue;
         const distance = distanceFeet(box(monster, grid.size), box(token, grid.size), grid);
         // (Batch 68: a distance in feet, Snap Shot's, its Strike by name, ranged too.)
         const strikes = (entry.plan.within && entry.plan.builtin === "reaction-strike"
             ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(entry.plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: entry.plan.within }))
             : meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name)).filter((strike) => distance <= strike.reach);
-        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: [entry.plan.criticalTrip ? CRITICAL_TRIP : null, entry.plan.builtin === "reactive-strike" ? entry.plan.note ?? null : null].filter(Boolean).join(" ") || null });
+        const disrupts = own && entry.plan.disrupts ? (entry.plan.disrupts === "critical" ? "On a critical hit, the triggering action is disrupted." : "If the Strike hits, the triggering action is disrupted.") : null;
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: [entry.plan.criticalTrip ? CRITICAL_TRIP : null, entry.plan.builtin === "reactive-strike" ? entry.plan.note ?? null : null, disrupts].filter(Boolean).join(" ") || null });
     }
 }
 

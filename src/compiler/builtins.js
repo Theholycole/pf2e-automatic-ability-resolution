@@ -1458,7 +1458,7 @@ export function readWithdraw(text) {
     const body = String(text).trim();
     const subject = "(?:the [\\w' -]+?|it|[A-Z][\\w'-]+(?: [A-Z][\\w'-]+)*)";
     const legacy = new RegExp(`^If an? (?:creature|enemy|foe) ends its movement adjacent to ${subject}(?: or within ${subject}['’]s space)?, ${subject} can use (?:its|their|his|her) reaction to (Step|Stride)(?:, Climb,? or Swim| or (?:Climb|Swim))?(?: up to (\\d+) feet)?\\.((?: [^.]+\\.)*)$`, "i").exec(body);
-    const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(body);
+    const split = /^Trigger (.+?)[.;]? Effect (.+)$/.exec(body);
     if (!legacy && !split) return null;
     let on = null;
     let melee = false;
@@ -1483,6 +1483,8 @@ export function readWithdraw(text) {
         else if (new RegExp(`^An? creature attempts to target ${subject}, or attempts to include ${subject} in an area of effect$`, "i").test(trigger)) on = "attacked";
         // (Batch 218, a Battlezoo taunt: a Strike aimed at it.)
         else if (/^(?:The )?[\w' -]+? is targeted by a Strike$/i.test(trigger)) on = "attacked";
+        // (Batch 225, Scurry: "A creature the lomori sprout can observe attacks the sprout" — once the attack is done.)
+        else if (new RegExp(`^An? (?:creature|enemy|foe) ${subject} can (?:observe|see) attacks ${subject}$`, "i").test(trigger)) on = "attacked";
         else if (new RegExp(`^An? (?:foe|enemy) ends (?:their|its) turn,? (?:and ${subject} is|with ${subject}) within that (?:foe|enemy)['’]s reach$`, "i").test(trigger)) on = "approach";
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
@@ -1508,6 +1510,8 @@ export function readWithdraw(text) {
     else {
         // ("… takes a step after the effects of the triggering attack are resolved.")
         if (/^(?:The )?[\w' -]+? takes a step after the effects of the triggering attack are resolved\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Steps.";
+        // (Batch 225, Scurry: "After the attack resolves, the lomori sprout can Stride up to their speed.")
+        if (/^After the attack resolves, (?:the [\w' -]+?|it|they) can Stride up to (?:its|their) [Ss]peed\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Strides.";
         // (Batch 191, Skittering Reposition: "The gogiteth moves 10 feet." — a Stride that far.)
         if (/^(?:The )?[\w' -]+? moves \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*moves (\d+) feet\.$/i, "It Strides up to $1 feet.");
         // (Batch 206, Panicked Withdrawal: "The marp drops any items held in their hands, then Climbs or Strides up to 15 feet." — the move; what it drops
@@ -1544,7 +1548,8 @@ export function readWithdraw(text) {
     let safe = move === "Step";
     let recharge = null;
     for (const sentence of sentences) {
-        if (/^This (?:movement |Burrowing )?(?:doesn't|does not) trigger reactions(?: based on movement)?\.$/i.test(sentence)) safe = true;
+        // (Batch 225, Scurry: "… doesn't trigger reactions from the triggering creature" — played as no reactions at all.)
+        if (/^This (?:movement |Burrowing )?(?:doesn't|does not) trigger reactions(?: based on movement| from the triggering creature)?\.$/i.test(sentence)) safe = true;
         // (Crumble: "The living landslide can't Crumble again for 1d4 rounds.")
         else if (/^(?:The [\w' -]+?|It|They) can(?:'t|not) [\w' -]+? again for (?:\[\[\/\w+ (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.test(sentence)) recharge = /(\d+d\d+)/.exec(sentence)[1];
         else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$|^(?:It|He|She|They) can(?:'t|not) end (?:the|its|this) movement (?:adjacent|next) to another (?:foe|enemy)\.$/i.test(sentence)) return null;

@@ -2124,3 +2124,22 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** cards as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Reaction Strikes at auditory and healing actions, shocks and bites (2026-10-12, batch 225)
+
+- **Compiled:**
+  - **Auditory Swipe, Disruptive Screech** → `reaction-strike` with the trigger `auditory`: a creature in its reach, or within 30 feet for Disruptive Screech's screech, uses an auditory action. Disruptive Screech's critical hit disrupts the action.
+  - **Clinch Victory** → `reaction-strike` with the trigger `healing`: an action that would restore Hit Points, in its reach. A critical hit disrupts it.
+  - **Shell Shock** → 7d6 electricity on a creature that hits it with any melee attack. "A melee or an unarmed attack" is now any melee attack, not unarmed only, and "A lightning turtle is hit" names the monster.
+  - **Gnashing Grip** → when a creature it holds fails to Escape, its own venom's save, with 1d6 piercing damage on every result.
+  - **Serrated Teeth** → 2d6 slashing on a creature that Escapes it: the new trigger `escaped`.
+  - **Scurry** → a Stride once an attack on it is done, with no reactions. The text only rules out the attacker's reactions.
+- **Live:**
+  - An auditory action (a spell with the trait, or a check with it, such as Demoralize) or a healing one (a spell, or a check with the trait, such as Battle Medicine) offers the reaction Strikes that name it, never Reactive Strike. Cards whose trigger names those kinds are offered too.
+  - The offer's note says when a critical hit disrupts the action.
+  - Escaping a monster's hold offers its `escaped` card.
+  - **Checked in pftest (2026-10-12):**
+    - Valeros's Demoralize at a Morthak offered Auditory Swipe ("used an auditory action") with its Claw, and no Reactive Strike. The Claw rolled against Valeros.
+    - Seelah's Lay on Hands beside a Triumph Siktempora offered Clinch Victory, with the critical-hit note. The healer has to be in the encounter.
+    - Merisiel's failed Escape from an Allosaurus offered nothing. The same Escape reposted as a success offered Serrated Teeth, and its card dealt her 5 damage.
+- **Simulator:** see B225 in its ability decisions.
+
