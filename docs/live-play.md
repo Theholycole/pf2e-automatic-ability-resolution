@@ -1654,3 +1654,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - the creature comes from a PF2e bestiary that isn't a rulebook's (`"adventure"`). The pack is the tool's `pack` option, or the actor's `_stats.compendiumSource` (`flags.core.sourceId`, `sourceId`).
 - **Live:** nothing changes in play: PF2e's own card, as for any `no-effect`. Run in pftest: Murschen, imported from the Abomination Vaults bestiary, kept its compendium source. His uncovered Red Ruin Stance compiled as the GM's (`adventure`), on the world actor and on an unlinked token's actor, while his Flurry of Blows stayed a multi-Strike.
 - **Simulator:** these aren't played, and the in-Foundry snapshot and the bestiary tool still list them among what the simulation leaves out.
+
+## An ability three times; more multi-Strikes (2026-10-12, batch 190)
+
+- **Compiled:** "uses X three times. None of the bursts can overlap." → X's plan with this action's cost, its other areas a note (Bathygenic Barrage). Multi-Strikes with a move first: flying (Aerial Attack), jumping (Spring Forward, with a note for its Knockdown), striding (Quickening Jolt, a blog creature's). Dead Shot is two ranged Strikes at one creature, with notes for the range increment and the precision once; its requirement after its frequency is now read. Lightning Blade → a Strike at each creature in reach, with its penalty, extra damage and "counts as two", one roll a note. Towering Bite → its jaws Strike with a reach note, Grabbed and a pull note on a hit. Masterful Engagement → its Strike with a Step note.
+- **Live:** no new live code. Not run in pftest.
+- **Simulator:** nothing new.

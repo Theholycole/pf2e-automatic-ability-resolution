@@ -964,6 +964,25 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 (activity.notes ??= []).push("On a hit, it pulls the target to a space beside it.");
                 return `If it hits, it deals an additional ${tag} damage.`;
             })
+            // (Batch 190: Towering Bite's "… making a jaws Strike with a reach of 60 feet. If the Strike hits, its target is Grabbed and pulled to an empty
+            // space adjacent to the plated python. The python can attack through any material it can burrow through, …"; Masterful Engagement's "It Steps
+            // and Strikes, in any order.")
+            .replace(/\b((?:makes|attempts|making) an? [\w' -]+? Strike) with a reach of (\d+) feet(?=\.$)/i, (_all, made, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike.`);
+                return made;
+            })
+            .replace(/^If the Strike hits, its target is Grabbed and pulled to an empty space adjacent to (?:the [\w' -]+?|it)\.$/i, () => {
+                (activity.notes ??= []).push("On a hit, it pulls the target to a space beside it.");
+                return "If it hits, the target is Grabbed.";
+            })
+            .replace(/^(?:The [\w' -]+?|It) can attack through any material it can burrow through[^.]*\.$/i, (sentence) => {
+                (activity.notes ??= []).push(sentence);
+                return "[told]";
+            })
+            .replace(/^((?:The )?[^.]+?|It|They) Steps and Strikes, in any order(?=\.$)/i, (_all, who) => {
+                (activity.notes ??= []).push("It Steps before or after its Strike.");
+                return `${who} makes a Strike`;
+            })
             // (Batch 173, Hunter's Aim: "makes a ranged weapon Strike against her hunted prey" — only at its prey; Dmiri's "When Dmiri focuses on aiming,
             // her attack becomes particularly accurate. Make a ranged weapon Strike against her hunted prey.")
             .replace(/^When [^,.]+? focuses on aiming, (?:her|his|its|their) attack becomes particularly accurate\.$/i, "[told]")
@@ -2430,6 +2449,21 @@ function reactionUsesAbility(item, actor, options) {
 function actionUsesTwice(item, actor, options) {
     if (item.system?.actionType?.value !== "action") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
+    // (Batch 190, Bathygenic Barrage: "Frequency once per day Effect The dragon uses Pressurized Pool three times. None of the bursts can overlap." —
+    // that ability's plan, its other areas a note; its frequency PF2e's.)
+    const thrice = /^(?:Frequency once per (?:day|hour|minute|10 minutes)\.? Effect )?(?:The )?[\w' -]+? uses ([A-Z][\w'-]*(?: [A-Z][\w'-]*)*) (twice|three times|four times)\. None of the (?:bursts|areas|clouds|pools|emanations) can overlap\.$/i.exec(plain);
+    if (thrice) {
+        const owner = actor ?? item.actor ?? item.parent;
+        const other = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && String(entry.name ?? "").toLowerCase() === thrice[1].toLowerCase());
+        let plan = null;
+        try {
+            plan = other ? compileMonsterAbility(other, { ...options, actor: owner }) : null;
+        } catch {
+            plan = null;
+        }
+        if (!plan?.resolution || !plan.targeting?.area) return null;
+        return { ...plan, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] }, trigger: { event: "use" }, notes: [...(plan.notes ?? []), `${thrice[1]} ${thrice[2].toLowerCase()}: that many areas, none overlapping.`] };
+    }
     const match = /^(?:The )?[\w' -]+? uses ([A-Z][\w'-]*(?: [A-Z][\w'-]*)*) twice\. A creature attempts only one save and can take damage only once\.(?: (?:The )?[\w' -]+? can(?:'t|not) use [\w' -]+? or [\w' -]+? again for (\d+d\d+|\d+) rounds\.)?$/.exec(plain);
     if (!match) return null;
     const owner = actor ?? item.actor ?? item.parent;

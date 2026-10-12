@@ -3153,3 +3153,19 @@ test("what no reading plays: the GM's when behind an unseen state, out of combat
     assert.equal(compileMonsterAbility(item("action", odd), { pack: "pathfinder-monster-core" }), null, "a rulebook creature's stays uncovered");
     assert.equal(compileMonsterAbility(item("passive", odd), { pack: "abomination-vaults-bestiary" }), null, "not a passive");
 });
+
+test("an ability used three times; flying and leaping multi-Strikes; one roll at everyone in reach; a long bite (2026-10-12, batch 190)", () => {
+    const item = (name, actions, html) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const pool = item("Test Pool", 2, "<p>The test drake expels a @Template[type:burst|distance:10] of water within 60 feet. Each creature in it must succeed at a @Check[fortitude|dc:20] save or be Clumsy 1 for 1 round.</p>");
+    const barrage = item("Test Barrage", 2, "<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test drake uses Test Pool three times. None of the bursts can overlap.</p>");
+    const thrice = compileMonsterAbility(barrage, { actor: { items: [pool, barrage] } });
+    assert.deepEqual([thrice.resolution.kind, thrice.notes.at(-1)], ["save", "Test Pool three times: that many areas, none overlapping."]);
+    const flying = compileMonsterAbility(item("Test Flight", 2, "<p>The test pegasus Flies and Strikes twice with their hooves at any points during their movement. Each attack counts toward the test pegasus's multiple attack penalty, but the penalty doesn't increase until after they make all the attacks.</p>"), {});
+    assert.deepEqual([flying.strikes, flying.strides, flying.sameMap], [["hoove", "hoove"], 1, true]);
+    const jump = compileMonsterAbility(item("Test Jump", 2, "<p>The test frog jumps up to 20 feet and makes two tongue Strikes against different targets.</p>"), {});
+    assert.deepEqual([jump.each, jump.max, jump.strides], [true, 2, 1]);
+    const blade = compileMonsterAbility(item("Test Blade", 3, "<p>The test giant hums. The test giant makes a maul Strike with a -2 circumstance penalty against each creature within its reach. It makes only one attack roll and compares the result against each creature's AC. This Strike deals an additional @Damage[2d6[sonic]] damage and counts as two attacks for the test giant's multiple attack penalty.</p>"), {});
+    assert.deepEqual([blade.each, blade.penalty, blade.countsAs, blade.extraDamage], [true, 2, 2, ["2d6[sonic]"]]);
+    const bite = compileMonsterAbility(item("Test Bite", 2, "<p>The test snake lunges, making a jaws Strike with a reach of 30 feet. If the Strike hits, its target is Grabbed and pulled to an empty space adjacent to the test snake.</p>"), {});
+    assert.deepEqual([bite.strike, bite.onHit.conditions.map((entry) => entry.slug), bite.notes.length], ["jaws", ["grabbed"], 2]);
+});

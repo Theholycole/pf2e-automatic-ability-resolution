@@ -116,6 +116,8 @@ export function readMultiStrikes(text) {
     // (Batch 153, Double Shot: "Requirements The urdefhan hunter is wielding a ranged weapon with reload 0 Effect … makes two Strikes with the
     // required weapon at a single target" — its best ranged Strikes.)
     let rangedRequired = false;
+    // (Batch 190, Dead Shot: its "two loaded firearms" after its frequency.)
+    body = body.replace(/^Requirements? (?:The |You )?[^.]+? (?:is|are) wielding two [\w' -]+?s\.? Effect /i, "");
     body = body.replace(/^Requirements? (?:The )?[^.]+? is wielding a ranged weapon(?: with (?:a )?reload (?:of )?0)?\.? Effect /i, () => {
         rangedRequired = true;
         return "";
@@ -161,6 +163,27 @@ export function readMultiStrikes(text) {
             swimAfter = true;
             return `makes two ${name} Strikes, each against a different target.`;
         });
+    // (Batch 190: Aerial Attack's "Flies and Strikes twice with their wings at any points during their movement"; Quickening Jolt's "…, Striding and making
+    // two Strikes against different targets during the movement"; Spring Forward's "jumps up to 30 feet and makes two fist Strikes against different
+    // targets"; a blog creature's "Strides and then makes two X Strikes at a single target"; Dead Shot's "makes two ranged Strikes, one with each of the
+    // firearms, each using …'s current multiple attack penalty" — a move first where there is one.)
+    let strideFirst = false;
+    body = body.replace(/^((?:The )?[^.]+?) Flies and Strikes twice with (?:its|their|his|her) ([\w' -]+?) at any points? during (?:its|their|his|her) movement\./i, (_all, who, weapon) => `${who} Strides once and makes two ${weapon.replace(/s$/i, "")} Strikes at any point along its movement.`)
+        .replace(/^(?:The )?([^.,]+?) [^.,]+?, Striding and making two Strikes against different targets during the movement\./i, (_all, who) => {
+            strideFirst = true;
+            return `The ${who} makes two Strikes, each against a different target.`;
+        })
+        .replace(/^((?:The )?[^.]+?) jumps up to \d+ feet and makes two ([\w' -]+?) Strikes against different targets\./i, (_all, who, weapon) => {
+            strideFirst = true;
+            return `${who} makes two ${weapon} Strikes, each against a different target.`;
+        })
+        .replace(/^((?:The )?[^.]+?) Strides and then makes two ([\w' -]+?) Strikes at a single target\./i, (_all, who, weapon) => {
+            strideFirst = true;
+            return `${who} makes two ${weapon} Strikes against the same target.`;
+        })
+        .replace(/\bmakes two ranged Strikes, one with each of the [\w' -]+?, each using (?:the [\w' -]+?['’]s|its|their|his|her) current multiple attack penalty\./i, "makes two ranged Strikes, ignoring the multiple attack penalty until after both Strikes.")
+        // (Dead Shot's last sentence, its stop missing.)
+        .replace(/(multiple attack penalty)\s*$/i, "$1.");
     // (Batch 175: Dancing Blade's "makes a Strike against a creature, then Strides. This Stride doesn't trigger reactions. If the guard ends this Stride
     // in a different space adjacent to the same creature, they make another Strike against it. If both Strikes succeed, …" — two Strikes at it, the
     // Stride between the GM's; Hunter's Wound's "Prerequisites … with a reload of 0 … two ranged Strikes against their prey".)
@@ -195,7 +218,7 @@ export function readMultiStrikes(text) {
     let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
-    let strides = 0;
+    let strides = strideFirst ? 1 : 0;
     if (held) sameTarget = true;
     first = first.trim().replace(/([^.])$/, "$1.")
         // (Batch 152, Fan of Daggers: "…, each against a separate target; he ignores the multiple attack penalty until after making all three
@@ -602,6 +625,26 @@ export function readMultiStrikes(text) {
         if (/^The second attack uses the same multiple attack penalty as the first, but attacks (?:it|they|he|she) makes? after this take a [-\u2013\u2212]10 multiple attack penalty\.$/i.test(sentence)) {
             sameMap = true;
             countsAs = 2;
+            continue;
+        }
+        // (Batch 190: Spring Forward's Knockdown after them; Dead Shot's "Both Strikes must have the same target, who must be within the first range
+        // increment of both weapons."; a blog creature's "must be able to move at least half its Speed to …".)
+        if (/^(?:The [\w' -]+?|It|They|He|She) can use Knockdown following this activity, attempting to Trip each creature struck\.$/i.test(sentence)) {
+            notes.push("After them, it can attempt to Trip each creature it hit (Knockdown).");
+            continue;
+        }
+        // (Dead Shot's "The pale stranger adds any precision damage only once, to the attack of their choice." — the GM's.)
+        if (/^(?:The [\w' -]+?|It|They) adds? any precision damage only once, to the attack of (?:its|their) choice\.$/i.test(sentence)) {
+            notes.push("Its precision damage only once, on one of the Strikes.");
+            continue;
+        }
+        if (/^Both Strikes must have the same target, who must be within the first range increment of both weapons\.$/i.test(sentence)) {
+            sameTarget = true;
+            notes.push("Its target must be within both weapons' first range increment.");
+            continue;
+        }
+        if (/^(?:The [\w' -]+?|It|They) must be able to move at least half (?:its|their) Speed to [\w' -]+?\.$/i.test(sentence)) {
+            notes.push(sentence);
             continue;
         }
         if (/^(?:The [\w' -]+?|It|They|He|She) can use Grab following this activity, separately attempting to Grapple each creature hit by an? [\w' -]+\.$/i.test(sentence)) {
@@ -2450,6 +2493,11 @@ export function compileBuiltin(item, slug) {
     // makes four hatchet Strikes, applying his multiple attack penalty as normal.")
     const rush = /^(?:The )?[\w' -]+? (?:[a-z]+ forward[^,.]*, Striding and then making|Strides(?: up to (?:half )?(?:its|their|his|her) [sS]peed)?(?:, ignoring difficult terrain)?,? (?:and )?then makes) (two|three|four) ([\w' -]+?) Strikes(?: at the end of (?:its|their|his|her) movement)?(?:, applying (?:its|their|his|her) multiple attack penalty as normal)?\.$/i.exec(text.trim().replace(/^Requirements? Each of [\w' -]+?['’]s (?:two|three|four|six) (?:hands|arms) wields an? [\w' -]+?\.? Effect /i, ""));
     if (rush) return { builtin: "multi-strike", actions, strikes: Array({ two: 2, three: 3, four: 4 }[rush[1].toLowerCase()]).fill(rush[2].toLowerCase()), sameTarget: true, strides: 1 };
+    // (Batch 190, Lightning Blade: "… The giant makes a greatsword Strike with a -2 circumstance penalty against each creature within its reach. It makes only
+    // one attack roll and compares the result against each creature's AC. This Strike deals an additional 3d12 electricity damage and counts as two attacks
+    // for the giant's multiple attack penalty." → its Strike at each creature in reach, the penalty and the extra damage, one roll a note.)
+    const blade = /^(?:[^.]+\. )?(?:The )?[\w' -]+? makes an? ([\w' -]+?) Strike with an? [-\u2013\u2212](\d+) circumstance penalty against each creature within (?:its|their|his|her) reach\. (?:It|They|He|She) makes only one attack roll and compares the result against each creature's AC\. This Strike deals an additional @Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})? damage and counts as two attacks for (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty\.$/i.exec(text.trim());
+    if (blade) return { builtin: "multi-strike", actions, strikes: [blade[1].toLowerCase()], each: true, max: 8, sameMap: true, countsAs: 2, penalty: Number(blade[2]), extraDamage: [blade[3].split("|")[0]], notes: ["One attack roll against each creature's AC."] };
     // (Batch 185, Blinking Barrage: "… The dragon teleports up to 60 feet to a space adjacent to a creature and makes a claw Strike against that creature. The
     // dragon can do this up to four times (or any number of times), teleporting to a different creature each time. Each attack counts toward their multiple
     // attack penalty, but the penalty does not increase until all attacks are made." → its claw Strike at different creatures at one penalty, the
