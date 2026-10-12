@@ -218,6 +218,21 @@ export function readMultiStrikes(text) {
         earlyNotes.push("The two creatures must be adjacent to each other; it ignores lesser cover between them and rolls damage once for both.");
         return `${who} makes two ${name} Strikes, each against a different target.`;
     });
+    // (Batch 203: Sixfold Flurry's "makes up to two longsword Strikes and up to four fist Strikes. Each Strike must be against a different target. These
+    // attacks count toward the calikang's multiple attack penalty, which doesn't increase until after all the attacks are complete. For 1 round, …"
+    // (its AC for Strikes not taken a note); Unleash Weapon's "releases their morningstar … makes up to two morningstar Strikes, each against a different
+    // target within 20 feet. … The morningstar then returns …".)
+    body = body.replace(/^((?:The )?[^.]+?) makes up to (two|three) ([\w' -]+?) Strikes and up to (two|three|four) ([\w' -]+?) Strikes\. Each Strike must be against a different target\. These attacks count toward (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, which doesn't increase until after all the attacks are complete\.( For 1 round, [^.]+\.)?(?:\s*Effect: [\w' -]+$)?/i, (_all, who, first, one, second, other, rest) => {
+        if (rest) earlyNotes.push(rest.trim());
+        // (Each Strike named in a list, the reading's own way of mixing more than two.)
+        const counts = { two: 2, three: 3, four: 4 };
+        const list = [...Array(counts[first.toLowerCase()]).fill(`a ${one} Strike`), ...Array(counts[second.toLowerCase()]).fill(`a ${other} Strike`)];
+        return `${who} makes ${list.slice(0, -1).join(", ")}, and ${list.at(-1)}, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
+    })
+        .replace(/^((?:The )?[^.]+?) releases (?:its|their|his|her) ([\w' -]+?) and commands [^.]+\. The weapon flies off and (?:the [\w' -]+?|it|they) makes up to (two|three) \2 Strikes, each against a different target within (\d+) feet\. These attacks count against (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, but the multiple attack penalty doesn't increase until after all the attacks\.((?: [^.]+\.)*)$/i, (_all, who, weapon, count, feet, rest) => {
+            earlyNotes.push(`Its ${weapon} flies off: each Strike at a different creature within ${feet} feet.`, ...rest.trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
+            return `${who} makes ${count.toLowerCase()} ${weapon} Strikes, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
+        });
     body = body.replace(/^((?:The )?[^.]+?) Flies and Strikes twice with (?:its|their|his|her) ([\w' -]+?) at any points? during (?:its|their|his|her) movement\./i, (_all, who, weapon) => `${who} Strides once and makes two ${weapon.replace(/s$/i, "")} Strikes at any point along its movement.`)
         .replace(/^(?:The )?([^.,]+?) [^.,]+?, Striding and making two Strikes against different targets during the movement\./i, (_all, who) => {
             strideFirst = true;
@@ -2250,6 +2265,8 @@ export function readReaction(item, text) {
     }
     // (Batch 145, Pack Ambush: "Trigger Another dromornis within 10 feet Strides. Effect The dromornis Strides up to half its Speed." — the same.)
     if (/^Another [\w' -]+? within \d+ feet Strides\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to half (?:its|their|his|her) Speed\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 203, Scuttle Away: "Trigger The ostovite's bone chariot is destroyed Effect The ostovite within Steps or Strides." — only a move.)
+    if (/^(?:The )?[^.]+?['’]s [\w' -]+? is destroyed\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? (?:Steps or Strides|Strides or Steps)\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // (A Step when an ally moves next to it, Goblin Scuttle, batch 38: nothing for the fight's numbers.)
     if (/^An? (?:[\w' -]+ )?ally ends a move action adjacent to [^.]+\.?$/.test(trigger.trim()) && /^(?:The )?[^.]+? Steps\.$/.test(effect.trim())) return { builtin: "no-effect" };
     // Fast Swallow (2026-10-10, batch 38): "Trigger The worm Grabs a creature (with its maw); Effect The worm uses Swallow Whole."
@@ -3204,6 +3221,11 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 203: Surge of Speed's "Strides three times, but it's Off-Guard until the start of its next turn."; Take Prisoner's "Interacts to pick up a Medium or
+    // smaller Unconscious creature within its reach, then Strides."; Scuttle Away's "Trigger The ostovite's bone chariot is destroyed Effect The ostovite
+    // within Steps or Strides." — moves.)
+    if (/^(?:The )?[^.]+? Strides (?:twice|three times), but (?:it's|it is|they're|they are) Off-Guard until the start of (?:its|their) next turn\.$/i.test(said)) return true;
+    if (/^(?:The )?[^.]+? Interacts to pick up an? (?:[A-Z][a-z]+ or smaller )?Unconscious creature within (?:its|their) reach, then Strides\.$/i.test(said)) return true;
     // (Batch 201, Chasm Crossing: "The mountaineer Strides twice and Leaps up to 20 feet horizontally." — a move.)
     if (/^(?:The )?[^.]+? Strides twice and Leaps up to \d+ feet (?:horizontally|vertically)\.$/i.test(said)) return true;
     // (Batch 200, Scurry: "The toady Strides, then can Hide. They can attempt to Hide from creatures without cover or being Concealed, but at a –2

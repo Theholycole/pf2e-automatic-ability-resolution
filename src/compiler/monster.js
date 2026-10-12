@@ -902,6 +902,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 203, Gouging Lunge: "makes a thumb spike Strike at an adjacent foe and then Strides up to 15 feet, dragging its thumb spike across the foe to
+        // gouge out a brutal wound. If this Strike hits, it deals an extra 1d8 slashing damage and the following Stride does not trigger reactions from the
+        // creature struck." — the Strike with its extra damage on a hit; the Stride after a note.)
+        .replace(/\b(makes an? [\w' -]+? Strike) at an adjacent foe and then Strides up to (\d+) feet, [^.]+\. If this Strike hits, it deals an extra (\d+d\d+) (\w+) damage and the following Stride does not trigger reactions from the creature struck\./i, (_all, made, feet, dice, type) => `${made}. On a hit, the target takes @Damage[${dice}[${type.toLowerCase()}]] damage. [then strides ${feet}]`)
         // (Batch 202, Fencing Brawl: "attempts a rapier Strike followed by a Disarm or Grapple attempt against the same enemy. These count as one attack for
         // the kingpin's multiple attack penalty, and the penalty doesn't increase until after both attacks." — the Strike, then the Grapple (the
         // simulator's pick; the Disarm instead a note).)
@@ -1507,6 +1511,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
             (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
             continue;
         }
+        if ((match = /^\[then strides (\d+)\]$/.exec(text))) {
+            (activity.notes ??= []).push(`Then it Strides up to ${match[1]} feet; on a hit, that Stride triggers no reactions from the creature it struck.`);
+            continue;
+        }
         if (text === "[or disarm, one attack]") {
             (activity.notes ??= []).push("It can Disarm instead of Grappling; the Strike and the maneuver count as one attack for its multiple attack penalty.");
             continue;
@@ -1639,7 +1647,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
         // (Batch 192, Dimensional Ambush: "This Strike counts as two attacks when calculating the katpaskir's multiple attack penalty.")
-        else if ((match = /^This (?:Strike )?counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the(?: [\w' -]+?'s)?) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
+        // (Batch 203, Gouging Lunge: "This thumb spike Strike counts as two attacks …".)
+        else if ((match = /^This (?:(?:[\w' -]+? )?Strike )?counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the(?: [\w' -]+?'s)?) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
         // (Batch 60, Savage Jaws: "If the attack hits, it deals @Damage[(4d12+16)[piercing]] damage (versatile S)." — its damage in place
         // of the Strike's; Bully's Bludgeon: "This attack is nonlethal.")
         else if (new RegExp(`${hit}(?:it|he|she|they) deals? @Damage\\[[^\\]]*(?:\\[[^\\]]*\\])?[^\\]]*\\] damage(?: \\(versatile [BPS]\\))?\\.$`, "i").test(htmlToPlainText(sentence).replace(/\s+/g, " ").trim()) && inlineTags(sentence, "Damage").length === 1) activity.damage = readDamage(inlineTags(sentence, "Damage")[0]);
@@ -2054,12 +2063,14 @@ export function headCount(actor) {
 }
 
 // Storm of Jaws (batch 43): "makes a number of Strikes up to its number of heads" with the creature's heads, "makes up to 5 Strikes".
+// (Batch 203, Ravenous Jaws: "makes a number of jaws Strikes up to their number of heads" — its name kept, the count in words.)
+const HEAD_WORDS = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight" };
 function withHeads(item, actor) {
     const html = item.system?.description?.value;
-    const words = /\ba number of Strikes up to (?:its|their|his|her) number of heads\b/gi;
+    const words = /\ba number of ((?:[\w' -]+? )?)Strikes up to (?:its|their|his|her) number of heads\b/gi;
     if (typeof html !== "string" || !words.test(html)) return item;
     const heads = headCount(actor ?? item.actor ?? item.parent);
-    return heads ? withDescription(item, html.replace(words, `up to ${heads} Strikes`)) : item;
+    return heads ? withDescription(item, html.replace(words, (_all, name) => `up to ${name ? HEAD_WORDS[heads] ?? heads : heads} ${name}Strikes`)) : item;
 }
 
 // Focused Assault (batch 43): one Strike for all its heads, leaves or weapons. "The hydra Strikes with its fangs. On a successful

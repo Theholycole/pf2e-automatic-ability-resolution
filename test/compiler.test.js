@@ -3306,3 +3306,14 @@ test("NPC Core: an ally's Stride and Strike as its reaction, a Strike then a Gra
     const bounce = compileMonsterAbility(item("<p>The test juggler Strikes with a thrown weapon they're juggling. If the Strike hits, the weapon bounces to a different creature in the weapon's first range increment. The test juggler repeats the Strike, which uses the same multiple attack penalty and doesn't increase their multiple attack penalty.</p>"), {});
     assert.deepEqual([bounce.max, bounce.ifFirstHits, bounce.sameMap], [2, true, true]);
 });
+
+test("Monster Core 2: two kinds of Strikes at different creatures, a weapon that flies off, a Strike then a Stride, moves (2026-10-12, batch 203)", () => {
+    const item = (html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const flurry = compileMonsterAbility(item("<p>The test deity makes up to two spear Strikes and up to three fist Strikes. Each Strike must be against a different target.</p><p>These attacks count toward the test deity's multiple attack penalty, which doesn't increase until after all the attacks are complete.</p>"), {});
+    assert.deepEqual([flurry.strikes, flurry.each, flurry.sameMap], [["spear", "spear", "fist", "fist", "fist"], true, true]);
+    const unleash = compileMonsterAbility(item("<p>The test priest releases their flail and commands the spirit within to attack. The weapon flies off and the test priest makes up to two flail Strikes, each against a different target within 30 feet. These attacks count against the test priest's multiple attack penalty, but the multiple attack penalty doesn't increase until after all the attacks.</p>"), {});
+    assert.deepEqual([unleash.strikes, unleash.max, unleash.notes.length], [["flail", "flail"], 2, 1]);
+    const lunge = compileMonsterAbility(item("<p>The test lizard makes a horn Strike at an adjacent foe and then Strides up to 10 feet, tearing through its foe. If this Strike hits, it deals an extra 1d6 piercing damage and the following Stride does not trigger reactions from the creature struck. This horn Strike counts as two attacks when calculating the test lizard's multiple attack penalty</p>"), {});
+    assert.deepEqual([lunge.strike, lunge.onHit.damage, lunge.countsAs, lunge.notes.length], ["horn", ["1d6[piercing]"], 2, 1]);
+    assert.deepEqual(compileMonsterAbility(item("<p>The test hound Strides three times, but it's Off-Guard until the start of its next turn.</p>"), {}), { builtin: "no-effect" });
+});

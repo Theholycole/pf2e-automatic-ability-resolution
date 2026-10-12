@@ -1800,3 +1800,14 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** the GM's ally-advance note says the ally can Stride and Strike as its reaction, and that each ally gets it once a day. With no extra damage, the note leaves the damage out. Not run in pftest.
 - **Simulator:** see B202 in its ability decisions.
 
+## Mixed multi-Strikes, a weapon that flies off, a Strike then a Stride (2026-10-12, batch 203)
+
+- **Compiled:**
+  - Sixfold Flurry → six Strikes (two longsword, four fist) at different creatures with the same multiple attack penalty; the AC for Strikes not taken is a note (PF2e's linked effect).
+  - Unleash Weapon → two morningstar Strikes at different creatures, with notes for the 20-foot range and the return.
+  - Gouging Lunge → a thumb spike Strike with 1d8 slashing on a hit, counting as two attacks, with a note for the 15-foot Stride after.
+  - Surge of Speed, Take Prisoner and Scuttle Away → `no-effect` (moves).
+  - "a number of jaws Strikes up to their number of heads" reads the creature's heads when one of its abilities states them ("has nine heads"). The jotund troll's own sheet doesn't, so its Ravenous Jaws stays uncovered.
+- **Live:** cards and notes as before. Not run in pftest.
+- **Simulator:** nothing new.
+
