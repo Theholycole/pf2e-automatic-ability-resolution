@@ -82,6 +82,9 @@ export function readMultiStrikes(text) {
     let oncePerTurn = false;
     // (Batch 42: what it wields, "Requirements The test slayer is wielding two melee weapons, each in a different hand Effect".)
     body = body.replace(/(^|Frequency once per (?:turn|round) )Requirements? (?:The |You )?[^.]+? (?:is wielding|are wielding|wields) two melee weapons, each in a different hand\.? Effect /i, (_all, before) => (before ? `${before}Effect ` : ""));
+    // (Batch 129, Double Stab: "Requirements Ralso is wielding two piercing weapons Frequency once per round Effect …" — what it wields, then its
+    // frequency.)
+    body = body.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding two [\w' -]+? weapons\.? (?=Frequency )/i, "");
     // (Batch 91: Paired Strike's "Requirements The maftet is wielding two scimitars Effect …"; the "diferent" of some texts.)
     body = body.replace(/^Requirements? (?:The |You )?[^.]+? (?:is|are) wielding two [\w' -]+?s\.? Effect /i, "").replace(/\bdiferent\b/g, "different");
     // (Batch 109, Captive Rake: "Requirements A creature is grabbed in the glabrezu's pincer. Effect The glabrezu pulls the grabbed creature up to
@@ -100,7 +103,7 @@ export function readMultiStrikes(text) {
     // (Batch 113: a requirement that names its own state — Drunken Flailing's "The drunkard is raging" — the GM's live, not planned by the
     // simulator: requires "requirement".)
     let stated = false;
-    body = body.replace(/^Requirements? (?:The )?[\w' -]+? is (?:raging|enraged|berserk|in [\w' -]+? stance)\.? Effect /i, () => {
+    body = body.replace(/^Requirements? (?:The )?[\w' -]+? is (?:raging|enraged|berserk|in [\w' -]+? stance|affected by [A-Z][\w' -]+?)\.? Effect /i, () => {
         stated = true;
         return "";
     });
@@ -138,6 +141,17 @@ export function readMultiStrikes(text) {
         .replace(/ and one Strike with (?:its|their|his|her) ([\w' -]+?)(?:, [\w' -]+?)*,? or [\w' -]+?(?=,? in any order\.$|\.$)/i, " and one $1 Strike")
         .replace(/, targeting either the same (?:foe|creature|target) or two adjacent (?:foes|creatures|targets)(?=\.$)/i, "")
         .replace(/, in (?:any|either) order(?=\.$)/i, "")
+        // (Batch 129, Frenzied Attack: "… against one or two different creatures (splitting up the attacks any way he wishes)" — its choice; Telekinetic
+        // Reach: "makes a Strike with each of its jaws, claw, and tail" — one with each.)
+        .replace(/ against one or two different creatures(?: \(splitting up the attacks any way (?:he|she|it|they) wishes?\))?(?=\.$)/i, "")
+        .replace(/\bmakes a Strike with each of (?:its|their|his|her) ([\w' -]+?), ([\w' -]+?),? and ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike, a $2 Strike, and a $3 Strike")
+        // (Batch 129: Hammering Flurry's "…, ignoring the multiple attack penalty until after all three attacks are completed"; Twin Chop's "…, each
+        // of which must target a different foe within reach".)
+        .replace(/, ignoring the multiple attack penalty until after (?:all (?:two|three|four|five) attacks|both attacks) (?:are|have been) (?:completed|made|resolved)(?=\.$)/i, () => {
+            sameMap = true;
+            return "";
+        })
+        .replace(/, each of which must target a different (?:foe|creature|enemy|target)(?: within (?:its |their )?reach)?(?=\.$)/i, ", each against a different creature")
         // (Batch 124, Twisting Reach: "…, ignoring the target's cover" — the GM's, a note.)
         .replace(/,? ignoring the target's cover(?=\.$)/i, () => {
             notes.push("The Strikes ignore the target's cover.");
@@ -219,9 +233,19 @@ export function readMultiStrikes(text) {
     // different creatures within reach"): a Strike at each of that many enemies in its Melee (2026-10-10).
     let each = false;
     if ((match = new RegExp(String.raw`^(?:The )?[^.]+? makes (?:up to )?(${COUNT}) (?:([\w' -]+?) )??Strikes?(?: and (a|an|one|two|three) ([\w' -]+?) Strikes?)?(?: with (?:its|their|his|her) ([\w' -]+?))?(?: in (?:any|either) order)?(${WHO})(?:,? one (?:Strike )?(?:with each of (?:its|their|his|her) [\w' -]+|per weapon))?\.$`, "i").exec(first))) {
-        for (const [number, name] of [[match[1], match[2] ?? match[5]], [match[3], match[4]]]) for (let index = 0; index < count(number ?? 0); index++) strikes.push(named(name));
+        // (Batch 129: "melee Strikes with her dagger" — the dagger.)
+        const first = match[2] && !/^(?:melee|ranged)$/i.test(match[2]) ? match[2] : match[5] && !/\b(?:at|against)\b/i.test(match[5]) ? match[5] : match[2];
+        for (const [number, name] of [[match[1], first], [match[3], match[4]]]) for (let index = 0; index < count(number ?? 0); index++) strikes.push(named(name));
         if (/single|same|one (?:creature|target|foe|enemy)/i.test(match[6] ?? "")) sameTarget = true;
         if (/different|two (?:creatures|targets|foes|enemies)/i.test(match[6] ?? "")) each = true;
+    } else if ((match = /^(?:The )?[^.]+? makes ((?:(?:a|an|one|two|three|four) [\w' -]+? Strikes?, )+(?:and )?(?:a|an|one|two|three|four) [\w' -]+? Strikes?)(?: in any order)?\.$/i.exec(first))) {
+        // (Batch 129, Destructive Frenzy: "makes a jaws Strike, two claw Strikes, two horn Strikes, and one tail Strike in any order"; Telekinetic
+        // Reach's one with each, as above.)
+        for (const part of match[1].split(/,\s*(?:and\s+)?/)) {
+            const piece = /^(a|an|one|two|three|four) ([\w' -]+?) Strikes?$/i.exec(part.trim());
+            if (!piece) return null;
+            for (let index = 0; index < count(piece[1]); index++) strikes.push(named(piece[2]));
+        }
     } else if ((match = /^(?:The )?[^.]+? makes (?:(two|three|four) )?(?:([\w' -]+?) )??Strikes(?: with (?:its|their|his|her) ([\w' -]+?))? against (two|three|four|up to two|up to three) (?:different |adjacent )?(?:creatures|foes|enemies|targets)(?:,? (?:both|all|each) of (?:whom|which) (?:are|is|must be) (?:within|in) (?:(?:its|their|his|her) )?reach| (?:within|in) (?:(?:its|their|his|her) )?reach)?\.$/i.exec(first))) {
         // "The emperor bird makes tail Strikes against two different creatures within reach", "makes two Strikes with its claw
         // against two adjacent foes, both of whom are within its reach".
@@ -334,7 +358,7 @@ export function readMultiStrikes(text) {
         // start of their next turn".)
         // (Batch 91: Extend Limbs' "… reach increases to 20 feet for these Strikes" — the GM's; Paired Strike's "This counts as one attack when
         // calculating the maftet's multiple attack penalty".)
-        if (/^(?:The [\w' -]+?['’]s|Its|Their|His|Her) reach increases to \d+ feet for these Strikes\.$/i.test(sentence)) continue;
+        if (/^(?:The [\w' -]+?['’]s|Its|Their|His|Her) reach increases to \d+ feet for these Strikes\.$|^These Strikes have a reach of \d+ feet\.$/i.test(sentence)) continue;
         if ((match = /^This counts as (one|two) attacks? when calculating [^.]*multiple attack penalty\.$/i.exec(sentence))) {
             sameMap = true;
             countsAs = /one/i.test(match[1]) ? 1 : 2;
@@ -365,6 +389,9 @@ export function readMultiStrikes(text) {
         }
         // (Wing Snap: "It can't Fly until the end of its turn.")
         if (/^(?:It|They) can(?:'t|not) Fly until the end of (?:its|their) turn\.$/i.test(sentence)) continue;
+        // (Batch 129, Bomb Barrage: "These Strikes can be made against the same creature or different creatures, as long as all targets are within
+        // 40 feet of each other." — its choice.)
+        if (/^These Strikes can be made against the same creature or different creatures(?:, as long as all targets are within \d+ feet of each other)?\.$/i.test(sentence)) continue;
         if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) {
             each = true;
             continue;
@@ -427,6 +454,10 @@ export function readSwipe(text) {
     if (sentences.length > 1 && !/\bStrikes?\b|\d|@/.test(sentences[0]) && /\bcompares the attack roll\b/i.test(sentences[1])) sentences.shift();
     // (Batch 38, Wide Swing: "makes a single greataxe Strike and compares the attack roll result to the ACs of up to two foes within
     // its reach"; batch 42: "within the guard captain's melee reach and adjacent to the other".)
+    // (Batch 129, Whirlwind Kick: "makes a single Strike and compares the result to the AC of all creatures within its reach, dealing damage to
+    // each creature hit" — every creature in its reach.)
+    const all = /^(?:The )?[^.]+? makes (?:a single |an? )(?:([\w' -]+?) )??Strike and compares the (?:attack roll )?result to the (?:AC|ACs|Armor Class) of all (?:creatures|foes|enemies) within (?:its|their|his|her) reach(?:, dealing damage to each creature hit)?\.$/i.exec(sentences[0] ?? "");
+    if (all && sentences.length === 1) return { strike: all[1] && !/^(?:melee|weapon|unarmed)$/i.test(all[1]) ? all[1].toLowerCase() : null, max: 8 };
     const match = /^(?:The )?[^.]+? makes (?:a single |an? )(?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|ACs|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's|the [\w' -]+?'s) (?:melee )?reach(?: and adjacent to (?:each other|the other))?| within (?:its|their|his|her) reach)?\.$/i.exec(sentences.shift() ?? "");
     if (!match) return null;
     for (const sentence of sentences) {
@@ -469,7 +500,8 @@ export function readSweep(text) {
     // (Batch 83, Whirlwind of Hooks: "… against every creature within its reach", after a first sentence that only tells it.)
     // (Batch 102: "… against every creature in its reach, whether that creature is an ally or not" — Rampage, behind its requirement; "… a
     // single pseudopod Strike against each target within range it hasn't already Grabbed" — not at those it holds.)
-    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:each|every) (?:creature|enemy|foe|target)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?(?:reach|range))?( it (?:hasn't already Grabbed|doesn't already have Grabbed))?(, whether that creature is an ally or not)?\.$/i;
+    // (Batch 129: "They make a melee Strike against each enemy within reach", "against all creatures within his reach".)
+    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes?|attempts?) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:(?:each|every) (?:creature|enemy|foe|target)|all (?:creatures|enemies|foes|targets))(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?(?:reach|range))?( it (?:hasn't already Grabbed|doesn't already have Grabbed))?(, whether that creature is an ally or not)?\.$/i;
     if (!counted && sentences.length > 1 && !SWEEP.test(sentences[0]) && SWEEP.test(sentences[1]) && !/\b(?:damage|bonus|penalty|save|check|DC|Strikes?)\b|\d/i.test(sentences[0])) sentences.shift();
     const match = counted ? null : SWEEP.exec(sentences[0] ?? "");
     sentences.shift();
@@ -489,7 +521,8 @@ export function readSweep(text) {
             sameMap = true;
             continue;
         }
-        if (/\b(?:multiple attack )?penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\b(?:multiple attack )?penalty increases only after\b/i.test(sentence)) {
+        // (Batch 129: "… but don't increase the amalgam's penalty until it has made all its attacks", "… they don't increase their penalty until …".)
+        if (/\b(?:multiple attack )?penalty\b[^.]*\b(?:doesn't|does not|don't|do not) increase(?: (?:the [\w' -]+?['’]s|its|their|his|her) penalty)? until\b|\b(?:multiple attack )?penalty increases only after\b/i.test(sentence)) {
             sameMap = true;
             continue;
         }
@@ -1751,8 +1784,10 @@ export function compileBuiltin(item, slug) {
     if (pike) return { builtin: "multi-strike", actions, strikes: [(pike[1] ?? pike[2]).toLowerCase(), pike[4].toLowerCase()], sameTarget: true, sameMap: true, ifFirstHits: true, instead: pike[3] };
     // (Batch 84, Chase Prey: "rushes forward on all fours, Striding and then making two claw Strikes"; Frumious Charge: "Strides, ignoring
     // difficult terrain, then makes two claw Strikes at the end of its movement" → a Stride, then the Strikes at one creature.)
-    const rush = /^(?:The )?[\w' -]+? (?:[a-z]+ forward[^,.]*, Striding and then making|Strides(?:, ignoring difficult terrain)?,? (?:and )?then makes) (two|three) ([\w' -]+?) Strikes(?: at the end of (?:its|their|his|her) movement)?\.$/i.exec(text.trim());
-    if (rush) return { builtin: "multi-strike", actions, strikes: Array((rush[1].toLowerCase() === "two" ? 2 : 3)).fill(rush[2].toLowerCase()), sameTarget: true, strides: 1 };
+    // (Batch 129, Hatchet Onslaught: "Requirements Each of Kargstaad's four hands wields a hatchet. Effect Kargstaad Strides up to half his speed, then
+    // makes four hatchet Strikes, applying his multiple attack penalty as normal.")
+    const rush = /^(?:The )?[\w' -]+? (?:[a-z]+ forward[^,.]*, Striding and then making|Strides(?: up to (?:half )?(?:its|their|his|her) [sS]peed)?(?:, ignoring difficult terrain)?,? (?:and )?then makes) (two|three|four) ([\w' -]+?) Strikes(?: at the end of (?:its|their|his|her) movement)?(?:, applying (?:its|their|his|her) multiple attack penalty as normal)?\.$/i.exec(text.trim().replace(/^Requirements? Each of [\w' -]+?['’]s (?:two|three|four|six) (?:hands|arms) wields an? [\w' -]+?\.? Effect /i, ""));
+    if (rush) return { builtin: "multi-strike", actions, strikes: Array({ two: 2, three: 3, four: 4 }[rush[1].toLowerCase()]).fill(rush[2].toLowerCase()), sameTarget: true, strides: 1 };
     // (Batch 85: a Stride with Strikes at different creatures along the way — Mauling Rush's "Strides up to its Speed. It can make up to
     // four claw Strikes at any point during this movement, each against a different target. These attacks count toward …, but the multiple
     // attack penalty doesn't increase until after …", Whirling Slashes' "… His multiple attack penalty applies as usual."; a movement that

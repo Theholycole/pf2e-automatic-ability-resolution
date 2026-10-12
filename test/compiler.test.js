@@ -2480,3 +2480,14 @@ test("Strike activities with a save or a rider in other words (2026-10-12, batch
     // (Not "Strikes with its fist at a -1 circumstance penalty" read as a Strike named so.)
     assert.equal(compile("The test golem Strikes with its fist at a -1 circumstance penalty.", 1)?.strike ?? "fist", "fist");
 });
+
+test("multi-Strikes and sweeps in more words (2026-10-12, batch 129)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    assert.deepEqual(compile("The test titan makes a bite Strike, two talon Strikes, and one tail Strike in any order.", 3)?.strikes, ["bite", "talon", "talon", "tail"]);
+    assert.deepEqual(compile("The test guard makes three mace Strikes against a single target, ignoring the multiple attack penalty until after all three attacks are completed.")?.sameMap, true);
+    assert.deepEqual(compile("The test troll swings wildly. The test troll attempts two axe Strikes, each of which must target a different foe within reach.", 1)?.each, true);
+    assert.deepEqual(compile("The test psychic makes a Strike with each of its jaws, claw, and tail, in any order. These Strikes have a reach of 60 feet.")?.strikes, ["jaws", "claw", "tail"]);
+    assert.equal(compile("The test dervish whirls. They make a melee Strike against each enemy within reach. Each attack counts toward the test dervish's multiple attack penalty, but they don't increase their penalty until they have made all their attacks.", 3)?.sameMap, true);
+    assert.deepEqual(compile("The test monk makes a single Strike and compares the result to the AC of all creatures within its reach, dealing damage to each creature hit.")?.max, 8);
+    assert.deepEqual(compile("<strong>Requirements</strong> Each of the test brute's four hands wields a club.</p><hr /><p><strong>Effect</strong> The test brute Strides up to half his speed, then makes four club Strikes, applying his multiple attack penalty as normal.", 3)?.strides, 1);
+});
