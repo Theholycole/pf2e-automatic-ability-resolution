@@ -120,6 +120,9 @@ export function readMultiStrikes(text) {
         // (Batch 80: "They make two hoof Strikes against the same target", "… two claw Strikes at the same target, each using her current
         // multiple attack penalty".)
         .replace(/^(They|You) make (?=(?:up to )?(?:a|an|one|two|three|four) )/, "$1 makes ")
+        // (Batch 81: "…, each using a different limb"; Wing Snap's "…, then falls if it's flying" (the fall the GM's).)
+        .replace(/, each using a different (?:limb|arm|head|tentacle)(?=\.$)/i, "")
+        .replace(/, then falls if (?:it's|it is|they're|they are) flying(?=\.$)/i, "")
         .replace(/ at the same (target|creature)(?=[,.])/i, " against the same $1")
         .replace(/, each using (?:its|their|his|her|the [\w' -]+?['’]s) current multiple attack penalty(?=\.$)/i, "")
         .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
@@ -235,6 +238,8 @@ export function readMultiStrikes(text) {
                 continue;
             }
         }
+        // (Wing Snap: "It can't Fly until the end of its turn.")
+        if (/^(?:It|They) can(?:'t|not) Fly until the end of (?:its|their) turn\.$/i.test(sentence)) continue;
         if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) {
             each = true;
             continue;
@@ -776,6 +781,13 @@ export function readReaction(item, text) {
     }
     const resisting = readResistDamage(text, trigger, effect);
     if (resisting) return resisting;
+    // Harder to escape (2026-10-11, batch 81): "Trigger A creature Grabbed or Restrained by the zinba attempts to Escape Effect The DC of the
+    // Escape check is increased by 2", "… The triggering creature takes a –2 circumstance penalty to the check to Escape." → { builtin:
+    // "escape-guard", value }.
+    if (/^An? creature (?:Grabbed|grabbed)(?: or Restrained)? by (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*)(?:['’]s [\w' -]+?)? attempts to Escape\.?$/i.test(trigger.trim())) {
+        const harder = /^The DC of the Escape check is increased by (\d+)\.?$/i.exec(effect.trim()) ?? /^The triggering creature takes an? [-\u2013\u2212](\d+) circumstance penalty to the check to Escape\.?$/i.exec(effect.trim());
+        if (harder) return { builtin: "escape-guard", value: Number(harder[1]) };
+    }
     // A critical hit on it answered with resistance against that attack (2026-10-10, batch 29): "Trigger The dragon is critically hit
     // by an attack; Effect … gaining resistance 20 to all damage against the triggering attack" (Wished Away, Withhold Death).
     const resist = /\b(?:gains?|gaining) resistance (\d+) to all damage against the triggering attack\b/i.exec(effect);

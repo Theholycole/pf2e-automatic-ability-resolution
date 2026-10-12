@@ -34,7 +34,9 @@ export function higherAC({ total, dc, natural = null, outcome = null }, value) {
     return DEGREES.indexOf(after) < DEGREES.indexOf(before) ? { before, after } : null;
 }
 
-export const degreeWords = (degree) => DEGREE_WORDS[degree] ?? degree;
+// (Batch 81: a check's words, not an attack's, "a success", for an Escape.)
+const CHECK_WORDS = { criticalFailure: "a critical failure", failure: "a failure", success: "a success", criticalSuccess: "a critical success" };
+export const degreeWords = (degree, check = false) => (check ? CHECK_WORDS : DEGREE_WORDS)[degree] ?? degree;
 
 // Along a move, in reach or not at each point: did it leave a square in reach?
 export function leftReach(insides) {
@@ -94,7 +96,7 @@ export function offerHTML(state) {
     const buttons = [];
     if (state.status === "open") {
         if (state.kind === "strike") for (const strike of state.strikes ?? []) buttons.push(`<button type="button" data-aar-reaction="strike" data-slug="${escape(strike.slug)}">${escape(strike.label)}${state.penalty ? ` (−${state.penalty})` : ""}</button>`);
-        if (state.kind === "ac") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(degreeWords(state.attack.after))}</button>`);
+        if (state.kind === "ac") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(degreeWords(state.attack.after, Boolean(state.attack.what)))}</button>`);
         if (state.kind === "misfortune") buttons.push(`<button type="button" data-aar-reaction="use">Reroll, keep the worse</button>`);
         // (Batch 67: Ferocity's kin, "half its HP", "25 HP", "4d10 HP".)
         if (state.kind === "ferocity") buttons.push(`<button type="button" data-aar-reaction="use">Stay at ${escape(state.survive?.hp === "half" ? "half its" : String(state.survive?.hp ?? 1))} HP</button>`);
@@ -114,7 +116,8 @@ export function offerHTML(state) {
         }
         buttons.push(`<button type="button" data-aar-reaction="decline">Not now</button>`);
     }
-    const detail = state.kind === "ac" ? `<p class="aar-hint">+${state.attack.value} AC against it turns ${escape(degreeWords(state.attack.before))} into ${escape(degreeWords(state.attack.after))}.</p>` : "";
+    // (Batch 81: or a higher Escape DC, Tighten Coils.)
+    const detail = state.kind === "ac" ? `<p class="aar-hint">+${state.attack.value} ${escape(state.attack.what ?? "AC")} against it turns ${escape(degreeWords(state.attack.before, Boolean(state.attack.what)))} into ${escape(degreeWords(state.attack.after, Boolean(state.attack.what)))}.</p>` : "";
     const note = state.note ? `<p class="aar-hint">${escape(state.note)}</p>` : "";
     const result = state.result ? `<ul class="aar-applied"><li>${escape(state.result)}</li></ul>` : "";
     const controls = buttons.length ? `<footer class="aar-controls">${buttons.join("")}</footer>` : "";

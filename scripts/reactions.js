@@ -32,7 +32,7 @@ import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } fr
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -210,6 +210,9 @@ async function onMessage(message) {
         const strikes = conductor ? (mine.actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(conductor.plan.strike)).map((action) => ({ slug: action.slug, label: action.label })) : [];
         if (strikes.length) await offer({ kind: "strike", item: conductor.item, monster: mine.token, actor: mine.actor, target: event.attacker, strikes, penalty: conductor.plan.penalty ?? 0, trigger: `aimed ${event.spell ? "a spell" : "an attack"} at it`, note: "At any range." });
     }
+    // (Batch 65: a failed Escape from a monster that answers it; batch 81: one it makes harder. PF2e rolls the Escape with the best of
+    // Acrobatics, Athletics and an unarmed attack: a skill check or an attack roll.)
+    if (["skill-check", "attack-roll"].includes(context?.type) && (context.options ?? []).includes("action:escape")) await escapeAnswers(message, context, scene, combat, token);
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
         if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach", "ranged");
@@ -223,8 +226,6 @@ async function onMessage(message) {
     }
     // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
     if (context?.type === "saving-throw" && ["failure", "criticalFailure"].includes(context.outcome)) await saveAnswers(message, context, scene, combat, token);
-    // (Batch 65: a failed Escape from a monster that answers it.)
-    if (context?.type === "skill-check" && (context.options ?? []).includes("action:escape")) await escapeAnswers(context, scene, combat, token);
     // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
     if (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("attack")) await strikeAnswers(context, scene, combat, token, { skill: true });
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
@@ -274,11 +275,25 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
 
 // A creature a monster holds failing to Escape (batch 65: Savage, Gnashing Bite): the monster's Strike or card at it. The monster: the
 // Escape's target, or else a foe in its reach.
-async function escapeAnswers(context, scene, combat, escaper) {
-    if (!["failure", "criticalFailure"].includes(context.outcome)) return;
-    const critical = context.outcome === "criticalFailure";
+async function escapeAnswers(message, context, scene, combat, escaper) {
     const holder = context.target?.token ? fromUuidSync(context.target.token) : null;
     const grid = gridOf(scene);
+    // (Batch 81: a reaction that makes the Escape harder, Tighten Coils: offered when its higher DC turns the success into a failure.)
+    if (["success", "criticalSuccess"].includes(context.outcome)) {
+        const dc = context.dc?.value;
+        const roll = message.rolls?.[0];
+        if (!Number.isFinite(dc)) return;
+        for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+            if (!isFoe(monster, escaper) || (holder && holder.id !== monster.id)) continue;
+            if (!holder && distanceFeet(box(monster, grid.size), box(escaper, grid.size), grid) > provokeRadius(actor)) continue;
+            const entry = reactions.find(({ plan }) => plan.builtin === "escape-guard");
+            const change = entry ? higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, entry.plan.value) : null;
+            if (change) return offer({ kind: "ac", item: entry.item, monster, actor, target: escaper, trigger: `rolled ${degreeWords(change.before, true)} to Escape`, attack: { messageId: message.id, value: entry.plan.value, what: "Escape DC", ...change } });
+        }
+        return;
+    }
+    if (!["failure", "criticalFailure"].includes(context.outcome)) return;
+    const critical = context.outcome === "criticalFailure";
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, escaper) || (holder && holder.id !== monster.id)) continue;
         if (!holder && distanceFeet(box(monster, grid.size), box(escaper, grid.size), grid) > provokeRadius(actor)) continue;
@@ -784,7 +799,10 @@ async function use(message, action, slug) {
         if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
         result = `${state.ability.name}: ${state.negate.name} is negated.`;
     } else if (state.kind === "ac") {
-        result = `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
+        // (Batch 81: a higher Escape DC, Tighten Coils: the creature stays held on a failure.)
+        result = state.attack.what === "Escape DC"
+            ? `${state.ability.name}: the Escape DC ${state.attack.value} higher makes it ${degreeWords(state.attack.after, true)}.${["failure", "criticalFailure"].includes(state.attack.after) ? ` ${state.target?.name ?? "The creature"} stays held.` : ""}`
+            : `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
     } else if (state.kind === "misfortune") {
         const attack = game.messages.get(state.attack.messageId);
         if (!attack) throw new Error("The attack roll is gone.");

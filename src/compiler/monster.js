@@ -529,7 +529,9 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     // (Batch 76: "… must succeed at a … save to avoid becoming Sickened 1 (Sickened 2 on a critical failure)", "… save to resist becoming
     // Slowed 1", "… save to avoid being knocked Prone": what it avoids is the failure's.)
     const legacy = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1]
-        ?? /(?:succeed at|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) to (?:avoid|resist) (?:becoming|being) (.+)$/i.exec(sentences[index])?.[1] ?? null;
+        ?? /(?:succeed at|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) to (?:avoid|resist) (?:becoming|being) (.+)$/i.exec(sentences[index])?.[1]
+        // (Batch 81: "If the target fails a … save, it gains Clumsy 1 and Stupefied 1", "…, they are Dazzled until …".)
+        ?? /^If (?:the|that) (?:target|creature|foe) fails (?:an?|its|the) @Check\[[^\]]*\](?:\{[^}]*\})? (?:save|saving throw), (?:it|they|he|she) (?:gains?|becomes?|is|are) (.+)$/i.exec(sentences[index].replace(/^\s*(?:<[^>]+>\s*)+/, ""))?.[1] ?? null;
     let failure = legacy ?? /(?:succeed(?: at)?|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1]
         // "becomes Frightened 1 unless they succeed at a @Check[will|dc:28] save (Frightened 2 on a critical failure)":
         // the brackets after the save are the failure's too.
@@ -838,6 +840,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/ or until (?:it|the target|the creature) (?:leaves (?:the [\w' -]+?'s|its|their|his|her) reach|is no longer within the reach of (?:the [\w' -]+?'s|its|their|his|her) hand), whichever comes first(?=\.$)/i, "")
             // (Batch 60, Savage Jaws: "makes a single Strike with its jaws" as "makes a jaws Strike".)
             .replace(/\bmakes a single Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike")
+            // (Batch 81, Tangle Prey: "draws a bola and Strikes a target within 20 feet" as a bola Strike; "immediately rolls an Athletics check
+            // against the target's Fortitude DC to Trip them" as a Trip.)
+            .replace(/\bdraws an? ([\w' -]+?) and Strikes an? (?:target|creature|foe)(?: within \d+ feet)?(?=\.$)/i, "makes a $1 Strike")
+            .replace(/\bimmediately rolls an? (?:@Check\[athletics[^\]]*\](?:\{[^}]*\})?|Athletics) check against the target's Fortitude DC to Trip (?:them|it|the target)(?=\.$)/i, "attempts to Trip the target")
+            // (Stunning Strike's "makes a weapon Strike against the foe": the foe its requirement hit.)
+            .replace(/\b(makes an? (?:weapon |melee )?Strike) against the foe(?=\.$)/i, "$1")
             // (Batch 80, Pierce Armor: the armor it breaks is the GM's.)
             .replace(/; if the (?:creature|target) is wearing armor with hardness \d+ or lower, the armor is [Bb]roken(?=\.$)/, "")
             // (Batch 80, Terrifying Smite: "against an enemy that has one of the rekhep's allies within its reach": an ally beside it.)
@@ -869,6 +877,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             else if (/has (?:a|one) (?:free )?hand(?: free)?/i.test(match[1])) activity.requires = "free-hand";
             // (Batch 45, Impaling Charge: "doesn't have a creature impaled on their horn": not while it holds one.)
             else if (/(?:doesn't|does not) have a creature impaled on (?:its|their|his|her) horn/i.test(match[1])) activity.requires = "free-hand";
+            // (Batch 81, Stunning Strike: "hit a foe earlier this turn with a weapon Strike": at a foe it hit this turn.)
+            else if (/^(?:The )?[^,]*? hit an? (?:foe|creature|enemy|target) earlier this turn(?: with an? (?:weapon |melee )?Strike)?$/i.test(match[1])) activity.requires = "hit-earlier";
             else if (!/is wielding|is holding/i.test(match[1])) return reject(text);
         } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides?(?: twice| or Steps?)?),? (?:and |then |and then )*)?(?:makes?|attempts?) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll)(?: against the (?:grabbed|restrained) (?:creature|target))?)?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*| while keeping one hand free)?\.$/i.exec(head)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(head.slice(head.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
             // A move written into the subject ("The worm Burrows at least 10 feet and then attempts a jaws Strike"): read as a move.
@@ -982,6 +992,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 trigger: { event: "strike-activity" },
                 resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: false, against: { dc: "fixed", value: check.dc } }, sharedDamage: null, outcomes }
             };
+        } else if (activity.onHit.save && (match = /^On a critical failure, the (?:foe|target|creature) is (.+?)(?: instead)?\.$/i.exec(text)) && conditions(match[1]).length) {
+            // (Batch 81, Stunning Strike: "On a critical failure, the foe is Stunned 2 instead." after its save: that save's.)
+            const outcomes = activity.onHit.save.resolution.outcomes;
+            outcomes.criticalFailure = { ...outcomes.criticalFailure, effects: conditions(match[1]).map((entry) => ({ kind: "condition", ...entry })) };
         } else return reject(text);
     }
     const rider = activity.onHit;

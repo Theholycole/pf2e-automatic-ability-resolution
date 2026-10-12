@@ -157,7 +157,8 @@ export function readLinger(text) {
 }
 
 export function readDuration(text) {
-    const plain = String(text ?? "");
+    // (Batch 81: a monster's own name, "until the beginning of Bshez's next turn", as its own turn.)
+    const plain = String(text ?? "").replace(/\b(of )[A-Z][\w'-]+(?: [A-Z][\w'-]+)*['’]s (next turn)\b/g, "$1its $2");
     // "while it remains in the area", "for as long as they remain within the aura": until it leaves.
     if (/\b(?:while|as long as) (?:it|they|the creature|the target) (?:remains?|stays?|is) (?:in|within|inside) (?:the|this|its|their) (?:aura|area|emanation)|\buntil (?:it|they)(?:'s|'re| is| are) no longer in (?:the|this|its|their) (?:aura|area|emanation)/i.test(plain)) {
         const after = readLinger(plain);
@@ -169,7 +170,7 @@ export function readDuration(text) {
     if (lasting) return { mode: "while", condition: lasting[1].toLowerCase() };
     // "Fleeing during their next turn": until the end of that turn, as "until the end of its next turn".
     if (/until the end of (?:your|its|their|the monster's|the creature's|the target's|the [\w' -]+?'s) next turn|\bduring (?:its|their|the creature's|the target's) next turn\b/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" };
-    if (/until the (?:start|beginning) of (?:your|its|their|the monster's|the creature's|the target's) next turn/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "source-turn" };
+    if (/until the (?:start|beginning) of (?:your|its|their|the monster's|the creature's|the target's|the [\w' -]+?'s) next turn/i.test(plain)) return { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "source-turn" };
     // "for [[/br 1d4 #rounds]]{1d4 rounds}", "for 1d4 rounds": rolled when it's applied (valueRoll); the
     // average, rounded down, where nothing rolls (the simulator). Not a recharge ("can't use it again for 1d4 rounds").
     // The unit is the roll's label, its flavor or the word after it ("[[/r 1d4 #hours]] hours" is hours, not rounds);

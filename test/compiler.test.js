@@ -1926,3 +1926,27 @@ test("two Strikes and what both hits bring; Terrifying Smite, Pierce Armor, Drag
     assert.deepEqual([pierce?.requires, pierce?.onHit?.conditions?.[0]?.slug, pierce?.onHit?.damage], ["grabbed", "prone", ["2d6[bleed]"]]);
     assert.deepEqual(compile("The test hyena makes a jaws Strike against a Prone enemy. If it hits, in addition to dealing damage, the test hyena Strides up to 10 feet, dragging the enemy along."), { builtin: "no-effect", strikeOnly: true });
 });
+
+test("a harder Escape; a failed save's own sentence; a hit earlier this turn; bola and limb wordings (2026-10-11, batch 81)", () => {
+    const action = (description, actions = 1, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } });
+    const compile = (description, actions, type) => compileMonsterAbility(action(description, actions, type), { basicActions: {} });
+    const reaction = (trigger, effect) => compile(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, null, "reaction");
+    // Its reaction as a creature it holds tries to Escape.
+    assert.deepEqual(reaction("A creature Grabbed or Restrained by the test serpent attempts to Escape.", "The DC of the Escape check is increased by 2."), { builtin: "escape-guard", value: 2 });
+    assert.deepEqual(reaction("A creature grabbed by Test Velka attempts to Escape", "The triggering creature takes a –3 circumstance penalty to the check to Escape."), { builtin: "escape-guard", value: 3 });
+    assert.notEqual(reaction("A creature Grabbed by the test serpent attempts to Escape.", "The test serpent makes a jaws Strike against it.")?.builtin, "escape-guard");
+    // "If the target fails a … save, it gains …", and a monster's own name in a duration.
+    const curse = compile("<p>The test dancer curses a foe it touches. If the target fails a @Check[will|dc:18] save, it gains @UUID[Compendium.pf2e.conditionitems.Item.i3OJZU2nk64Df3xm]{Clumsy 1} and @UUID[Compendium.pf2e.conditionitems.Item.e1XGnhKNSQIm5IXg]{Stupefied 1}.</p>");
+    assert.deepEqual(curse?.resolution?.outcomes?.failure?.effects?.map((effect) => [effect.slug, effect.value]), [["clumsy", 1], ["stupefied", 1]]);
+    const sand = compile("<p>Test Vashka throws grit into the eyes of a foe beside her. If the target fails a @Check[reflex|dc:30] save, they are @UUID[Compendium.pf2e.conditionitems.Item.TkIyaNPgTZFBCCuh]{Dazzled} until the beginning of Test Vashka's next turn.</p>");
+    assert.deepEqual(sand?.resolution?.outcomes?.failure?.effects?.[0]?.duration, { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "source-turn" });
+    // A Strike at a foe it hit earlier this turn, its critical failure in a sentence of its own.
+    const stunning = compile("<p><strong>Requirements</strong> The test emissary hit a foe earlier this turn with a weapon Strike</p><hr /><p><strong>Effect</strong> The test emissary makes a weapon Strike against the foe. On a success, the foe must succeed at a @Check[fortitude|dc:30] save or become @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1}. On a critical failure, the foe is @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 2} instead.</p>");
+    assert.deepEqual([stunning?.builtin, stunning?.requires, stunning?.onHit?.save?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], ["strike-activity", "hit-earlier", 2]);
+    // A bola drawn and thrown, then a Trip.
+    const bola = compile("<p>The test hunter draws a bola and Strikes a target within 20 feet. On a success, the test hunter immediately rolls an @Check[athletics|defense:fortitude] check against the target's Fortitude DC to Trip them.</p>");
+    assert.deepEqual([bola?.strike, bola?.onHit?.follow], ["bola", "trip"]);
+    // Strikes each with another limb; wing Strikes, then a fall the GM's.
+    assert.deepEqual(compile("<p>The test crawler makes up to three Strikes against different targets, each using a different limb.</p>", 2)?.strikes, [null, null, null]);
+    assert.deepEqual(compile("<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test bat makes two wing Strikes, then falls if it's flying. It can't Fly until the end of its turn.</p>")?.strikes, ["wing", "wing"]);
+});
