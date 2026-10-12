@@ -965,6 +965,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
         else if (/^If the Strike misses, (?:the [\w' -]+?|it|he|she|they) can Step\b[^.]*\.$|^(?:The [\w' -]+?|It|He|She|They) can (?:\[\[\/act hide\]\]|Hide) if\b[^.]*\.$/i.test(text)) continue;
         // "After this Strike, the harmona can Fly up to half their fly Speed." (a move after: the GM's, nothing for the simulation.)
         else if (/^After (?:this|the) Strike, (?:it|he|she|they|the [\w' -]+?) can (?:Fly|Stride|Step|Swim|Burrow|Climb)\b[^.@]*\.$/i.test(text)) continue;
+        // (Batch 90, Feathered Charge: "If the feathered bear doesn't end their movement on solid ground, they fall as soon as the Strike is
+        // completed." — the fall the GM's.)
+        else if (/^If (?:the [\w' -]+?|it|they|he|she) (?:doesn't|does not) end (?:its|their|his|her) movement on solid ground, (?:it|they|he|she) falls? as soon as the Strike is completed\.$/i.test(text)) continue;
         // "On a critical hit, the target is pushed back 10 feet."
         else if ((match = /^On a critical hit, the (?:target|creature) is pushed (?:back )?(\d+) feet\.?$/i.exec(text))) activity.onHit.criticalPush = Number(match[1]);
         // (Batch 83, Stomp: "If the boot Strike hits a Prone creature, it deals an extra 2d6 bleed damage": only on a creature already Prone.)
@@ -1013,7 +1016,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
     const rider = activity.onHit;
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    if (!opened || (!rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage)) return null;
+    const bare = !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage;
+    // (Batch 90, Feathered Charge: every sentence read, and only a Stride and a Strike for as many actions — terrain it ignores, a fall the
+    // GM's: nothing more than its Strike.)
+    if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };
+    if (!opened || bare) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length) return null;
     return activity;
 }

@@ -124,14 +124,29 @@ export function readMultiStrikes(text) {
         .replace(/, each using a different (?:limb|arm|head|tentacle)(?=\.$)/i, "")
         .replace(/, then falls if (?:it's|it is|they're|they are) flying(?=\.$)/i, "")
         .replace(/ at the same (target|creature)(?=[,.])/i, " against the same $1")
+        // (Batch 90: Two-Headed Strike's "makes a Strike with each set of jaws, each against a different creature", Bloody Dance's "makes a
+        // Strike with up to four arms, each against a different target and using a claw or scimitar as appropriate", Axe Swipe's "makes two
+        // Strikes with their greataxe against two adjacent enemies, both of whom are within their reach".)
+        .replace(/\bmakes a Strike with each set of jaws, each against a different creature(?=\.$)/i, "makes two jaws Strikes, each against a different creature")
+        .replace(/\bmakes a Strike with up to (two|three|four) arms, each against a different target and using an? [\w' -]+? or [\w' -]+? as appropriate(?=\.$)/i, "makes up to $1 Strikes, each against a different target")
+        .replace(/\bmakes two Strikes with (?:its|their|his|her) ([\w' -]+?) against two adjacent enemies, both of whom are within (?:its|their|his|her) reach(?=\.$)/i, "makes two $1 Strikes, each against a different creature")
         // (Batch 87, Dual Disarm: "makes two Strikes, one with their rapier and one with their main-gauche (in either order)".)
         .replace(/\bmakes two Strikes, one with (?:its|their|his|her) ([\w' -]+?) and one with (?:its|their|his|her) ([\w' -]+?)(?: \(in either order\))?(?=\.$)/i, "makes a $1 Strike and a $2 Strike")
         .replace(/, each using (?:its|their|his|her|the [\w' -]+?['’]s) current multiple attack penalty(?=\.$)/i, "")
         .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
         .replace(/(Strikes), or one [\w' -]+? Strike and an? [\w' -]+? Strike(?=\.$)/i, "$1")
         .replace(/, making ([\w' -]+? Strikes against )/i, " and makes $1")
+        // (Batch 90, the minotaur's Axe Swipe: "… making greataxe Strikes against any two foes who are adjacent to each other and within the
+        // minotaur's reach".)
+        .replace(/\bmakes ([\w' -]+?) Strikes against any two foes who are adjacent to each other and within (?:the [\w' -]+?['’]s|its|their|his|her) reach(?=\.$)/i, "makes two $1 Strikes, each against a different creature")
         .replace(/ (?:within|in) (?:the|its|their|his|her) [\w' -]+?(?:'s)? first range increment/i, "")
         .replace(/; no more than (?:two|one) can be against the same target/i, "")
+        // (Batch 90, Dual Stab: "against an Immobilized or Off-Guard target" — only at one.)
+        .replace(/ against an? Immobilized or Off-Guard target(?=\.$)/i, () => {
+            requires = "off-guard";
+            sameTarget = true;
+            return "";
+        })
         .replace(/ against (?:a|the) creature (?:it|they|he|she) (?:has|have) Grabbed(?: or Restrained)?/i, () => {
             requires = "grabbed";
             sameTarget = true;
@@ -212,7 +227,7 @@ export function readMultiStrikes(text) {
         }
         // (Three-Headed Strike: "These Strikes count as only one attack for the chimera's multiple attack penalty, and the penalty
         // doesn't increase until after it has made all three attacks", "… count as two attacks …".)
-        if ((match = /^These Strikes count as (only one attack|two attacks|three attacks) for [^.]*multiple attack penalty, and the penalty (?:doesn't|does not) increase until (?:after )?(?:it|he|she|they) (?:has|have) made all (?:two|three|four|five) attacks\.?$/i.exec(sentence))) {
+        if ((match = /^These Strikes count as (only one attack|one attack|two attacks|three attacks) for [^.]*multiple attack penalty, and the penalty (?:doesn't|does not) increase until (?:after )?(?:(?:it|he|she|they) (?:has|have) made all (?:two|three|four|five) attacks|both attacks)\.?$/i.exec(sentence))) {
             sameMap = true;
             countsAs = /one/i.test(match[1]) ? 1 : count(match[1].split(" ")[0]);
             continue;
@@ -244,6 +259,29 @@ export function readMultiStrikes(text) {
         const bothFollow = /^If both (?:Strikes|attacks) hit, (?:the [\w' -]+?|it|they|he|she) can attempt to (Disarm|Trip|Shove|Grapple|Reposition|Demoralize) the (?:target|creature)\.$/i.exec(sentence.replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{[^}]*\})?/g, (_all, slug) => slug.replace(/^\w/, (letter) => letter.toUpperCase())));
         if (bothFollow) {
             bothHit = { conditions: [], damage: [], follow: bothFollow[1].toLowerCase() };
+            continue;
+        }
+        // (Batch 90: Whirling Death's "No single creature can be targeted by more than one blade Strike during one use of this ability.";
+        // Axe Swipe's "The second attack uses the same multiple attack penalty as the first, but attacks they make after this take a –10
+        // multiple attack penalty."; Bloody Dance's "… can use Grab following this activity, separately attempting to Grapple each creature hit
+        // by a claw."; Fervent Frenzy's off-guard against them while frightened by its other ability (the GM's) and "becomes Clumsy 1 until the
+        // start of their next turn".)
+        if (/^No single creature can be targeted by more than one [\w' -]+? Strike during one use of this ability\.$/i.test(sentence)) {
+            each = true;
+            continue;
+        }
+        if (/^The second attack uses the same multiple attack penalty as the first, but attacks (?:it|they|he|she) makes? after this take a [-\u2013\u2212]10 multiple attack penalty\.$/i.test(sentence)) {
+            sameMap = true;
+            countsAs = 2;
+            continue;
+        }
+        if (/^(?:The [\w' -]+?|It|They|He|She) can use Grab following this activity, separately attempting to Grapple each creature hit by an? [\w' -]+\.$/i.test(sentence)) {
+            grab = true;
+            continue;
+        }
+        if (/^If the target creature is currently frightened by an? [\w' -]+?['’]s [\w' -]+? ability, it's Off-Guard against these attacks\.$/i.test(sentence)) continue;
+        if ((match = /^(?:The [\w' -]+?|It|They|He|She) becomes? (\w+) (\d+) until the (?:beginning|start) of (?:its|their|his|her) next turn\.$/i.exec(sentence))) {
+            after.push({ slug: match[1].toLowerCase(), value: Number(match[2]), until: "own-turn-start" });
             continue;
         }
         // (Wing Snap: "It can't Fly until the end of its turn.")
@@ -333,7 +371,9 @@ export function chargeSentences(text) {
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
 // Its multiple attack penalty increases only after all the attacks." → { strike, sameMap }, or null.
 export function readSweep(text) {
-    const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 90, Sweeping Axes: "Requirements The troll warleader is wielding two battle axes Effect … and the bonus from sweep applies to each
+    // attack" — what it wields; sweep's bonus left out.)
+    const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 47, Thrash: "attempts individual Strikes against each creature in its reach", "Strikes once against each creature in its reach".)
     // (Batch 83, Whirlwind of Hooks: "… against every creature within its reach", after a first sentence that only tells it.)
     const SWEEP = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:each|every) (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i;
@@ -1627,7 +1667,8 @@ function readStrikeOnly(text) {
     // scythe, increasing their reach by 5 feet for that Strike", "extending their reach by 5 feet for that Strike".)
     const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet|makes a Strike with (?:a melee weapon|(?:his|her|its|their|the) [\w' -]+?), (?:increasing|extending) (?:the reach of the Strike|(?:his|her|its|their) reach) by \d+ feet(?: for (?:that|this|the) Strike)?)\.$`, "i");
     // (Batch 42, Skirmish Strike: "The hunter can Step and then Strike, or Strike and then Step.")
-    const skirmish = new RegExp(String.raw`${who} (?:can )?(?:either )?Steps? and then Strikes?,? or Strikes? and then Steps?\.$`, "i");
+    // (Batch 90, Darting Strike: "Strides up to 10 feet and then makes a Strike, or makes a Strike and then Strides up to 10 feet".)
+    const skirmish = new RegExp(String.raw`${who} (?:(?:can )?(?:either )?Steps? and then Strikes?,? or Strikes? and then Steps?|Strides up to \d+ feet and then makes a Strike, or makes a Strike and then Strides up to \d+ feet)\.$`, "i");
     // (Batch 80, Drag: "makes a jaws Strike against a Prone enemy. If it hits, in addition to dealing damage, the hyaenodon Strides up to 10
     // feet, dragging the enemy along." — the drag the GM's.)
     const prone = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike against an? Prone (?:enemy|creature|foe)\.$`, "i");
