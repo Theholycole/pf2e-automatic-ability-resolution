@@ -702,7 +702,8 @@ test("results with no roll (2026-10-10, batch 11): damage and conditions on the 
     // Not: some of them only, a save in it, a choice, a degree, damage to itself, concealment.
     const not = (name, html) => assert.notEqual(compileMonsterAbility(action(name, html))?.resolution?.check?.roll, "automatic", name);
     not("Test Purge", "<p>Each creature that fails its save against the Breath Weapon takes @Damage[4d6[persistent,fire]] damage.</p>");
-    not("Test Flames", "<p>Every foe within 60 feet taking persistent fire damage takes @Damage[5d6[fire]] damage.</p>");
+    // (Only the foes taking persistent fire: read since batch 250 as Stoke the Flames' kin, with that filter.)
+    assert.equal(compileMonsterAbility(action("Test Flames", "<p>Every foe within 60 feet taking persistent fire damage takes @Damage[5d6[fire]] damage.</p>"))?.targeting?.taking, "fire");
     not("Test Topple", `<p>All creatures in a @Template[cone|distance:30] must attempt a Reflex save. Critical Success The target is unaffected. Failure The target is ${drained}.</p>`);
     not("Test Choice", `<p>The foe must choose one: the ally is unharmed, or the enemy is ${drained}.</p>`);
     not("Test Degree", `<p>The victim becomes ${drained}, or Drained 2 on a critical hit.</p>`);
@@ -3998,4 +3999,17 @@ test("One of two spells cast, spells turned back or steered, a pulse through its
     const pulse = plan("<p>The test dragon chooses one effect to impose on creatures in their glowing presence aura.</p><ul><li><strong>Push</strong> Each creature must succeed at a @Check[fortitude|dc:20] save or be pushed until it's no longer in the aura.</li><li><strong>Mend</strong> Each creature recovers @Damage[2d8[healing]]{2d8 Hit Points}.</li></ul>", "action", 2, dragon);
     assert.deepEqual(pulse?.modes?.map((mode) => [mode.name, mode.plan?.targeting?.area?.value, mode.plan?.resolution?.kind]), [["Push", 15, "save"], ["Mend", 15, "healing"]]);
     assert.equal(pulse.modes[0].plan.resolution.outcomes.failure.forcedMovement.distance, 15);
+});
+
+test("Monster Core 2: fires stoked for foes taking persistent fire, a Strike with a curse's save or a spell after, a pull then a Strike (2026-10-12, batch 250)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const stoke = plan("<p>Every foe within 30 feet taking persistent fire damage takes @Damage[2d6[fire]] damage.</p>");
+    assert.deepEqual([stoke?.targeting?.taking, stoke?.targeting?.area?.value], ["fire", 30]);
+    const curse = plan("<p>The test hag makes a staff Strike. If it hits, it deals an additional 1d8 spirit damage, and the target must attempt a save against either Test Hex or Test Jinx (the test hag's choice).</p>", "action", 2);
+    assert.deepEqual([curse?.onHit?.damage, curse?.notes?.length], [["1d8[spirit]"], 1]);
+    const ignite = plan("<p><strong>Requirements</strong> The test imp is not under the effect of @UUID[Compendium.pf2e.spells-srd.Item.YrzBLPLd3r9m6t1p]{Fire Shield}</p><hr /><p><strong>Effect</strong> The test imp makes a claw Strike. If it hits, it can immediately cast one of its available fire shield innate spells as a free action.</p>");
+    assert.deepEqual([ignite?.builtin, ignite?.requires, ignite?.notes?.length], ["strike-activity", "requirement", 1]);
+    const winds = plan("<p>The test bird calls the wind. A target within 30 feet must succeed at a @Check[fortitude|dc:20] save or be pulled adjacent to the test bird, where they make a talon Strike against the target. If the target was pulled off the ground and can't fly, it then falls as normal.</p>", "action", 2);
+    assert.deepEqual([winds?.resolution?.outcomes?.failure?.forcedMovement, winds?.notes?.length], [{ kind: "pull", distance: 30, upTo: true, optional: false, direction: "toward" }, 2]);
 });

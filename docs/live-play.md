@@ -2439,3 +2439,13 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a GM button for each way, as before.
 - **Simulator:** nothing new.
 
+## Stoked fires, curse and spell riders, a pull then a bite (2026-10-12, batch 250)
+
+- **Compiled** (4 new in PF2e, plus adventure copies):
+  - **Damage on foes taking persistent fire** (the ravener's Manipulate Flames): Stoke the Flames' reader also takes "Every foe within 60 feet taking persistent fire damage …" (without "that is").
+  - **Strike riders**:
+    - Implacable Curse: the extra spirit damage on a hit; the save against its curse of choice is a note.
+    - Igniting Assault: a claw Strike, with casting its Fire Shield as a free action on a hit as a note; not while under it (a requirement).
+  - **A pull, then a Strike** (Hungry Winds) → a save at one creature in range; a failure pulls it up to that far toward the harpy. The jaws Strike after and the fall are notes.
+- **Live / simulator:** as their kinds, nothing new.
+

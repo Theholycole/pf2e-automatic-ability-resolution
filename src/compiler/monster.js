@@ -1630,6 +1630,17 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 return made;
             })
             .replace(/^If successful, the attack deals an (additional|extra) (.+?) damage(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
+            // (Batch 250, Implacable Curse: "If it hits, it deals an additional 2d8 spirit damage, and the target must attempt a save against either
+            // Mumbletongue or Stumblefoot (the bodach's choice)." — the damage; the curse's save a note. Igniting Assault: "If it hits, it can
+            // immediately cast one of its available fire shield innate spells as a free action." — a note.)
+            .replace(/^If it hits, it deals an additional (\d+d\d+ \w+) damage, and the target must attempt a save against either ([A-Z][\w' -]+?) or ([A-Z][\w' -]+?) \((?:the [\w' -]+?['’]s|its) choice\)(?=\.$)/i, (_all, damage, first, second) => {
+                (activity.notes ??= []).push(`On a hit the target also saves against ${first} or ${second}, its pick (the GM's).`);
+                return `If it hits, it deals an additional ${damage} damage`;
+            })
+            .replace(/^If it hits, (?:it|they) can immediately cast one of (?:its|their) available ([\w' -]+?) innate spells as a free action\.$/i, (_all, spell) => {
+                (activity.notes ??= []).push(`If it hits, it can cast its ${spell} innate spell as a free action.`);
+                return "[told]";
+            })
             // (Batch 245, Swinging Spear: "On a hit, the murajau twists their spear to move the target to any space adjacent to the murajau and deals an
             // additional 2d6 bludgeoning damage as the target smashes into …" — the damage; the move a note.)
             .replace(/^On a hit, (?:the [\w' -]+?|it|they) twists? (?:their|its) [\w' -]+? to move the target to any space adjacent to (?:the [\w' -]+?|it|them) and deals? an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage as the target smashes into [^.]+(?=\.$)/i, (_all, damage) => {
@@ -3252,6 +3263,26 @@ function healTouch(item) {
     };
 }
 
+// A pull to it, then a Strike (2026-10-12, batch 250, Hungry Winds): one creature in range saves or is drawn in beside the harpy, which then bites it;
+// one drawn off the ground that can't fly falls → the save, a failure pulled up to that distance toward it; the Strike after and the fall, notes.
+// null otherwise.
+function pullThenStrike(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "@C")).replace(/\s+/g, " ").trim();
+    const match = /^(?:[^.@]+\. )?A target within (\d+) feet must succeed at an? @C save or be pulled adjacent to (?:the [\w' -]+?|it)(?:, where (?:they|it) makes? an? ([\w' -]+?) Strike against the target\.|\. (?:The [\w' -]+?|It) then makes an? ([\w' -]+?) [Ss]trike against the target\.)( If the target (?:was|is) pulled (?:off the ground|into the air) and (?:can't|cannot) fly, it (?:then )?falls as normal\.)?$/i.exec(plain);
+    const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+    if (!match || !check) return null;
+    const pulled = { ...none(), forcedMovement: { kind: "pull", distance: Number(match[1]), upTo: true, optional: false, direction: "toward" } };
+    return {
+        ...base(item),
+        targeting: { target: "1 creature", range: `${match[1]} feet`, area: null },
+        trigger: { event: "use" },
+        resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: false, against: { dc: "fixed", value: check.dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: pulled, criticalFailure: structuredClone(pulled) } },
+        notes: [`On a failure, once the creature is beside it, it makes a ${(match[2] ?? match[3]).toLowerCase()} Strike against it.`, ...(match[4] ? ["A creature pulled off the ground that can't fly falls."] : [])]
+    };
+}
+
 // Healing for every creature in an area (2026-10-12, batch 249, Halo Pulse's Restoration): "Each creature in a @Template[emanation|distance:20]
 // recovers 5d8 Hit Points." → the healing family's plan in that area, any creature. null otherwise.
 function areaHealing(item) {
@@ -4531,7 +4562,8 @@ function stokeFlames(item) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
     const plain = htmlToPlainText(html).replace(/\s+/g, " ").trim();
-    const match = /^(?:(?:The )?[^.@]+? intensifies nearby fires\. )?Every foe within (\d+) feet that is taking persistent (\w+) damage takes @Damage\[([^\]]+\])\] damage\.$/i.exec(plain);
+    // (Batch 250: "Every foe within 60 feet taking persistent fire damage …" too, the ravener's.)
+    const match = /^(?:(?:The )?[^.@]+? intensifies nearby fires\. )?Every foe within (\d+) feet (?:that is )?taking persistent (\w+) damage takes @Damage\[([^\]]+\])\] damage\.$/i.exec(plain);
     const tags = inlineTags(html, "Damage");
     if (!match || tags.length !== 1) return null;
     const hit = { damage: { mode: "formulas", formulas: [{ formula: readDamage(tags[0]) }], rollScope: "outcome" }, effects: [] };
@@ -4764,7 +4796,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
