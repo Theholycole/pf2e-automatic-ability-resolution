@@ -1759,7 +1759,9 @@ export function readReaction(item, text) {
         // (Batch 157, Shadow Veil: "targeted by a melee attack" — melee only.)
         const melee = /\bmelee\b/i.test(trigger);
         const ranged = /\branged\b/i.test(trigger);
-        return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}) };
+        // (Batch 158, Leap Away: a move with it — a note for the GM.)
+        const moves = /\b(?:Leaps|Steps|Strides)\b/.test(effect) ? [effect.trim().replace(/\s*\bEffect: [^.]+$/, "")] : [];
+        return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(moves.length ? { notes: moves } : {}) };
     }
     // Distracting Whisper (batch 58): "Trigger The dragon is targeted with an attack Effect A mysterious voice whispers something
     // disconcerting in the triggering creature's ear, inflicting a –2 circumstance penalty to the triggering attack." → as +2 AC against it.
@@ -1904,6 +1906,8 @@ function acDodge(text, trigger, effect) {
     // (Not with a requirement the simulator can't check; "is not encumbered" it can.)
     if (/\bRequirements? (?![^.]*?\b(?:not encumbered|(?:can't|cannot) use this reaction while Encumbered)\b)/i.test(text)) return null;
     if (!/ Effect /.test(text)) {
+        // (Batch 158, Leap Away: "Trigger Nixbrix is targeted with a ranged attack Nixbrix Leaps up to …" — no full stop after its trigger.)
+        text = text.trim().replace(/^(Trigger (?:The )?[\w' -]+? is targeted (?:with|by) an? (?:ranged |melee )?attack) (?=(?:The )?[A-Z][\w'-]*(?: [\w'-]+)*? (?:Leaps|Steps|Strides)\b)/, "$1. ");
         const parts = /^Trigger (.+?)\.\s+(?:Requirements? [^.]+\.\s+)?(.+)$/.exec(text.trim());
         if (!parts) return null;
         [trigger, effect] = [parts[1], parts[2]];
@@ -1926,7 +1930,8 @@ function acDodge(text, trigger, effect) {
     // Its sentence and any more: a note when it says more than the bonus against the attack.
     // (Not the PF2e effect it links: "… Effect: Shielding Wing".)
     const plain = effect.trim().replace(/\s*\bEffect: [^.]+$/, "");
-    const only = /^[^.]*?\+\d+ circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)(?: against (?:the|that) triggering (?:attack|Strike))?\.?$/i.test(plain);
+    // (Batch 158, Leap Away: a move in the same sentence is more than the bonus — a note.)
+    const only = /^[^.]*?\+\d+ circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)(?: against (?:the|that) triggering (?:attack|Strike))?\.?$/i.test(plain) && !/\b(?:Leaps|Steps|Strides|Flies)\b/.test(plain);
     const notes = [...(only ? [] : [plain]), ...(spellToo ? ["A spell aimed at it sets it off too."] : [])];
     return { builtin: "ac-reaction", value: Number(bonus[1]), when: hit ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(notes.length ? { notes } : {}) };
 }
@@ -2365,8 +2370,15 @@ export function readSelfGuard(item) {
     const text = htmlToPlainText(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\s+/g, " ").trim();
     // (Not one that links PF2e's own effect, which its effect reading uses.)
     if (/\bTrigger\b/.test(text) || /@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item?.system?.description?.value ?? "")) return null;
+    // (Batch 158, Mountain Stance: "Requirements Evora is unarmored and touching the ground Effect Evora enters the stance of an implacable mountain
+    // until she is knocked out or the encounter ends. She gains a +4 status bonus to AC and a +2 circumstance bonus to any defenses against being
+    // Shoved or Tripped. Her Speed is reduced by 5 feet." — a stance for the fight; the rest notes.)
+    const mountain = /^(?:Requirements? (?:The )?[\w' -]+? is unarmored(?: and touching the ground)?\.? Effect )?(?:The )?[\w' -]+? enters the stance of [^.]+? until (?:she|he|it|they) (?:is|are) knocked out or the encounter ends\. (?:She|He|It|They) gains? an? \+(\d) (status|circumstance) bonus to AC(?: and an? \+(\d) circumstance bonus to any defenses against being Shoved or Tripped)?\.(?: (?:Her|His|Its|Their) Speed is reduced by (\d+) feet\.)?$/i.exec(text);
+    if (mountain) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: null, modifiers: [{ on: "ac", type: mountain[2].toLowerCase(), value: Number(mountain[1]) }], tempHp: 0 }, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: [...(mountain[3] ? [`+${mountain[3]} circumstance bonus to its defenses against Shove and Trip.`] : []), ...(mountain[4] ? [`Its Speed is ${mountain[4]} feet lower.`] : [])] };
     const required = /^Requirements? (.+?) Effect /.exec(text)?.[1] ?? "";
-    if (required && !/^(?:The )?[\w' -]+? (?:is wielding [^.]+|has (?:a|an|one|two|his|her|its|their) [^.]*?(?:weapon|shield|hand)[^.]*)$/i.test(required.trim())) return null;
+    // (Batch 158, Mountain Stronghold: "Requirements Evora is in Mountain Stance" — only while that stance of its own is on it.)
+    const inStance = /^(?:The )?[\w' -]+? is in ([A-Z][\w' -]+? Stance)\.?$/.exec(required.trim())?.[1] ?? null;
+    if (required && !inStance && !/^(?:The )?[\w' -]+? (?:is wielding [^.]+|has (?:a|an|one|two|his|her|its|their) [^.]*?(?:weapon|shield|hand)[^.]*)$/i.test(required.trim())) return null;
     const body = text.replace(/^Requirements? .+? Effect /, "").replace(/^Frequency [^.]*? Effect /, "")
         // (Batch 138, Defender of the Seas: "The triton Interacts to raise their trident, gaining a +1 circumstance bonus to AC until …".)
         .replace(/^((?:The )?[\w' -]+?) Interacts to [^,.]+, gaining (?=an? \+\d+ (?:circumstance|status) bonus to AC\b)/, "$1 gains ");
@@ -2379,6 +2391,11 @@ export function readSelfGuard(item) {
     if (held) return held;
     // (Batch 144, Raise Shields: "The arboreal wardens of the copse raise their shields in tandem, gaining a +2 circumstance bonus to AC and Reflex
     // saves." — Raise a Shield's, until the start of its next turn.)
+    // (Batch 158, Spinning Shield: "Rayhnne spins her flails rapidly in all directions, giving her a +2 circumstance bonus to her AC and Reflex saves
+    // until the start of her next turn. If she uses Reactive Strike while this ability is active, she adds 1d10 to her damage." — the Reactive
+    // Strike's extra die a note.)
+    const spinning = /^(?:The )?[^.,]+? [^.,]+?, giving (?:her|him|it|them|itself|herself|himself|themselves) an? \+(\d) circumstance bonus to (?:her|his|its|their) AC and Reflex saves until the start of (?:her|his|its|their) next turn\.(?: If (?:she|he|it|they) uses Reactive Strike while this ability is active, (?:she|he|it|they) adds? (\d+d\d+) to (?:her|his|its|their) damage\.)?$/i.exec(body.trim());
+    if (spinning) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(spinning[1]) }, { on: "reflex", type: "circumstance", value: Number(spinning[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, ...(spinning[2] ? { notes: [`While it lasts, its Reactive Strike deals ${spinning[2]} more damage.`] } : {}) };
     const shields = /^(?:The )?[^.]+? raises? (?:their|its) shields?(?: in tandem)?, gaining an? \+(\d) circumstance bonus to AC and Reflex saves\.$/i.exec(body.trim());
     if (shields) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(shields[1]) }, { on: "reflex", type: "circumstance", value: Number(shields[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" } };
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/);
@@ -2416,7 +2433,7 @@ export function readSelfGuard(item) {
         actions: Number(item.system?.actions?.value) || 1,
         model: { name: item.name, rounds, modifiers: [{ on: "ac", type: found[3].toLowerCase(), value: Number(found[2]) }], tempHp: 0 },
         duration: { value: 1, unit: "rounds", expiry: rounds === 2 ? "turn-end" : "turn-start" },
-        ...(notes.length ? { notes } : {})
+        ...(inStance ? { requiresEffect: inStance, notes: [`Only while it is in ${inStance}.`, ...notes] } : notes.length ? { notes } : {})
     };
 }
 

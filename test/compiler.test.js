@@ -1291,7 +1291,7 @@ test("Focus Gaze through the gaze it names, a monster's Hunt Prey, a bonus to it
     assert.deepEqual([parry.builtin, parry.model.modifiers, parry.model.rounds, parry.duration, parry.notes], ["self-effect", [{ on: "ac", type: "circumstance", value: 2 }], 1, { value: 1, unit: "rounds", expiry: "turn-start" }, ["As long as his other hand remains free."]]);
     const flames = compileMonsterAbility(item("Test Flames", "<p>The test salamander stokes its flames. Until the start of its next turn, it gains a +2 circumstance bonus to AC, and an adjacent creature that hits it takes 1d6 fire damage.</p>"));
     assert.deepEqual([flames.model.modifiers[0].value, flames.notes], [2, ["An adjacent creature that hits it takes 1d6 fire damage."]]);
-    assert.equal(compileMonsterAbility(item("Test Stance", "<p><strong>Requirements</strong> Test Monk is in Test Stance</p><hr /><p><strong>Effect</strong> Test Monk gains a +2 circumstance bonus to AC until the start of her next turn.</p>"))?.builtin, undefined);
+    assert.equal(compileMonsterAbility(item("Test Stance", "<p><strong>Requirements</strong> Test Monk is in Test Stance</p><hr /><p><strong>Effect</strong> Test Monk gains a +2 circumstance bonus to AC until the start of her next turn.</p>"))?.requiresEffect, "Test Stance");
 });
 
 test("Mist Escape, a weapon that appears in its hand, Goblin Scuttle and Avenging Bite with no labels (2026-10-11, batch 40)", () => {
@@ -2888,4 +2888,16 @@ test("a screech on the move, a thrown Strike then a teleport and a melee one, a 
     const veil = compileMonsterAbility({ ...item("<p>If the test priest is targeted by a melee attack, they can use their reaction to gain a +2 circumstance bonus to AC against the triggering attack.</p>", "reaction"), system: { ...item("", "reaction").system, description: { value: "<p>If the test priest is targeted by a melee attack, they can use their reaction to gain a +2 circumstance bonus to AC against the triggering attack.</p>" }, rules: [{ key: "FlatModifier", selector: "ac", value: 2 }] } }, { basicActions });
     assert.deepEqual(veil, { builtin: "ac-reaction", value: 2, when: "targeted", against: "melee" });
     assert.deepEqual(ability("<p><strong>Frequency</strong> twice per day</p><hr /><p><strong>Effect</strong> Tess steps through a fold in space, instantly teleporting to a space within 60 feet that she can see.</p>", "action", 1), { builtin: "safe-move", actions: 1 });
+});
+
+test("a stance for the fight and a guard only in it, AC and Reflex while spinning, a leap with an AC reaction (2026-10-12, batch 158)", () => {
+    const ability = (description, type = "action", rules = []) => compileMonsterAbility({ type: "action", name: type === "action" ? "Test Stance" : "Test Leap", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: description }, rules } }, { basicActions: {} });
+    const stance = ability("<p><strong>Requirements</strong> Tess is unarmored and touching the ground</p><hr /><p><strong>Effect</strong> Tess enters the stance of a rooted oak until she is knocked out or the encounter ends. She gains a +3 status bonus to AC. Her Speed is reduced by 5 feet.</p>");
+    assert.deepEqual([stance.stance, stance.model.modifiers, stance.notes], [true, [{ on: "ac", type: "status", value: 3 }], ["Its Speed is 5 feet lower."]]);
+    const strong = ability("<p><strong>Requirements</strong> Tess is in Oak Stance</p><hr /><p><strong>Effect</strong> Tess gains a +2 circumstance bonus to AC until the beginning of her next turn.</p>");
+    assert.deepEqual([strong.requiresEffect, strong.model.modifiers[0].value], ["Oak Stance", 2]);
+    const spin = ability("<p>Tess whirls her chains in all directions, giving her a +1 circumstance bonus to her AC and Reflex saves until the start of her next turn. If she uses Reactive Strike while this ability is active, she adds 1d8 to her damage.</p>");
+    assert.deepEqual([spin.model.modifiers.map((modifier) => modifier.on), spin.notes], [["ac", "reflex"], ["While it lasts, its Reactive Strike deals 1d8 more damage."]]);
+    const leap = ability("<p><strong>Trigger</strong> Tess is targeted with a ranged attack Tess Leaps up to 20 feet horizontally, and she gains a +2 circumstance bonus to AC against the triggering attack.</p>", "reaction");
+    assert.deepEqual([leap.builtin, leap.against, leap.notes?.length], ["ac-reaction", "ranged", 1]);
 });

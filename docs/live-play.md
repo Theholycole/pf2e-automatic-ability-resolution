@@ -1501,3 +1501,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Screeching Advance → the owlbear's own Bloodcurdling Screech plan with 2 actions and a note; Storm Strikes Twice → a multi-Strike with `sameMap`; skill reactions may now carry a requirement (`requires`, `note`); AC reactions from a FlatModifier rule gain `against` from their trigger.
 - **Live:** no new live code: the save card, the multi-Strike notes, the skill and AC offers as before. Not run in pftest.
 - **Simulator:** nothing new: the screech as an area save, the two Strikes, the AC reaction only against that kind of attack.
+
+## A stance and a guard only in it; moves with AC reactions (2026-10-12, batch 158)
+
+- **Compiled:** Mountain Stance → a stance self-effect (+4 status AC) with notes; a guard behind "is in X Stance" → `requiresEffect`; Spinning Shield → AC and Reflex until its next turn; AC reactions whose words move it keep those words as a note.
+- **Live:** no new live code: the effects and the AC offers (with their notes) as before. Not run in pftest.
+- **Simulator:** a self-effect with `requiresEffect` is planned only while its own effect of that name is on it (B158).
