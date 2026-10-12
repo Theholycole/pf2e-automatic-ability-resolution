@@ -91,6 +91,20 @@ export function readMultiStrikes(text) {
     // (Batch 129, Double Stab: "Requirements Ralso is wielding two piercing weapons Frequency once per round Effect …" — what it wields, then its
     // frequency.)
     body = body.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding two [\w' -]+? weapons\.? (?=Frequency )/i, "");
+    // (Batch 200, Power Through: "Requirements The warmonger is wielding two melee weapons and isn't Fatigued Effect The warmonger attempts up to three
+    // melee Strikes against different creatures. … The warmonger overexerts themself with the attacks, becoming fatigued. The warmonger can attempt a
+    // … save to recover from this fatigued condition at the start of each of their turns." — not while Fatigued; Fatigued after, until it saves.)
+    let notFatigued = false;
+    let fatiguedAfter = null;
+    body = body.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding two melee weapons and (?:isn't|is not|aren't|are not) Fatigued\.? Effect /i, () => {
+        notFatigued = true;
+        return "";
+    }).replace(/ against different creatures\.(?= These count toward)/i, ", each against a different target.")
+        .replace(/\bThese count toward (?:the [\w' -]+?['’]s|its|their) multiple attack penalty normally, but the penalty doesn't increase until after all the attacks\./i, "These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.")
+        .replace(/ (?:The [\w' -]+?|It|They) overexerts? (?:themself|itself|themselves) with the attacks, becoming fatigued\.(?: (?:The [\w' -]+?|It|They) can attempt an? (@Check\[[^\]]*\]) save to recover from this fatigued condition at the start of each of (?:its|their) turns\.)?$/i, (_all, check) => {
+            fatiguedAfter = check ? `It becomes Fatigued; at the start of each of its turns it attempts a DC ${/dc:(\d+)/i.exec(check)?.[1] ?? "?"} Fortitude save to recover.` : "It becomes Fatigued.";
+            return "";
+        });
     // (Batch 91: Paired Strike's "Requirements The maftet is wielding two scimitars Effect …"; the "diferent" of some texts.)
     body = body.replace(/^Requirements? (?:The |You )?[^.]+? (?:is|are) wielding two [\w' -]+?s\.? Effect /i, "").replace(/\bdiferent\b/g, "different");
     // (Batch 109, Captive Rake: "Requirements A creature is grabbed in the glabrezu's pincer. Effect The glabrezu pulls the grabbed creature up to
@@ -243,10 +257,11 @@ export function readMultiStrikes(text) {
     let penalty = 0;
     const notes = [];
     notes.push(...earlyNotes);
+    if (fatiguedAfter) notes.push(fatiguedAfter);
     if (strideBetween) notes.push("Between the Strikes it Strides (no reactions) to another space beside the creature; the second Strike only if it gets there.");
     if (preyOnly) notes.push("Only at its prey.");
     if (swimAfter) notes.push("Then it Swims up to its swim Speed; that Swim triggers no reactions.");
-    let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : null;
+    let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : notFatigued ? "not-fatigued" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
     let strides = movesFirst || (strideFirst ? 1 : 0);
@@ -416,6 +431,8 @@ export function readMultiStrikes(text) {
             return "";
         });
     const after = [];
+    // (Batch 200, Power Through: Fatigued after, until it saves — for the fight, in the simulator.)
+    if (fatiguedAfter) after.push({ slug: "fatigued", value: null, until: "save" });
     const strikes = [];
     const count = countWord;
     // "scimitar or fangs": the first; "melee", "unarmed", "ranged" or none: the best (null).
@@ -863,7 +880,12 @@ export function readSweep(text) {
         // (Batch 156, Slagblade Storm: "Temperbrand Strikes all creatures within her reach with a slagblade Strike.")
         .replace(/^((?:The )?[^.]+?) Strikes all creatures within (?:its|their|his|her) reach with an? ([\w' -]+?) Strike\./i, "$1 makes a $2 Strike against all creatures within reach.")
         // (Batch 150, Whirlwind Strike: "Ordulf Strikes each enemy within his reach.")
-        .replace(/^((?:The )?[^.]+?) Strikes each (enemy|creature|foe) within (?:its|their|his|her) reach\./i, "$1 makes a Strike against each $2 within reach.").split(/(?<=\.)\s+(?=[A-Z])/);
+        .replace(/^((?:The )?[^.]+?) Strikes each (enemy|creature|foe) within (?:its|their|his|her) reach\./i, "$1 makes a Strike against each $2 within reach.")
+        // (Batch 200, Staff Swipe: "They attempt a bo staff Strike against each enemy in a @Template[type:cone|distance:15]." — each enemy in that cone.)
+        .replace(/\b(attempts?|makes?) an? ([\w' -]+?) Strike against each enemy in an? @Template\[type:(cone|emanation|burst)\|distance:(\d+)\](?:\{[^}]*\})?\./i, (_all, made, name, shape, feet) => {
+            notes.push(`Each enemy in a ${feet}-foot ${shape.toLowerCase()}.`);
+            return `${made} a ${name} Strike against each enemy within reach.`;
+        }).split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 102: "makes three jaws Strikes, each against a different target", "makes up to six longsword Strikes, each against a different
     // target" → that many, each at a different creature in its reach.)
     const COUNTS = { two: 2, three: 3, four: 4, five: 5, six: 6 };
@@ -903,7 +925,7 @@ export function readSweep(text) {
         if (/^The first (?:enemy|creature) (?:it|they|he|she) damages? is subject to [A-Z][\w' -]+\.$/.test(sentence)) continue;
         // "It can Strike up to once with its jaws and any number of times with its body": its Strikes, the best one played.
         if (/^(?:It|They) can Strike up to once with (?:its|their) [\w' -]+(?:, up to once with (?:its|their) [\w' -]+)*,? and any number of times with (?:its|their) [\w' -]+\.$/i.test(sentence)) continue;
-        if (/^This counts as (?:two|three|four|\w+) attacks for [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.test(sentence)) {
+        if (/^This counts as (?:two|three|four|\w+) attacks (?:for|toward) [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.test(sentence)) {
             sameMap = true;
             continue;
         }
@@ -2462,6 +2484,8 @@ export function readStrikeBuff(item) {
         .replace(/\bAll of (the [\w' -]+?['’]s) melee unarmed attacks deal an (additional|extra) ((?:\u0001\d+\u0001|\d+d\d+ [a-z]+)) damage until (?:the [\w' -]+?['’]s|its|their) rage ends\./, "Until its rage ends, $1 melee Strikes deal an $2 $3 damage.")
         // (Batch 166, Trick Attack: "The next attack with that weapon this turn deals an additional 2d6 precision damage." — its next Strike only.)
         .replace(/\bThe next attack with that weapon(?: this turn)? deals an (?:extra|additional) (\d+d\d+) precision damage\./, "Until the end of its turn, its Strikes deal an additional $1 precision damage. Next Strike only.")
+        // (Batch 200, Local Poison: "Until the end of their turn, Strikes with their dagger deal an additional 2 persistent poison damage.")
+        .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) (?:next )?turn), Strikes with (?:its|their|his|her) ([\w' -]+?) deal an (additional|extra) /, "$1, their $2 Strikes deal an $3 ")
         // (Batch 152, Demon-Touched Weapon: "Until the end of her next turn, Shenga deals 1d6 bleed damage with her melee Strikes.")
         .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) next turn), (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) deals? (\d+d\d+(?:\s*[+-]\s*\d+)? [a-z]+) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./, "$1, its $3Strikes deal an additional $2 damage.")
         .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
@@ -3158,6 +3182,12 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 200, Scurry: "The toady Strides, then can Hide. They can attempt to Hide from creatures without cover or being Concealed, but at a –2
+    // circumstance penalty."; Stealthy Pad: "Frequency once per round Effect The leaping thief Steps, then Hides or Sneaks, ignoring difficult terrain for
+    // this movement." — a move and its hiding, which the simulator doesn't play.)
+    const hiding = said.replace(/\[\[\/act (hide|sneak)[^\]]*\]\](?:\{([^}]*)\})?/gi, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
+    if (/^(?:The )?[^.]+? Strides, then can Hide\. (?:It|They|He|She) can attempt to Hide from creatures without cover or being Concealed, but at a [-\u2013\u2212]\d circumstance penalty\.$/i.test(hiding)) return true;
+    if (/^(?:Frequency once per (?:round|turn) Effect )?(?:The )?[^.]+? Steps, then Hides or Sneaks, ignoring difficult terrain for this movement\.$/i.test(hiding)) return true;
     // (Batch 60, Undulate: "Strides or Steps. During this movement, it can pass through spaces as narrow as 5 feet without Squeezing.")
     if (/^(?:The )?[^.]+? (?:Strides(?: up to (?:its|his|her|their) Speed)?(?: or Steps)?|Swims|Climbs|Burrows)\. During this movement, (?:it|they|he|she) can pass through spaces as narrow as \d+ feet without Squeezing\.$/i.test(said)) return true;
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;

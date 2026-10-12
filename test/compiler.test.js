@@ -3267,3 +3267,18 @@ test("a Stride and a Strike as it rolls initiative (2026-10-12, batch 199)", () 
     assert.deepEqual([pounce.builtin, pounce.actions, pounce.strides, pounce.strike, pounce.initiative], ["strike-activity", 0, 1, "claw", true]);
     assert.match(pounce.notes[0], /with Forest Lore/);
 });
+
+test("NPC Core Strikes: a cone sweep, three Strikes then Fatigued, swings and leaps, a pull, a carry-free move and hide, a Feint, a dagger's poison (2026-10-12, batch 200)", () => {
+    const item = (html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const sweep = compileMonsterAbility(item("<p>The test monk spins their staff. They attempt a staff Strike against each enemy in a @Template[type:cone|distance:10]. This counts as two attacks toward their multiple attack penalty, but the penalty doesn't increase until after all the attacks.</p>", 2), {});
+    assert.deepEqual([sweep.builtin, sweep.strikes, sweep.each, sweep.sameMap, sweep.notes], ["multi-strike", ["staff"], true, true, ["Each enemy in a 10-foot cone."]]);
+    const through = compileMonsterAbility(item("<p><strong>Requirements</strong> The test brute is wielding two melee weapons and isn't Fatigued</p><hr /><p><strong>Effect</strong> The test brute attempts up to three melee Strikes against different creatures. These count toward the test brute's multiple attack penalty normally, but the penalty doesn't increase until after all the attacks. The test brute overexerts themself with the attacks, becoming fatigued. The test brute can attempt a @Check[fortitude|dc:20] save to recover from this fatigued condition at the start of each of their turns.</p>", 2), {});
+    assert.deepEqual([through.max, through.sameMap, through.requires, through.after], [3, true, "not-fatigued", [{ slug: "fatigued", value: null, until: "save" }]]);
+    const swing = compileMonsterAbility(item("<p>The test acrobat swings on a rope or trapeze, moving up to double their Speed. At any point during the swing, they can make a melee Strike.</p>", 2), {});
+    assert.deepEqual([swing.strides, swing.requires], [2, "requirement"]);
+    const reel = compileMonsterAbility(item("<p>The test guard makes a ranged Strike with their harpoon. If the Strike hits, the guard can haul on the attached line, moving the target up to 20 feet in a straight line toward the guard.</p>", 2), {});
+    assert.deepEqual([reel.strike, reel.notes], ["harpoon", ["On a hit, it can pull the target up to 20 feet straight toward itself."]]);
+    assert.deepEqual(compileMonsterAbility(item("<p>The test lackey Strides, then can Hide. They can attempt to Hide from creatures without cover or being Concealed, but at a –2 circumstance penalty.</p>"), {}), { builtin: "no-effect" });
+    const poison = compileMonsterAbility(item("<p>The test hunter coats their knife. Until the end of their turn, Strikes with their knife deal an additional 1 persistent poison damage.</p>"), {});
+    assert.deepEqual([poison.builtin, poison.damage, poison.strike], ["self-effect", ["1[persistent,poison]"], "knife"]);
+});

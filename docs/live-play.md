@@ -1761,3 +1761,17 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** as the encounter starts, a siktempora in it brings a free Strike offer with its named Strike. The note names the Lore it rolls for initiative and says it Strides once, before or after the Strike. Not run in pftest: the same path as batch 170's initiative offers.
 - **Simulator:** see B199 in its ability decisions.
 
+## NPC Core Strikes and moves (2026-10-12, batch 200)
+
+- **Compiled:**
+  - Staff Swipe → a sweep at each enemy, with a note for the 15-foot cone.
+  - Power Through → three melee Strikes at different creatures with the same multiple attack penalty, `requires: "not-fatigued"`, then Fatigued (`until: "save"`), with a note for its Fortitude save at each turn's start.
+  - Swinging Strike → two Strides and a melee Strike, behind its rope or trapeze (`requires: "requirement"`).
+  - Flying Attack → a Stride and a Strike, played as PF2e's own (`strikeOnly`).
+  - Reshape the Battle and Reel In → their Strikes, with notes for the Reposition and the 30-foot pull.
+  - Scurry and Stealthy Pad → `no-effect` (a move and hiding).
+  - Fence's Feint → PF2e's Feint, with notes for the Step and the longer Off-Guard.
+  - Local Poison → 2 persistent poison on its dagger Strikes until the end of its turn.
+- **Live:** cards, offers and buffs as for their kinds before. Not run in pftest.
+- **Simulator:** see B200 in its ability decisions.
+

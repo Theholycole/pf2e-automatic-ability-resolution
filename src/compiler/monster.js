@@ -902,6 +902,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 200, Swinging Strike: "swings on a rope or trapeze, moving up to double their Speed. At any point during the swing, they can make a melee
+        // Strike." — two Strides and the Strike, only where there's a rope or trapeze (the GM's); Flying Attack: "makes a Leap, High Jump, or Long Jump. At
+        // any point during the jump, if they're adjacent to an enemy, they can Strike that enemy with a fist or nunchaku Strike, even in midair. …" — a
+        // move and the Strike, the fall after notes.)
+        .replace(/\b((?:The )?[\w' -]+?) swings on a rope or trapeze, moving up to double (?:its|their|his|her) Speed\. At any point during the swing, (?:it|they|he|she) can make an? ([\w' -]+?) Strike\./i, "$1 Strides twice and makes a $2 Strike. [rope or trapeze]")
+        .replace(/\b((?:The )?[\w' -]+?) makes a (?:@UUID\[[^\]]*\]\{)?Leap\}?, (?:@UUID\[[^\]]*\]\{)?High Jump\}?, or (?:@UUID\[[^\]]*\]\{)?Long Jump\}?\. At any point during the jump, if (?:it's|they're|he's|she's) adjacent to an enemy, (?:it|they|he|she) can Strike that enemy with an? [\w' -]+?(?: or [\w' -]+?)? Strike, even in midair\. (?:The [\w' -]+?|It|They|He|She) falls? to the ground after the Strike\. If the distance (?:it|they|he|she) falls? is no more than the height of (?:its|their|his|her) jump, (?:it|they|he|she) lands? upright and takes? no damage\./i, "$1 Strides and makes a Strike. [leap strike]")
         // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
         .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -1027,6 +1033,17 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
             // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
             // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            // (Batch 200: Reshape the Battle's "If it hits a creature of the master's size or smaller, the master can automatically Reposition it to any
+            // space within the bo staff's reach."; Reel In's "If the Strike hits, the guard can haul on the attached line, moving the target up to 30 feet in
+            // a straight line toward the iruxi." — notes.)
+            .replace(/^If it hits a creature of (?:the [\w' -]+?['’]s|its|their) size or smaller, (?:the [\w' -]+?|it|they) can automatically Reposition it to any space within (?:the [\w' -]+?['’]s|its|their) reach\.$/i, () => {
+                (activity.notes ??= []).push("On a hit at a creature its size or smaller, it can move that creature to any space within its reach.");
+                return "[told]";
+            })
+            .replace(/^If the Strike hits, (?:the [\w' -]+?|it|they) can haul on the attached line, moving the target up to (\d+) feet in a straight line toward (?:the [\w' -]+?|it|them)\.$/i, (_all, feet) => {
+                (activity.notes ??= []).push(`On a hit, it can pull the target up to ${feet} feet straight toward itself.`);
+                return "[told]";
+            })
             .replace(/^If it hits, it injects additional poison, causing its venom to gain the virulent trait\.$/i, () => {
                 (activity.notes ??= []).push("On a hit, its venom gains the virulent trait.");
                 return "[told]";
@@ -1442,6 +1459,16 @@ function strikeActivity(item, actor, { after = null } = {}) {
         if (text === "[boat boarding]") {
             activity.requires = "requirement";
             (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
+            continue;
+        }
+        // (Batch 200: Swinging Strike's rope or trapeze, which the GM checks; Flying Attack's jump.)
+        if (text === "[rope or trapeze]") {
+            activity.requires = "requirement";
+            (activity.notes ??= []).push("Only with a rope or trapeze to swing on; the Strike at any point along the swing.");
+            continue;
+        }
+        if (text === "[leap strike]") {
+            (activity.notes ??= []).push("It Leaps, High Jumps or Long Jumps, Striking an adjacent enemy at any point in the air; it lands upright if it falls no further than it jumped.");
             continue;
         }
         // (Batch 184, Halyard Swing's rope.)
@@ -3258,6 +3285,12 @@ function variedManeuver(item, basicActions = {}) {
             statistic = skill.toLowerCase();
             extra.push(`It rolls ${skill} for the check.`, ...(/willing/.test(_all) ? ["A willing creature is grabbed without a check."] : []));
             return `${act}.`;
+        })
+        // (Batch 200, Fence's Feint: "The fence Feints, then can Step. If the feint succeeds, the target is Off-Guard against the fence's melee attacks until
+        // the end of the fence's next turn (or to all melee attacks on a critical success)." — the Feint; the Step and its longer Off-Guard notes.)
+        .replace(/^((?:The )?[^.]+?) Feints, then can Step\. If the feint succeeds, the target is Off-Guard against (?:the [\w' -]+?['’]s|its|their|his|her) melee attacks until the end of (?:the [\w' -]+?['’]s|its|their|his|her) next turn \(or to all melee attacks on a critical success\)\.$/i, (_all, who) => {
+            extra.push("Then it can Step.", "On a success the target is Off-Guard to its melee attacks until the end of its next turn (to all melee attacks on a critical success).");
+            return `${who} Feints a creature.`;
         })
         // (Batch 156: Looming Threat's "The master xun Steps or Feints, then Demoralizes." — the Step or Feint before it the GM's.)
         .replace(/^((?:The )?[^.]+?) Steps or Feints, then Demoralizes\.(?=\s|$)/i, (_all, who) => {
