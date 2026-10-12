@@ -2393,7 +2393,7 @@ export function followUpSkill(item, html, basicActions) {
 // dragon's tail uses a manipulate action or a move action, makes a ranged attack, or leaves a square during a move action it's using Effect
 // The dragon attempts an Athletics check to Trip the triggering creature. This check doesn't count toward the dragon's multiple attack
 // penalty, and its multiple attack penalty doesn't apply to this check." → PF2e's Trip (or Shove, Grapple) at the provoking creature.
-function provokedSkill(item, basicActions) {
+function provokedSkill(item, basicActions, actor = null) {
     if (item.system?.actionType?.value !== "reaction") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
     const parts = /^(?:Requirements? .+? )?Trigger (.+?)\.? (?:Requirements? .+? )?Effect (.+)$/.exec(plain);
@@ -2404,7 +2404,37 @@ function provokedSkill(item, basicActions) {
     // penalty", "On a success, the triggering movement is disrupted (and the creature is Tripped as normal)" — a Trip that lands stops a
     // move anyway; a first sentence that only tells it.)
     const told = parts[2].split(/(?<=\.)\s+(?=[A-Z])/);
-    const effect = (told.length > 1 && !/\b(?:Trip|Shove|Grapple|Strike)\b/.test(told[0]) && !/\b(?:check|damage|save)\b/i.test(told[0]) ? told.slice(1) : told)
+    // (Batch 137: Tail Whip's "On a success, the creature also takes damage as if the shemhazian had hit with a tail Strike, and if the
+    // creature was flying, it falls 30 feet." — that Strike's damage on its successes, the fall the GM's; Territorial Retaliation's
+    // "Regardless of the result, the space … become difficult terrain for 1 round." — the GM's.)
+    const reminders = [];
+    let struck = null;
+    const kept = told.filter((sentence) => {
+        const hit = /^On a success, the creature also takes damage as if (?:the [\w' -]+?|it|they|he|she) had hit with an? ([\w' -]+?) Strike(?:, and (if the creature was flying, it falls \d+ feet))?\.$/i.exec(sentence);
+        if (hit) {
+            struck = hit[1];
+            if (hit[2]) reminders.push(hit[2][0].toUpperCase() + hit[2].slice(1) + ".");
+            return false;
+        }
+        if (/^Regardless of the result, [^.]*? becomes? difficult terrain for \d+ rounds?\.$/i.test(sentence)) {
+            reminders.push(sentence);
+            return false;
+        }
+        return true;
+    });
+    // (Kneecapper: "lashes out at the triggering creature's knees and tries to knock them Prone. The nuglub makes an Acrobatics check
+    // against the creature's Reflex DC. On a success, the target falls and lands prone." — PF2e's Trip rolled with Acrobatics, Prone on
+    // its successes and nothing else.)
+    const kneecap = kept.length === 3 && /^(?:The )?[^.]+? (?:makes|attempts) an? (?:@Check\[acrobatics[^\]]*\](?:\{[^}]*\})?|Acrobatics) check against the creature's Reflex DC\.$/i.test(kept[1]) && /^On a success, the target falls and lands prone\.$/i.test(kept[2]) && !/\b(?:check|damage|save)\b/i.test(kept[0]);
+    if (kneecap && basicActions.trip?.resolution) {
+        const plan = structuredClone(basicActions.trip);
+        const rows = plan.resolution.outcomes;
+        plan.resolution.check = { ...plan.resolution.check, statistic: "acrobatics" };
+        rows.criticalSuccess = structuredClone(rows.success);
+        rows.criticalFailure = structuredClone(rows.failure);
+        return { ...plan, ...base(item, { traits: (plan.traits ?? []).filter((trait) => trait !== "attack") }), targeting: { ...plan.targeting, target: "the attacker" }, trigger };
+    }
+    const effect = (kept.length > 1 && !/\b(?:Trip|Shove|Grapple|Strike)\b/.test(kept[0]) && !/\b(?:check|damage|save)\b/i.test(kept[0]) ? kept.slice(1) : kept)
         .filter((sentence) => !/^(?:This (?:check|attempt) (?:neither applies nor counts|doesn't count|does not count) toward (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.|On a success, the triggering (?:action|movement) is disrupted(?: and the creature is Tripped as normal)?\.)$/i.test(sentence)).join(" ");
     const match = /^(?:The )?[^.]+? attempts an Athletics check to (Trip|Shove|Grapple) the triggering creature\.(?: This check (?:doesn't|does not) count toward (?:the [\w' -]+?'s|its|their) multiple attack penalty, and (?:its|their) multiple attack penalty (?:doesn't|does not) apply to this check\.)?$/i.exec(effect)
         ?? /^(?:The )?[^.]+? (?:attempts|makes) an Athletics check to (Trip|Shove|Grapple) the (?:triggering creature|target|creature)\.$|^(?:The )?[^.]+? (?:attempts to|uses (?:its|their|his|her) [\w' -]+? to attempt to|extends an? [\w' -]+? and attempts to) (Trip|Grapple) the (?:triggering )?creature\.$/i.exec(effect);
@@ -2412,6 +2442,16 @@ function provokedSkill(item, basicActions) {
     const basic = match ? basicActions[match[1].toLowerCase()] : null;
     if (!basic?.resolution) return null;
     const plan = structuredClone(basic);
+    if (struck) {
+        const components = strikeComponents(item, struck, actor);
+        if (!components.length) return null;
+        const rows = plan.resolution.outcomes;
+        for (const degree of ["success", "criticalSuccess"]) {
+            const formulas = components.map(({ formula }) => ({ formula }));
+            rows[degree].damage = rows[degree].damage?.mode === "formulas" ? { ...rows[degree].damage, formulas: [...rows[degree].damage.formulas, ...formulas] } : { mode: "formulas", formulas, rollScope: "target" };
+        }
+    }
+    if (reminders.length) plan.resolution.reminders = [...(plan.resolution.reminders ?? []), ...reminders.map((reminder) => readableText(reminder))];
     return { ...plan, ...base(item, { traits: (plan.traits ?? []).filter((trait) => trait !== "attack") }), targeting: { ...plan.targeting, target: "the attacker" }, trigger };
 }
 
@@ -3017,7 +3057,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
@@ -3397,7 +3437,10 @@ function ownStrikePassive(item, plan) {
 // "reach" }. Not one in a place ("in area A7", "in the bridge's area", an aura it leaves).
 function provokeTrigger(text) {
     // (Batch 68: a closing aside in brackets, "(move actions using only a fly Speed don't trigger this)", left out.)
-    const trigger = String(text).replace(/\s*\([^)]*\)$/, "").replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action");
+    let trigger = String(text).replace(/\s*\([^)]*\)$/, "").replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action");
+    // (Batch 137, Kneecapper: "A Medium creature within the nuglub's reach …" — only a creature of that size.)
+    const sized = /^An? (Tiny|Small|Medium|Large|Huge|Gargantuan) creature\b/.exec(trigger);
+    if (sized) trigger = trigger.replace(sized[0], "A creature");
     // (Batch 68: "in the grick's reach", "within a clockwork sentry's reach", "within reach of Racharak's tail".)
     const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: (?:within|in) (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|(?:${SELF}|an? [\w' -]+?)'s? reach|reach|(${SELF}))(?: of ${SELF}(?:['’]s [\w' -]+?)?)?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves)\b.*)$`).exec(trigger);
     if (!subject) return null;
@@ -3424,7 +3467,7 @@ function provokeTrigger(text) {
             within ??= "reach";
         }
         else if (/^makes? a ranged attack$/i.test(part)) triggers.add("ranged");
-        else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during a move action)?$/i.test(part)) triggers.add("leave");
+        else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during (?:a|its|their) move action)?$/i.test(part)) triggers.add("leave");
         else if (/^Strides$/.test(part)) triggers.add("move");
         else if (new RegExp(String.raw`^enters ${SELF}'s? reach$`).test(part)) {
             triggers.add("enter");
@@ -3439,7 +3482,7 @@ function provokeTrigger(text) {
     }
     if (!triggers.size) return null;
     // "A creature leaves a space within Kas Xi Rai's reach".
-    return { event: "provoke", reaction: true, triggers: [...triggers], within: within ?? "reach" };
+    return { event: "provoke", reaction: true, triggers: [...triggers], within: within ?? "reach", ...(sized ? { sizes: [sized[1].toLowerCase()] } : {}) };
 }
 
 // "targets the hound with a mental effect" (2026-10-10, batch 17): { event: "targeted-by", traits, spells? } (spells: any spell

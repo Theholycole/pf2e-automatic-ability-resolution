@@ -35,6 +35,10 @@ import { isActiveGM, postCard, postEffectCard, postSkillCard, targetedEvent, tar
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
+// (Batch 137: a reaction's Strike without its Improved Grab, scripts/live.js.)
+export const NO_GRAB = "pf2e-automatic-ability-resolution:no-grab";
+// PF2e's actor sizes in the words a trigger uses ("A Medium creature").
+const SIZE_WORDS = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
 const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue"]);
 
 let compile = () => null;
@@ -172,6 +176,8 @@ async function onMove(token, movement) {
         const own = reactions.find(({ plan }) => {
             const trigger = plan.trigger;
             if (!trigger?.reaction || trigger.event !== "provoke") return false;
+            // (Batch 137, Kneecapper: only a creature of the size it names.)
+            if (trigger.sizes?.length && !trigger.sizes.includes(SIZE_WORDS[token.actor?.size] ?? token.actor?.size)) return false;
             const radius = provokeRadius(actor, trigger.within);
             const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= radius);
             return (trigger.triggers.includes("leave") && leftReach(insides)) || (trigger.triggers.includes("move") && insides.some(Boolean)) || (trigger.triggers.includes("enter") && !insides[0] && insides.some(Boolean));
@@ -203,7 +209,9 @@ async function onMove(token, movement) {
             }
         }
         for (const { item, plan } of reactions) {
-            const movesTrigger = plan.builtin === "reactive-strike" || (plan.builtin === "reaction-strike" && plan.triggers?.includes("move"));
+            // (Batch 137, Tail Trip: a Strike at a creature leaving its reach.)
+            const leaves = plan.builtin === "reactive-strike" || (plan.builtin === "reaction-strike" && !plan.skill && !plan.triggers?.includes("move") && plan.triggers?.includes("leave"));
+            const movesTrigger = leaves || (plan.builtin === "reaction-strike" && plan.triggers?.includes("move"));
             if (!movesTrigger) continue;
             // (Batch 68, Snap Shot: a distance in feet, its Strike by name, ranged too.)
             const strikes = plan.within && plan.builtin === "reaction-strike"
@@ -213,12 +221,12 @@ async function onMove(token, movement) {
             const reach = Math.max(...strikes.map((strike) => strike.reach));
             const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= reach);
             // Reactive Strike: leaving a square in reach. Twisting Tail: a move action in reach.
-            const triggered = plan.builtin === "reactive-strike" ? leftReach(insides) : insides.some(Boolean);
+            const triggered = leaves ? leftReach(insides) : insides.some(Boolean);
             if (!triggered) continue;
             await offer({
                 kind: "strike", item, monster, actor, target: token, strikes, penalty: plan.penalty ?? 0,
-                trigger: plan.builtin === "reactive-strike" ? "left a square in its reach" : "moved in its reach",
-                note: [squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null].filter(Boolean).join(" ") || null
+                trigger: leaves ? "left a square in its reach" : "moved in its reach",
+                note: [plan.only ? `Only at ${plan.only}.` : null, squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null].filter(Boolean).join(" ") || null
             });
             break;
         }
@@ -268,6 +276,8 @@ async function onMessage(message) {
     if (context?.type === "saving-throw" && ["failure", "criticalFailure"].includes(context.outcome)) await saveAnswers(message, context, scene, combat, token);
     // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
     if (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("attack")) await strikeAnswers(context, scene, combat, token, { skill: true });
+    // (Batch 137, Sweeping Hook: its own Trip that succeeded, its Strike at the creature it tripped.)
+    if (context?.type === "skill-check" && (context.options ?? []).includes("action:trip") && ["success", "criticalSuccess"].includes(context.outcome)) await trippedAnswer(context, scene, combat, token);
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
     const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
     // (Batch 104, Spell Interception: any spell cast in its reach, its Strike; a hit disrupts the spell.)
@@ -367,11 +377,29 @@ async function critAnswers(context, scene, combat, attacker) {
     if (flash) await offer({ kind: "upgrade", item: flash.item, monster: own.token, actor: own.actor, target, trigger: "was hit", note: "The hit becomes a critical hit: roll its critical damage from the attack card.", free: true });
 }
 
+// Its own Trip that succeeded (batch 137, Sweeping Hook: "successfully Trips a creature using an ogre hook"): its Strike at that creature.
+async function trippedAnswer(context, scene, combat, tripper) {
+    const target = context.target?.token ? fromUuidSync(context.target.token) : null;
+    const mine = reactors(scene, combat).find((entry) => entry.token.id === tripper.id);
+    if (!target || !mine || !isFoe(mine.token, target)) return;
+    const entry = mine.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("tripped"));
+    const strikes = entry ? meleeStrikes(mine.actor, `(${entry.plan.strike} only)`) : [];
+    if (strikes.length) await offer({ kind: "strike", item: entry.item, monster: mine.token, actor: mine.actor, target, strikes, trigger: "was tripped by it", note: entry.plan.using ? `Only if the Trip was made with its ${entry.plan.using}.` : null });
+}
+
 // A creature a monster holds failing to Escape (batch 65: Savage, Gnashing Bite): the monster's Strike or card at it. The monster: the
 // Escape's target, or else a foe in its reach.
 async function escapeAnswers(message, context, scene, combat, escaper) {
     const holder = context.target?.token ? fromUuidSync(context.target.token) : null;
     const grid = gridOf(scene);
+    // (Batch 137, Punish Flight: a Strike at a creature trying to Escape it, whatever the result.)
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, escaper) || (holder && holder.id !== monster.id)) continue;
+        if (!holder && distanceFeet(box(monster, grid.size), box(escaper, grid.size), grid) > provokeRadius(actor)) continue;
+        const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("escape"));
+        const strikes = entry ? meleeStrikes(actor, `(${entry.plan.strike} only)`) : [];
+        if (strikes.length) return offer({ kind: "strike", item: entry.item, monster, actor, target: escaper, strikes, trigger: "tried to Escape it", note: ["As it tries: if this Strike stops it, ignore the Escape's result.", entry.plan.noGrab ? "This Strike doesn't Grab on a hit (no Improved Grab)." : null].filter(Boolean).join(" "), noGrab: !!entry.plan.noGrab });
+    }
     // (Batch 81: a reaction that makes the Escape harder, Tighten Coils: offered when its higher DC turns the success into a failure.)
     if (["success", "criticalSuccess"].includes(context.outcome)) {
         const dc = context.dc?.value;
@@ -872,7 +900,7 @@ async function onDamaged(actor, amount) {
 }
 
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null, move = null }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null, move = null, noGrab = false }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -899,6 +927,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         ...(skill ? { skill } : {}),
         ...(move ? { move } : {}),
         ...(free ? { free: true } : {}),
+        ...(noGrab ? { noGrab: true } : {}),
         status: "open",
         result: null
     };
@@ -1128,7 +1157,8 @@ async function rollStrike(state, actor, slug) {
     else if (!game.user.targets.size) throw new Error("Target a creature first.");
     const modifiers = state.penalty ? [new game.pf2e.Modifier({ slug: "reaction-penalty", label: state.ability.name, modifier: -state.penalty, type: "untyped" })] : [];
     // Shift skips PF2e's roll dialog when the GM shows it by default.
-    await strike.variants[0].roll({ event: new PointerEvent("click", { shiftKey: !!game.user.settings?.showCheckDialogs }), modifiers });
+    // (Batch 137, Punish Flight's "This Strike doesn't have Improved Grab": a roll option the Strike's rider cards skip.)
+    await strike.variants[0].roll({ event: new PointerEvent("click", { shiftKey: !!game.user.settings?.showCheckDialogs }), modifiers, ...(state.noGrab ? { options: [NO_GRAB] } : {}) });
     return `${state.monster.name} Strikes with ${strike.label}.`;
 }
 

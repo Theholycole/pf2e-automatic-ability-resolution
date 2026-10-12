@@ -2563,3 +2563,21 @@ test("a Burrow away on damage with a recharge, a resistance with a shift, a Stri
     assert.deepEqual([pounce?.builtin, pounce?.requires, pounce?.onHit?.critical?.[0]?.slug], ["strike-activity", "requirement", "prone"]);
     assert.equal(compile("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Effect</strong> The test bird Strides three times in a straight line</p>", "action", 2)?.builtin, "no-effect");
 });
+
+test("reaction Strikes at a creature leaving with metal, trying to Escape or just tripped; provoked Trips with more (2026-10-12, batch 137)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const actor = { items: [{ type: "melee", name: "Tail", system: { damageRolls: { a: { damage: "2d8+9", damageType: "slashing" } } } }] };
+    const reaction = (trigger, effect) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions, actor });
+    assert.deepEqual(reaction("A creature carrying a metal item attempts to move out of a square within reach of the test beast's tail.", "The test beast makes a tail Strike against the triggering creature."), { builtin: "reaction-strike", triggers: ["leave"], strike: "tail", penalty: 0, disrupts: false, only: "a creature carrying a metal item" });
+    assert.deepEqual(reaction("A creature attempts to Escape from the test strangler", "The test strangler makes a cord Strike against the triggering creature. This Strike doesn't have Improved Grab."), { builtin: "reaction-strike", triggers: ["escape"], strike: "cord", penalty: 0, disrupts: false, noGrab: true });
+    assert.deepEqual(reaction("The test brute successfully Trips a creature using a hooked pole", "The test brute makes a hooked pole Strike against the creature they tripped."), { builtin: "reaction-strike", triggers: ["tripped"], strike: "hooked pole", penalty: 0, disrupts: false, using: "hooked pole" });
+    // A provoked Trip that also deals its tail's damage on a success, the fall the GM's.
+    const whip = reaction("A creature within reach of the test fiend's tail leaves a square during a move action it's using", "The test fiend attempts to [[/act trip]] the triggering creature. On a success, the creature also takes damage as if the test fiend had hit with a tail Strike, and if the creature was flying, it falls 30 feet.");
+    assert.deepEqual([whip.trigger.triggers, whip.resolution.outcomes.success.damage.formulas, whip.resolution.reminders], [["leave"], [{ formula: "(2d8+9)[slashing]" }], ["If the creature was flying, it falls 30 feet."]]);
+    // Acrobatics against Reflex, Prone on either success, nothing else; only a Medium creature.
+    const knees = reaction("A Medium creature within the test imp's reach leaves a square during its move action", "The test imp swipes low at the triggering creature's ankles. The test imp makes an @Check[acrobatics] check against the creature's Reflex DC. On a success, the target falls and lands prone.");
+    assert.deepEqual([knees.trigger.sizes, knees.resolution.check.statistic, knees.resolution.outcomes.criticalSuccess.damage.mode, knees.resolution.outcomes.criticalFailure.effects], [["medium"], "acrobatics", "none", []]);
+    // A Trip whose ground becomes difficult terrain: a note.
+    const ground = reaction("A creature within 15 feet uses a move action (move actions using only a fly Speed don't trigger this reaction)", "The test digger attempts an Athletics check to Trip the triggering creature. Regardless of the result, the space of the triggering creature becomes difficult terrain for 1 round.");
+    assert.deepEqual([ground.trigger.within, ground.resolution.reminders.length], [15, 1]);
+});

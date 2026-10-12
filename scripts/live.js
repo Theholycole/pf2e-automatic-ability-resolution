@@ -458,6 +458,8 @@ async function cardsForRiders(message) {
         if (trigger?.event !== "strike" || !(effects.includes(trigger.attackEffect) || effects.includes(plan.source?.slug) || (trigger.strikes ?? []).includes(strikeName))) continue;
         // (A critical hit's only, "A creature critically hit by …": not on a plain hit; batch 28.)
         if (!(trigger.on ?? ["success", "criticalSuccess"]).includes(context.outcome)) continue;
+        // (Batch 137, Punish Flight: a reaction's Strike that "doesn't have Improved Grab".)
+        if ((context.options ?? []).includes("pf2e-automatic-ability-resolution:no-grab") && ["grab", "improved-grab"].includes(trigger.attackEffect ?? plan.source?.slug)) continue;
         // (Its results by the Strike's degree, "Enfeebled 1 (or Enfeebled 2 on a critical hit)"; batch 34.)
         if (plan.resolution?.check?.statistic === "strike") {
             await degreeCard(message, item, plan, { actor, strike, target, targetToken, context, sourceToken: message.token ?? null, cost: trigger.cost ?? "free" });

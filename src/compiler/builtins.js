@@ -984,8 +984,17 @@ function readMoreReactionStrikes(trigger, effect) {
         [new RegExp(String.raw`^A creature damages ${it} with a melee Strike$`, "i"), () => ({ triggers: ["damaged-adjacent"] })],
         [new RegExp(String.raw`^A creature within reach of ${reachOf} [\w' -]+? Casts a Spell$`, "i"), () => ({ triggers: ["cast"] })],
         [new RegExp(String.raw`^A creature ${it} had Grabbed or Restrained successfully Escapes$`, "i"), () => ({ triggers: ["escaped"] })],
+        // (Batch 137, Punish Flight: "A creature attempts to Escape from the hatred siktempora" — as it tries, whatever the result.)
+        [new RegExp(String.raw`^A creature attempts to Escape from ${it}$`, "i"), () => ({ triggers: ["escape"] })],
         [new RegExp(String.raw`^A creature ends a move action within reach of ${reachOf} [\w' -]+? Strike$`, "i"), () => ({ triggers: ["approach"] })]
     ];
+    // (Batch 137, Sweeping Hook: "The ogre boss successfully Trips a creature using an ogre hook" — its Strike at the creature it tripped,
+    // the weapon a note for the GM.)
+    const tripped = new RegExp(String.raw`^${it} successfully Trips a creature(?: using (?:an? |its |their |his |her )?([\w' -]+?))?$`, "i").exec(trigger.replace(/;$/, ""));
+    if (tripped) {
+        const answer = strikeBack(sentences.map((sentence) => sentence.replace(/ against the creature (?:they|it|he|she) tripped\.$/i, " against the creature.")));
+        if (answer) return { builtin: "reaction-strike", triggers: ["tripped"], ...answer, ...(tripped[1] ? { using: tripped[1].toLowerCase() } : {}) };
+    }
     for (const [pattern, read] of kinds) {
         const match = pattern.exec(trigger.replace(/;$/, ""));
         const answer = match ? strikeBack(sentences) : null;
@@ -1008,6 +1017,11 @@ function strikeBack(sentences) {
         if (/^This Strike (?:doesn't|does not|neither applies nor) counts? toward (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty(?:,? and (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty (?:doesn't|does not) apply to this Strike)?\.$/i.test(sentence)) continue;
         if (/^If the Strike hits, (?:the [\w' -]+?|[A-Z][\w'-]+|it|they) disrupts? the (?:creature's|triggering) action\.$/i.test(sentence)) {
             answer.disrupts = true;
+            continue;
+        }
+        // (Batch 137, Punish Flight: "This Strike doesn't have Improved Grab.")
+        if (/^This Strike (?:doesn't|does not) have Improved Grab\.$/i.test(sentence)) {
+            answer.noGrab = true;
             continue;
         }
         const both = /^(?:It|They|He|She) suffers? an? [-–](\d+) penalty on the attack roll but gains? an? \+(\d+) bonus on the damage roll if the Strike hits\.$/i.exec(sentence);
@@ -1508,9 +1522,13 @@ export function readReaction(item, text) {
     if (/^(?:The )?[^.]+? Grabs a creature(?: (?:with|in) (?:its|their|his|her) [\w' -]+?)?;?\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? uses Swallow Whole\.?$/i.test(effect.trim())) return { builtin: "fast-swallow" };
     // (Batch 64: "attempts to move away from it during a move action it's using", and "targets it with a ranged attack" too → "ranged";
     // a Trip it may add on a critical hit, a note for live play.)
-    const moving = /\buses a move action\b|\bleaves a square during a move action\b|\battempts to move away from [^.]+? during a move action\b/i.test(trigger);
+    // (Batch 137, Tail Trip: "A creature carrying a metal item attempts to move out of a square within reach of the rust monster's tail" —
+    // leaving its reach, the metal item a note for the GM.)
+    const leaving = /^A creature(?: (carrying a metal item))? attempts to move out of a square within reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+?\.?$/i.exec(trigger.trim());
+    const moving = leaving || /\buses a move action\b|\bleaves a square during a move action\b|\battempts to move away from [^.]+? during a move action\b/i.test(trigger);
     const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
-    if (moving && struck) return { builtin: "reaction-strike", triggers: ["move", ...(/\bwith a ranged attack\b/i.test(trigger) ? ["ranged"] : [])], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect), ...(/\bOn a critical (?:success|hit), [^.]*? can also attempt an Athletics check to Trip the triggering creature\./i.test(effect) ? { criticalTrip: true } : {}) };
+    if (leaving && struck && !/\.\s+\S/.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["leave"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: false, ...(leaving[1] ? { only: `a creature ${leaving[1]}` } : {}) };
+    if (moving && !leaving && struck) return { builtin: "reaction-strike", triggers: ["move", ...(/\bwith a ranged attack\b/i.test(trigger) ? ["ranged"] : [])], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect), ...(/\bOn a critical (?:success|hit), [^.]*? can also attempt an Athletics check to Trip the triggering creature\./i.test(effect) ? { criticalTrip: true } : {}) };
     // (Batch 73, Final Blow: "Berleth is reduced to 0 HP", "Berleth makes a final shovel Strike before dying.")
     if (/^(?:The )?[^.]+? is reduced to 0 (?:Hit Points|HP)\.?$/i.test(trigger.trim())) {
         // (Batch 61, Death Slam: "Before it's knocked out, the argorth makes a tail Strike against a random creature within reach.")
