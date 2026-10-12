@@ -124,6 +124,8 @@ export function readMultiStrikes(text) {
         .replace(/, each using a different (?:limb|arm|head|tentacle)(?=\.$)/i, "")
         .replace(/, then falls if (?:it's|it is|they're|they are) flying(?=\.$)/i, "")
         .replace(/ at the same (target|creature)(?=[,.])/i, " against the same $1")
+        // (Batch 87, Dual Disarm: "makes two Strikes, one with their rapier and one with their main-gauche (in either order)".)
+        .replace(/\bmakes two Strikes, one with (?:its|their|his|her) ([\w' -]+?) and one with (?:its|their|his|her) ([\w' -]+?)(?: \(in either order\))?(?=\.$)/i, "makes a $1 Strike and a $2 Strike")
         .replace(/, each using (?:its|their|his|her|the [\w' -]+?['’]s) current multiple attack penalty(?=\.$)/i, "")
         .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
         .replace(/(Strikes), or one [\w' -]+? Strike and an? [\w' -]+? Strike(?=\.$)/i, "$1")
@@ -237,6 +239,12 @@ export function readMultiStrikes(text) {
                 bothHit = { conditions, damage };
                 continue;
             }
+        }
+        // (Batch 87, Dual Disarm: "If both Strikes hit, the ship captain can attempt to Disarm the target." → a basic action at it.)
+        const bothFollow = /^If both (?:Strikes|attacks) hit, (?:the [\w' -]+?|it|they|he|she) can attempt to (Disarm|Trip|Shove|Grapple|Reposition|Demoralize) the (?:target|creature)\.$/i.exec(sentence.replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{[^}]*\})?/g, (_all, slug) => slug.replace(/^\w/, (letter) => letter.toUpperCase())));
+        if (bothFollow) {
+            bothHit = { conditions: [], damage: [], follow: bothFollow[1].toLowerCase() };
+            continue;
         }
         // (Wing Snap: "It can't Fly until the end of its turn.")
         if (/^(?:It|They) can(?:'t|not) Fly until the end of (?:its|their) turn\.$/i.test(sentence)) continue;
@@ -419,6 +427,10 @@ export function readCharge(text) {
     // trigger reactions. At any point, the rabbit attempts a jaws Strike." → a move that triggers no reactions, and its Strike.)
     const jump = /^(?:The )?[^.]+? jumps with a maximum height and distance each equal to half (?:its|their|his|her) Speed\. This movement (?:doesn't|does not) trigger reactions\. At any point, (?:the [\w' -]+?|it|they|he|she) attempts an? ([\w' -]+?) Strike\.$/i.exec(String(text).replace(/’/g, "'").trim());
     if (jump) return { strides: 1, strike: jump[1].toLowerCase(), safe: true };
+    // (Batch 87, Slip Between: "The stalker teleports into an occupied space it can see within 50 feet and makes a melee Strike." → a move
+    // that triggers no reactions, as far as that many Strides go (25 feet each), and its Strike.)
+    const blink = /^(?:The )?[^.]+? teleports (?:in)?to (?:an? )?(?:occupied |unoccupied |open )?(?:space|square)(?: adjacent to an? (?:creature|enemy|foe))?(?: (?:it|they|he|she) can see)? within (\d+) feet(?: of (?:its|their|his|her)self)?,? and (?:then )?makes an? (?:melee )?(?:([\w' -]+?) )?Strike\.$/i.exec(String(text).replace(/’/g, "'").trim());
+    if (blink) return { strides: Math.max(1, Math.ceil(Number(blink[1]) / 25)), strike: blink[2] && !/^melee$/i.test(blink[2]) ? blink[2].toLowerCase() : null, safe: true };
     // ("Frequency once per turn Effect The knight Strides twice. …": its Effect, batch 38.)
     // (Batch 70: what only tells the move — "…, ignoring difficult terrain caused by rubble", "…, during which it attempts a High Jump or a
     // Long Jump" — and "Strides twice, Leaps twice, or Strides once and Leaps once. It then makes a jaws Strike at the end of the movement".)
@@ -598,6 +610,20 @@ export function readReaction(item, text) {
     // (Batch 86: Counterspell's kin — a spell or effect that sets it off, and an attempt to counteract it: "Trigger The nullifier is the target
     // of a spell Effect The nullifier attempts to counteract the triggering spell …", "Trigger A creature within 30 feet casts a divine spell
     // … attempts to counteract the triggering spell …". The GM's, as Counterspell is (the user's choice of 2026-10-11).)
+    // (Batch 87: a bonus to its own save as it comes — Occult Ward's "Trigger Padli attempts a saving throw against a spell cast by a creature
+    // he can see Effect Padli gains a +2 circumstance bonus to the triggering save.", "is about to make a saving throw against a spell or
+    // magical effect", "is about to attempt a saving throw", "is targeted by a spell that allows a saving throw", "An opponent casts a spell
+    // that targets the manticore and requires a saving throw"; what a critical success brings besides, the GM's.)
+    const ownSaveSplit = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
+    const saveTrigger = ownSaveSplit ? /^(?:(?:The )?[^.]+? (?:attempts|is about to (?:make|attempt)) a saving throw(?: against (a spell(?: cast by a creature (?:it|he|she|they) can see)?|a spell or magical effect))?|(?:The )?[^.]+? is targeted by a spell that allows a saving throw|An opponent casts a spell that targets (?:the [\w' -]+?|it|[A-Z][\w'-]+) and requires a saving throw)$/i.exec(ownSaveSplit[1].trim()) : null;
+    if (saveTrigger) {
+        const said = ownSaveSplit[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+        const gains = /^(?:The )?[^.]+? (?:touches [^,.]+? and )?gains an? \+(\d+) circumstance bonus to the (?:triggering )?(?:save|saving throw)\.$/i.exec(said[0] ?? "");
+        if (gains && said.slice(1).every((sentence) => /^If (?:it|they|he|she|the [\w' -]+?) critically succeeds? (?:at|on) the (?:save|saving throw)\b/i.test(sentence) || !/\d|@|\b(?:damage|bonus|penalty|condition)\b/i.test(sentence))) {
+            const against = /\bspell or magical effect\b/i.test(ownSaveSplit[1]) ? "magical" : /\bspell\b/i.test(ownSaveSplit[1]) ? "spell" : null;
+            return { builtin: "save-bonus-reaction", value: Number(gains[1]), ...(against ? { against } : {}) };
+        }
+    }
     // (Its own split, case-sensitive: "Trigger The dragon is targeted by a mental effect they're aware of Effect …".)
     const countering = /Trigger (.+?)(?: Requirements? .+?)? Effect (.+)$/.exec(text);
     if (countering && /\b(?:Casts? (?:a |an |the )?(?:[\w-]+ )?Spell|spells?|effects?|casting)\b/i.test(countering[1]) && /\b(?:attempts? to (?:counteract|unravel|unmake)|makes a counteract check|to counter the triggering creature's casting)\b/i.test(countering[2])) return { builtin: "no-effect" };
@@ -1558,8 +1584,10 @@ function readStrikeOnly(text) {
     // (Batch 80, Drag: "makes a jaws Strike against a Prone enemy. If it hits, in addition to dealing damage, the hyaenodon Strides up to 10
     // feet, dragging the enemy along." — the drag the GM's.)
     const prone = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike against an? Prone (?:enemy|creature|foe)\.$`, "i");
+    // (Batch 87, Reloading Strike: "makes a melee Strike against an opponent within reach and Interacts to reload a firearm in their other hand".)
+    const reloading = new RegExp(String.raw`${who} makes an? (?:melee )?Strike against an opponent within reach and Interacts to reload an? [\w' -]+? in (?:its|their|his|her) other hand\.$`, "i");
     // (Batch 83: "makes a mandibles Strike; if the Strike hits, the target's armor takes the damage and …", "makes a mandibles Strike
     // against a creature it has Grabbed" with its armor sentences above: the armor the GM's.)
     const armor = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike(?:; if the Strike hits, the target's armor takes the damage[^.]*| against a creature it has Grabbed)\.$`, "i");
-    return [draw, reload, returning, reach, skirmish, prone].some((pattern) => pattern.test(sentence)) || (armor.test(sentence) && /\barmor\b/i.test(text));
+    return [draw, reload, returning, reach, skirmish, prone, reloading].some((pattern) => pattern.test(sentence)) || (armor.test(sentence) && /\barmor\b/i.test(text));
 }

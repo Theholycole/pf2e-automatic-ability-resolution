@@ -117,7 +117,7 @@ export function offerHTML(state) {
         buttons.push(`<button type="button" data-aar-reaction="decline">Not now</button>`);
     }
     // (Batch 81: or a higher Escape DC, Tighten Coils.)
-    const detail = state.kind === "ac" ? `<p class="aar-hint">+${state.attack.value} ${escape(state.attack.what ?? "AC")} against it turns ${escape(degreeWords(state.attack.before, Boolean(state.attack.what)))} into ${escape(degreeWords(state.attack.after, Boolean(state.attack.what)))}.</p>` : "";
+    const detail = state.kind === "ac" ? `<p class="aar-hint">+${state.attack.value} ${escape(state.attack.what ?? "AC")}${state.attack.what === "to the save" ? "" : " against it"} turns ${escape(degreeWords(state.attack.before, Boolean(state.attack.what)))} into ${escape(degreeWords(state.attack.after, Boolean(state.attack.what)))}.</p>` : "";
     const note = state.note ? `<p class="aar-hint">${escape(state.note)}</p>` : "";
     const result = state.result ? `<ul class="aar-applied"><li>${escape(state.result)}</li></ul>` : "";
     const controls = buttons.length ? `<footer class="aar-controls">${buttons.join("")}</footer>` : "";

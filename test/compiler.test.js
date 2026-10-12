@@ -2037,3 +2037,17 @@ test("Counterspell's kin: a spell or effect that sets it off and an attempt to c
     // Not a counteract set off by anything else.
     assert.notDeepEqual(reaction("A living creature within 30 feet is reduced to 0 Hit Points", "The residual energy attempts to counteract any vitality effect on it."), none);
 });
+
+test("a teleport and a Strike; two weapons and a Disarm when both hit; a Strike and a reload (2026-10-11, batch 87)", () => {
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    assert.deepEqual(compile("<p>The test stalker teleports into an occupied space it can see within 50 feet and makes a melee Strike.</p>", 2), { builtin: "charge", actions: 2, strides: 2, strike: null, safe: true });
+    assert.deepEqual(compile("<p>The test captain makes two Strikes, one with their rapier and one with their main-gauche (in either order). If both Strikes hit, the test captain can attempt to [[/act disarm]] the target. Their multiple attack penalty increases only after all the attacks are made.</p>", 2),
+        { builtin: "multi-strike", actions: 2, strikes: ["rapier", "main-gauche"], sameMap: true, sameTarget: true, bothHit: { conditions: [], damage: [], follow: "disarm" } });
+    assert.deepEqual(compile("<p>The test marshal makes a melee Strike against an opponent within reach and Interacts to reload a firearm in their other hand.</p>"), { builtin: "no-effect", strikeOnly: true });
+    // A bonus to its own save as it comes.
+    const reaction = (trigger, effect) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    assert.deepEqual(reaction("Test Pell attempts a saving throw against a spell cast by a creature he can see", "Test Pell gains a +2 circumstance bonus to the triggering save."), { builtin: "save-bonus-reaction", value: 2, against: "spell" });
+    assert.deepEqual(reaction("Test Ona is about to make a saving throw against a spell or magical effect", "Test Ona gains a +1 circumstance bonus to the triggering save."), { builtin: "save-bonus-reaction", value: 1, against: "magical" });
+    assert.deepEqual(reaction("The test spy is about to attempt a saving throw", "The test spy touches their holy symbol and gains a +2 circumstance bonus to the triggering save."), { builtin: "save-bonus-reaction", value: 2 });
+    assert.deepEqual(reaction("An opponent casts a spell that targets the test beast and requires a saving throw", "The test beast gains a +4 circumstance bonus to the saving throw. If they critically succeed at the save, they can choose another creature within 30 feet to target instead."), { builtin: "save-bonus-reaction", value: 4, against: "spell" });
+});

@@ -1252,7 +1252,8 @@ async function forcedMove(state, target, token, change) {
 function bothHitText(rider) {
     const conditions = (rider.conditions ?? []).map((entry) => `${entry.slug.replace(/^\w/, (letter) => letter.toUpperCase())}${Number.isFinite(entry.value) ? ` ${entry.value}` : ""}${entry.rounds ? ` for ${entry.rounds} round${entry.rounds === 1 ? "" : "s"}` : ""}`);
     const damage = (rider.damage ?? []).map((formula) => `${formula} damage`);
-    return [conditions.length ? `it is ${conditions.join(" and ")}` : null, damage.length ? `it takes ${damage.join(" and ")}` : null].filter(Boolean).join(", and ");
+    // (Batch 87, Dual Disarm: a basic action at it.)
+    return [conditions.length ? `it is ${conditions.join(" and ")}` : null, damage.length ? `it takes ${damage.join(" and ")}` : null, rider.follow ? `the attacker can attempt to ${rider.follow.replace(/^\w/, (letter) => letter.toUpperCase())} it` : null].filter(Boolean).join(", and ");
 }
 
 // A condition at least at this value (PF2e's conditions take the higher value, not the sum).

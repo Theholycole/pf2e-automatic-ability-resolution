@@ -24,7 +24,7 @@
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, ownStrikeSetsOff, reactionRounds } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
@@ -32,7 +32,7 @@ import { isActiveGM, postCard, postEffectCard, targetedEvent, targetedSetsOff, t
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -91,7 +91,7 @@ function reactionsOf(actor) {
     if ((actor?.itemTypes?.action ?? []).some((item) => item.system?.actionType?.value === "passive" && compile(item)?.noReactions)) return [];
     // (And a reaction with results of its own whose trigger the module reads: plan.trigger.reaction.)
     return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) }))
-        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade")) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && plan.resolution));
+        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade" || (item.system?.actionType?.value === "free" && plan.free))) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && plan.resolution));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -498,6 +498,17 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 if (Number.isFinite(left) && left <= 0) continue;
                 return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: plan.mythic ? "It costs a Mythic Point." : null });
             }
+            // (Batch 87, Occult Ward: a bonus to its own save, offered when it turns the failure around; against a spell, a spell's save.)
+            if (self && plan.builtin === "save-bonus-reaction") {
+                const roll = message.rolls?.[0];
+                const dc = context.dc?.value;
+                const spell = message.flags?.pf2e?.origin?.type === "spell" || (context.options ?? []).some((option) => /^origin:item:type:spell$|^item:type:spell$/.test(option));
+                const magical = spell || (context.options ?? []).some((option) => /^(?:origin:)?item:trait:(?:magical|arcane|divine|occult|primal)$/.test(option));
+                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total) || (plan.against === "spell" && !spell) || (plan.against === "magical" && !magical)) continue;
+                const after = degreeOf(roll.total + plan.value, dc, roll.dice?.[0]?.total ?? null);
+                if (after === context.outcome) continue;
+                return offer({ kind: "ac", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, value: plan.value, what: "to the save", before: context.outcome, after } });
+            }
             if (plan.builtin !== "save-boost" || (self ? plan.ally : !plan.ally)) continue;
             if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
             // (Batch 65: only a critical failure, Reality Twist's; once a day, Stubborn Resolve's.)
@@ -811,7 +822,10 @@ async function use(message, action, slug) {
         // (Batch 81: a higher Escape DC, Tighten Coils: the creature stays held on a failure.)
         result = state.attack.what === "Escape DC"
             ? `${state.ability.name}: the Escape DC ${state.attack.value} higher makes it ${degreeWords(state.attack.after, true)}.${["failure", "criticalFailure"].includes(state.attack.after) ? ` ${state.target?.name ?? "The creature"} stays held.` : ""}`
-            : `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
+            : state.attack.what === "to the save"
+                // (Batch 87, Occult Ward: the save's result, for the GM to apply.)
+                ? `${state.ability.name}: +${state.attack.value} to the save makes it ${degreeWords(state.attack.after, true)}. Apply that result instead.`
+                : `${state.ability.name}: +${state.attack.value} AC makes it ${degreeWords(state.attack.after)}. Apply its damage (if any) for that result.`;
     } else if (state.kind === "misfortune") {
         const attack = game.messages.get(state.attack.messageId);
         if (!attack) throw new Error("The attack roll is gone.");
