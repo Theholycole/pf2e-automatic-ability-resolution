@@ -272,6 +272,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - Frightening Flurry: Frightened as many as the Strikes that hit;
   - Mend Soul: healing itself;
   - actions that only lengthen its reach or give it a climb, fly or swim Speed for a while are no-effect.
+- **Resistance, half damage, Scatter, retreats** (2026-10-12, batch 214): 5 new in PF2e (and an adventure copy).
+  - Runic Resistance: resistance 5 to one type of the triggering damage, for a minute.
+  - Shadow Siphon: half a spell's damage.
+  - Scatter: +2 to its Reflex save against an area.
+  - Tactical Retreat: a Stride away on any damage, its Fleeing a note.
+  - A thrall's Rally back to its master: no-effect.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

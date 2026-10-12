@@ -3453,3 +3453,16 @@ test("a Strike at each creature in a line with one roll, bleed on a hit; damage 
     const mend = plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test spirit restores @Damage[12[healing]] HP to itself or an incorporeal creature it has Grabbed.</p>", 1);
     assert.deepEqual([mend.resolution.kind, mend.notes], ["healing", ["Or it heals an incorporeal creature it has Grabbed instead."]]);
 });
+
+test("a resistance reaction to one type of the triggering damage for a minute; half a spell's damage (2026-10-12, batch 214)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test golem takes damage from a Strike or spell effect</p><hr /><p><strong>Effect</strong> The test golem's runes flare, granting it resistance 3 to one damage type dealt by the triggering attack.</p><p>This resistance applies against the triggering effect and lasts for 1 minute or until the test golem uses this ability again, whichever comes first. If the triggering effect deals multiple damage types, the test golem chooses which type to resist.</p>"), {}), { builtin: "resist-damage", value: 3, on: null, types: ["triggering"], lasts: 10 });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test shade would take damage from a spell or magical effect</p><hr /><p><strong>Effect</strong> The test shade takes half the triggering damage instead.</p>"), {}), { builtin: "resist-damage", value: "half", on: null, types: null, magical: true });
+});
+
+test("a move away on any damage, Fleeing a note; a bonus to its Reflex save against an area; a thrall's move back to its master (2026-10-12, batch 214)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test fox takes damage</p><hr /><p><strong>Effect</strong> The test fox runs to a better tactical position. The test fox gains the Fleeing condition until the beginning of its next turn and Strides.</p>"), {}), { builtin: "withdraw", on: "damaged", move: "Stride", safe: false, notes: ["It's Fleeing until the start of its next turn."] });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test swarm is targeted by a splash attack or would attempt a Reflex save against an area effect</p><hr /><p><strong>Effect</strong> The test swarm spreads out, gaining a +3 circumstance bonus to AC and Reflex saves against the triggering effect.</p>"), {}), { builtin: "save-bonus-reaction", value: 3, kind: "reflex", area: true, notes: ["Or +3 to its AC against a splash attack aimed at it."] });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test servant ends its turn more than 30 feet away from its master</p><hr /><p><strong>Effect</strong> The test servant Strides up to its Speed toward its master.</p>"), {}), { builtin: "no-effect" });
+});

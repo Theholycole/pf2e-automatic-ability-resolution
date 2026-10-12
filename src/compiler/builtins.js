@@ -1287,8 +1287,11 @@ function readResistDamage(text, trigger, effect) {
     let on = null;
     let attack = false;
     let foe = false;
-    let match = new RegExp(String.raw`^${self} (?:takes|would take|is about to take) ([a-z, ]*?)\s*damage(?: from (an attack|a Strike|a physical attack|a creature|an enemy|a hostile source|a Strike or spell effect))?$`).exec(said);
+    // (Batch 213, Shadow Siphon: "would take damage from a spell or magical effect" — a spell's, in the simulator.)
+    let magical = false;
+    let match = new RegExp(String.raw`^${self} (?:takes|would take|is about to take) ([a-z, ]*?)\s*damage(?: from (an attack|a Strike|a physical attack|a creature|an enemy|a hostile source|a Strike or spell effect|a spell or magical effect))?$`).exec(said);
     if (match) {
+        magical = /magical/.test(match[2] ?? "");
         on = match[1].trim() ? damageTypesIn(match[1]) : null;
         if (match[1].trim() && !on) return null;
         attack = /attack|Strike$/.test(match[2] ?? "") && !/spell/.test(match[2] ?? "");
@@ -1319,7 +1322,24 @@ function readResistDamage(text, trigger, effect) {
     // Its effect: the resistance, perhaps after a sentence that only tells it; an AC that drops for a day ("cannot be reduced below 16").
     const T = DAMAGE_WORDS;
     // (Batch 152, Overcharge: "… and becomes Quickened for [[/gmr 1d4 #Quickened Duration]]{1d4 rounds}" — the roll as its label.)
-    const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 213, Shadow Siphon: "The interlocutor takes half the triggering damage instead." — half of it.)
+    if (/^(?:The )?[^.]+? takes half the triggering damage instead\.$/i.test(effect.trim().replace(/\s*Effect: [\w' -]+$/, ""))) return { builtin: "resist-damage", value: "half", on, types: null, ...(magical ? { magical: true } : {}), ...(attack ? { attack: true } : {}), ...(foe ? { foe: true } : {}) };
+    // (Batch 213, Runic Resistance: "…, granting them resistance 5 to one damage type dealt by the triggering attack. This resistance applies against the
+    // triggering effect and lasts for 1 minute or until the maftet uses this ability again, whichever comes first. If the triggering effect deals multiple
+    // damage types, the maftet chooses which type to resist." — the triggering damage's type, for a minute: types ["triggering"].)
+    let triggering = false;
+    let minute = false;
+    const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")
+        .replace(/, granting (?:them|it|him|her|themself|itself) resistance (\d+) to one damage type dealt by the triggering (?:attack|effect)\./i, (_all, value) => {
+            triggering = true;
+            return `, gaining resistance ${value} against the triggering damage.`;
+        })
+        .replace(/\s*This resistance applies against the triggering effect and lasts for 1 minute or until (?:the [\w' -]+?|it|they) uses? this ability again, whichever comes first\./i, () => {
+            minute = true;
+            return "";
+        })
+        .replace(/\s*If the triggering effect deals multiple damage types, (?:the [\w' -]+?|it|they) chooses? which type to resist\./i, (all) => (triggering ? "" : all))
+        .split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
     const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports to an adjacent (?:space|square))?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
     // (Batch 150, Clot: "… forms a clot around the wound, reducing the damage taken by 5 (to a minimum of 0)." — resistance 5 to it.)
     const clot = /^(?:The )?[^.]*?, reducing the damage taken by (\d+) \(to a minimum of 0\)\.$/i.exec(sentences.at(-1) ?? "");
@@ -1347,10 +1367,11 @@ function readResistDamage(text, trigger, effect) {
         builtin: "resist-damage",
         value: Number(read[2]),
         on,
-        types: named ? [named.toLowerCase()] : null,
+        types: triggering ? ["triggering"] : named ? [named.toLowerCase()] : null,
+        ...(minute ? { lasts: 10 } : {}),
         ...(attack ? { attack: true } : {}),
         ...(foe ? { foe: true } : {}),
-        ...(/until the end of (?:its|their|his|her) next turn/i.test(read[0]) ? { lasts: 1 } : {}),
+        ...(/until the end of (?:its|their|his|her) next turn/i.test(read[0]) && !minute ? { lasts: 1 } : {}),
         ...(read[6] ? { acPenalty: Number(read[6]) } : {}),
         // (Batch 136, Gnomish Shift: "… and teleports to an adjacent space" — the GM's move.)
         ...(read[7] ? { shift: true } : {}),
@@ -1397,6 +1418,8 @@ export function readWithdraw(text) {
         // is the GM's, a note.)
         else if (/^(?:The )?[\w' -]+? takes damage from a hostile source(?: while [^.]+)?$/i.test(trigger)) [on, source] = ["damaged", { hostile: true, ...(/ while ([^.]+)$/i.exec(trigger) ? { while: / while ([^.]+)$/i.exec(trigger)[1] } : {}) }];
         else if (/^(?:The )?[\w' -]+? is attacked with a melee weapon$/i.test(trigger)) [on, melee] = ["attacked", true];
+        // (Batch 214, Tactical Retreat: "The tanuki takes damage" — any damage.)
+        else if (/^(?:The )?[\w' -]+? takes damage$/i.test(trigger)) on = "damaged";
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
         else if (new RegExp(`^An? (?:creature|enemy|foe) (?:enters ${subject}['’]s space or an adjacent square|moves into an adjacent space|moves adjacent to ${subject})$`, "i").test(trigger)) [on, enters] = ["approach", true];
@@ -1409,6 +1432,13 @@ export function readWithdraw(text) {
     let move;
     let feet = null;
     let dropsHeld = false;
+    // (Batch 214, Tactical Retreat: "The tanuki runs to a better tactical position. The tanuki gains the Fleeing condition until the beginning of their
+    // next turn and Strides." — the Stride; Fleeing until its turn a note.)
+    let fleeing = false;
+    if (!legacy && sentences.length === 2 && /^(?:The )?[\w' -]+? runs to a better tactical position\.$/i.test(sentences[0]) && /^(?:The )?[\w' -]+? gains the Fleeing condition until the (?:beginning|start) of (?:its|their) next turn and Strides\.$/i.test(sentences[1])) {
+        sentences.splice(0, 2, "It Strides.");
+        fleeing = true;
+    }
     if (legacy) [move, feet] = [legacy[1].toLowerCase() === "step" ? "Step" : "Stride", legacy[2] ? Number(legacy[2]) : null];
     else {
         // ("… takes a step after the effects of the triggering attack are resolved.")
@@ -1439,7 +1469,7 @@ export function readWithdraw(text) {
         else if (/^(?:The [\w' -]+?|It|They) can(?:'t|not) [\w' -]+? again for (?:\[\[\/\w+ (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.test(sentence)) recharge = /(\d+d\d+)/.exec(sentence)[1];
         else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$/i.test(sentence)) return null;
     }
-    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}), ...(dropsHeld ? { notes: ["It drops whatever it holds first."] } : {}) };
+    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}), ...(dropsHeld ? { notes: ["It drops whatever it holds first."] } : {}), ...(fleeing ? { notes: ["It's Fleeing until the start of its next turn."] } : {}) };
 }
 
 // Following a foe that moves away (2026-10-11, batch 99): "Trigger An enemy within reach of the guard attempts to move away Effect The guard
@@ -1979,6 +2009,13 @@ export function readReaction(item, text) {
             return { builtin: "save-bonus-reaction", value: Number(gains[1]), ...(against ? { against } : {}) };
         }
     }
+    // (Batch 214, Scatter: "Trigger The skittering slayer is targeted by a splash attack or would attempt a Reflex save against an area effect Effect
+    // The skittering slayer scatters in place, gaining a +2 circumstance bonus to AC and Reflex saves against the triggering effect." — its Reflex
+    // save against an area; the AC against a splash attack a note.)
+    if (ownSaveSplit && /^(?:The )?[^.]+? is targeted by a splash attack or would attempt a Reflex save against an area effect$/i.test(ownSaveSplit[1].trim())) {
+        const scatter = /^(?:The )?[^.]+?, gaining an? \+(\d+) circumstance bonus to AC and Reflex saves against the triggering effect\.$/i.exec(ownSaveSplit[2].trim().replace(/\s*Effect: [\w' -]+$/, ""));
+        if (scatter) return { builtin: "save-bonus-reaction", value: Number(scatter[1]), kind: "reflex", area: true, notes: [`Or +${scatter[1]} to its AC against a splash attack aimed at it.`] };
+    }
     // (Its own split, case-sensitive: "Trigger The dragon is targeted by a mental effect they're aware of Effect …".)
     const countering = /Trigger (.+?)(?: Requirements? .+?)? Effect (.+)$/.exec(text);
     if (countering && /\b(?:Casts? (?:a |an |the )?(?:[\w-]+ )?Spell|spells?|effects?|casting)\b/i.test(countering[1]) && /\b(?:attempts? to (?:counteract|unravel|unmake)|makes a counteract check|to counter the triggering creature's casting)\b/i.test(countering[2])) return { builtin: "no-effect" };
@@ -2304,6 +2341,9 @@ export function readReaction(item, text) {
         const conditions = negates[1] ? negates[1].split(/,\s*(?:or\s+)?|\s+or\s+/).map((word) => word.trim().toLowerCase()).filter(Boolean) : null;
         return { builtin: "negate-condition", ...(conditions ? { conditions } : {}) };
     }
+    // (Batch 214, Rally: "Trigger The thrall ends their turn more than 30 feet away from their master Effect The thrall Strides up to their Speed toward
+    // their master." — a move back to its master, which the simulator doesn't place.)
+    if (/^(?:The )?[^.]+? ends (?:its|their) turn more than \d+ feet away from (?:its|their) master\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to (?:its|their) Speed toward (?:its|their) master\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // Spurred by Death (batch 47): "Trigger An ally within 30 feet reduces a creature to 0 HP Effect The burnbearer Steps or Strides.": a
     // move, nothing for the fight's numbers.
     if (/^An? ally within \d+ feet reduces a creature to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Steps or Strides\.$/i.test(effect.trim())) return { builtin: "no-effect" };

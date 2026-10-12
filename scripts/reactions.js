@@ -760,10 +760,11 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 const dc = context.dc?.value;
                 const spell = message.flags?.pf2e?.origin?.type === "spell" || (context.options ?? []).some((option) => /^origin:item:type:spell$|^item:type:spell$/.test(option));
                 const magical = spell || (context.options ?? []).some((option) => /^(?:origin:)?item:trait:(?:magical|arcane|divine|occult|primal)$/.test(option));
-                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total) || (plan.against === "spell" && !spell) || (plan.against === "magical" && !magical)) continue;
+                // (Batch 214, Scatter: its Reflex save only; against an area, the GM's — a note.)
+                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total) || (plan.against === "spell" && !spell) || (plan.against === "magical" && !magical) || (plan.kind && plan.kind !== statistic)) continue;
                 const after = degreeOf(roll.total + plan.value, dc, roll.dice?.[0]?.total ?? null);
                 if (after === context.outcome) continue;
-                return offer({ kind: "ac", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, value: plan.value, what: "to the save", before: context.outcome, after } });
+                return offer({ kind: "ac", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, value: plan.value, what: "to the save", before: context.outcome, after }, note: plan.area ? "Only against an area effect (and +" + plan.value + " AC against a splash attack aimed at it)." : null });
             }
             if (plan.builtin !== "save-boost" || (self ? plan.ally : !plan.ally)) continue;
             if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
@@ -965,9 +966,13 @@ async function onDamaged(actor, amount) {
             const kinds = lastDamageTypes();
             const fits = (type, types) => !types || types.includes(type) || (types.includes("physical") && ["bludgeoning", "piercing", "slashing"].includes(type));
             if ((!plan.foe || foe) && (!kinds || kinds.some(({ type }) => fits(type, plan.on)))) {
-                const restore = Math.min(amount, kinds ? kinds.filter(({ type }) => fits(type, plan.types)).reduce((sum, { total }) => sum + Math.min(plan.value, total), 0) : plan.value);
-                const note = [kinds ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? "It keeps the resistance until the end of its next turn." : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null, plan.shift ? "It then teleports to an adjacent space: move its token." : null, plan.quickened ? `It also becomes Quickened for ${plan.quickened} rounds.` : null, plan.note ?? null].filter(Boolean).join(" ");
-                await offer({ kind: "resist", item: resist.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: note || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore } });
+                // (Batch 213: Shadow Siphon's half of the damage; Runic Resistance's one type of it — the type it took most of.)
+                const half = plan.value === "half";
+                const triggering = plan.types?.includes("triggering");
+                const main = kinds ? kinds.filter(({ type }) => fits(type, plan.on)).reduce((best, kind) => (!best || kind.total > best.total ? kind : best), null) : null;
+                const restore = half ? Math.floor(amount / 2) : triggering ? Math.min(amount, main ? Math.min(plan.value, main.total) : plan.value) : Math.min(amount, kinds ? kinds.filter(({ type }) => fits(type, plan.types)).reduce((sum, { total }) => sum + Math.min(plan.value, total), 0) : plan.value);
+                const note = [half ? `Half this damage${plan.magical ? ", only from a spell or magical effect" : ""}.` : null, triggering ? `Resistance ${plan.value} to ${main ? main.type : "one damage type of it (its choice)"}.` : null, kinds || half || triggering ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? (plan.lasts === 1 ? "It keeps the resistance until the end of its next turn." : `It keeps the resistance for ${plan.lasts} rounds, or until it uses this again.`) : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null, plan.shift ? "It then teleports to an adjacent space: move its token." : null, plan.quickened ? `It also becomes Quickened for ${plan.quickened} rounds.` : null, plan.note ?? null].filter(Boolean).join(" ");
+                await offer({ kind: "resist", item: resist.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: note || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore, ...(triggering && main ? { type: main.type } : {}) } });
             }
         }
         // Furious Flailing, Splinter (batch 61): damage of its types (the GM checks the type), its Strike at a random creature in its
@@ -1132,7 +1137,7 @@ async function use(message, action, slug) {
             const template = game.pf2e.ConditionManager.getCondition("quickened");
             quickened = template ? { rounds: roll.total, uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, img: template.img } : null;
         }
-        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null, quickened, rank: state.retribution?.rank ?? null });
+        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null, quickened, rank: state.retribution?.rank ?? null, type: state.retribution?.type ?? null });
         if (effects.length) {
             await actor.createEmbeddedDocuments("Item", effects);
             lines.push(effects.map((effect) => effect.name).join(", ") + " on it.");

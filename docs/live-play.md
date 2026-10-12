@@ -1956,3 +1956,21 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - `perHit` sets the condition's value to the number of hits;
   - `withExtraDamage` reads `[persistent,type]` and makes bleed persistent.
 
+## A resistance to the triggering type, half damage, Scatter, a retreat (2026-10-12, batch 214)
+
+- **Compiled:**
+  - **Runic Resistance** → `resist-damage` `{ value: 5, types: ["triggering"], lasts: 10 }`: resistance 5 to one type of the triggering damage for a minute. Where there are several types it chooses; the simulator and the live offer take the type it took most of.
+  - **Shadow Siphon** → `resist-damage` `{ value: "half", magical: true }`: half the damage of a spell or magical effect.
+  - **Scatter** → `save-bonus-reaction` `{ value: 2, kind: "reflex", area: true }`, plus a note for the +2 AC against a splash attack.
+  - **Tactical Retreat** → `withdraw` on any damage (a Stride). Its Fleeing until its next turn is a note.
+  - **Rally** (a thrall back to its master) → no-effect.
+- **Live:**
+  - The resistance offer gives back half the damage for "half".
+  - For "triggering" it gives back up to 5 of the type it took most of, and the lasting effect is resistance to that type.
+  - The save bonus is offered only for its Reflex save, with the area a note.
+  - Not run in pftest.
+- **Simulator (B214):**
+  - `resistReaction` halves the damage after resistances for "half", a spell's only with `magical`.
+  - `"triggering"` resists the largest type, kept by `lasts`.
+  - `saveBonusReaction` checks `kind` and `area`.
+

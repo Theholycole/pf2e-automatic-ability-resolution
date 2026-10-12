@@ -206,3 +206,11 @@ test("the Hit Points a Strike activity's hit gives back to the monster (2026-10-
     const rider = activityRider({ builtin: "strike-activity", source: { name: "Test Drain" }, onHit: { conditions: [{ slug: "drained", value: 1, duration: null }], damage: [], selfHeal: 4 } });
     assert.deepEqual(rider.plan.resolution.outcomes.success.effects.map((effect) => effect.kind === "heal" ? [effect.kind, effect.amount, effect.recipient] : effect.slug), ["drained", ["heal", 4, "self"]]);
 });
+
+test("a resistance reaction to the triggering damage's own type for a minute; half the damage leaves no effect (2026-10-12, batch 214)", () => {
+    const runic = { builtin: "resist-damage", value: 5, on: null, types: ["triggering"], lasts: 10 };
+    const [lasting] = resistEffects(runic, { name: "Test Runes", type: "slashing" });
+    assert.deepEqual([lasting.system.rules, lasting.system.duration.value, lasting.system.description.value], [[{ key: "Resistance", type: "slashing", value: 5 }], 10, "<p>Resistance 5 to slashing.</p>"]);
+    assert.deepEqual(resistEffects(runic, { name: "Test Runes" }), [], "none when the type wasn't known");
+    assert.deepEqual(resistEffects({ builtin: "resist-damage", value: "half", on: null, types: null, magical: true }, { name: "Test Siphon" }), []);
+});
