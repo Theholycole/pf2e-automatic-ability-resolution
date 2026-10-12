@@ -529,7 +529,7 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     // (Batch 76: "… must succeed at a … save to avoid becoming Sickened 1 (Sickened 2 on a critical failure)", "… save to resist becoming
     // Slowed 1", "… save to avoid being knocked Prone": what it avoids is the failure's.)
     const legacy = /succeed at an? @Check\[[^\]]*\] (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1] ?? /^(?:A|Each) creature that fails (?:its|the|this) save (.+)$/i.exec(sentences[index + 1] ?? "")?.[1] ?? /^On a failed save, (.+)$/i.exec(sentences[index + 1] ?? "")?.[1]
-        ?? /succeed at an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) to (?:avoid|resist) (?:becoming|being) (.+)$/i.exec(sentences[index])?.[1] ?? null;
+        ?? /(?:succeed at|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) to (?:avoid|resist) (?:becoming|being) (.+)$/i.exec(sentences[index])?.[1] ?? null;
     let failure = legacy ?? /(?:succeed(?: at)?|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1]
         // "becomes Frightened 1 unless they succeed at a @Check[will|dc:28] save (Frightened 2 on a critical failure)":
         // the brackets after the save are the failure's too.
@@ -585,7 +585,7 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     // follows a semicolon in them ("…on a critical failure; creatures in the hall gain +2 …)") isn't the critical's.
     const TAGGED = String.raw`(?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^();@])`;
     // (Batch 69: also "(Enfeebled 2 if it critically fails)".)
-    const replaced = new RegExp(String.raw`\((?:or )?(${TAGGED}+?) (?:on (?:a )?critical failure|if (?:it|they|the (?:creature|target)) critically fails?)(?:;[^()]*)?\)`, "i").exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
+    const replaced = new RegExp(String.raw`\((?:or )?(${TAGGED}+?) (?:on (?:a )?critical failure|if (?:it|they|the (?:creature|target)) critically fails?)(?:[;,][^()]*)?\)`, "i").exec(failure) ?? /,? or ((?:@(?:UUID|Damage)\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|[^;.()@])+?) on (?:a )?critical failure\b/i.exec(failure);
     const added = new RegExp(String.raw`\(on (?:a )?critical failure,? (${TAGGED}+?)\)`, "i").exec(failure);
     const bracket = added ? { text: added[1], adds: true } : replaced ? { text: replaced[1], adds: false } : null;
     if (added) failure = failure.replace(added[0], "");

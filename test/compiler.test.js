@@ -1887,3 +1887,10 @@ test("a save to avoid or resist becoming a condition; a critical failure's condi
     // "(or Blinded permanently on a critical failure)": not the failure's minute.
     assert.deepEqual(rows("All creatures within 120 feet must succeed at a @Check[fortitude|dc:40] save to resist becoming Dazzled for 1 minute (or Blinded permanently on a critical failure)."), [[["dazzled", null, 1]], [["blinded", null, null]]]);
 });
+
+test("a save to avoid a condition that must only be attempted; a critical failure's longer time with words after it (2026-10-11, batch 77)", () => {
+    const item = (description) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } });
+    const rows = (description) => { const outcomes = compileMonsterAbility(item(description), { basicActions: {} })?.resolution?.outcomes; return ["failure", "criticalFailure"].map((degree) => outcomes?.[degree]?.effects?.map((effect) => [effect.slug, effect.value, effect.duration?.value ?? null, effect.duration?.unit ?? null])); };
+    assert.deepEqual(rows("The test governor sobs. Creatures within 30 feet must attempt a @Check[will|dc:29] save to avoid becoming Stunned 1 (Stunned 3 on a critical failure)."), [[["stunned", 1, null, null]], [["stunned", 3, null, null]]]);
+    assert.deepEqual(rows("All living creatures within 30 feet must attempt a @Check[will|dc:26] save to avoid becoming Paralyzed for 1 round (or 1 minute on a critical failure, with a new save at the end of their turn to recover)."), [[["paralyzed", null, 1, "rounds"]], [["paralyzed", null, 1, "minutes"]]]);
+});
