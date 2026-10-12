@@ -1404,3 +1404,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Cower → `{ builtin: "self-effect", model: { modifiers: [ac +4 circumstance, attack −2] }, stance: true, endsOnMove: true, duration: unlimited, notes }`; Entrench → the same with AC and Reflex +2 and its notes (immobilized by choice, can't be forcibly moved or tripped); Tentacle Stab → multi-strike with `noGrab` and notes; Rattling Spear → PF2e's Demoralize in a 30-foot emanation with `trigger.followUp: { strike: "longspear" }`.
 - **Live:** Cower puts an effect on the pusk that turns on PF2e's own Cower toggle (AC 17 → 21, attack +10 → +8), with no end date and "It ends when it moves." for the GM; Tentacle Stab's note reads "These Strikes deal piercing damage instead of bludgeoning. It can't Grab with them: skip a Grab card after them."; both checked in pftest.
 - **Simulator:** a stance with `endsOnMove` is removed when the creature Strides or Steps; a multi-strike with `noGrab` makes its Strikes without their Grab (B137).
+
+## Strike activities and multi-Strikes in more words; a reaction to initiative with a skill (2026-10-12, batch 139)
+
+- **Compiled:** Skewer → a Strike activity with +1 to hit and 1d6 bleed on damage; Big Swing → `onHit.push: 10, criticalPush: 20` and the collision as a note; Rapid Rake, Whirling Frenzy (`each`), Team Attack (`each`), Mangling Rend (`bothHit` with 2d6 and Off-Guard, the Speeds a note), Circling Attack (its flights a note) → multi-strike; Daunting Charisma → `trigger: { event: "initiative", skills: ["deception", "performance"], free }`.
+- **Live:** the encounter starting offers Daunting Charisma with "Only if it rolled initiative with Deception or Performance."; "Use it" posts its Demoralize card; checked in pftest.
+- **Simulator:** the initiative reaction is played as if it rolled with that skill (B138).

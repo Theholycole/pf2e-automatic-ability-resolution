@@ -978,6 +978,16 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^On a successful hit, the target is pushed back (\d+) feet, with the effects of a successful Shove(?=\.$)/i, "If it hits, the target is pushed $1 feet")
             .replace(/^On a hit, (?:the [\w' -]+?|it|they) automatically Grabs the (?:creature|target)(?=\.$)/i, "If it hits, the target is Grabbed")
             .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
+            // (Batch 139: Skewer's "Strikes with its rapier, and gains a +1 circumstance bonus to the attack roll" and "A creature damaged by the
+            // attack takes 1d6 bleed"; Big Swing's "The target is Pushed up to 10 feet on a hit or up to 20 feet on a critical hit" and its
+            // collision (the GM's).)
+            .replace(/^((?:The )?[^.]+?) Strikes with (?:its|their|his|her) ([\w' -]+?), and gains a \+(\d) circumstance bonus to the attack roll(?=\.$)/i, "$1 makes a $2 Strike with a +$3 circumstance bonus to the attack roll")
+            .replace(/^A creature damaged by the (?:attack|Strike) takes /i, "If it hits and deals damage, the target takes ")
+            .replace(/^The target is Pushed up to (\d+) feet on a hit or up to (\d+) feet on a critical hit(?=\.$)/i, (_all, feet, critical) => {
+                activity.onHit.criticalPush = Number(critical);
+                return `If it hits, the target is pushed ${feet} feet`;
+            })
+            .replace(/^If the target collides with a solid object(?: or lands on the ground)?, it takes bludgeoning damage as though it had fallen the distance it moved\.$/i, "[gm]")
             // (Gnaw Metal's armor made Broken; Big Thwunk's following the foe: the GM's.)
             .replace(/^In addition, if the target is wearing armor with Hardness \d+ or lower, the armor becomes Broken\.$|^If the target is Off-Guard, then the [\w' -]+? can follow the foe\.$/i, "[gm]")
             .replace(/^If successful, after taking the normal damage from the Strike, (the target must succeed at .+? save or become [^.]+?)(?: as it becomes [a-z][^.@]*)?(?=\.$)/i, "If it hits, $1")
@@ -3158,6 +3168,9 @@ export function readReactionTrigger(text) {
     if (own) return { event: "turn-start", reaction: true, within: Number(own[2]), ...(own[1] ? { living: true } : {}) };
     // "The egarhowl rolls initiative" (not "… while in water").
     if (new RegExp(String.raw`^${SELF} rolls (?:for )?initiative$`).test(trigger)) return { event: "initiative", reaction: true };
+    // (Batch 139, Daunting Charisma: "The razzle dazzler rolls initiative using Deception or Performance" — only with those, a note live.)
+    const using = new RegExp(String.raw`^${SELF} rolls (?:for )?initiative using (Acrobatics|Athletics|Deception|Diplomacy|Intimidation|Performance|Stealth|Survival|Perception)(?: or (Acrobatics|Athletics|Deception|Diplomacy|Intimidation|Performance|Stealth|Survival|Perception))?$`).exec(trigger);
+    if (using) return { event: "initiative", reaction: true, skills: [using[1], using[2]].filter(Boolean).map((skill) => skill.toLowerCase()) };
     // (Batch 72: "The director general's turn begins", "The fetch starts its turn" — its own turn starting.)
     if (new RegExp(String.raw`^${SELF}['’]s? turn begins$|^${SELF} (?:starts|begins) (?:its|their|his|her) turn$`).test(trigger)) return { event: "own-turn-start", reaction: true };
     let match = new RegExp(String.raw`^${SELF} (?:is (critically )?hit|takes a (critical) hit)\b(.*)$`).exec(trigger);

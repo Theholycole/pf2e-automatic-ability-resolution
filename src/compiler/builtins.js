@@ -190,6 +190,12 @@ export function readMultiStrikes(text) {
         .replace(/, each using a different (?:limb|arm|head|tentacle)(?=\.$)/i, "")
         .replace(/, then falls if (?:it's|it is|they're|they are) flying(?=\.$)/i, "")
         .replace(/ at the same (target|creature)(?=[,.])/i, " against the same $1")
+        // (Batch 139, Circling Attack: "Flies up to half its Speed, makes two wing Strikes, then Flies up to half its Speed again to return to its
+        // original location" — the flight the GM's, a note.)
+        .replace(/^((?:The )?[^.]+?) Flies up to half (?:its|their|his|her) Speed, makes (two|three) ([\w' -]+?) Strikes, then Flies up to half (?:its|their|his|her) Speed again to return to (?:its|their|his|her) original location(?=\.$)/i, (_all, who, number, name) => {
+            notes.push("It Flies up to half its Speed before the Strikes and again after them, back to where it started; that second flight triggers no reactions.");
+            return `${who} makes ${number} ${name} Strikes`;
+        })
         // (Batch 138, Spirit Shot: "… two ranged Strikes against their prey" — one creature.)
         .replace(/ against (?:its|their|his|her) (?:designated |hunted )?prey(?=\.$)/i, " against the same target")
         // (Batch 90: Two-Headed Strike's "makes a Strike with each set of jaws, each against a different creature", Bloody Dance's "makes a
@@ -258,9 +264,12 @@ export function readMultiStrikes(text) {
         for (const [number, name] of [[match[1], first], [match[3], match[4]]]) for (let index = 0; index < count(number ?? 0); index++) strikes.push(named(name));
         if (/single|same|one (?:creature|target|foe|enemy)/i.test(match[6] ?? "")) sameTarget = true;
         if (/different|two (?:creatures|targets|foes|enemies)/i.test(match[6] ?? "")) each = true;
-    } else if ((match = /^(?:The )?[^.]+? makes ((?:(?:a|an|one|two|three|four) [\w' -]+? Strikes?, )+(?:and )?(?:a|an|one|two|three|four) [\w' -]+? Strikes?)(?: in any order)?\.$/i.exec(first))) {
+    } else if ((match = /^(?:The )?[^.]+? makes ((?:(?:a|an|one|two|three|four) [\w' -]+? Strikes?, )+(?:and )?(?:a|an|one|two|three|four) [\w' -]+? Strikes?)(?: in any order)?(, each against a different (?:target|creature|foe|enemy))?\.$/i.exec(first.replace(/\b(Strikes?, (?:and )?)(?!(?:a|an|one|two|three|four|and) )(?=(?:(?!(?:the|ignoring|until|after|both|all|multiple|attack|penalty|each|then)\b)[\w'-]+ ){1,3}Strikes?\b)/gi, "$1a ")))) {
+        // (Batch 139, Team Attack: "makes a ghostly longsword Strike, ghostly dagger Strike, and ghostly longbow Strike" — one of each.)
         // (Batch 129, Destructive Frenzy: "makes a jaws Strike, two claw Strikes, two horn Strikes, and one tail Strike in any order"; Telekinetic
         // Reach's one with each, as above.)
+        // (Batch 139, Whirling Frenzy: "…, and two claw Strikes, each against a different target".)
+        if (match[2]) each = true;
         for (const part of match[1].split(/,\s*(?:and\s+)?/)) {
             const piece = /^(a|an|one|two|three|four) ([\w' -]+?) Strikes?$/i.exec(part.trim());
             if (!piece) return null;
@@ -314,6 +323,12 @@ export function readMultiStrikes(text) {
     let noGrab = false;
     for (let sentence of sentences) {
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
+        // (Batch 139, Team Attack: "Each must target a different creature.")
+        if (/^Each must target a different (?:creature|target|foe|enemy)\.$/i.test(sentence) && !sameTarget) {
+            each = true;
+            continue;
+        }
+        if (/^The second half of this movement (?:doesn't|does not) trigger reactions\.$/i.test(sentence) && notes.some((note) => /second flight triggers no reactions/.test(note))) continue;
         // (Batch 138, Tentacle Stab: "These Strikes deal piercing damage instead of bludgeoning, and the quoppopak can't Grab with them." —
         // for the GM; no Grab after them.)
         if ((match = /^These Strikes deal (\w+) damage instead of (\w+)(, and (?:the [\w' -]+?|it|they|he|she) can(?:'t|not) Grab with them)?\.$/i.exec(sentence))) {
@@ -351,6 +366,17 @@ export function readMultiStrikes(text) {
             sameMap = true;
             continue;
         }
+        // (Batch 139, Mangling Rend: "If both hit, the attack deals an additional 2d6 bludgeoning damage, the target is Off-Guard, and the target
+        // takes a –20-foot status penalty to all Speeds until the end of its next turn." — the Speeds the GM's (PF2e's linked effect has them).)
+        if ((match = /^If both (?:Strikes |attacks )?hit, the attack deals an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage, the target is Off-Guard, and the target takes an? [-\u2013\u2212](\d+)-foot status penalty to all Speeds until the end of its next turn\.$/i.exec(sentence))) {
+            bothHit = { conditions: [{ slug: "off-guard", value: null, rounds: 1 }], damage: [/^@Damage\[((?:[^[\]]|\[[^\]]*\])*)\]/.exec(match[1])[1].split("|")[0]] };
+            notes.push(`If both hit, the target also takes a –${match[2]}-foot status penalty to all its Speeds until the end of its next turn.`);
+            continue;
+        }
+        if (/^Effect: [\w' -]+$/.test(sentence) && bothHit) continue;
+        // (Batch 139, Rapid Rake: "Each attack counts toward the aurumvorax's multiple attack penalty, and the multiple attack penalty increases with
+        // each attack.")
+        if (/^Each attack counts toward (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty, and the (?:multiple attack )?penalty increases with each attack\.$/i.test(sentence)) continue;
         if (/\bmultiple attack penalty\b[^.]*\b(?:as normal|normally)\b|\bcount(?:s)? toward (?:its|their|his|her|the [\w' -]+?'s) multiple attack penalty(?: as normal)?\.$|^Apply the multiple attack penalty to these Strikes normally\.$/i.test(sentence)) continue;
         // (Batch 130, Haphazard Hack: "These attacks count toward her multiple attack penalty, but only after all three Strikes have been made.")
         if (/^These attacks count toward (?:its|their|his|her) multiple attack penalty, but only after all (?:two|three|four) Strikes have been made\.$/i.test(sentence)) {

@@ -2604,3 +2604,26 @@ test("guards that last until it moves, a guard raised with a weapon, more multi-
     // Not a requirement read as its subject.
     assert.equal(action("<p><strong>Requirements</strong> The test lizard is in the water</p><hr /><p><strong>Effect</strong> The test lizard attempts to Demoralize all enemies within 30 feet.</p>")?.resolution?.check?.statistic === "intimidation", false);
 });
+
+test("Strike activities and multi-Strikes in more words; a reaction to initiative with a skill (2026-10-12, batch 139)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const ability = (description, type = "action", actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const skewer = ability("<p>The test duelist Strikes with its estoc, and gains a +1 circumstance bonus to the attack roll. A creature damaged by the attack takes @Damage[1d4[bleed]].</p>");
+    assert.deepEqual([skewer.builtin, skewer.strike, skewer.attackBonus, skewer.onHit.damage], ["strike-activity", "estoc", 1, ["1d4[bleed]"]]);
+    const swing = ability("<p>The test ogre makes a maul Strike. The target is Pushed up to 5 feet on a hit or up to 15 feet on a critical hit. If the target collides with a solid object, it takes bludgeoning damage as though it had fallen the distance it moved.</p>");
+    assert.deepEqual([swing.onHit.push, swing.onHit.criticalPush, swing.notes.length], [5, 15, 1]);
+    const rake = ability("<p>The test badger makes three claw Strikes against a creature it has grabbed. Each attack counts toward the test badger's multiple attack penalty, and the multiple attack penalty increases with each attack.</p>");
+    assert.deepEqual([rake.strikes.length, rake.requires, rake.sameMap], [3, "grabbed", undefined]);
+    const frenzy = ability("<p>The test beast makes a jaws Strike, a tail Strike, and two hoof Strikes, each against a different target. Each attack counts toward the test beast's multiple attack penalty, but the penalty doesn't increase until after all the attacks.</p>");
+    assert.deepEqual([frenzy.strikes, frenzy.each, frenzy.sameMap], [["jaws", "tail", "hoof", "hoof"], true, true]);
+    const team = ability("<p>The test haunt makes a spectral axe Strike, spectral spear Strike, and spectral sling Strike in any order. Each must target a different creature. Their multiple attack penalty doesn't increase until after all the attacks.</p>", "action", 3);
+    assert.deepEqual([team.strikes, team.each], [["spectral axe", "spectral spear", "spectral sling"], true]);
+    // Not a list made of what follows the Strikes.
+    assert.notDeepEqual(ability("<p>The test boxer makes two fist Strikes, ignoring the multiple attack penalty until after both Strikes.</p>", "action", 1)?.strikes?.length, 3);
+    const rend = ability("<p>The test ape makes two fist Strikes against the same target. If both hit, the attack deals an additional @Damage[2d4[bludgeoning]] damage, the target is Off-Guard, and the target takes a –10-foot status penalty to all Speeds until the end of its next turn.</p>");
+    assert.deepEqual([rend.bothHit.damage, rend.bothHit.conditions[0].slug, rend.notes.length], [["2d4[bludgeoning]"], "off-guard", 1]);
+    const circle = ability("<p>The test kite Flies up to half its Speed, makes two talon Strikes, then Flies up to half its Speed again to return to its original location. The second half of this movement doesn't trigger reactions. Both attacks count toward the test kite's multiple attack penalty, but the penalty doesn't increase until after it makes both attacks.</p>");
+    assert.deepEqual([circle.strikes, circle.sameMap, circle.notes.length], [["talon", "talon"], true, 1]);
+    const charm = ability("<p><strong>Trigger</strong> The test showman rolls initiative using Deception or Performance</p><hr /><p><strong>Effect</strong> The test showman can attempt to [[/act demoralize]] one creature they can see.</p>", "free");
+    assert.deepEqual([charm.trigger.event, charm.trigger.skills, charm.resolution.check.statistic], ["initiative", ["deception", "performance"], "intimidation"]);
+});

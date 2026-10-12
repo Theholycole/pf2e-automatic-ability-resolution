@@ -743,7 +743,9 @@ async function onInitiative(combat) {
     if (!scene) return;
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "initiative");
-        if (entry) await offer({ kind: "card", item: entry.item, monster, actor, target: null, trigger: "rolls initiative", free: !!entry.plan.trigger.free });
+        // (Batch 139, Daunting Charisma: only with the skills it names.)
+        const skills = entry?.plan.trigger.skills?.map((skill) => skill[0].toUpperCase() + skill.slice(1));
+        if (entry) await offer({ kind: "card", item: entry.item, monster, actor, target: null, trigger: "rolls initiative", free: !!entry.plan.trigger.free, note: skills?.length ? `Only if it rolled initiative with ${skills.join(" or ")}.` : null });
     }
 }
 
