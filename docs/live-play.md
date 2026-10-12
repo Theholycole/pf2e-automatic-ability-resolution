@@ -1579,3 +1579,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Retributive Rune → a reaction card when a creature within 15 feet damages it: an automatic hit at the attacker for the damage written in the creature's own Detonating Rune, with notes for its type (the dragon's current Shifting Rune, the GM's) and the archdragon's extra reaction. Final Spite's raised reinforcements and the cobbled bruiser's swarms are the GM's (`no-effect`), as summons are by the user's choice of 2026-10-11. The Menace Under Otari wight's unlabeled Final Spite → `death-strike`.
 - **Live:** no new live code: the hit-by offer and its card at the attacker, as before. Not run in pftest.
 - **Simulator:** nothing new. The card plays as an answer to being hit, and the death Strike as before (B177).
+
+## Demoralize as it rolls initiative; allies within 10 feet (2026-10-12, batch 178)
+
+- **Compiled:** Battle Cry ("Frequency once per day Trigger … rolls initiative Effect … attempts to Demoralize an observed foe") → PF2e's Demoralize as the fight starts. Warning Ears ("rolls initiative using Perception or Survival … granting allies within 10 feet a +2 circumstance bonus to initiative rolls") → `initiative-warning` with `within`.
+- **Live:** Battle Cry's offer and card as the fight starts, as before. Warning Ears' offer names the distance, and its button adds the bonus only to allies of its disposition within that many feet. Not run in pftest: the distance filter on batch 170's offer, which was run.
+- **Simulator:** Battle Cry plays as before. Warning Ears gives its bonus only to the allies in its melee (B178).

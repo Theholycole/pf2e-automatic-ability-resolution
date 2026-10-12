@@ -1497,18 +1497,26 @@ export function readInitiativeWarning(text, item = null) {
         .replace(/^When ([^,]+? is about to roll [^,]+?), (?:it|they|he|she) can alert (?:its|their|his|her) allies as a free action\. /i, (_all, when) => `Trigger ${when} Effect `);
     const free = item?.system?.actionType?.value === "free" || /^When [^,]+?, (?:it|they|he|she) can alert [^.]+? as a free action\./i.test(String(text).trim());
     const split = /^Trigger (.+?)[.;]? Effect (.+)$/.exec(body);
-    const trigger = split ? /^(?:The )?[\w'" -]+? is about to roll (?:an? )?(Perception(?: or Survival)?)(?: check)? (?:to determine (?:(?:its|their|his|her) )?initiative|for initiative)$/i.exec(split[1]) : null;
+    // (Batch 178, Warning Ears: "Trigger The lucky courser rolls initiative using Perception or Survival Effect Their expressive ears twitch in alarm,
+    // granting allies within 10 feet a +2 circumstance bonus to initiative rolls.")
+    const trigger = split ? /^(?:The )?[\w'" -]+? is about to roll (?:an? )?(Perception(?: or Survival)?)(?: check)? (?:to determine (?:(?:its|their|his|her) )?initiative|for initiative)$/i.exec(split[1])
+        ?? /^(?:The )?[\w'" -]+? rolls initiative using (Perception(?: or Survival)?)$/i.exec(split[1]) : null;
     if (!trigger) return null;
     let value = null;
+    let within = null;
     const notes = [];
     for (const sentence of split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/)) {
-        const bonus = /^(?:(?:The )?[\w' -]+? [^.]*?\bwarns? (?:its |their )?allies(?: of imminent danger)?, granting (?:them|each ally)|Any ally who is able to (?:hear|see) [^.]*?\) gains) an? \+(\d+) circumstance bonus to (?:their|its) initiative rolls?\.$/i.exec(sentence);
-        if (bonus && value === null) value = Number(bonus[1]);
+        const bonus = /^(?:(?:The )?[\w' -]+? [^.]*?\bwarns? (?:its |their )?allies(?: of imminent danger)?, granting (?:them|each ally)|Any ally who is able to (?:hear|see) [^.]*?\) gains) an? \+(\d+) circumstance bonus to (?:their|its) initiative rolls?\.$/i.exec(sentence)
+            ?? /^(?:Their|Its|His|Her) [^.]*?, granting allies within (\d+) feet an? \+(\d+) circumstance bonus to (?:their )?initiative rolls\.$/i.exec(sentence);
+        if (bonus && value === null && bonus[2]) {
+            value = Number(bonus[2]);
+            within = Number(bonus[1]);
+        } else if (bonus && value === null) value = Number(bonus[1]);
         else if (/^This bonus increases to \+(\d+) if (?:the [\w' -]+?|it|they) (?:was|were) Scouting\.$/i.test(sentence)) notes.push(`${sentence.replace(/^This bonus/, "The bonus").replace(/\.$/, "")} (the GM's).`);
         else if (!/^(?:Depending on how [^.]+?, this action has the auditory or visual trait|This ability gains the auditory trait if [^.]+?, and the visual trait if [^.]+?)\.$/i.test(sentence) && !(value === null && !/\d|@/.test(sentence) && /\bwarns\b/i.test(sentence))) return null;
     }
     if (!value) return null;
-    return { builtin: "initiative-warning", value, skills: trigger[1].toLowerCase().split(/\s+or\s+/), ...(free ? { free: true } : {}), ...(notes.length ? { notes } : {}) };
+    return { builtin: "initiative-warning", value, skills: trigger[1].toLowerCase().split(/\s+or\s+/), ...(within ? { within } : {}), ...(free ? { free: true } : {}), ...(notes.length ? { notes } : {}) };
 }
 
 // (Batch 171, Sidestep: "Trigger The attack roll for a Strike targeting the assassin fails or critically fails Effect … If there's another

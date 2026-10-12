@@ -3065,3 +3065,12 @@ test("a rune detonated on the attacker, creatures that come as it falls, a Strik
     const spite = compileMonsterAbility(item("Test Spite", "reaction", "<p>When the test ghoul is reduced to 0 Hit Points, they can use their reaction to make a Strike before being destroyed. They don't gain any Hit Points from ghoul hunger on this Strike.</p>"), { basicActions: {} });
     assert.deepEqual(spite, { builtin: "death-strike", strike: null });
 });
+
+test("Demoralize as it rolls initiative, once a day; an initiative bonus for allies within 10 feet (2026-10-12, batch 178)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const item = (type, html) => ({ type: "action", name: "Test Cry", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: ["auditory"] }, description: { value: html } } });
+    const cry = compileMonsterAbility(item("reaction", "<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> Test Raider rolls initiative</p><hr /><p><strong>Effect</strong> Test Raider attempts to [[/act demoralize]] an observed foe.</p>"), { basicActions });
+    assert.deepEqual([cry.trigger.event, cry.resolution.check.statistic], ["initiative", "intimidation"]);
+    const ears = compileMonsterAbility(item("free", "<p><strong>Trigger</strong> The test hare rolls initiative using Perception or Survival</p><hr /><p><strong>Effect</strong> Their long ears flick in warning, granting allies within 15 feet a +1 circumstance bonus to initiative rolls.</p>"), { basicActions: {} });
+    assert.deepEqual([ears.builtin, ears.value, ears.within, ears.free], ["initiative-warning", 1, 15, true]);
+});

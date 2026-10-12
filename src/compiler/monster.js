@@ -3352,7 +3352,9 @@ function downsDemoralize(item, basicActions) {
     const type = item.system?.actionType?.value;
     if (!["reaction", "free"].includes(type) || !basicActions.demoralize?.resolution) return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
-    const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain);
+    // (Batch 178, Battle Cry: "Frequency once per day Trigger Ordulf rolls initiative Effect Ordulf attempts to Demoralize an observed foe." — once a
+    // fight, as the fight starts.)
+    const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain.replace(/^Frequency once per (?:day|hour|10 minutes|minute)\.? (?=Trigger )/i, ""));
     const trigger = parts ? readReactionTrigger(parts[1]) : null;
     if (trigger?.event === "foe-mishap") {
         // (Batch 57, Jeer at Failure: "Effect The mocking dragon laughs dismissively at the foe, attempting an Intimidation check to
@@ -3368,7 +3370,7 @@ function downsDemoralize(item, basicActions) {
     if (!["downs", "initiative", "own-turn-start"].includes(trigger?.event)) return null;
     // (A first sentence that only tells it: "After downing the foe, Krosovahn menacingly reminds another foe that he's coming after them next.")
     const effect = parts[2].replace(/^After downing the foe, [^.]+\.\s*/i, "");
-    const WHOM = String.raw`(?:a single creature|a creature|one creature|a creature within \d+ feet)(?: (?:that )?(?:it|he|she|they|xe) can see)?(?: and that can see (?:it|him|her|them|xir|the [\w' -]+?))?`;
+    const WHOM = String.raw`(?:a single creature|a creature|one creature|a creature within \d+ feet|an observed (?:foe|enemy|creature))(?: (?:that )?(?:it|he|she|they|xe) can see)?(?: and that can see (?:it|him|her|them|xir|the [\w' -]+?))?`;
     const match = new RegExp(String.raw`^(?:The )?[^.]+? attempts? (?:an Intimidation check (?:with a \+(\d+) circumstance bonus )?to Demoralize ${WHOM}(?:,? with a \+(\d+) circumstance bonus)?|to Demoralize ${WHOM}(?:,? with a \+(\d+) circumstance bonus)?)\.(?: (?:It|He|She|They|Xe) gains? a \+(\d+) circumstance bonus to this check\.)?$`, "i").exec(effect);
     if (!match) return null;
     const bonus = Number(match.slice(1).find(Boolean)) || 0;

@@ -796,7 +796,7 @@ async function onInitiative(combat) {
         const plan = item ? compile(item) : null;
         if (!plan || (!plan.free && reactionUsed(actor))) continue;
         const skills = plan.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1));
-        await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value }, note: [`Only if it rolled initiative with ${skills.join(" or ")}, and for the allies that can hear or see it.`, ...(plan.notes ?? [])].join(" ") });
+        await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value, ...(plan.within ? { within: plan.within } : {}) }, note: [`Only if it rolled initiative with ${skills.join(" or ")}, and for the allies ${plan.within ? `within ${plan.within} feet` : "that can hear or see it"}.`, ...(plan.notes ?? [])].join(" ") });
     }
 }
 
@@ -1180,7 +1180,10 @@ async function use(message, action, slug) {
         // (Batch 170, Guide's Warning: its allies' rolled initiative that much higher — the circumstance bonus their rolls were due; the turn
         // order follows.)
         const combat = runningCombat(monster.parent);
-        const allies = (combat?.combatants.contents ?? []).filter((entry) => entry.tokenId !== monster.id && entry.token?.disposition === monster.disposition && Number.isFinite(entry.initiative));
+        // (Batch 178, Warning Ears: only its allies within that distance.)
+        const grid = gridOf(monster.parent);
+        const near = (entry) => !state.attack.within || (entry.token && distanceFeet(box(monster, grid.size), box(entry.token, grid.size), grid) <= state.attack.within);
+        const allies = (combat?.combatants.contents ?? []).filter((entry) => entry.tokenId !== monster.id && entry.token?.disposition === monster.disposition && Number.isFinite(entry.initiative) && near(entry));
         if (allies.length) await combat.updateEmbeddedDocuments("Combatant", allies.map((entry) => ({ _id: entry.id, initiative: entry.initiative + state.attack.value })));
         result = allies.length ? `${state.ability.name}: +${state.attack.value} to the initiative of ${allies.map((entry) => entry.name).join(", ")}.` : `${state.ability.name}: none of its allies has rolled initiative.`;
         if (state.free) return settle(message, state, "used", result);
