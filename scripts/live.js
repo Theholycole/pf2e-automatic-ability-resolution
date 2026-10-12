@@ -13,6 +13,7 @@ import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
+import { startZone } from "./zones.js";
 import { strikeBuffEffect } from "../src/live/buff.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
@@ -179,7 +180,8 @@ async function cardForAbility(message) {
         const strikes = strikesFor(plan, rolls.map((roll) => roll.total));
         await rollsToChat(item, sourceToken, rolls, strikes.map((strike, index) => `${rolls[index].total}: ${strike ? `a ${strike} Strike` : "nothing"}`));
         const made = strikes.filter(Boolean);
-        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${made.length ? `${made.map((strike) => `a ${strike} Strike`).join(" and ")}${made.length > 1 ? ", in either order" : ""} — roll ${made.length > 1 ? "them" : "it"} from the sheet.` : "no Strike this time."}`]);
+        const words = made.length === 2 && made[0] === made[1] ? `two ${made[0]} Strikes` : made.map((strike) => `a ${strike} Strike`).join(" and ");
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${made.length ? `${words}${made.length > 1 && made[0] !== made[1] ? ", in either order" : ""} — roll ${made.length > 1 ? "them" : "it"} from the sheet.` : "no Strike this time."}`]);
         return;
     }
     return playAbility(item, plan, sourceToken);
@@ -194,6 +196,13 @@ async function rollsToChat(item, sourceToken, rolls, lines) {
 
 // A monster's or a hazard's ability as compiled (or the way a random table picked): its card, its effect, its note.
 async function playAbility(item, plan, sourceToken) {
+    // An area that lasts (batch 256): its Region and card (scripts/zones.js).
+    if (plan?.builtin === "zone") {
+        await startZone({ item, plan, sourceToken });
+        const recharge = rechargeFormula(item, plan);
+        if (recharge) await noteToGM(item.actor, sourceToken, [rechargeWarning(item.actor, item.name), await startRecharge({ actor: item.actor, item, formula: recharge, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+        return;
+    }
     const formula = rechargeFormula(item, plan);
     // Used again while it recharges: the card says so (the GM decides).
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;

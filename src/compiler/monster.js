@@ -3022,6 +3022,8 @@ function actionUsesTwice(item, actor, options) {
         } catch {
             plan = null;
         }
+        // (Batch 256: that ability's zone, made that many times.)
+        if (plan?.builtin === "zone") return { ...plan, actions: Number(item.system?.actions?.value) || 1, times: { twice: 2, "three times": 3, "four times": 4 }[thrice[2].toLowerCase()], trigger: { event: "use" }, zone: { ...plan.zone, notes: [...(plan.zone.notes ?? []), "None of its areas can overlap."] } };
         if (!plan?.resolution || !plan.targeting?.area) return null;
         return { ...plan, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] }, trigger: { event: "use" }, notes: [...(plan.notes ?? []), `${thrice[1]} ${thrice[2].toLowerCase()}: that many areas, none overlapping.`] };
     }
@@ -4404,6 +4406,272 @@ function randomTable(item, actor, options = {}) {
     return null;
 }
 
+// Zones (2026-10-12, batch 256; the user's call of 2026-10-12: zones automated, not the GM's): an area an ability leaves for a while — a
+// cloud that conceals those in it, difficult or hazardous terrain, a save or damage on entering it or at a turn's start or end, a penalty
+// or PF2e's own effect while inside. Each sentence is read, or kept as a note; with nothing read but the area, null.
+// → { builtin: "zone", actions, trigger, zone: { area, centre: "self" | "placed", range, lasts, untilReused, concealed, terrain: [{ movement,
+//   difficulty }], others, hazard: { formulas }, saves: [{ when: ["initial" | "enter" | "start" | "end"], plan, note? }], damage: [{ when,
+//   formulas }], effect: { uuid, label, allies? }, modifiers, notes } }.
+const ZONE_EFFECT = /@UUID\[(Compendium\.pf2e\.[\w-]*effects\.Item\.[A-Za-z0-9]{16})\]\{(Effect: [^}]+)\}/;
+function zoneLasts(text) {
+    const said = String(text).replace(/\b(?:her|his|their|them|its own)( next turn)\b/gi, "its$1").replace(/\buntil (?:the [\w' -]+?['’]s|its) next turn\b/gi, "until the start of its next turn").replace(/\b(?:until|unless) (?:it is |it's )?dispersed[^,.;]*|\bor until (?:it is |it's )?dispersed[^,.;]*/gi, "");
+    if (!/\b(?:for|until)\b/i.test(said)) return null;
+    return readDuration(said);
+}
+// Who difficult terrain is for: [{ movement, difficulty }] and whether the creature itself is spared ("for creatures other than grodairs").
+function zoneTerrain(text) {
+    const entries = [];
+    let others = false;
+    for (const match of String(text).matchAll(/\b(greater )?difficult terrain(?: for ([^,.;]+?))?(?=,|\.|;| but\b| until\b| unless\b| and (?=hazardous|greater|difficult)|$)/gi)) {
+        // (Who it's for, after it or in its clause before: "creatures flying toward the jabberwock are moving through greater difficult terrain".)
+        const before = String(text).slice(Math.max(0, String(text).lastIndexOf(",", match.index) + 1), match.index).toLowerCase();
+        const who = `${match[2] ?? ""} ${/\b(?:fly|flying|swim|swimming|climbing)\b/.test(before) ? before : ""}`.toLowerCase();
+        if (/\bother\b/.test(who)) others = true;
+        const movement = [...(/\bfly(?:ing)?\b/.test(who) ? ["fly"] : []), ...(/\bswim(?:ming)?\b/.test(who) ? ["swim"] : []), ...(/\bon the ground\b/.test(who) ? ["walk"] : []), ...(/\bclimb(?:ing)?\b/.test(who) ? ["climb"] : [])];
+        entries.push({ movement: movement.length ? movement : ["walk"], difficulty: match[1] ? 3 : 2 });
+    }
+    return { entries, others };
+}
+function readZone(item, actor = null) {
+    const type = item.system?.actionType?.value;
+    if (!["action", "free", "reaction"].includes(type)) return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const triggerText = /\bTrigger\s+(.+?)\s*(?:\bEffect\b|\bRequirements?\b|\bFrequency\b|$)/s.exec(plain)?.[1] ?? null;
+    if (type === "reaction" && !triggerText) return null;
+    if (/\bRequirements?\b/.test(plain)) return null;
+    // (One whose effects depend on where it happens, Quake's: the GM's.)
+    if (/\bdepend(?:s|ing) on (?:the surrounding|where|the environment|its surroundings)\b/i.test(plain)) return null;
+    const read = triggerText ? readReactionTrigger(triggerText) : null;
+    const body = html.replace(/<strong>\s*(?:Frequency|Requirements?|Trigger|Cost)\s*<\/strong>[\s\S]*?(?=<strong>|<hr|<\/p>)/gi, "").replace(/<strong>\s*Effect\s*<\/strong>/gi, "");
+    // (Its sentences, split after a roll or a link too: "… @Template[emanation|distance:5]. The leshy takes …".)
+    const sentences = body.split(/(?<=[.!?])(?:<\/?(?:p|li|ul|ol|br|hr)\b[^>]*>|\s)+(?=(?:<[^>]+>)*[A-Z@(])/).map((sentence) => ({ html: sentence, said: htmlToPlainText(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim() })).filter((sentence) => sentence.said);
+    const zone = { area: null, centre: "self", range: null, lasts: null, untilReused: false, concealed: false, terrain: [], others: false, hazard: null, saves: [], damage: [], effect: null, modifiers: [], notes: [] };
+    const recharge = readRecharge(html);
+    // (What it says before its area: "… create a cloud of smoke within 120 feet. This cloud is a 20-foot burst …".)
+    let lead = "";
+    const link = ZONE_EFFECT.exec(html);
+    let inside = false;
+    let allies = false;
+    // A save's results after it ("On a failure, …", "A creature can attempt to Escape …"), for that save.
+    let open = null;
+    const saveOn = (when, check, rest, said) => {
+        const sub = `<p>The target must succeed at a ${check} save${rest ? ` or ${rest}` : ""}.</p>`;
+        open = { when, check, sub, said, follow: [] };
+        zone.saves.push(open);
+    };
+    for (const { html: sentence, said: line } of sentences) {
+        let said = line;
+        if (/^Effect: /i.test(said)) continue;
+        if (ZONE_EFFECT.test(sentence) && /^Effect: [^.]+\.?$/i.test(said)) continue;
+        const template = inlineTags(sentence, "Template").map(readTemplate).find(Boolean);
+        // The area it makes: where, how long, and terrain it says there.
+        if (template && !zone.area) {
+            said = `${lead} ${said}`.trim();
+            if (!["burst", "emanation", "cone", "line"].includes(template.type) || /@Damage\[|@Check\[/.test(sentence)) return null;
+            // (Not what the creatures there get at once, an ally's bonus or extra damage for a round: War Cry's, Sic 'Em!'s.)
+            if (/^(?:Each|All|Any|Every)\b/i.test(said) || /\b(?:gains?|deals?) (?:an? )?(?:additional|[+–-]\d)/i.test(said)) return null;
+            zone.area = { type: template.type, value: template.value };
+            const placed = /\bwithin (\d+) feet\b(?! of (?:it|them|itself|themselves|him|her)\b)/i.exec(said.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "").replace(/\bwithin an? @Template/gi, "")) ?? /\b(\d+) feet away\b/i.exec(said);
+            const centred = /\bcentered on (?:a corner of )?(?:them|themselves|themself|itself|himself|herself|him|her|it|its own|their own|(?:its|their|his|her) (?:own )?(?:space|square)|the [\w' -]+?)\b/i.exec(said);
+            if (template.type === "burst" && placed && !(centred && !/\btarget\b/i.test(centred[0]))) {
+                zone.centre = "placed";
+                zone.range = Number(placed[1]);
+            }
+            // ("centered anywhere on the island": where the GM puts it.)
+            if (template.type === "burst" && /\bcentered anywhere\b/i.test(said)) zone.centre = "placed";
+            zone.lasts = zoneLasts(said.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "")) ?? zone.lasts;
+            const terrain = zoneTerrain(said);
+            zone.terrain.push(...terrain.entries);
+            zone.others ||= terrain.others;
+            if (/\bhazardous terrain\b/i.test(said)) zone.hazard = { formulas: [] };
+            if (/\bdispersed by a strong wind\b/i.test(said)) zone.notes.push("A strong wind disperses it.");
+            // ("…; creatures within the soot are Concealed, and …": in the same sentence.)
+            if (/\bcreatures (?:with)?in(?:side)? (?:the|this|that) [\w' -]+? (?:are|become) Concealed\b/i.test(said)) zone.concealed = true;
+            continue;
+        }
+        if (!zone.area) {
+            // (Before the area: what the creature does first, "The dragon turtle summons a mighty storm …", the GM's flavour.)
+            if (/@(?:Check|Damage)\[/.test(sentence)) return null;
+            lead = `${lead} ${said}`.trim();
+            continue;
+        }
+        // Its results after a save ("On a failure, …"), kept with that save.
+        if (open && /^(?:On a (?:critical )?(?:failure|success)|A creature can attempt to Escape|If (?:it|the creature) (?:fails|critically fails)|(?:Critical )?(?:Success|Failure)\b)/i.test(said)) {
+            open.follow.push(sentence);
+            continue;
+        }
+        // (A save's results by degree, after other words: that save's.)
+        if (!open && zone.saves.at(-1)?.follow && /^(?:Critical )?(?:Success|Failure)\b/.test(said)) {
+            zone.saves.at(-1).follow.push(sentence);
+            continue;
+        }
+        open = null;
+        // (Its recharge, read with the area's trigger.)
+        if (recharge && /\bcan(?:'|’)?t (?:use )?(?:its |their |this )?[\w' -]+? (?:again )?for\b/i.test(said)) continue;
+        // (Cinder Dispersal: back in its form at the start of its turn — the cloud ends then.)
+        if (/^At the start of its turn, the [\w' -]+? returns to its normal form\b/i.test(said)) {
+            zone.lasts = readDuration("until the start of its next turn");
+            zone.notes.push(said);
+            continue;
+        }
+        if (/^A creature must attempt a new save each round it remains (?:with)?in the (?:area|cloud|emanation)\.$/i.test(said) && zone.saves.length) {
+            zone.saves.at(-1).when = [...new Set([...zone.saves.at(-1).when, "start"])];
+            continue;
+        }
+        const lasts = /^(?:The|This|These|Its) [\w' -]+?\b[^.]*?\b(?:lasts?|remains?(?: in place)?|persists?|continues?) (?:for|until)\b/i.test(said);
+        if (lasts) {
+            zone.lasts = zoneLasts(said) ?? zone.lasts;
+            if (/\bdispersed\b[^.]*\bstrong wind\b|\bstrong wind\b[^.]*\bdispers/i.test(said)) zone.notes.push("A strong wind disperses it.");
+            if (/\buntil (?:the [\w' -]+?|it|they|he|she) uses? this (?:ability|action) again\b/i.test(said)) zone.untilReused = true;
+            continue;
+        }
+        // "… can use this action again to dismiss …", "… can end the storm by taking this action again."
+        if (/\b(?:can|may) (?:use this (?:action|ability) again to (?:dismiss|end)|end (?:the|this) [\w ]+? by (?:taking|using) this (?:action|ability) again)\b/i.test(said)) {
+            zone.untilReused = true;
+            continue;
+        }
+        if (/\bConcealed\b/.test(said) && /^(?:(?:All|Any|Each) (?:other )?creatures?|Anything|Creatures) (?:with)?in(?:side)? (?:the|this|that) /i.test(said)) {
+            zone.concealed = true;
+            // (", and any creature ending its turn there takes 2d6 fire damage": damage at its turn's end.)
+            const ending = /, and (?:any|each) creature ending its turn there takes @Damage\[/i.test(said);
+            if (ending) zone.damage.push({ when: "end", formulas: inlineTags(sentence, "Damage").map(readDamage) });
+            continue;
+        }
+        if (/\bdifficult terrain\b/i.test(said) && !/@Check\[/.test(said)) {
+            const terrain = zoneTerrain(said);
+            if (terrain.entries.length && !/\bcan ignore\b|\bignores?\b/i.test(said)) {
+                zone.terrain.push(...terrain.entries);
+                zone.others ||= terrain.others;
+                if (/\bhazardous terrain\b/i.test(said)) zone.hazard ??= { formulas: [] };
+                if (/\bunless they (?:also )?have a swim Speed\b/i.test(said)) zone.notes.push("A creature with a swim Speed ignores it.");
+                if (/\bwith an Interact action\b/i.test(said)) zone.notes.push("An Interact action clears a square of it.");
+                continue;
+            }
+        }
+        if (/\bhazardous terrain\b/i.test(said) && !/@(?:Damage|Check)\[/.test(said)) {
+            zone.hazard ??= { formulas: [] };
+            zone.others ||= /\bfor other creatures\b/i.test(said);
+            continue;
+        }
+        const hazard = /\btakes @Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})? damage (?:each time it moves into one of these squares|for (?:every|each) square (?:of (?:that|the) area )?it moves into|for every 5 feet of movement)\.$/i.test(said);
+        if (hazard) {
+            zone.hazard = { formulas: inlineTags(sentence, "Damage").map(readDamage) };
+            continue;
+        }
+        const ending = /^(?:A|Any|Each) creature (?:with)?in the [\w' -]+? at the end of its turn takes @Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?\.(?: Effect: [^.]+\.?)?$/i.test(said);
+        if (ending) {
+            zone.damage.push({ when: "end", formulas: inlineTags(sentence, "Damage").map(readDamage) });
+            continue;
+        }
+        const check = /(@Check\[[^\]]*\])(?:\{[^}]*\})?/.exec(said);
+        // A save on whoever enters, starts or ends a turn in it, or is there as it's made.
+        const subject = check ? said.slice(0, said.indexOf(check[0])) : "";
+        if (check && /\bmust (?:attempt|succeed at|succeed on) an? $/i.test(subject)) {
+            const rest = said.slice(said.indexOf(check[0]) + check[0].length).replace(/^\s*(?:saving throw|save)\b\s*/i, "").replace(/^or\s+/i, "").replace(/\.$/, "");
+            // ("The first time each round a creature takes piercing damage from these bones, it must …": as it moves in.)
+            const when = [...(/\benters?\b|\bwho enter\b|^The first time each round an? creature takes [\w ]+? damage from (?:these|this|the)\b/i.test(subject) ? ["enter"] : []), ...(/\b(?:starts?|begins?) (?:its|their) turns?\b/i.test(subject) ? ["start"] : []), ...(/\bends? (?:its|their) turns?\b/i.test(subject) ? ["end"] : [])];
+            const there = /^(?:Each|Every|All|Any) creatures? (?:with)?in (?:the|this|that) /i.test(subject) || /^Creatures (?:with)?in (?:the|this|that) /i.test(subject);
+            // (Sandstorm: "Creatures within the emanation take a –4 circumstance penalty to Perception checks and must succeed at …".)
+            const penalty = /^Creatures (?:with)?in (?:the|this|that) [\w' -]+? (take an? [–-]\d+ \w+ penalty to [^.]+?) and must /i.exec(subject);
+            if (penalty) {
+                inside = true;
+                if (!link) zone.modifiers.push(...readPenalties(penalty[1].replace(/\bPerception checks\b/i, "Perception").replace(/^take/i, "takes")));
+            }
+            if (!when.length && !there) {
+                open = null;
+                zone.notes.push(said);
+                continue;
+            }
+            saveOn(when.length ? when : penalty ? ["initial", "enter"] : ["initial"], check[1], rest, said);
+            continue;
+        }
+        // Exposure on being there or entering ("Each creature that's in the cloud or enters it is exposed to purple pox."): a note for the GM.
+        if (/^Each creature (?:that's|that is|who's) in the [\w' -]+? or enters it is exposed to\b/i.test(said)) {
+            zone.saves.push({ when: ["initial", "enter"], plan: null, note: said });
+            continue;
+        }
+        const exposed = /^(?:A|Any|Each) creature (?:that|who) (ends|starts|begins) its turn in the [\w' -]+? is exposed to\b/i.exec(said);
+        if (exposed) {
+            zone.saves.push({ when: [/^ends$/i.test(exposed[1]) ? "end" : "start"], plan: null, note: said });
+            continue;
+        }
+        // What those inside take while there: a penalty, a weakness (PF2e's own effect when it gives one).
+        if (/^(?:While in the area|Creatures (?:with)?in the (?:area|emanation|aura|cloud|storm))\b/i.test(said)) {
+            inside = true;
+            if (!link) {
+                const read = readPenalties(said.replace(/\bPerception checks\b/i, "Perception").replace(/\btake\b/i, "takes"));
+                if (read.length) zone.modifiers.push(...read);
+                else zone.notes.push(said);
+            }
+            continue;
+        }
+        // Its allies inside (Cleansing Earth): PF2e's effect on them; ignoring its terrain, a note.
+        if (/^Additionally, all allies in the [\w' -]+? gain\b/i.test(said) && link) {
+            allies = true;
+            if (/\bcan ignore the difficult terrain\b/i.test(said)) zone.notes.push("Its allies ignore the difficult terrain.");
+            continue;
+        }
+        zone.notes.push(readableText(said));
+    }
+    if (!zone.area) return null;
+    // Each save: its results read as a save would be, else noted.
+    for (const save of zone.saves) {
+        if (save.plan === null && save.note) continue;
+        const sub = `${save.sub}${save.follow.map((sentence) => `<p>${sentence}</p>`).join("")}`;
+        const plan = inlineSave(withDescription(item, sub), actor);
+        const targeting = { target: "1 creature", range: null, area: null };
+        save.plan = plan?.resolution?.kind === "save" ? { ...plan, targeting, trigger: { event: "zone" } } : { ...base(item), targeting, trigger: { event: "zone" }, resolution: { kind: "save", check: { roll: "save", statistic: readCheck(save.check.slice(7, -1))?.statistic ?? "fortitude", basic: false, against: { dc: "fixed", value: readCheck(save.check.slice(7, -1))?.dc ?? null } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: { ...none(), manualInstructions: [htmlToPlainText(save.said)] }, criticalFailure: { ...none(), manualInstructions: [htmlToPlainText(save.said)] } } } };
+        if (!Number.isFinite(save.plan.resolution.check?.against?.value)) return null;
+        delete save.check;
+        delete save.sub;
+        delete save.said;
+        delete save.follow;
+    }
+    // PF2e's own effect: on whoever fails a save whose failure reads nothing else; else on those inside (its allies only when it says so).
+    // (Two of them, a failure's and a critical failure's: the save's own, not the zone's.)
+    if (link && (html.match(new RegExp(ZONE_EFFECT.source, "g")) ?? []).length === 1) {
+        const effect = { uuid: link[1], label: link[2].replace(/^Effect:\s*/i, "") };
+        const bare = !inside && !allies ? zone.saves.find((save) => save.plan?.resolution && !save.plan.resolution.outcomes.failure.effects.length && !(save.plan.resolution.outcomes.failure.modifiers ?? []).length) : null;
+        if (bare) for (const degree of ["failure", "criticalFailure"]) bare.plan.resolution.outcomes[degree] = { ...bare.plan.resolution.outcomes[degree], nativeEffects: [{ ...effect }], manualInstructions: undefined };
+        else zone.effect = { ...effect, ...(allies ? { allies: true } : {}) };
+    }
+    if (zone.hazard && !zone.hazard.formulas.length) zone.hazard = null;
+    if (!zone.concealed && !zone.terrain.length && !zone.hazard && !zone.saves.length && !zone.damage.length && !zone.effect && !zone.modifiers.length) return null;
+    // (Something that lasts: a time, an end by its maker, cover or terrain, what entering or a turn there brings, what those inside have — not
+    // a one-off area with PF2e's effect, Fog of Chance's.)
+    const lasting = zone.lasts || zone.untilReused || zone.concealed || zone.terrain.length || zone.hazard || zone.damage.length || zone.saves.some((save) => save.when.some((when) => when !== "initial")) || inside || allies;
+    if (!lasting) return null;
+    const trigger = read ? { ...read, reaction: true, ...(type === "free" ? { free: true } : {}) } : triggerText ? { event: "unread" } : null;
+    return { builtin: "zone", actions: Number(item.system?.actions?.value) || (type === "action" ? 1 : 0), ...(trigger || recharge ? { trigger: { ...(trigger ?? { event: "use" }), ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) } } : {}), zone: { ...zone, notes: [...new Set(zone.notes)] } };
+}
+
+// A zone of its own used on a trigger, once or more (Master of Clouds: "Trigger The dragon rolls initiative Effect … The dragon uses Dragonmist
+// twice."): that zone's plan, with the trigger and how many (times). Words before it with no rolls in them are flavour. null otherwise.
+function zoneOnTrigger(item, actor, options) {
+    const type = item.system?.actionType?.value;
+    if (!["reaction", "free"].includes(type)) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (!trigger) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const uses = /^(?:The )?[\w' -]+? uses (?:its |their |his |her )?([A-Z][\w'-]*(?: [A-Z][\w'-]*)*)(?: (twice|three times|four times|five times))?\.$/.exec(said.at(-1) ?? "");
+    if (!uses || said.slice(0, -1).some((sentence) => /@|\[\[/.test(sentence))) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const other = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && String(entry.name ?? "").toLowerCase() === uses[1].toLowerCase());
+    if (!other) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(other, { ...options, actor: owner });
+    } catch {
+        plan = null;
+    }
+    if (plan?.builtin !== "zone") return null;
+    const times = { twice: 2, "three times": 3, "four times": 4, "five times": 5 }[uses[2] ?? ""] ?? 1;
+    return { ...plan, actions: 0, trigger: { ...trigger, reaction: true, ...(type === "free" ? { free: true } : {}) }, ...(times > 1 ? { times } : {}) };
+}
+
 // One of two spells (2026-10-12, batch 249, Change Size): "This works as a 4th-rank Enlarge or Shrink spell but can target an unwilling creature
 // (… Fortitude save negates)." → { builtin: "modes" }: each spell's cast at that rank (castSpell), an unwilling target's save a note. null otherwise.
 function eitherSpell(item, actor) {
@@ -5065,9 +5333,21 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
+    if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
+        const zone = readZone(item, actor);
+        const lasting = zone?.zone?.saves?.find((save) => save.plan && save.when.some((when) => when !== "initial"));
+        // (The save as the area save read it — its results by degree, its damage — on each creature when the zone says; its recharge kept.)
+        if (lasting) {
+            const single = { ...plan, targeting: { target: "1 creature", range: null, area: null }, trigger: { event: "zone" } };
+            const saves = zone.zone.saves.map((save) => (save === lasting ? { ...save, plan: single } : save));
+            return { ...zone, ...(plan.trigger?.recharge ? { trigger: { ...(zone.trigger ?? { event: "use" }), recharge: plan.trigger.recharge } } : {}), zone: { ...zone.zone, saves } };
+        }
+    }
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
+const ZONE_LASTING = /\b(?:new save each round|(?:starts?|begins?|ends?) (?:its|their) turns? (?:with)?in|who enters?|or enters?|persists? for|lasts? for|remains? (?:in place )?for)\b/i;
 
 // A reaction whose trigger is a hit, a critical hit or damage on the monster, or its death (2026-10-10, batch 16): "The
 // dragon is critically hit with a melee weapon or unarmed attack", "A creature within the thoqqua's reach hits the thoqqua

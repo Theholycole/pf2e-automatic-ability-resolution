@@ -158,3 +158,39 @@ test("a way that casts a spell keeps its plan on the mode card (2026-10-12, batc
     const state = createModeCard({ modes: [{ name: "Puddle", plan: cast }, { name: "Odd Gas", plan: null }], ability: { name: "Test Breath", uuid: "Item.b" }, source: { actorUuid: "Actor.d", tokenUuid: null, name: "Dragon" }, targets: [] });
     assert.deepEqual(state.modes.map((mode) => mode.plan?.builtin ?? null), ["cast-spell", null]);
 });
+
+test("zones live: the Region at the token or for the GM to place, its terrain, its end, what each event does (2026-10-12, batch 256)", async () => {
+    const { zoneActions, zoneDamagePlan, zoneDifficulties, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneRounds } = await import("../src/live/zones.js");
+    const grid = { size: 100, distance: 5 };
+    const token = { id: "tok", x: 200, y: 300, width: 2, height: 2, shape: 0 };
+    const zone = { area: { type: "emanation", value: 10 }, centre: "self", lasts: { mode: "fixed", value: 1, unit: "minutes", expiry: "turn-start" }, concealed: true, terrain: [{ movement: ["walk"], difficulty: 2 }, { movement: ["fly"], difficulty: 3 }], others: true, hazard: { formulas: ["1[fire]"] }, saves: [{ when: ["enter", "start"], plan: { id: "save" } }, { when: ["initial"], plan: null, note: "Exposed." }], damage: [{ when: "end", formulas: ["2d6[fire]"] }], effect: { uuid: "Compendium.pf2e.bestiary-effects.Item.x", label: "Test" }, modifiers: [] };
+    const aura = zoneRegion({ name: "Test Smoke", zone, token, grid, moduleId: "mod", flags: { id: 1 } });
+    assert.deepEqual([aura.place, aura.data.attachment, aura.data.shapes[0].type, aura.data.shapes[0].radius, aura.data.shapes[0].base], [false, { token: "tok" }, "emanation", 200, { type: "token", x: 200, y: 300, width: 2, height: 2, shape: 0 }]);
+    assert.deepEqual(aura.data.behaviors.map((behavior) => behavior.type), ["modifyMovementCost", "executeScript"]);
+    assert.deepEqual(zoneDifficulties(zone.terrain), { walk: 2, travel: 2, fly: 3 });
+    assert.match(aura.data.behaviors[1].system.source, /activeGM[\s\S]*zoneEvent/);
+    assert.deepEqual(aura.data.flags, { mod: { zone: { id: 1 } } });
+    const burst = zoneRegion({ name: "Test Fog", zone: { ...zone, area: { type: "burst", value: 20 }, centre: "placed", terrain: [] }, token, grid, moduleId: "mod", flags: {} });
+    assert.deepEqual([burst.place, burst.data.shapes[0].type, burst.data.shapes[0].radius, burst.data.behaviors.length], [true, "circle", 400, 1]);
+    const own = zoneRegion({ name: "Test Puff", zone: { ...zone, area: { type: "burst", value: 10 }, centre: "self" }, token, grid, moduleId: "mod", flags: {} });
+    assert.deepEqual([own.place, own.data.shapes[0].x, own.data.shapes[0].y], [false, 300, 400]);
+    assert.equal(zoneRegion({ name: "Test Cone", zone: { ...zone, area: { type: "cone", value: 15 } }, token, grid, moduleId: "mod", flags: {} }).data.shapes[0].angle, 90);
+    // Its time: rounds (a minute ten), its maker's turn; for good when it's the GM's to end.
+    assert.deepEqual([zoneRounds(zone.lasts), zoneRounds({ value: 2, unit: "rounds" }, 3), zoneRounds({ value: 1, unit: "hours" }), zoneRounds(null)], [10, 3, null, null]);
+    const ends = zoneEndsAt({ value: 1, unit: "rounds", expiry: "turn-end" }, { round: 2, combatantId: "c1" });
+    assert.deepEqual(ends, { combatantId: "c1", round: 3, at: "turn-end" });
+    assert.deepEqual(zoneEndsAt({ value: 1, unit: "rounds", expiry: "turn-start" }, { round: 2, combatantId: "c1", acted: false }), { combatantId: "c1", round: 2, at: "turn-start" });
+    assert.deepEqual([zoneOver(ends, { phase: "end", round: 2, combatantId: "c1" }), zoneOver(ends, { phase: "start", round: 3, combatantId: "c1" }), zoneOver(ends, { phase: "end", round: 3, combatantId: "c2" }), zoneOver(ends, { phase: "end", round: 3, combatantId: "c1" }), zoneOver(ends, { phase: "start", round: 4, combatantId: "c2" })], [false, false, false, true, true]);
+    // Each event: what entering gives, the saves and damage (not on its maker), clearing on leaving.
+    assert.deepEqual(zoneActions(zone, "tokenEnter").map((action) => action.kind), ["conceal", "effect", "hazard", "save"]);
+    assert.deepEqual(zoneActions(zone, "tokenEnter", { initial: true }).map((action) => action.kind), ["conceal", "effect", "note"]);
+    assert.deepEqual(zoneActions(zone, "tokenEnter", { own: true }).map((action) => action.kind), ["conceal", "effect"]);
+    assert.deepEqual(zoneActions(zone, "tokenTurnStart").map((action) => action.kind), ["save"]);
+    assert.deepEqual(zoneActions(zone, "tokenTurnEnd").map((action) => [action.kind, action.formulas]), [["damage", ["2d6[fire]"]]]);
+    assert.deepEqual(zoneActions(zone, "tokenExit"), [{ kind: "clear" }]);
+    assert.deepEqual(zoneActions({ ...zone, effect: { ...zone.effect, allies: true } }, "tokenEnter", { allied: false }).map((action) => action.kind), ["conceal", "hazard", "save"]);
+    assert.equal(zoneDamagePlan("Test", ["2d6[fire]"]).resolution.outcomes.success.damage.formulas[0].formula, "2d6[fire]");
+    const hidden = zoneMemberEffect({ name: "Test Fog", kind: "conceal", concealedUuid: "Compendium.pf2e.conditionitems.Item.DmAIPqOBomZ7H95W", regionUuid: "Scene.s.Region.r", moduleId: "mod" });
+    assert.deepEqual([hidden.system.rules[0].key, hidden.system.rules[0].uuid, hidden.flags.mod.zone], ["GrantItem", "Compendium.pf2e.conditionitems.Item.DmAIPqOBomZ7H95W", "Scene.s.Region.r"]);
+    assert.deepEqual(zoneMemberEffect({ name: "Test", kind: "modifiers", modifiers: [{ selector: "reflex", value: -2, type: "status" }], regionUuid: "r", moduleId: "mod" }).system.rules, [{ key: "FlatModifier", selector: "reflex", value: -2, type: "status", label: "Test" }]);
+});

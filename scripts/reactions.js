@@ -28,6 +28,7 @@
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
 import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
+import { startZone } from "./zones.js";
 import { endRecharge } from "./recharge.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
@@ -98,7 +99,7 @@ function reactionsOf(actor) {
     if ((actor?.itemTypes?.action ?? []).some((item) => item.system?.actionType?.value === "passive" && compile(item)?.noReactions)) return [];
     // (And a reaction with results of its own whose trigger the module reads: plan.trigger.reaction.)
     return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) }))
-        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade" || (item.system?.actionType?.value === "free" && plan.free))) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && plan.resolution));
+        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade" || (item.system?.actionType?.value === "free" && plan.free))) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && (plan.resolution || plan.builtin === "zone")));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -1277,6 +1278,12 @@ async function use(message, action, slug) {
         if (!item || !target) throw new Error("The creature or the ability is gone.");
         await postSkillCard({ skill: state.skill.slug, shift: state.skill.shift ?? 0, item, sourceActor: actor, sourceToken: monster, tokens: [target.object ?? target] });
         result = `${state.ability.name}: its ${state.skill.slug.replace(/^\w/, (letter) => letter.toUpperCase())} card is posted.`;
+    } else if (state.kind === "card" && (await fromUuid(state.ability.uuid).then((item) => (item ? compile(item) : null)).catch(() => null))?.builtin === "zone") {
+        // (Batch 256: an area that lasts, Cloud of Allergens' as it rolls initiative — its Region and card.)
+        const item = await fromUuid(state.ability.uuid);
+        await startZone({ item, plan: compile(item), sourceToken: monster });
+        result = `${state.ability.name}: its area is made.`;
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "card") {
         // Its card: on the attacker, the creatures in its emanation, or the GM's targets.
         const item = await fromUuid(state.ability.uuid);

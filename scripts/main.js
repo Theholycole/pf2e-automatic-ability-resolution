@@ -10,6 +10,7 @@ import { setUpSwallow } from "./swallow.js";
 import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
 import { setUpHazards } from "./hazards.js";
+import { setUpZones, zoneEvent } from "./zones.js";
 import { actorData, watchActors } from "./actor-data.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
@@ -74,10 +75,12 @@ Hooks.once("ready", () => {
     setUpRecharge({ compileItem });
     setUpReactions({ compileItem });
     setUpHazards({ compileItem });
+    setUpZones();
 });
 
 Hooks.once("ready", async () => {
     await loadBasicActions();
     const module = game.modules.get(MODULE_ID);
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor });
+    // (zoneEvent: the zones' Region script behaviours call it, batch 256.)
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, zoneEvent });
 });
