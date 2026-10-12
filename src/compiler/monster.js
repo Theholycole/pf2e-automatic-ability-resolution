@@ -845,6 +845,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // against the target's Fortitude DC to Trip them" as a Trip.)
             .replace(/\bdraws an? ([\w' -]+?) and Strikes an? (?:target|creature|foe)(?: within \d+ feet)?(?=\.$)/i, "makes a $1 Strike")
             .replace(/\bimmediately rolls an? (?:@Check\[athletics[^\]]*\](?:\{[^}]*\})?|Athletics) check against the target's Fortitude DC to Trip (?:them|it|the target)(?=\.$)/i, "attempts to Trip the target")
+            // (Batch 95: Concussive Shot's "against a creature within the weapon's first range increment"; Terrifying Strike's "attempts a weapon
+            // Strike against a target, shouting threats and curses" — what it tells.)
+            .replace(/\b(makes an? [\w' -]+? Strike) against a creature within the weapon's first range increment(?=\.$)/i, "$1")
+            .replace(/\b((?:attempts|makes) an? (?:weapon |melee )?Strike) against a target, [a-z]+ing (?:(?!\d|@|\bdamage\b|\bbonus\b|\bpenalty\b)[^.])+(?=\.$)/i, "$1")
             // (Batch 83, Portal Strike: "makes a claw Strike against a creature within 120 feet" — the distance the GM's.)
             .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy|target) within \d+ feet(?=\.$)/i, "$1")
             // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
@@ -995,7 +999,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (critical) activity.onHit.critical = conditions(critical.replace(/ on a critical hit$/i, ""));
             if (!activity.onHit.conditions.length) return reject(text);
         } else if ((match = /^On a critical hit, the (?:target|creature) is (.+?)(?: instead)?\.?$/i.exec(text) ?? /^If (?:the [\w' -]+?|it|they|he|she) critically hits with (?:this|the) Strike, the (?:creature hit|target|creature) is (.+?)\.$/i.exec(text)) && conditions(match[1]).length) activity.onHit.critical = conditions(match[1]);
-        else if (new RegExp(`${hit}the target must (?:also )?succeed at`, "i").test(text) || /^On a (?:hit|success), the (?:target|foe) must also succeed at/i.test(text) || (match = /^A (Tiny|Small|Medium|Large|Huge) or smaller creature (?:struck|hit|damaged) by this attack must succeed at/i.exec(text))) {
+        else if (new RegExp(`${hit}the target must (?:also )?succeed at`, "i").test(text) || /^On a (?:hit|success), the (?:target|foe) must also succeed at/i.test(text) || /^On a success, the creature must (?:also )?succeed at/i.test(text) || (match = /^A (Tiny|Small|Medium|Large|Huge) or smaller creature (?:struck|hit|damaged) by this attack must succeed at/i.exec(text))) {
             const raw = inlineTags(sentence, "Check")[0];
             const check = raw ? readCheck(raw) : null;
             const outcomes = check?.save && check.dc ? saveOrOutcomes(sentence, [], { afterHit: true }) : null;
@@ -2278,6 +2282,50 @@ function trapFall(item) {
     return { ...base(item), targeting: { target: "the triggering creature", range: null, area: null }, trigger: { event: "use" }, resolution };
 }
 
+// A trap's slab, door, tree or wall that drops (2026-10-11, batch 95; the user's choice: hazards' cards where the text allows): "Effect The
+// door falls, closing off the hallway. The stone slab deals 3d8 bludgeoning damage to anyone beneath or adjacent to the slab when it drops and
+// pushes them out of its space in a random direction. A creature that succeeds at a @Check[reflex|dc:17] save takes no damage and rolls out
+// of the way in a random direction. On a critical success, …" → its damage with that save (a success: none, or half and none on a critical
+// success); where they're pushed and roll, the GM's. Not with a condition, a curse or anything else. null otherwise.
+function trapDrop(item) {
+    if (!["reaction", "free"].includes(item.system?.actionType?.value) || (item.actor ?? item.parent)?.type === "npc") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const effect = /<strong>\s*Effect\s*<\/strong>([\s\S]*)$/i.exec(html)?.[1];
+    if (!effect) return null;
+    const plain = htmlToPlainText(effect.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    let damage = [];
+    let save = null;
+    let half = false;
+    for (const sentence of plain.split(/(?<=\.)\s+(?=[A-Z])/)) {
+        const tags = inlineTags(sentence, "Damage");
+        const check = /^A creature that succeeds at an? @Check\[reflex\|dc:(\d+)[^\]]*\](?:\{[^}]*\})? save takes (no|half) damage\b[^.]*\.$/i.exec(sentence);
+        if (check && !save) {
+            save = Number(check[1]);
+            half = /half/i.test(check[2]);
+            continue;
+        }
+        if (tags.length && !damage.length && /\b(?:deals?|dealing)\b/i.test(sentence) && !/@Check|\b(?:Prone|Grabbed|Restrained|Immobilized|Stunned|cursed?|persistent|Strikes?|save)\b/i.test(sentence)) {
+            damage = tags.map((tag) => readDamage(tag));
+            continue;
+        }
+        if (/^On a critical success, (?:(?:they|it|the creature) takes? no damage and )?(?:(?:they|it|the creature) )?(?:(?:can|may) )?chooses? the direction\b[^.]*\.$/i.test(sentence)) continue;
+        // (What the GM needs after it: lifting the slab, what triggers it, the slab's own numbers.)
+        if (/^Lifting the (?:fallen|closed) [\w ]+? requires a successful @Check\[athletics[^\]]*\](?:\{[^}]*\})? check\.$|^Hitting the floor panels triggers the trap\.$|^The [\w ]+? uses the same AC and saves as the trap, but it has Hardness \d+,? (?:and )?(?:HP )?\d+(?: HP)? \(BT \d+\)\.$/i.test(sentence)) continue;
+        if (/^The (?:haunt|trap|hazard) (?:then )?rolls initiative\.$/i.test(sentence) || !/\d|@|\b(?:damage|save|Prone|Grabbed|Restrained|Immobilized|Stunned|Frightened|Sickened|curse\w*|Strikes?|penalty|bonus)\b/i.test(sentence)) continue;
+        return null;
+    }
+    if (!damage.length || !save) return null;
+    // (Its damage rolled once for all, as a basic save's: whole on a failure, half on a success that says so.)
+    const components = damage.flatMap((formula) => String(formula).split(/,(?![^[]*\])/)).map((formula) => formula.trim()).filter(Boolean).map((formula, index) => ({ id: String(index), formula, type: null, category: null }));
+    const share = (multiplier) => ({ damage: { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) }, effects: [] });
+    return {
+        ...base(item),
+        targeting: { target: "the creatures it drops on", range: null, area: null },
+        trigger: { event: "use" },
+        resolution: { kind: "save", check: { roll: "save", statistic: "reflex", basic: false, against: { dc: "fixed", value: save } }, sharedDamage: { rollOnce: true, components }, outcomes: { criticalSuccess: none(), success: half ? share(0.5) : none(), failure: share(1), criticalFailure: share(1) }, reminders: ["Where the creatures are pushed or roll is the GM's."] }
+    };
+}
+
 // A skill action set off by its own critical hit (2026-10-11, batch 44, Unnerving Prowess): "Trigger Dura critically succeeds at a
 // Strike or Disarm with her Aldori dueling sword. Effect Dura attempts to Demoralize the target of her Strike or Disarm. This
 // Demoralize attempt does not have the auditory trait, nor does Dura take a penalty …" → the basic action's plan (followUpSkill),
@@ -2389,7 +2437,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

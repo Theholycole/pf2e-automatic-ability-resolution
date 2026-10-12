@@ -2123,3 +2123,21 @@ test("a Strike at a creature one of its allies just hit (2026-10-11, batch 94)",
     assert.deepEqual(reaction("A creature within melee reach is hit by a melee attack from one of the test ambusher's allies", "The test ambusher attempts a Strike against the triggering creature."), answer);
     assert.deepEqual(reaction("A creature within Test Ola's melee reach is hit by a melee attack from one of her allies", "Test Ola Strikes the triggering creature."), answer);
 });
+
+test("a flavour clause after the target; a range increment; the creature's save on a success (2026-10-11, batch 95)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const shout = compile("<p>The test rider attempts a weapon Strike against a target, shouting boasts and insults. If it hits, the target must succeed at a @Check[will|dc:25] save or be @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 2} (Frightened 3 on a critical failure).</p>");
+    assert.deepEqual([shout?.builtin, shout?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["strike-activity", "frightened"]);
+    const shot = compile("<p>The test sniper makes an arquebus Strike against a creature within the weapon's first range increment. On a success, the creature must succeed at a @Check[fortitude|dc:20] save or be @UUID[Compendium.pf2e.conditionitems.Item.dfCMdR4wnpbYNTix]{Stunned 1} (Stunned 2 on a critical failure).</p>");
+    assert.deepEqual([shot?.strike, shot?.onHit?.save?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], ["arquebus", 2]);
+});
+
+test("a trap's slab that drops: its damage and the Reflex save that avoids it (2026-10-11, batch 95)", () => {
+    const trap = (effect) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> Pressure is placed on the test tile.</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    const slab = trap("The test door falls, closing off the passage. The slab deals @Damage[2d8[bludgeoning]] damage to anyone beneath or adjacent to it when it drops and pushes them out of its space in a random direction. A creature that succeeds at a @Check[reflex|dc:16] save takes no damage and rolls out of the way in a random direction. On a critical success, they can choose the direction.</p><p>Lifting the fallen slab requires a successful @Check[athletics|dc:20] check.");
+    assert.deepEqual([slab?.resolution?.check?.against?.value, slab?.resolution?.outcomes?.success?.damage?.mode, slab?.resolution?.outcomes?.failure?.damage?.multiplier, slab?.resolution?.sharedDamage?.components?.[0]?.formula], [16, "none", 1, "2d8[bludgeoning]"]);
+    const wall = trap("The test wall collapses, dealing @Damage[2d6[bludgeoning]] damage to creatures within 10 feet of it. A creature that succeeds at a @Check[reflex|dc:15] save takes half damage and rolls out of the way. On a critical success, they take no damage and can choose the direction.");
+    assert.equal(wall?.resolution?.outcomes?.success?.damage?.multiplier, 0.5);
+    // Not with a condition or a curse.
+    assert.equal(trap("The test gate falls. Any creature under it takes @Damage[2d10[piercing]] damage and is Immobilized. A creature that succeeds at a @Check[reflex|dc:15] save takes no damage."), null);
+});
