@@ -172,6 +172,13 @@ export function readMultiStrikes(text) {
             then = "demoralize";
             return "";
         })
+        // (Batch 157, Storm Strikes Twice: "… make a ranged thunderbolt Strike against a creature within their first range increment, teleport to
+        // the creature's location as a gust of wind, then grasp the thrown thunderbolt and make a melee thunderbolt Strike against a creature within
+        // reach" — a ranged Strike and a melee one, the teleport between a note.)
+        .replace(/^((?:The )?[^.]+?) makes? a ranged ([\w' -]+?) Strike against a creature within (?:its|their|his|her) first range increment, teleports? to the creature's location as a gust of wind, then grasps? the thrown \2 and makes? a melee \2 Strike against a creature within reach(?=\.$)/i, (_all, who, name) => {
+            notes.push("It teleports to the first target's location between the two Strikes.");
+            return `${who} makes a ${name} Strike and a ${name} Strike`;
+        })
         // (Batch 156: Circling the Kingdom's "Strides twice and makes two quarterstaff Strikes at any point along its movement" — the moves first;
         // Spear Dance's "…, each with a range of 10 feet" — a note; What Lurks Beneath's "attacks with their tentacles six times".)
         .replace(/^((?:The )?[^.]+?) Strides (twice|once) and makes (two|three) ([\w' -]+?) Strikes at any point (?:along|during) (?:its|their|his|her) movement(?=\.$)/i, (_all, who, times, number, name) => {
@@ -1391,6 +1398,9 @@ export function readAllySave(text) {
 export function readReaction(item, text) {
     // (Linked names as words: "@UUID[…]{Concealment}" → "Concealment".)
     text = text.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
+    // (Batch 157, Shadow Veil: "If the shadow priest is targeted by a melee attack, they can use their reaction to gain a +2 circumstance bonus to AC
+    // against the triggering attack." — its trigger and effect written out.)
+    text = text.trim().replace(/^If ((?:the )?[^,.]+?) is targeted by (a melee attack|an attack|a ranged attack), (?:it|they|he|she) can use (?:its|their|his|her) reaction to gain (an? \+\d+ circumstance bonus to AC against the triggering attack)\.$/i, (_all, who, what, bonus) => `Trigger ${who[0].toUpperCase()}${who.slice(1)} is targeted by ${what} Effect ${who[0].toUpperCase()}${who.slice(1)} gains ${bonus}.`);
     // (Batch 156: Coiled Strike's "As Reactive Strike, but the goblin snake can use this reaction only if it's Coiled.", Aquatic Opportunity's "As
     // Attack of Opportunity, but both the bunyip and the triggering creature must be in water." — Reactive Strike behind a state the GM checks.)
     const kin = /^As (?:Reactive Strike|Attack of Opportunity), but (.+?)\.?$/i.exec(text.trim());
@@ -1653,7 +1663,9 @@ export function readReaction(item, text) {
         [new RegExp(String.raw`^(?:The )?[^.]+? is attacked by a melee weapon$`, "i"), "attacked"],
         [new RegExp(String.raw`^(?:The )?[^.]+? takes damage from (?:a melee attack|an adjacent creature)$`, "i"), "damaged-adjacent"]
     ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
-    if (skillTrigger && !/\bRequirements?\b/.test(text)) {
+    // (Batch 156, Snagging Catch: "Requirements The disciple has their crimson cloak raised" — a state the GM checks: requires, a note.)
+    const skillRequired = /\bRequirements? (.+?)\.? (?=Trigger\b|Effect\b)/.exec(text)?.[1] ?? null;
+    if (skillTrigger && (!/\bRequirements?\b/.test(text) || (skillRequired && !/\d|@/.test(skillRequired)))) {
         const plain = effect.trim().replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
         const said = plain.split(/(?<=\.)\s+(?=[A-Z])/);
         const at = said.findIndex((sentence) => /\battempts? (?:an Athletics check )?to (?:Disarm|Shove|Trip|Grapple|Demoralize)\b/.test(sentence));
@@ -1663,7 +1675,7 @@ export function readReaction(item, text) {
         const quietRest = rest.every((sentence) => !/\d|@|\b(?:damage|save|Strikes?|bonus|penalty|Hit Points)\b/i.test(sentence) && !CONDITIONS_SAID.test(sentence));
         if (move && quietRest) {
             const once = rest.some((sentence) => /\bis destroyed after this action\b/i.test(sentence));
-            return { builtin: "reaction-strike", triggers: [skillTrigger], strike: null, skill: move[1].toLowerCase(), penalty: Number(move[2]) || 0, ...(move[3] ? { bonus: Number(move[3]) } : {}), disrupts: false, ...(once ? { uses: 1 } : {}) };
+            return { builtin: "reaction-strike", triggers: [skillTrigger], strike: null, skill: move[1].toLowerCase(), penalty: Number(move[2]) || 0, ...(move[3] ? { bonus: Number(move[3]) } : {}), disrupts: false, ...(once ? { uses: 1 } : {}), ...(skillRequired ? { requires: "requirement", note: `Only when: ${skillRequired.replace(/^The /, "the ")}.` } : {}) };
         }
     }
     // Telekinetic Defense, Wing Rebuff (batch 54): "Trigger A creature approaches within 10 feet of the poltergeist", "A creature moves from
@@ -1744,7 +1756,10 @@ export function readReaction(item, text) {
     const ac = (item?.system?.rules ?? []).find((rule) => rule?.key === "FlatModifier" && [].concat(rule.selector).includes("ac") && Number.isFinite(Number(rule.value)));
     // (Batch 122: "a +2 circumstance bonus to their Armor Class against the triggering attack" too.)
     if (ac && /\b(?:AC|Armor Class) against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
-        return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted" };
+        // (Batch 157, Shadow Veil: "targeted by a melee attack" — melee only.)
+        const melee = /\bmelee\b/i.test(trigger);
+        const ranged = /\branged\b/i.test(trigger);
+        return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}) };
     }
     // Distracting Whisper (batch 58): "Trigger The dragon is targeted with an attack Effect A mysterious voice whispers something
     // disconcerting in the triggering creature's ear, inflicting a –2 circumstance penalty to the triggering attack." → as +2 AC against it.
@@ -2577,7 +2592,10 @@ function readTeleport(text) {
     // (Not one with a requirement: Shadow Jump's "Requirement The bright walker's Light Aura is suppressed".)
     if (/\b(?:Requirements?|Trigger)\b/.test(String(text))) return null;
     const rolls = String(text).replace(/\[\[\/(?:r|br|gmr) \{?([^\]}#]+?)\}?(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll);
-    const sentences = rolls.replace(/’/g, "'").trim().replace(/^Frequency once per (?:round|turn) Effect /i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 157, Dimensional Slide: "Frequency twice per day Effect Il'setsya steps through a transient hole in space, instantly teleporting to a
+    // space within 60 feet that she can see." — the GM counts its uses.)
+    const sentences = rolls.replace(/’/g, "'").trim().replace(/^Frequency (?:once per (?:round|turn)|(?:once|twice) per day) Effect /i, "")
+        .replace(/^((?:The )?[^.,]+?) steps through [^,.]+, instantly teleporting to /i, "$1 instantly teleports to ").split(/(?<=\.)\s+(?=[A-Z])/);
     const where = String.raw`(?:up to \d+ feet )?(?:in)?to an? (?:unoccupied |empty |clear )?(?:space|square|location)(?: (?:it|they|he|she) can see)?(?: within \d+ feet)?(?: that (?:it|they|he|she) can see)?(?: that (?:isn't|is not) in an area of bright light)?`;
     const teleports = new RegExp(String.raw`^(?:The |An? )?[^.]+? (?:instantly )?teleports (?:itself |themselves |themself )?${where}\.$`, "i");
     const wait = /^(?:It|They|He|She|The [\w' -]+?) can(?:'t|not) use (?:[\w' -]+? )?again for (\d+d\d+) rounds\.$/i;

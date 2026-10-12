@@ -1495,3 +1495,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Strike activities with `afterStrike` (a basic action at the creature, hit or miss), `damageTimes`, more notes (a reach, the GM's armor rule), pushes by size; multi-Strikes with Strides along the way; maneuvers with Feint, a check `statistic` (Deception for a Grapple) or a fixed `modifier`; `reactive-strike` with `requires` and a `note`.
 - **Live:** Battering Blow posts PF2e's Shove card at the GM's target ("After its Strike, hit or miss.") beside its notes; Grab Attention's card rolls Deception against Fortitude; Coiled Strike's offer as a creature leaves its reach says "The goblin snake can use this reaction only if it's Coiled." Checked in pftest.
 - **Simulator:** the basic action after the Strike, hit or miss; damage multiplied for `damageTimes`; Reactive Strike behind a state not loaded (B156).
+
+## A screech on the move, a Disarm behind a requirement, melee-or-ranged AC reactions (2026-10-12, batch 157)
+
+- **Compiled:** Screeching Advance → the owlbear's own Bloodcurdling Screech plan with 2 actions and a note; Storm Strikes Twice → a multi-Strike with `sameMap`; skill reactions may now carry a requirement (`requires`, `note`); AC reactions from a FlatModifier rule gain `against` from their trigger.
+- **Live:** no new live code: the save card, the multi-Strike notes, the skill and AC offers as before. Not run in pftest.
+- **Simulator:** nothing new: the screech as an area save, the two Strikes, the AC reaction only against that kind of attack.

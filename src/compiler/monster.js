@@ -2368,6 +2368,32 @@ function areaUsesAbility(item, actor, options) {
     };
 }
 
+// An action that uses another of its abilities on the move (2026-10-12, batch 157, Screeching Advance): "The owlbear makes a Bloodcurdling Screech and
+// Strides twice. All creatures within 80 feet of the owlbear at any point during this movement are subjected to the effects of Bloodcurdling
+// Screech." → that ability's plan with this action's cost; the move a note (the simulator plays the screech).
+function moveUsesAbility(item, actor, options) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@Template\[[^\]]*\](?:\{([^}]*)\})?/g, (_all, label) => label ?? "the area")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[\w' -]+? makes an? ([A-Z][\w'-]*(?: [A-Z][\w'-]*)*) and Strides (twice|once)\. All creatures within [^.]+? at any point during this movement are subjected to the effects of \1\.$/.exec(plain);
+    if (!match) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const other = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && String(entry.name ?? "").toLowerCase() === match[1].toLowerCase());
+    if (!other) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(other, { ...options, actor: owner });
+    } catch {
+        plan = null;
+    }
+    if (!plan?.resolution) return null;
+    return {
+        ...plan,
+        source: base(item).source,
+        activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] },
+        notes: [...(plan.notes ?? []), `It Strides ${match[2]}: every creature within the area at any point of the move is affected (target them all).`]
+    };
+}
+
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
 function ownAffliction(item, actor, phrase) {
     const owner = actor ?? item.actor ?? item.parent;
@@ -3524,7 +3550,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
