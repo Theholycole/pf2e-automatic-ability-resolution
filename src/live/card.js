@@ -38,7 +38,8 @@ export function createModeCard({ modes, ability, source, targets, warning = null
         kind: "modes",
         ability: { name: ability?.name ?? "Ability", uuid: ability?.uuid ?? null, slug: null },
         source,
-        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && cardCheck(mode.plan) ? mode.plan : null })),
+        // (Batch 179: a way that casts a spell keeps its plan, for its cast card.)
+        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && (mode.plan.builtin === "cast-spell" || cardCheck(mode.plan)) ? mode.plan : null })),
         warning,
         targets: targets.map((target) => ({ actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name })),
         status: "choose",

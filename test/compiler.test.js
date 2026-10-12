@@ -3074,3 +3074,10 @@ test("Demoralize as it rolls initiative, once a day; an initiative bonus for all
     const ears = compileMonsterAbility(item("free", "<p><strong>Trigger</strong> The test hare rolls initiative using Perception or Survival</p><hr /><p><strong>Effect</strong> Their long ears flick in warning, granting allies within 15 feet a +1 circumstance bonus to initiative rolls.</p>"), { basicActions: {} });
     assert.deepEqual([ears.builtin, ears.value, ears.within, ears.free], ["initiative-warning", 1, 15, true]);
 });
+
+test("ways that have a spell's effects, an area before a casting as a note (2026-10-12, batch 179)", () => {
+    const html = "<p>The test drake unleashes their breath in one of two ways. The test drake can't use Test Breath again for [[/gmr 1d4 #Recharge Test Breath]]{1d4 rounds}.</p><ul><li><p><strong>Giggle Gas</strong> (emotion, mental) The test drake breaths a cloud of gas in a @Template[cone|distance:15]. This has the effect of @UUID[Compendium.pf2e.spells-srd.Item.tlSE7Ly8vi1Dgddv]{Laughing Fit} (@Check[will|dc:20]) with a duration of 1 round.</p></li><li><p><strong>Slick Spit</strong> The test drake spits goo at a solid surface. This creates a @Template[burst|distance:10] with the area effect of @UUID[Compendium.pf2e.spells-srd.Item.Wu0xFpewMKRK3HG8]{Grease} (@Check[reflex|dc:20]).</p></li></ul>";
+    const plan = compileMonsterAbility({ type: "action", name: "Test Breath", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    assert.deepEqual(plan.modes.map((mode) => [mode.name, mode.plan.builtin, mode.plan.spell.name, mode.plan.dc]), [["Giggle Gas", "cast-spell", "Laughing Fit", 20], ["Slick Spit", "cast-spell", "Grease", 20]]);
+    assert.equal(plan.modes[0].plan.notes[0], "The test drake breaths a cloud of gas in a 15-foot cone.");
+});

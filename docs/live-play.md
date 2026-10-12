@@ -1585,3 +1585,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Battle Cry ("Frequency once per day Trigger … rolls initiative Effect … attempts to Demoralize an observed foe") → PF2e's Demoralize as the fight starts. Warning Ears ("rolls initiative using Perception or Survival … granting allies within 10 feet a +2 circumstance bonus to initiative rolls") → `initiative-warning` with `within`.
 - **Live:** Battle Cry's offer and card as the fight starts, as before. Warning Ears' offer names the distance, and its button adds the bonus only to allies of its disposition within that many feet. Not run in pftest: the distance filter on batch 170's offer, which was run.
 - **Simulator:** Battle Cry plays as before. Warning Ears gives its bonus only to the allies in its melee (B178).
+
+## Ways that cast a spell (2026-10-12, batch 179)
+
+- **Compiled:** a way of a `modes` ability can be a `cast-spell` plan (Hilarious Exhalation's "This has the effect of Laughing Fit …", "This creates a 15-foot burst with the area effect of Grease …"). A sentence with an area before a casting becomes a note on any cast-spell plan, and so does the casting sentence when it has the area itself (Belch Smoke, Breath of Phantasms, Silkworm's Basket and Despairing Weep gained theirs).
+- **Live:** the mode card shows such a way, and picking it turns the card into that spell's cast card at the ability's rank and DC. Run in pftest: a young mocking dragon's Hilarious Exhalation card offered both ways. Slippery Puddle became "Grease (rank 4, DC 26)" with its burst note, and casting it posted PF2e's Grease and started the recharge.
+- **Simulator:** the in-Foundry snapshot reads each way that casts a spell as one of its abilities, sharing the recharge. In pftest the young dragon's Laughing Gas came in at rank 4, DC 26. Grease, which the engine can't cast, was left out (B179).

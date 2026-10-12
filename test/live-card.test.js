@@ -152,3 +152,9 @@ test("a card with no roll: every target affected, Apply at once", () => {
     assert.doesNotMatch(html, /data-aar-action="roll/);
     assert.match(html, /data-aar-action="apply" data-gm-only="true">Apply/);
 });
+
+test("a way that casts a spell keeps its plan on the mode card (2026-10-12, batch 179)", () => {
+    const cast = { builtin: "cast-spell", spell: { uuid: "Compendium.pf2e.spells-srd.Item.x", name: "Grease" }, rank: null, dc: 20, attack: null, tradition: null, self: false, notes: [] };
+    const state = createModeCard({ modes: [{ name: "Puddle", plan: cast }, { name: "Odd Gas", plan: null }], ability: { name: "Test Breath", uuid: "Item.b" }, source: { actorUuid: "Actor.d", tokenUuid: null, name: "Dragon" }, targets: [] });
+    assert.deepEqual(state.modes.map((mode) => mode.plan?.builtin ?? null), ["cast-spell", null]);
+});

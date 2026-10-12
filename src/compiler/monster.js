@@ -1972,7 +1972,8 @@ function compileModes(item, options) {
         // (Batch 162, Weakening Gas: "…; the effect lasts 1 minute." — its conditions' time.)
         const lasts = /\bthe effect lasts (\d+) minutes?\b/i.exec(htmlToPlainText(body))?.[1];
         if (lasts && plan?.resolution?.outcomes) for (const row of Object.values(plan.resolution.outcomes)) for (const effect of row.effects ?? []) if (effect.kind === "condition" && !effect.duration) effect.duration = { mode: "fixed", value: Number(lasts), unit: "minutes" };
-        return { name, plan: plan?.resolution ? plan : null };
+        // (Batch 179, the mocking dragon's Hilarious Exhalation: a way that has a spell's effect — Laughing Fit, Grease — as that spell's cast.)
+        return { name, plan: plan?.resolution || plan?.builtin === "cast-spell" ? plan : null };
     });
     if (modes.some((mode) => !mode) || !modes.some((mode) => mode.plan)) return null;
     return { builtin: "modes", actions: Number(item.system?.actions?.value) || 1, modes };

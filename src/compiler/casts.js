@@ -23,6 +23,8 @@ const LEAD = String.raw`(?:(?:a|an|the|its|his|her|their)\s+)?(?:(?:DC \d+|innat
 const CASTS = [
     new RegExp(String.raw`\bcasts?\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\b(?:has|have|having|with|gains?|gaining) the (?:same )?effects? of\s+${LEAD}\u0001`, "i"),
+    // (Batch 179, the mocking dragon's Slippery Puddle: "This creates a 15-foot burst with the area effect of Grease".)
+    new RegExp(String.raw`\bwith the area effects? of\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bsame effects? as\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bas\s+(?:the|an?)\s+(?:${ORDINAL}\s+)?\u0001 spell\b`, "i"),
     new RegExp(String.raw`\bas per\s+\u0001`, "i"),
@@ -110,6 +112,10 @@ export function castSpell(item, actor = null) {
     // What the ability changes or adds: its sentence, when it says more than the spell does ("… except the duration is 24
     // hours", "… and is exposed to abyssal plague"), and its other sentences.
     const notes = [];
+    // (Batch 179: an area before the casting, "The dragon breaths a cloud of mood-altering gas in a 30-foot cone.", "This creates a 15-foot burst
+    // with the area effect of Grease" — where it lands, for the GM.)
+    for (const other of sentences.slice(0, index)) if (/@Template\[/.test(other)) notes.push(readableText(rolls(other)).replace(/^(?:The )?[^.]+? can(?:'|’)?t use [^.]+? again for [^.]+?\.\s*/i, ""));
+    if (/@Template\[/.test(sentence) && PLAIN_TAIL.test(tail) && change < 0) notes.push(marked.replace(/\u0001/g, label ?? "the spell"));
     if (change >= 0 || !PLAIN_TAIL.test(tail)) notes.push(marked.replace(/\u0001/g, label ?? "the spell"));
     // (Not its recharge, which the module keeps: "The titan can't use Send Beyond for 1d4 rounds".)
     for (const other of sentences.slice(index + 1)) {

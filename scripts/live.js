@@ -186,7 +186,8 @@ async function cardForAbility(message) {
         return;
     }
     // Used in one of several ways (two breath weapons): the GM picks the way on the card.
-    if (plan?.builtin === "modes" && plan.modes.some((mode) => mode.plan && (mode.plan.trigger?.event ?? "use") === "use" && cardCheck(mode.plan))) {
+    // (Batch 179: or one that casts a spell, Hilarious Exhalation's Laughing Gas.)
+    if (plan?.builtin === "modes" && plan.modes.some((mode) => mode.plan && (mode.plan.builtin === "cast-spell" || ((mode.plan.trigger?.event ?? "use") === "use" && cardCheck(mode.plan))))) {
         const state = createModeCard({
             modes: plan.modes,
             ability: { name: item.name, uuid: item.uuid },
@@ -947,6 +948,13 @@ async function chooseMode(message, state, index) {
         const formula = item ? rechargeFormula(item) : null;
         if (item && formula) lines.push(await startRecharge({ actor: item.actor, item, formula, tokenUuid: state.source.tokenUuid }));
         const next = { ...state, status: "chosen", results: lines };
+        return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    }
+    // (Batch 179: a way that casts a spell — its cast card, at the ability's rank and DC.)
+    if (mode.plan.builtin === "cast-spell") {
+        const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+        const spell = await fromUuid(mode.plan.spell.uuid).catch(() => null);
+        const next = createCastCard({ plan: mode.plan, ability: { name, uuid: state.ability.uuid }, source: state.source, spell: spell ? { uuid: mode.plan.spell.uuid, name: spell.name } : null, rank: mode.plan.rank ?? (spell && item ? defaultRank(spell, item.actor) : null), dc: mode.plan.dc ?? (item ? spellDC(item.actor) : null), warning: state.warning });
         return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
     }
     const check = cardCheck(mode.plan);
