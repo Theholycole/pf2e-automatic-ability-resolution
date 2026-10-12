@@ -1357,7 +1357,8 @@ export function compileBuiltin(item, slug) {
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };
     const charge = readCharge(text);
     // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
-    if (charge && actions >= charge.strides && actions <= 3) return { builtin: "charge", actions, ...charge };
+    // (Batch 93: or fewer, as its text says — the knight's once-a-turn 1-action Sudden Charge, Eagle Dive's 1-action dive.)
+    if (charge && actions >= 1 && actions <= 3) return { builtin: "charge", actions, ...charge, ...(/\bFrequency once per (?:turn|round)\b/i.test(text) && !charge.oncePerTurn ? { oncePerTurn: true } : {}) };
     if (readStrikeOnly(text)) return { builtin: "no-effect", strikeOnly: true };
     const sweepSkill = readSkillSweep(text);
     if (sweepSkill) return { builtin: "skill-sweep", actions, ...sweepSkill };
@@ -1616,6 +1617,8 @@ function readNoCombatEffect(text) {
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    // (Batch 93: allies that may only take a Step or a Stride toward it, after a sentence that only tells it.)
+    if (/^(?:Frequency once per (?:round|turn) Effect )?(?:[^.]+\. )?Each ally (?:in|within) \d+ feet [^.]*?can immediately (?:use a )?Step or Stride(?: action)?; (?:this|the) (?:movement|move) must (?:move|bring) them closer to [^.]+\.$/i.test(said)) return true;
     // (Batch 92: Fancy Footwork's "Steps and Strides in any order"; Coiled Leap's "Leaps up to 10 feet vertically or 30 feet horizontally".)
     if (/^(?:The )?[^.]+? (?:Steps and Strides in any order|Leaps up to \d+ feet vertically or \d+ feet horizontally)\.$/i.test(said)) return true;
     // (Batch 92, Unnatural Leap: "jumps up to their Speed horizontally, or half that vertically" — a move.)

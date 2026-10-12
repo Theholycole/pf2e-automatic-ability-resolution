@@ -2109,3 +2109,9 @@ test("Strikes along a swim, a vine at each of six, more moves, a Demoralize with
         resolution: { kind: "check", check: { roll: "skill", statistic: "intimidation", against: { dc: "target", statistic: "will" } }, sharedDamage: null, outcomes: {} } };
     assert.equal(compile("<p>The test courtesan levies insults, attempting to [[/act demoralize skill=performance]] a creature using their Performance modifier instead of Intimidation.</p>", 1, { demoralize })?.resolution?.check?.statistic, "performance");
 });
+
+test("a charge in fewer actions than its moves, its frequency kept; allies only moving closer (2026-10-11, batch 93)", () => {
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    assert.deepEqual(compile("<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test knight Strides twice. If they end their movement within melee reach of at least one enemy, the test knight can make a melee Strike against that enemy.</p>"), { builtin: "charge", actions: 1, strides: 2, strike: null, oncePerTurn: true });
+    assert.deepEqual(compile("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test chief bellows a summons. Each ally within 30 feet that hears it can immediately Step or Stride; the move must bring them closer to the test chief.</p>"), { builtin: "no-effect" });
+});

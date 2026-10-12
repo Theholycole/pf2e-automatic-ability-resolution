@@ -1249,3 +1249,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Six vines:** Vine Forest's "They make up to six vine Strikes, each against a different target; this counts as one attack for their multiple attack penalty, increasing only after all the attacks are made." (a subject of "They", up to six).
 - **Moves only** (no-effect, as batch 73's): "jumps up to their Speed horizontally, or half that vertically" (Unnatural Leap), "Steps and Strides in any order" (Fancy Footwork), "Leaps up to 10 feet vertically or 30 feet horizontally" (Coiled Leap).
 - **A maneuver with another skill** (batch 82's Embrace): Cutting Remarks' "levies insults or backhanded compliments, attempting to Demoralize a creature using their Performance modifier instead of Intimidation" → PF2e's Demoralize, rolled with Performance.
+
+## A charge in fewer actions than its moves; allies only moving closer (2026-10-11, batch 93)
+
+- **Fewer actions than moves:** batch 25 read a charge only when it took at least as many actions as its moves (Swoop's 2 actions for one Fly and a Strike). The text decides now: the knight's "Frequency once per turn Effect The knight Strides twice. If they end their movement within melee reach of at least one enemy, the knight can make a melee Strike against that enemy." (1 action), Eagle Dive's "Flies up to double his fly Speed in a straight line, descending at least 10 feet, and then makes a talon Strike" (1 action), Breach (1 action).
+- **Its frequency:** a charge's "Frequency once per turn" or "once per round" is kept as oncePerTurn (the simulator, as batch 70's charges already could; live play as before): 8 charges that had it in their text gain it.
+- **Allies only moving closer:** an ability that lets its allies in range take a Step or a Stride, as long as they end up nearer to it → no-effect (moves only, as batch 73's).
