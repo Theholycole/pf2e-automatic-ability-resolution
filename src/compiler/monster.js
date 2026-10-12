@@ -1870,21 +1870,36 @@ function ownVenom(item, actor, name) {
     return plan?.resolution ? { builtin: "poison-weapon", actions: Number(item.system?.actions?.value) || 1, poison: { name: source.name, uuid: source.uuid ?? null, plan }, doses: 99, own: true } : null;
 }
 
-// A poison breathed or sprayed over an area (2026-10-12, batch 114, the iron golem's Breath Weapon): "The iron golem exhales poisonous gas in a
-// @Template[burst|distance:10] centered on the corner of one of the iron golem's squares. The gas persists for 1 round. Any creature in the
-// area (or that later enters the area) is exposed to the iron golem's poison. The golem can't use its Breath Weapon again for 1d4 rounds." →
-// its poison's plan (the affliction with that name among its abilities: its save and stages) over that area, with the recharge; the gas
-// that lingers a note for the GM.
+// A creature exposed to the monster's own affliction (2026-10-12, batches 114-115) — the affliction with that name among its abilities (its
+// save and stages), at the creatures the text names:
+// - a poison gas over an area: "The iron golem exhales poisonous gas in a @Template[burst|distance:10] centered on the corner of one of the
+//   iron golem's squares. The gas persists for 1 round (until the start of the warden's next turn). Any creature in the area (or that later
+//   enters the area) is exposed to the iron golem's poison. The golem can't use its Breath Weapon again for 1d4 rounds." (the gas that
+//   lingers a note);
+// - an area: "Each living creature within a @Template[emanation|distance:10] is exposed to void's embrace." (after a sentence that tells it);
+// - one creature: "The giant wasp lays eggs in an adjacent creature that is Paralyzed or Unconscious, exposing it to the wasp larva
+//   disease." (only at such a creature: requiresFoe), "The virulak locks its gaze on a single creature within 30 feet. The target is exposed
+//   to the virulak's undead virulence."
 function areaExposure(item, actor) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
     const template = /@Template\[(?:type:)?(burst|cone|emanation|line)\|distance:(\d+)[^\]]*\]/i.exec(html);
-    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
-    const match = /^(?:The )?[^.]+? (?:exhales|emits|breathes out|sprays) (?:a cloud of )?(?:poisonous|toxic|noxious) gas in an? @T(?: centered on (?:the corner of )?one of (?:the [\w' -]+?['’]s|its|their) squares)?\. The gas persists for 1 round\. Any creature in the area \(or that later enters the area\) is exposed to (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?)\.(?: (?:The )?[^.]+? can(?:'t|not) use (?:its |their )?[\w' -]+? again for (\d+d\d+|\d+) rounds?\.)?$/i.exec(plain);
-    if (!template || !match) return null;
+    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim()
+        .replace(/^Frequency once per (?:round|turn) Effect /i, "");
+    const wait = String.raw`(?: (?:The )?[^.]+? can(?:'t|not) (?:use )?(?:its |their )?[\w' -]+? again for (\d+d\d+|\d+) rounds?\.)?`;
+    const gas = new RegExp(String.raw`^(?:The )?[^.]+? (?:exhales|emits|breathes out|sprays) (?:a cloud of )?(?:poisonous|toxic|noxious) gas in an? @T(?: centered on (?:the corner of )?one of (?:the [\w' -]+?['’]s|its|their) squares)?\. The gas persists (?:for 1 round|until the start of (?:the [\w' -]+?['’]s|its|their) next turn)\. Any creature in the area \(or that later enters the area\) is exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
+    const area = gas ? null : new RegExp(String.raw`^(?:[^.@]+\. )?(?:Each|Every|All)(?: living)? creatures? within an? @T (?:is|are) exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
+    const one = gas || area ? null : /^(?:The )?[^.]+? (?:an adjacent|a) (?:living )?creature(?: (?:that(?:'s| is)|who is) ([^,]+?))?, exposing (?:it|them) to ([^.]+?)\.$/i.exec(plain)
+        ?? /^(?:The )?[^.]+? (?:on|at) a single creature within (\d+) feet\. The target is exposed to ([^.]+?)\.$/i.exec(plain);
+    if (!gas && !area && !one) return null;
+    if ((gas || area) && !template) return null;
+    const phrase = (gas?.[1] ?? area?.[1] ?? one[2]).toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, "");
     const owner = actor ?? item.actor ?? item.parent;
-    const wanted = match[1].toLowerCase();
-    const source = (owner?.items?.contents ?? owner?.items ?? []).find((other) => other !== item && /<strong>\s*Stage\s+1\s*<\/strong>/i.test(other.system?.description?.value ?? "") && (String(other.name ?? "").toLowerCase() === wanted || String(other.name ?? "").toLowerCase().endsWith(` ${wanted}`)));
+    const source = (owner?.items?.contents ?? owner?.items ?? []).find((other) => {
+        if (other === item || !/<strong>\s*Stage\s+1\s*<\/strong>/i.test(other.system?.description?.value ?? "")) return false;
+        const name = String(other.name ?? "").toLowerCase();
+        return name === phrase || phrase.includes(name) || name.endsWith(` ${phrase}`);
+    });
     if (!source) return null;
     let poison = null;
     try {
@@ -1893,13 +1908,19 @@ function areaExposure(item, actor) {
         poison = null;
     }
     if (!poison?.resolution) return null;
+    const recharge = gas?.[2] ?? area?.[2] ?? null;
+    // (Only at a creature in that state: "that is Paralyzed or Unconscious", "that's asleep, Paralyzed, or Unconscious".)
+    const states = one && /^(?:The )?[^.]+? (?:an adjacent|a)/i.test(plain) && one[1] ? one[1].toLowerCase().split(/,? or |, /).map((state) => state.trim()).filter(Boolean) : [];
+    const foe = states.length ? { within: 5, conditions: [...new Set(states.map((state) => (state === "unconscious" || state === "asleep" ? "dying" : state)).filter((state) => ["paralyzed", "dying", "restrained", "grabbed", "prone"].includes(state)))] } : null;
+    if (states.length && !foe.conditions.length) return null;
     return {
         ...poison,
         source: base(item).source,
         activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] },
-        targeting: { target: null, range: null, area: { type: template[1].toLowerCase(), value: Number(template[2]) } },
-        trigger: { event: "use", ...(match[2] ? { recharge: { formula: match[2], unit: "rounds" } } : {}) },
-        notes: [...(poison.notes ?? []), "The gas persists for 1 round: a creature that enters the area then is exposed too."]
+        targeting: gas || area ? { target: null, range: null, area: { type: template[1].toLowerCase(), value: Number(template[2]) } } : { target: "1 creature", range: one[1] && /^\d+$/.test(one[1]) ? Number(one[1]) : "touch", area: null },
+        trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
+        ...(foe ? { requiresFoe: foe } : {}),
+        ...(gas ? { notes: [...(poison.notes ?? []), "The gas lingers: a creature that enters the area then is exposed too."] } : {})
     };
 }
 

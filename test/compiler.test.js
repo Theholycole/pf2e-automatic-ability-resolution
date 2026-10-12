@@ -2324,3 +2324,14 @@ test("a poison gas breathed over an area: its own poison's stages there, the rec
     const plan = compileMonsterAbility(breath, { basicActions: {}, actor });
     assert.deepEqual([plan?.targeting?.area, plan?.trigger?.recharge?.formula, plan?.resolution?.check?.against?.value, plan?.resolution?.outcomes?.failure?.affliction?.stage], [{ type: "burst", value: 10 }, "1d4", 25, 1]);
 });
+
+test("its own affliction at one creature in a state, or over an emanation (2026-10-12, batch 115)", () => {
+    const disease = { type: "action", name: "Test Grub Fever", system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: ["disease"] }, description: { value: "<p><strong>Saving Throw</strong> @Check[fortitude|dc:20]</p><hr /><p><strong>Stage 1</strong> carrier with no ill effect (1 day)</p><p><strong>Stage 2</strong> @Damage[1d6[poison]] damage (1 day)</p>" } } };
+    const eggs = { type: "action", name: "Test Eggs", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p>The test hornet lays eggs in an adjacent creature that is @UUID[Compendium.pf2e.conditionitems.Item.6uEgoh53GbXuHpTF]{Paralyzed} or @UUID[Compendium.pf2e.conditionitems.Item.fBnFDH2MTzgFijKf]{Unconscious}, exposing it to the test grub fever disease.</p>" } } };
+    const wings = { type: "action", name: "Test Wings", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test shade spreads its wings. Each living creature within a @Template[type:emanation|distance:10] is exposed to test grub fever.</p>" } } };
+    const actor = { name: "Test", items: [eggs, wings, disease] };
+    const one = compileMonsterAbility(eggs, { basicActions: {}, actor });
+    assert.deepEqual([one?.targeting?.target, one?.requiresFoe?.conditions, one?.resolution?.check?.against?.value], ["1 creature", ["paralyzed", "dying"], 20]);
+    const all = compileMonsterAbility(wings, { basicActions: {}, actor });
+    assert.deepEqual(all?.targeting?.area, { type: "emanation", value: 10 });
+});
