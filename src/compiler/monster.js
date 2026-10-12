@@ -889,6 +889,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 140, Punishing Strike: "He Strikes; if he hits, he increases the number of damage dice by one and adds Push to the effect.")
         .replace(/\b(He|She|It|They) Strikes?; if (?:he|she|it|they) hits?, (?:he|she|it|they) increases? the number of damage dice by one and adds? (?:@UUID\[[^\]]*\]\{Push\}|Push) to the effect\./i, "$1 makes a Strike. If it hits, it deals an extra die of weapon damage. If it hits, the target is pushed 5 feet.")
         .replace(/(multiple attack penalty)(\s*(?:<\/p>)?\s*)$/i, "$1.$2")
+        // (Batch 184, Halyard Swing: "swings from a nearby rope, moving up to twice its Speed and ignoring any terrain or lack of surface beneath it. It
+        // can make a tentacle Strike at any point during this movement." — two Strides and the Strike; its requirement, a ship's deck, the GM's.)
+        .replace(/\b((?:The )?[\w' -]+?) swings from a nearby rope, moving up to twice (?:its|their|his|her) Speed and ignoring any terrain or lack of surface beneath (?:it|them|him|her)\. (?:It|They|He|She) can make an? ([\w' -]+?) Strike at any point during this movement\./i, "$1 Strides twice and makes a $2 Strike. [rope swing]")
         // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
         .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -1316,6 +1319,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
         if (/^\[grab time\]\.?$/.test(text) || text === "[told]") continue;
+        // (Batch 184, Halyard Swing's rope.)
+        if (text === "[rope swing]") {
+            (activity.notes ??= []).push("It swings on a rope, ignoring any terrain beneath it; the Strike at any point along the way.");
+            continue;
+        }
         if ((match = /^\[after-strike (shove|trip|grapple|disarm|demoralize)\]$/.exec(text))) {
             activity.afterStrike = match[1];
             (activity.notes ??= []).push(`After the Strike, hit or miss, it attempts to ${match[1].replace(/^\w/, (letter) => letter.toUpperCase())} the same creature.`);
@@ -1509,7 +1517,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
     if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };
     // (Batch 156: a Strike whose only extra is the GM's — Shattering Scrape's broken armor — still posts its note.)
     if (!opened || (bare && !activity.notes?.length)) return null;
-    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length && !rider.follow) return null;
+    // (Batch 184: not one behind a requirement the GM checks, Halyard Swing's ship deck — its card and notes, never planned by the simulator.)
+    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length && !rider.follow && !(activity.requires === "requirement" && activity.notes?.length)) return null;
     return activity;
 }
 

@@ -1615,3 +1615,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Word of Advice → `ally-advance` with `within`, `extraDamage`, the linked effect's `uuid` and `oncePerTurn`.
 - **Live:** the linked PF2e effect goes on each ally of its disposition that the GM targets within that distance, and a GM note says the ally can Stride once and Strike once, adding the damage. With no target, the note says to target one. Run in pftest: a young vizier dragon's goblin student got "Effect: Word of Advice" (PF2e's damage dice), and the note named it.
 - **Simulator:** once a turn, its best ally's best Strike at a foe in its reach or one Stride away, with the extra dice. It isn't that ally's turn, so there's no multiple attack penalty. It's worth the damage it does, as Strike Hard! is (B183).
+
+## A rope swing behind a requirement (2026-10-12, batch 184)
+
+- **Compiled:** Halyard Swing → a Strike activity with two Strides, its tentacle Strike and a note for the rope swing. Its requirement (a ship's deck) is `requires: "requirement"`. A Strike activity with Strides and no rider, but behind such a requirement and with a note, is now kept rather than left to the charge reader.
+- **Live:** no new live code: the Strike activity's card and note. Not run in pftest.
+- **Simulator:** nothing new; a plan behind a requirement isn't planned.

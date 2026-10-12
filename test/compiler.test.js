@@ -3103,3 +3103,8 @@ test("an ally's Stride and Strike with extra damage on a hit (2026-10-12, batch 
     const plan = compileMonsterAbility({ type: "action", name: "Test Counsel", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test sage barks an order. An ally within 30 feet of the test sage can Stride once and Strike once, in any order. If it hits, the Strike deals an additional 1d6 cold damage.</p>" } } }, { basicActions: {} });
     assert.deepEqual(plan, { builtin: "ally-advance", actions: 1, within: 30, extraDamage: ["1d6[cold]"], oncePerTurn: true });
 });
+
+test("a rope swing with a Strike along the way, behind a requirement the GM checks (2026-10-12, batch 184)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Swing", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p><strong>Requirements</strong> The test pirate is on the deck of a ship.</p><hr /><p><strong>Effect</strong> The test pirate swings from a nearby rope, moving up to twice its Speed and ignoring any terrain or lack of surface beneath it. It can make a cutlass Strike at any point during this movement.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.strides, plan.strike, plan.requires, plan.notes.length], ["strike-activity", 2, "cutlass", "requirement", 1]);
+});
