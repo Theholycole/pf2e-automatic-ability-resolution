@@ -2925,7 +2925,8 @@ export function readStrikeBuff(item) {
     // reaction — straight after a spell.)
     const finished = /\bfinishes Casting a Spell\b/i.test(htmlToPlainText(String(item?.system?.description?.value ?? "")));
     if (!["action", "free"].includes(item?.system?.actionType?.value) && !(item?.system?.actionType?.value === "reaction" && finished)) return null;
-    if (item.system.actionType.value === "free" && !finished && !/\bmost recent action (?:this turn )?was to (?:cast|Cast) an? (?:non-cantrip )?spell\b/i.test(String(item.system?.description?.value ?? ""))) return null;
+    // (Batch 233, Charge Chain: a free action once a round, too.)
+    if (item.system.actionType.value === "free" && !finished && !/\bmost recent action (?:this turn )?was to (?:cast|Cast) an? (?:non-cantrip )?spell\b/i.test(String(item.system?.description?.value ?? "")) && !/<strong>\s*Frequency\s*<\/strong>\s*once per (?:round|turn)\b/i.test(String(item.system?.description?.value ?? ""))) return null;
     const html = String(item?.system?.description?.value ?? "");
     const formulas = [];
     // ("@Damage[2d8[sonic]]" and "[[/r 1d4[slashing]]]" as numbered marks; links as their labels.)
@@ -2953,6 +2954,12 @@ export function readStrikeBuff(item) {
         .replace(/\bThe next attack with that weapon(?: this turn)? deals an (?:extra|additional) (\d+d\d+) precision damage\./, "Until the end of its turn, its Strikes deal an additional $1 precision damage. Next Strike only.")
         // (Batch 200, Local Poison: "Until the end of their turn, Strikes with their dagger deal an additional 2 persistent poison damage.")
         .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) (?:next )?turn), Strikes with (?:its|their|his|her) ([\w' -]+?) deal an (additional|extra) /, "$1, their $2 Strikes deal an $3 ")
+        // (Batch 233, Charge Chain: "… chooses to make their next Strike with the chain this turn either deal an additional 4d6 void damage or have 120-foot
+        // reach." — the damage, its next Strike; the reach instead, a note.)
+        .replace(/(^|\.\s)(?:The [\w' -]+?|It|They) chooses? to make (?:its|their) next Strike with (?:the|its|their) ([\w' -]+?) this turn either deal an additional (\u0001\d+\u0001) damage or have (\d+)-foot reach\./i, "$1Until the end of its turn, its $2 Strikes deal an additional $3 damage. Next Strike only. Or, instead of the damage, that Strike can have $4-foot reach.")
+        // (Batch 233, Bespell Strikes: "Until the end of the turn, the weapon or unarmed attack deals an extra 2d6 force damage and gains the arcane trait if it
+        // didn't have it already." — its Strikes this turn.)
+        .replace(/\bUntil the end of the turn, the weapon or unarmed attack deals an extra (\d+d\d+ [a-z]+) damage and gains the [a-z]+ trait if it didn't have it already\./i, "Until the end of its turn, its Strikes deal an extra $1 damage.")
         // (Batch 152, Demon-Touched Weapon: "Until the end of her next turn, Shenga deals 1d6 bleed damage with her melee Strikes.")
         .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) next turn), (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) deals? (\d+d\d+(?:\s*[+-]\s*\d+)? [a-z]+) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./, "$1, its $3Strikes deal an additional $2 damage.")
         .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
@@ -3800,6 +3807,10 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 233: Re-Arm's "forms a new stone axe or stone shield in a free hand", Hidden Pockets' Interact to draw an item from its pockets — items in hand,
+    // nothing for the fight's numbers.)
+    if (/^(?:The )?[^.]+? forms a new [\w' -]+?(?: or [\w' -]+?)? in a free hand\.?$/i.test(said)) return true;
+    if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? Interacts to draw an item of (?:light|negligible) Bulk concealed in one of (?:its|their|his|her) [\w' -]+?\./i.test(said) && !/@|\b(?:damage|Strikes?|saves?|DC)\b/i.test(said)) return true;
     // (Batch 230, Flight Commander of Dis: "… granting themself and evil allies with fly Speeds a +20-foot status bonus to their fly Speeds for 1 round." — a
     // Speed only.)
     if (/^(?:The )?[^.]+?, granting (?:itself|themself|themselves|herself|himself)(?: and (?:[\w-]+ )?allies(?: with fly Speeds)?)? an? \+\d+-foot (?:status|circumstance) bonus to (?:its|their) (?:fly |land |swim |climb )?Speeds? for \d+ rounds?\.$/i.test(said)) return true;

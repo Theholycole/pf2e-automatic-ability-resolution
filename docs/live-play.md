@@ -2234,3 +2234,12 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - 10 new in PF2e, 13 adventure ones relabelled (still the GM's), and 14 in Battlezoo.
 - **Live / simulator:** no-effect, as before.
 
+## Spell-charged Strikes, chain charges, weapons in hand (2026-10-12, batch 233)
+
+- **Compiled:**
+  - **Bespell Strikes** → its Strikes deal an extra 2d6 force damage until the end of its turn, after a non-cantrip spell (`requires: "after-cast"`). A spell that dealt another damage type is a note.
+  - **Charge Chain** → its next chain Strike this turn deals an extra 4d6 void damage (`nextStrike`). The other choice, 120-foot reach, is a note. A free action limited to once a round is now read by the Strike-buff reading too.
+  - **Re-Arm, Hidden Pockets** → no-effect (a weapon formed in hand, an item drawn).
+- **Live:** as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+

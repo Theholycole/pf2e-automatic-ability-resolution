@@ -3772,3 +3772,14 @@ test("an action that only counteracts magic is the GM's, as Counterspell is; not
     assert.equal(plan("<p>The test herald attempts to counteract one fear effect on an ally (counteract modifier +16), and both gain a +1 status bonus to attack rolls for 1 round.</p>")?.builtin === "no-effect" && !plan("<p>The test herald attempts to counteract one fear effect on an ally (counteract modifier +16), and both gain a +1 status bonus to attack rolls for 1 round.</p>")?.gm, false);
     assert.notDeepEqual(plan("<p>The test mist conjurer fills a @Template[burst|distance:20] with fog. Creatures in it are Concealed; anyone else trying to clear it must succeed at a counteract check.</p>"), { builtin: "no-effect" });
 });
+
+test("spell energy in its Strikes after a spell; a once-a-round charge on its next Strike; a weapon formed or drawn (2026-10-12, batch 233)", () => {
+    const item = (html, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {} });
+    const bespell = plan("<p><strong>Frequency</strong> once per turn</p><p><strong>Requirements</strong> The test knight's most recent action was to cast a non-cantrip spell</p><hr /><p><strong>Effect</strong> The test knight channels the spell into a weapon. Until the end of the turn, the weapon or unarmed attack deals an extra 1d6 force damage and gains the arcane trait if it didn't have it already.</p>", "free");
+    assert.deepEqual([bespell.builtin, bespell.damage, bespell.requires, bespell.nonCantrip], ["self-effect", ["1d6[force]"], "after-cast", true]);
+    const charge = plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test warden charges its chain. The test warden chooses to make their next Strike with the chain this turn either deal an additional @Damage[2d6[void]] damage or have 60-foot reach.</p>", "free");
+    assert.deepEqual([charge.damage, charge.strike, charge.nextStrike, charge.notes.at(-1)], [["2d6[void]"], "chain", true, "Or, instead of the damage, that Strike can have 60-foot reach."]);
+    assert.deepEqual(plan("<p>The test golem forms a new stone club or stone shield in a free hand</p>", "free"), { builtin: "no-effect" });
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test thief Interacts to draw an item of light Bulk concealed in one of their secret pockets. The pockets hold up to three such items.</p>", "free"), { builtin: "no-effect" });
+});
