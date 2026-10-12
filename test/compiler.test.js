@@ -3134,3 +3134,8 @@ test("a drawn weapon's Strike off-guard with extra bleed; a hit that grabs and p
     const drop = compile("<p>The test bat makes a claw Strike. On a hit, the Strike deals an additional @Damage[1d4[slashing]] damage and the test bat immediately Grabs the target and pulls it to a space adjacent to the test bat.</p>");
     assert.deepEqual([drop.onHit.damage, drop.onHit.conditions.map((entry) => entry.slug)], [["1d4[slashing]"], ["grabbed"]]);
 });
+
+test("a shape that otherwise uses a spell's effects, cast through PF2e (2026-10-12, batch 188)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Shape", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: ["concentrate", "polymorph"] }, description: { value: "<p>The test sprout transforms into a Tiny shrub. This ability otherwise uses the effects of @UUID[Compendium.pf2e.spells-srd.Item.dileJ0Yxqg76LMvu]{One with Plants}.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.spell.name], ["cast-spell", "One with Plants"]);
+});

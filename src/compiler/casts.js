@@ -25,6 +25,8 @@ const CASTS = [
     new RegExp(String.raw`\b(?:has|have|having|with|gains?|gaining) the (?:same )?effects? of\s+${LEAD}\u0001`, "i"),
     // (Batch 179, the mocking dragon's Slippery Puddle: "This creates a 15-foot burst with the area effect of Grease".)
     new RegExp(String.raw`\bwith the area effects? of\s+${LEAD}\u0001`, "i"),
+    // (Batch 188, a leshy's Change Shape: "The leshy transforms into a Small plant. This ability otherwise uses the effects of One with Plants.")
+    new RegExp(String.raw`\b(?:otherwise )?uses the effects? of\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bsame effects? as\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bas\s+(?:the|an?)\s+(?:${ORDINAL}\s+)?\u0001 spell\b`, "i"),
     new RegExp(String.raw`\bas per\s+\u0001`, "i"),

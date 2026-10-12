@@ -1639,3 +1639,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Swift Blow → a Strike activity, off-guard, with 2d8 bleed on a hit and a note for the draw. Attack from Above → its claw Strike (its reach a note), extra damage and Grabbed on a hit, and a note for the pull. Both are behind requirements the GM checks.
 - **Live:** no new live code. Not run in pftest.
 - **Simulator:** nothing new; they aren't planned (their requirements).
+
+## A shape with a spell's effects (2026-10-12, batch 188)
+
+- **Compiled:** "… otherwise uses the effects of" a linked spell is a cast-spell plan (a leshy's Change Shape, One with Plants).
+- **Live:** no new live code: the cast card. Not run in pftest.
+- **Simulator:** nothing new; a utility spell isn't cast.
