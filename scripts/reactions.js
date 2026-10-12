@@ -222,7 +222,8 @@ async function onMove(token, movement) {
             const movesTrigger = leaves || (plan.builtin === "reaction-strike" && plan.triggers?.includes("move"));
             if (!movesTrigger) continue;
             // (Batch 68, Snap Shot: a distance in feet, its Strike by name, ranged too.)
-            const strikes = plan.within && plan.builtin === "reaction-strike"
+            const strikes = plan.teleport ? meleeStrikes(actor, `(${plan.strike} only)`).map((strike) => ({ ...strike, reach: plan.within ?? strike.reach }))
+                : plan.within && plan.builtin === "reaction-strike"
                 ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: plan.within }))
                 : meleeStrikes(actor, plan.builtin === "reaction-strike" ? `(${plan.strike} only)` : item.name);
             if (!strikes.length) continue;
@@ -524,7 +525,9 @@ async function reachTrigger(scene, combat, token, trigger, kind = null, { own = 
         if (!entry) continue;
         const distance = distanceFeet(box(monster, grid.size), box(token, grid.size), grid);
         // (Batch 68: a distance in feet, Snap Shot's, its Strike by name, ranged too.)
-        const strikes = (entry.plan.within && entry.plan.builtin === "reaction-strike"
+        // (Batch 242, Lurking Death: a teleport first — any melee Strike, from within its distance.)
+        const strikes = (entry.plan.teleport ? meleeStrikes(actor, `(${entry.plan.strike} only)`).map((strike) => ({ ...strike, reach: entry.plan.within ?? strike.reach }))
+            : entry.plan.within && entry.plan.builtin === "reaction-strike"
             ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(entry.plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: entry.plan.within }))
             : meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name)).filter((strike) => distance <= strike.reach);
         // (Batch 227: a save that keeps the action; the hit's conditions, a note.)

@@ -2328,3 +2328,22 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - Thunder of Hooves gives a GM button for each way.
 - **Simulator:** see B241 in its ability decisions.
 
+## Monster Core teleports, marches and held foes (2026-10-12, batch 242)
+
+- **Compiled** (13 new in PF2e, 1 in Battlezoo; 8 adventure copies that were the GM's now read too):
+  - **A teleport, then a Strike** (Lurking Death) → `reaction-strike` with `teleport: true` and `within` (60 or 100 feet). The trigger "uses an action that has the concentrate, manipulate, or move trait" is now read as three kinds.
+  - **A teleport after a moving creature** (Primal Hunt) → `follow` with `move: "Teleport"` and `within`.
+  - **A march through foes** (Inexorable March) → Trample's targeting over one Stride, at any size, with a non-basic Fortitude save:
+    - a critical success bars the way unhurt;
+    - a success bars it and takes the fist's damage;
+    - a failure is pushed back ahead of it (a note).
+    - Both the newer and the older (save first) wordings are read.
+  - **A push in its own aura** (Hurricane Blast) → a Fortitude save in the aura's emanation (its Aura rule's radius). A failure pushes 20 feet away, and the djinni's critical failure adds Prone. Moving around it instead, and the air trait's immunity, are notes.
+  - **Damage to the creature it holds** (Shred Soul, Embrace of Iron) → automatic damage on the creature it holds. An incorporeal-only target is a requirement; the Reposition and Strike after are notes.
+  - **A charge's spell after the hit** (Titanic Charge) → `charge` with `notes`.
+- **Live:**
+  - Lurking Death's offer comes for a creature acting within its distance, with any melee Strike and the note "It teleports beside the creature first";
+  - Primal Hunt's follow offer says it teleports up to 60 feet;
+  - a charge's notes go to the GM.
+- **Simulator:** see B242 in its ability decisions.
+

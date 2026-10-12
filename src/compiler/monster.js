@@ -249,6 +249,63 @@ function strikeComponents(item, name, actor) {
 
 // Trample: Strides up to double its Speed through creatures of the listed
 // size or smaller; each takes the listed Strike's damage (basic Reflex).
+// Inexorable March (2026-10-12, batch 242): a Stride up to its Speed that shoves back each creature in its way, where a creature may stand
+// against it with a Fortitude save — unhurt on a critical success, else taking its fist's damage → Trample's targeting over one Stride, any
+// size: a success bars the way with the fist's damage, a critical success unhurt; a failure is pushed back along its path (a note). null
+// otherwise.
+function inexorableMarch(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    // (Older bestiaries put the save and the critical success first, "@Check[fortitude|dc:34] On a critical success, …", then the Stride.)
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "")).replace(/\s+/g, " ").trim();
+    const dc = Number(/@Check\[(?:type:)?fortitude\|dc:(\d+)/i.exec(html)?.[1]);
+    const stride = /(?:^|\.\s)(?:The )?[^.]+? Strides up to (?:its|their) Speed, pushing back each creature whose space it moves into and damaging them if they try to stop its movement\. A creature can attempt to bar the way by succeeding at an? (?:Fortitude )?save\./i.test(plain);
+    const fist = /(?:^|\.\s)On a critical success, the resisting creature takes no damage; otherwise,? it(?: is|['’]s) damaged as if hit by (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?)\./i.exec(plain);
+    if (!dc || !stride || !fist) return null;
+    const match = [null, dc, fist[1]];
+    const components = strikeComponents(item, match[2], actor);
+    if (!components.length) return null;
+    const hurt = { damage: { mode: "shared", multiplier: 1, sourceComponentIds: components.map((component) => component.id) }, effects: [] };
+    return {
+        ...base(item),
+        targeting: { target: "creatures whose space it moves through", range: null, area: null, trample: { size: "gargantuan", strides: 1 } },
+        trigger: { event: "use" },
+        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: Number(match[1]) } }, sharedDamage: { rollOnce: true, components }, outcomes: { criticalSuccess: none(), success: hurt, failure: none(), criticalFailure: none() } },
+        notes: ["A creature that succeeds bars its way (its movement stops there); one that fails is pushed back ahead of it."]
+    };
+}
+
+// A push for every creature in its own aura (2026-10-12, batch 242, Hurricane Blast): "The jaathoom moves all creatures without the air trait in
+// their turbulent skies aura 20 feet directly away, clockwise, or counterclockwise. A creature avoids being moved if it succeeds at a … Fortitude
+// save.", the djinni's "… all creatures in its whirlwind pushes back 20 feet, or forces all creatures in the aura to move 20 feet clockwise or
+// counterclockwise. Each creature must attempt a … save. On a success, it avoids being moved, and on a critical failure it falls Prone in addition
+// to being moved. Creatures with the air trait are immune." → a Fortitude save in that aura's emanation (its Aura rule's radius): a failure pushed
+// that far away, a critical failure Prone too where it says so; around it instead and the immune trait, notes. null otherwise.
+function auraPush(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const dc = Number(/@Check\[(?:type:)?fortitude\|dc:(\d+)/i.exec(html)?.[1]);
+    if (!dc) return null;
+    const plain = htmlToPlainText(html.replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim().replace(/^Frequency [^.]+?\.? Effect /i, "");
+    const moves = /^(?:The )?[^.]+? moves all creatures without the (\w+) trait in (?:its|their) ([\w' -]+?) aura (\d+) feet directly away, clockwise, or counterclockwise\. A creature avoids being moved if it succeeds at an? save\.$/i.exec(plain);
+    const blows = moves ? null : /^(?:The )?[^.]+? all creatures in its ([\w' -]+?) pushes back (\d+) feet, or forces all creatures in the aura to move \d+ feet clockwise or counterclockwise\. Each creature must attempt an? save\. On a success, it avoids being moved, and on a critical failure it falls Prone in addition to being moved\. Creatures with the (\w+) trait are immune\.$/i.exec(plain);
+    if (!moves && !blows) return null;
+    const [auraName, distance, trait] = moves ? [moves[2], moves[3], moves[1]] : [blows[1], blows[2], blows[3]];
+    const aura = [...(actor?.items ?? [])].find((entry) => String(entry.name ?? "").toLowerCase() === auraName.toLowerCase());
+    const radius = Number((aura?.system?.rules ?? []).find((rule) => rule.key === "Aura")?.radius) || Number(/^\s*(?:<p>)?\s*(\d+) feet\b/i.exec(aura?.system?.description?.value ?? "")?.[1]) || 0;
+    if (!radius) return null;
+    const push = { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" };
+    const failed = { ...none(), forcedMovement: push };
+    const critical = blows ? { ...none(), effects: [{ kind: "condition", slug: "prone", value: null, duration: null }], forcedMovement: push } : failed;
+    return {
+        ...base(item),
+        targeting: { target: null, range: null, area: { type: "emanation", value: radius } },
+        trigger: { event: "use" },
+        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: failed, criticalFailure: critical } },
+        notes: [`Or ${distance} feet around it, clockwise or counterclockwise, instead of away (the GM's choice).`, `Creatures with the ${trait.toLowerCase()} trait aren't moved.`]
+    };
+}
+
 function trample(item, actor) {
     const html = item.system?.description?.value ?? "";
     const raw = inlineTags(html, "Check")[0];
@@ -3061,6 +3118,39 @@ function fling(item) {
     };
 }
 
+// Damage to the creature it holds (2026-10-12, batch 242): Shred Soul's "Requirements The eseneth has an incorporeal creature Grabbed or Restrained
+// Effect The eseneth deals … force damage to the required creature.", Embrace of Iron's "Requirements A creature is Grabbed or Restrained by the iron
+// hag's claw Effect The hag's nails tear into their captured victim, dealing … damage (the nails are cold iron). Then the hag can attempt to
+// Reposition the creature. If the creature is adjacent to the hag, they can then attempt a jaws Strike against it." → that damage on the creature
+// it holds, no roll; the Reposition and the Strike after, notes; an incorporeal creature only, a requirement. null otherwise.
+function heldDamage(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    if (tags.length !== 1) return null;
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D")).replace(/\s+/g, " ").trim().replace(/^Frequency once per (?:round|turn)\.? (?=Requirements?\b)/i, "");
+    const need = /^Requirements? (?:(?:The )?[^.]+? has an? (incorporeal )?creature Grabbed(?: or Restrained)?|An? creature is Grabbed(?: or Restrained)? by (?:the [\w' -]+?['’]s|its) [\w' -]+?)\.? Effect (.+)$/i.exec(plain);
+    if (!need) return null;
+    const sentences = need[2].split(/(?<=\.)\s+(?=[A-Z])/);
+    if (!/^(?:(?:The )?[^.]+? deals @D damage to the (?:required|grabbed|held|captured) creature|(?:The )?[^.]+? tears? into (?:their|its) captured victim, dealing @D damage(?: \(the [\w' -]+? (?:are|is) cold iron\))?)\.$/i.test(sentences[0] ?? "")) return null;
+    const notes = need[1] ? ["Only an incorporeal creature it holds."] : [];
+    for (const sentence of sentences.slice(1)) {
+        const strike = /^If the creature is adjacent to (?:the [\w' -]+?|it), (?:they|it) can then attempt an? ([\w' -]+?) Strike against it\.$/i.exec(sentence);
+        if (/^Then (?:the [\w' -]+?|it) can attempt to Reposition the creature\.$/i.test(sentence)) notes.push("Then it can Reposition the creature.");
+        else if (strike) notes.push(`If the creature is beside it then, it can make a ${strike[1]} Strike against it.`);
+        else return null;
+    }
+    const formula = readDamage(tags[0]);
+    return {
+        ...base(item),
+        targeting: { target: "the creature it holds", range: "touch", area: null, grabbed: true },
+        trigger: { event: "use" },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: { damage: { mode: "formulas", formulas: [{ formula }], rollScope: "outcome" }, effects: [] }, failure: none(), criticalFailure: none() } },
+        ...(need[1] ? { requires: "requirement" } : {}),
+        ...(notes.length ? { notes } : {})
+    };
+}
+
 // A rune detonated on the creature that hurt it (2026-10-12, batch 177, Retributive Rune): "Trigger A creature within 15 feet damages the rune
 // dragon Effect With a burst of runic magic, the rune dragon uses their detonating rune ability on the triggering creature and immediately causes
 // the rune to detonate if it didn't automatically do so." (or "creates a detonating rune on …") → its Detonating Rune's damage at the attacker, its
@@ -3993,8 +4083,11 @@ function provokedStrike(item) {
     const first = sentences[0] ?? "";
     const struck = new RegExp(String.raw`^(?:The )?[^.]+? (?:makes?|attempts?) an? ([\w' -]+?) Strike (?:at|against) ${who}(?: with an? [–-](\d+) penalty)?\.$`, "i").exec(first)
         ?? new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who} with (?:its|their|his|her) ([\w' -]+?)\.$`, "i").exec(first)
-        ?? (new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who}\.$`, "i").test(first) ? [first, "melee"] : null);
+        ?? (new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who}\.$`, "i").test(first) ? [first, "melee"] : null)
+        // (Batch 242, Lurking Death: "… teleports to a square adjacent to the triggering creature and makes a melee Strike against it." — teleport.)
+        ?? (new RegExp(String.raw`^(?:The )?[^.]+? teleports to a square adjacent to ${who} and makes a melee Strike against (?:it|them)\.$`, "i").test(first) ? [first, "melee"] : null);
     if (!struck) return null;
+    const teleport = /\bteleports to a square adjacent to\b/i.test(first);
     let disrupts = false;
     for (const sentence of sentences.slice(1)) {
         if (/^If (?:it|the Strike|the attack|this attack|the Strike) hits, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts (?:the (?:creature's|triggering) action|that action|the action)\.$|^On a success the target's action is interrupted;/i.test(sentence)) disrupts = true;
@@ -4015,7 +4108,8 @@ function provokedStrike(item) {
     const triggers = [...new Set((trigger.triggers ?? []).map((kind) => kinds[kind] ?? kind))];
     if (!triggers.length) return null;
     // (A distance in feet, Snap Shot's "within 30 feet": live play's, for a ranged Strike.)
-    return { builtin: "reaction-strike", triggers, strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: disruptSave ? true : disrupts, ...(disruptSave ? { disruptSave } : {}), ...(typeof trigger.within === "number" ? { within: trigger.within } : {}) };
+    if (teleport && typeof trigger.within !== "number") return null;
+    return { builtin: "reaction-strike", triggers, strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: disruptSave ? true : disrupts, ...(disruptSave ? { disruptSave } : {}), ...(typeof trigger.within === "number" ? { within: trigger.within } : {}), ...(teleport ? { teleport: true, note: "It teleports beside the creature first." } : {}) };
 }
 
 // You're Next (2026-10-11, batch 52): "Trigger The prisoner reduces a creature to 0 hit points. Effect The prisoner attempts an
@@ -4403,6 +4497,8 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (slug === "stench") return stench(item);
     if (slug === "swallow-whole") return swallowWhole(item);
     if (slug === "trample") return trample(item, actor);
+    const march = inexorableMarch(item, actor) ?? auraPush(item, actor);
+    if (march) return march;
     if (slug === "buck") return buck(item);
     if (/drink-blood|drink-essence/.test(slug ?? "") || /^Drink (?:Blood|Essence)$/i.test(item.name ?? "")) {
         const plan = drinkBlood(item);
@@ -4441,7 +4537,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -4883,7 +4979,9 @@ function ownStrikePassive(item, plan) {
 // "reach" }. Not one in a place ("in area A7", "in the bridge's area", an aura it leaves).
 function provokeTrigger(text) {
     // (Batch 68: a closing aside in brackets, "(move actions using only a fly Speed don't trigger this)", left out.)
-    let trigger = String(text).replace(/\s*\([^)]*\)$/, "").replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action");
+    let trigger = String(text).replace(/\s*\([^)]*\)$/, "").replace(/\s+it(?:'|’)s using$/, "").replace(/\.$/, "").replace(/\bmanipulate or move action\b/g, "manipulate-or-move action")
+        // (Batch 242, Lurking Death: "uses an action that has the concentrate, manipulate, or move trait" — each its own.)
+        .replace(/\buses? an action (with|that has) the (concentrate|manipulate|move), (concentrate|manipulate|move),? or (concentrate|manipulate|move) trait\b/g, "uses an action $1 the $2 trait, uses an action $1 the $3 trait, uses an action $1 the $4 trait");
     // (Batch 137, Kneecapper: "A Medium creature within the nuglub's reach …" — only a creature of that size.)
     const sized = /^An? (Tiny|Small|Medium|Large|Huge|Gargantuan) creature\b/.exec(trigger);
     if (sized) trigger = trigger.replace(sized[0], "A creature");

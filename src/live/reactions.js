@@ -108,7 +108,8 @@ export function withdrawMove(plan) {
 export function followMove(plan) {
     return {
         label: "Follow",
-        note: [plan?.prey ? "Only if the creature is its hunted prey." : null, `It ${plan?.move === "Fly" ? "Flies" : "Strides"} up to its Speed after the creature, keeping it in reach: move its token beside it.`, plan?.strike ? "If it ends in reach, it can make a Strike: roll it from its sheet." : null].filter(Boolean).join(" ")
+        // (Batch 242, Primal Hunt: a teleport after the creature's action.)
+        note: [plan?.prey ? "Only if the creature is its hunted prey." : null, plan?.move === "Teleport" ? `After the creature's action, it teleports up to ${plan.within ?? 60} feet to a space beside it: move its token there.` : `It ${plan?.move === "Fly" ? "Flies" : "Strides"} up to its Speed after the creature, keeping it in reach: move its token beside it.`, plan?.strike ? "If it ends in reach, it can make a Strike: roll it from its sheet." : null].filter(Boolean).join(" ")
     };
 }
 

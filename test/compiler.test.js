@@ -3870,3 +3870,23 @@ test("NPC Core: a troop's conditions by the number of actions, a flight with two
     assert.equal(breaker?.requires, undefined);
     assert.match(breaker?.note ?? "", /DC 11 flat check/);
 });
+
+test("Monster Core: a teleport then a Strike, a teleport after a moving creature, a march through foes, a push in its own aura, damage to a held creature, a charge's spell after it (2026-10-12, batch 242)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, type, actions), { basicActions: {}, ...(actor ? { actor } : {}) });
+    const react = (trigger, effect) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction");
+    const reaper = react("A creature within 60 feet makes a ranged attack or uses an action that has the concentrate, manipulate, or move trait", "The test shade teleports to a square adjacent to the triggering creature and makes a melee Strike against it. If the Strike hits, the test shade disrupts the triggering action.");
+    assert.deepEqual([reaper?.builtin, reaper?.triggers, reaper?.within, reaper?.teleport, reaper?.disrupts], ["reaction-strike", ["ranged", "concentrate", "manipulate", "move"], 60, true, true]);
+    assert.deepEqual(react("A creature within the test hound's reach takes a move or teleportation action", "After the triggering action, the test hound can teleport up to 60 feet to a space adjacent to that creature."), { builtin: "follow", move: "Teleport", within: 60 });
+    const golem = { name: "Test Golem", items: [{ type: "melee", name: "Fist", system: { damageRolls: { a: { damage: "2d10+5", damageType: "bludgeoning" } } } }, { type: "action", name: "Gale", system: { rules: [{ key: "Aura", radius: 15 }], description: { value: "<p>15 feet.</p>" } } }] };
+    const march = plan("<p>The test golem Strides up to its Speed, pushing back each creature whose space it moves into and damaging them if they try to stop its movement. A creature can attempt to bar the way by succeeding at a @Check[fortitude|dc:30] save. On a critical success, the resisting creature takes no damage; otherwise, it's damaged as if hit by the golem's fist.</p>", "action", 1, golem);
+    assert.deepEqual([march?.targeting?.trample, march?.resolution?.check?.basic, march?.resolution?.sharedDamage?.components?.[0]?.formula, march?.resolution?.outcomes?.success?.damage?.multiplier, march?.resolution?.outcomes?.failure?.damage?.mode], [{ size: "gargantuan", strides: 1 }, false, "(2d10+5)[bludgeoning]", 1, "none"]);
+    const gust = plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test sylph moves all creatures without the air trait in their gale aura 20 feet directly away, clockwise, or counterclockwise. A creature avoids being moved if it succeeds at a @Check[fortitude|dc:22] save.</p>", "action", 1, golem);
+    assert.deepEqual([gust?.targeting?.area, gust?.resolution?.outcomes?.failure?.forcedMovement?.distance, gust?.resolution?.outcomes?.success?.forcedMovement], [{ type: "emanation", value: 15 }, 20, undefined]);
+    const shred = plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Requirements</strong> The test spirit has an incorporeal creature @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} or Restrained</p><hr /><p><strong>Effect</strong> The test spirit deals @Damage[(2d10+4)[force]] damage to the required creature.</p>");
+    assert.deepEqual([shred?.targeting?.grabbed, shred?.resolution?.outcomes?.success?.damage?.formulas, shred?.requires], [true, [{ formula: "(2d10+4)[force]" }], "requirement"]);
+    const nails = plan("<p><strong>Requirements</strong> A creature is Grabbed or Restrained by the test witch's claw</p><hr /><p><strong>Effect</strong> The witch's nails tear into their captured victim, dealing @Damage[1d8[piercing]] damage. Then the witch can attempt to Reposition the creature. If the creature is adjacent to the witch, they can then attempt a jaws Strike against it.</p>");
+    assert.deepEqual([nails?.requires, nails?.notes?.length], [undefined, 2]);
+    const charge = plan("<p>The test giant Strides twice and makes a melee Strike. If the Strike hits, the test giant can cast Earthquake centered on the target as a free action.</p>", "action", 2);
+    assert.deepEqual([charge?.builtin, charge?.strides, charge?.notes?.length], ["charge", 2, 1]);
+});

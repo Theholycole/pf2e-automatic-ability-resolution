@@ -153,3 +153,7 @@ test("offer buttons: a creature brought back, a healing at its least, resistance
     assert.match(offerHTML({ ...base, kind: "siphon" }), /Use it: the healing at its least/);
     assert.match(offerHTML({ ...base, kind: "resist", retribution: { spells: true, rank: 4, restore: 0 } }), /Use it: resistance 4 to spells/);
 });
+
+test("a teleport after the creature's action: its follow offer says so (2026-10-12, batch 242)", () => {
+    assert.equal(followMove({ move: "Teleport", within: 60 }).note, "After the creature's action, it teleports up to 60 feet to a space beside it: move its token there.");
+});

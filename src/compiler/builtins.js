@@ -1318,6 +1318,12 @@ export function readCharge(text) {
             charge.halfDamage = true;
             continue;
         }
+        // (Batch 242, Titanic Charge: "If the Strike hits, the titan can cast Earthquake centered on the target as a free action." — the GM's, a note.)
+        const cast = /^If the Strike hits, (?:the [\w' -]+?|it|they) can cast ([A-Z][\w' -]+?) centered on the target as a free action\.$/i.exec(sentence);
+        if (cast) {
+            (charge.notes ??= []).push(`If the Strike hits, it can cast ${cast[1]} centered on the target as a free action.`);
+            continue;
+        }
         const bonus = new RegExp(`${moved}(?:it gains|they gain|he gains|she gains|it gets|they get|he gets|she gets) a \\+(\\d+) circumstance bonus (?:to|on) (?:its|their|his|her|this|the) attack roll\\.$`, "i").exec(sentence);
         const damage = new RegExp(`${moved}the Strike's damage (?:is increased to|increases to) (.+?)(?: damage)?\\.$`, "i").exec(sentence);
         if (bonus) charge.attackBonus = Number(bonus[1]);
@@ -1610,6 +1616,10 @@ export function readFollow(text) {
     const near = new RegExp(`^An? (?:adjacent (?:enemy|foe|creature)|(?:enemy|foe|creature) within (?:(?:the )?reach(?: of ${subject})?|${subject}['’]s reach)) (?:attempts to move|moves) away(?: from (?:${subject}|${pronoun}))?$`, "i").test(trigger);
     // (Batch 217, a Battlezoo swarm: a creature leaving its space, and a Stride after it that keeps it in the swarm's space — a follow.)
     if (new RegExp(`^An? creature leaves ${subject}['’]s space$`, "i").test(trigger) && new RegExp(`^(?:${subject} tries to chase after the triggering creature\\. )?${subject} Strides up to (?:its|their) Speed, (?:following the creature and keeping it within ${subject}['’]s space|staying on the creature) throughout its movement(?: until it stops moving or until ${subject} has moved (?:its|their) full Speed, whichever comes first)?\\.$`, "i").test(split[2].trim())) return { builtin: "follow", move: "Stride" };
+    // (Batch 242, Primal Hunt: "A creature within the barghest's reach takes a move or teleportation action", "After the triggering action, the
+    // barghest can teleport up to 60 feet to a space adjacent to that creature." — a teleport after it.)
+    const hunt = new RegExp(`^An? creature within (?:${subject}['’]s reach|(?:the )?reach(?: of ${subject})?) takes a move or teleportation action$`, "i").test(trigger) ? new RegExp(`^After the triggering action, ${subject} can teleport up to (\\d+) feet to a space adjacent to that creature\\.$`, "i").exec(split[2].trim()) : null;
+    if (hunt) return { builtin: "follow", move: "Teleport", within: Number(hunt[1]) };
     if (!prey && !near) return null;
     // (Batch 208, Deadly Pursuit: "The cursed king Strides up to its Speed, keeping the creature within reach until the creature stops or the cursed king has
     // moved its full Speed. If the creature is still within reach, the cursed king makes a jaws Strike against it." — the follow, its Strike after.)
