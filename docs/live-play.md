@@ -2193,3 +2193,13 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - Not run in pftest.
 - **Simulator:** see B228 in its ability decisions.
 
+## "Each creature within N feet" as an area; poisons and drains (2026-10-12, batch 229)
+
+- **Compiled:**
+  - **An area around it:** a save whose text names "each/all/every creature (or foe, enemy) within N feet" with no template is an emanation of N feet (`targeting.area`). Before, it was one creature at range N. Foes or enemies only add `area.foes`. "Within N feet of the target" (or of another creature or point) is left as before. About 100 PF2e plans changed (mostly adventure creatures and hazards: screams, explosions, slams) and 23 in Battlezoo.
+  - **Its own poison on its weapon** in two more wordings (Battlezoo): one secreted or smeared onto the weapon, and a dose applied to it.
+  - **A damage-type pick** ("X or Y damage") on a formula in brackets, such as "(1d6+3)".
+  - **Blood lapped up** from a creature it holds: Blood Drain's reading (damage, temporary HP equal to it, Drained until healed).
+- **Live:** a reaction's or passive's emanation card takes only the foes around it when `area.foes` is set. A used action's emanation is still the GM's targets.
+- **Simulator:** see B229 in its ability decisions. Reactions whose plan was "1 creature" with a creature setting them off found no target there. As emanations they now play.
+

@@ -1268,7 +1268,7 @@ async function use(message, action, slug) {
             // (Batch 132: "an adjacent creature", Electric Reflexes — the offer's creature when it was beside it.)
             : ["the attacker", "the creature the Strike hits", "an adjacent creature"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
-            : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
+            : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0, { foes: !!area.foes }) : [];
         if (applications.length) await postEffectCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens: ownEffect ? [] : tokens });
         else await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: state.free ? "free action" : "reaction" });
         result = applications.length ? `${state.ability.name}: its effect card is posted${ownEffect || tokens.length ? "; Apply gives the effect" : "; target the creatures it affects, then Use my targets"}.` : tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;

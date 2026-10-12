@@ -3701,3 +3701,22 @@ test("resistance to the triggering type for a minute; an ally's Strike taken who
     assert.deepEqual(plan("A goblin ally beside the test boss is slain", "The test boss calls the corpse back. The ally rises as a Small-sized Test Bones, acting at its place in the initiative order."), { builtin: "no-effect" });
     assert.deepEqual(plan("A creature comes within 30 feet of the test ghost", "The test ghost creates an auditory illusion: a far-off scream. A @Check[perception|dc:15] check reveals the trick.", "free"), { builtin: "no-effect", gm: "out-of-combat" });
 });
+
+test("each creature or foe within some feet as an emanation around it; a damage type picked for a bracketed formula; its own poison on its blade; blood slurped from a held creature (2026-10-12, batch 229)", () => {
+    const item = (html, type = "action", name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, options = {}) => compileMonsterAbility(item(html), { basicActions: {}, ...options });
+    const frighten = "<p><strong>Failure</strong> The creature is @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}.</p>";
+    assert.deepEqual(plan(`<p>The test hag cackles. Each creature within 30 feet must attempt a @Check[will|dc:20] save.</p>${frighten}`).targeting, { target: null, range: null, area: { type: "emanation", value: 30 } });
+    assert.deepEqual(plan(`<p>The test hag glares. All enemies within 10 feet of the test hag must attempt a @Check[will|dc:20] save.</p>${frighten}`).targeting, { target: null, range: null, area: { type: "emanation", value: 10, foes: true } });
+    assert.deepEqual(plan(`<p>The test hag curses. Each creature within 10 feet of the target must attempt a @Check[will|dc:20] save.</p>${frighten}`).targeting.area, null);
+    const thorns = plan("<p>The test bramble whips each foe within 10 feet, dealing @Damage[(1d8+2)[piercing]] or @Damage[(1d8+2)[slashing]] damage (@Check[reflex|dc:20|basic] save).</p>");
+    assert.deepEqual([thorns.targeting.area, thorns.resolution.casterChoice?.values], [{ type: "emanation", value: 10, foes: true }, ["piercing", "slashing"]]);
+    const sting = item("<p><strong>Saving Throw</strong> @Check[fortitude|dc:18]</p><hr /><p><strong>Maximum Duration</strong> 4 rounds</p><p><strong>Stage 1</strong> @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (1 round)</p>", "passive", "Test Sting Poison");
+    const smear = item("<p>The test wasp smears its test sting poison onto its blade.</p>", "action", "Test Smear");
+    assert.equal(compileMonsterAbility(smear, { basicActions: {}, actor: { name: "Test Wasp", items: [smear, sting] } })?.builtin, "poison-weapon");
+    const gloom = item("<p><strong>Saving Throw</strong> @Check[will|dc:18]</p><hr /><p><strong>Maximum Duration</strong> 4 rounds</p><p><strong>Stage 1</strong> @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1} (1 round)</p>", "passive", "Test Gloom");
+    const dose = item("<p>Humming a dirge, the test jester applies a dose of test gloom to its blade.</p>", "action", "Test Dose");
+    assert.equal(compileMonsterAbility(dose, { basicActions: {}, actor: { name: "Test Jester", items: [dose, gloom] } })?.builtin, "poison-weapon");
+    const slurp = plan("<p><strong>Requirements</strong> The test leech has a creature @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}</p><hr /><p><strong>Effect</strong> The test leech slurps the blood of the held creature. This deals @Damage[2d4[piercing]] damage, and the test leech gains temporary Hit Points equal to the damage dealt. A creature drained this way is @UUID[Compendium.pf2e.conditionitems.Item.4D2KBtexWXa6oUMR]{Drained 1} until it receives healing.</p>");
+    assert.deepEqual([slurp.targeting.grabbed, slurp.resolution.check.roll], [true, "automatic"]);
+});

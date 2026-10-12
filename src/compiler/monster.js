@@ -364,7 +364,8 @@ function bloodDrain(item) {
     const sentences = effect.split(/(?<=\.)\s+/);
     const formulas = inlineTags(html, "Damage").map(readDamage);
     const damage = formulas.filter((formula) => !/healing/i.test(formula));
-    if (damage.length !== 1 || !/\bdrains? (?:blood|blood or ichor|vitality)\b|\bdrink its blood\b|\bdrain its vital essence\b/i.test(effect)) return null;
+    // (Batch 229, Battlezoo: roots drinking from the creature it holds.)
+    if (damage.length !== 1 || !/\bdrains? (?:blood|blood or ichor|vitality)\b|\bdrink its blood\b|\bdrain its vital essence\b|\blaps? up the blood\b|\bslurps? (?:up )?(?:the )?blood\b/i.test(effect)) return null;
     const untilHealed = /\bis Drained (\d+) until it receives(?: any kind or amount of)? healing\b/i.exec(effect);
     const drained = untilHealed ?? /\bmakes the creature Drained (\d+) or increases its drained (?:value|condition) by 1\b/i.exec(effect);
     let temp = false;
@@ -393,7 +394,7 @@ function bloodDrain(item) {
             continue;
         }
         if (/\bis Drained \d+ until it receives\b/i.test(sentence)) continue;
-        if (/^(?:The|A|An) [\w' -]+? (?:drains|drives|sinks|engages) [^.@]+\.$/i.test(sentence)) continue;
+        if (/^(?:The|A|An) [\w' -]+? (?:drains|drives|sinks|engages|laps? up|slurps?) [^.@]+\.$/i.test(sentence)) continue;
         return null;
     }
     if (heal && !heal.fromDamage && !Number.isFinite(heal.amount)) return null;
@@ -1964,13 +1965,15 @@ function degreeListHtml(html) {
     return `${String(html).replace(whole, `${must} attempt a ${check} save.`).replace(/\b(Other creatures within) (\d+) feet(?= must\b)/i, "$1 @Template[emanation|distance:$2]{$2 feet}")}${sections}`;
 }
 
+const AROUND = /\b(?:each|all|every) (?:other )?(?:living )?(?:enemy )?(creatures?|foes?|enem(?:y|ies))(?: of (?:the [\w' -]+?['’]s|its|their) choice| (?:that|who) can (?:see|hear) (?:it|them|the [\w' -]+?))? within (\d+) feet\b(?! of (?:the (?:target|triggering|struck|chosen|creature|point|corner|ally|enemy|foe|space|square)|that|those|a|an|any|each|one|its target|their target)\b)/i;
 function inlineSave(item, actor = null, { afterHit = false } = {}) {
     // (Batch 142: degrees listed in brackets, as sections.)
     const listed = degreeListHtml(item.system?.description?.value ?? "");
     if (listed) return inlineSave(withDescription(item, listed), actor, { afterHit });
     // (Batch 142, Eye Beams: "2d6 cold or 2d6 fire damage" — one roll, its type the monster's pick: PF2e's caster choice, a GM button live, the
     // simulator's best.)
-    const typed = /(@Damage\[(\d+d\d+(?:[+-]\d+)?)\[(\w+)\](?:\|[^\]]*)?\](?:\{[^}]*\})?) or @Damage\[\2\[(\w+)\](?:\|[^\]]*)?\](?:\{[^}]*\})?/.exec(item.system?.description?.value ?? "");
+    // (Batch 229: a formula in brackets, "(1d6+3)[piercing] or (1d6+3)[slashing]".)
+    const typed = /(@Damage\[(\(?\d+d\d+(?:\s*[+-]\s*\d+)?\)?)\[(\w+)\](?:\|[^\]]*)?\](?:\{[^}]*\})?) or @Damage\[\2\[(\w+)\](?:\|[^\]]*)?\](?:\{[^}]*\})?/.exec(item.system?.description?.value ?? "");
     // (Only one such pair, for a basic save's damage; results by degree with their own pairs (Agonizing Overload, Boomstrike) read as before.)
     const pairs = String(item.system?.description?.value ?? "").match(/@Damage\[[^\]]*\[\w+\][^\]]*\](?:\{[^}]*\})? or @Damage\[/g) ?? [];
     if (typed && typed[3] !== typed[4] && pairs.length === 1) {
@@ -2077,14 +2080,18 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     // An aura with no template: "30 feet." at the start of its text.
     const template = inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? (passive && /^(\d+) feet/i.test(plain) ? { type: "emanation", value: Number(/^(\d+) feet/i.exec(plain)[1]) } : null)
         ?? (dies ? (/\badjacent creatures?\b|\beach (?:creature|enemy) adjacent\b|\bcreatures? adjacent to (?:it|the [\w' -]+)\b/i.test(plain) ? { type: "emanation", value: 5 } : /\bwithin (\d+) feet\b/i.exec(plain) ? { type: "emanation", value: Number(/\bwithin (\d+) feet\b/i.exec(plain)[1]) } : null) : null);
-    const range = readRange(plain);
+    // (Batch 229: "each creature within 30 feet", "all enemies within 10 feet", "each foe within 5 feet" with no template — an emanation around it, foes
+    // only when it says foes or enemies; not "within 10 feet of the target", around something else.)
+    const around = !template && !aura ? AROUND.exec(plain) : null;
+    const area = template ?? (around ? { type: "emanation", value: Number(around[2]), ...(/^(?:foe|enem)/i.test(around[1]) ? { foes: true } : {}) } : null);
+    const range = around ? null : readRange(plain);
     const recharge = readRecharge(html);
     const immunity = readImmunity(html, [item.name, (actor ?? item.actor ?? item.parent)?.name]);
     // Only creatures it's holding ("each creature it has grabbed").
     const grabbed = /\b(?:creatures?|targets?) (?:it(?:'s| is| has)?|the monster(?:'s| is| has)?) (?:grabbed|grabbing|restrained|restraining)|\b(?:grabbed|restrained) by (?:it|the monster)\b/i.test(plain);
     return {
         ...base(item),
-        targeting: { target: template ? null : "1 creature", range: range ? `${range} feet` : template ? null : "touch", area: template, ...(grabbed ? { grabbed: true } : {}) },
+        targeting: { target: area ? null : "1 creature", range: range ? `${range} feet` : area ? null : "touch", area, ...(grabbed ? { grabbed: true } : {}) },
         trigger: { event: aura ? "aura" : dies ? "death" : passive ? "passive" : "use", ...(aura ? readAuraTiming(plain) : {}), ...(aura && readActiveAfter(plain) ? { activeAfter: readActiveAfter(plain) } : {}), ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}), ...(immunity ? { immunity } : {}) },
         resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: check.basic, against: { dc: "fixed", value: check.dc } }, sharedDamage: components.length ? { rollOnce: true, components } : null, outcomes }
     };
@@ -3163,7 +3170,10 @@ function poisonWeapon(item, actor) {
     // applies it to a weapon", "Interacts to draw an injury poison and applies the poison to the required weapon".)
     // (Batch 55, Envenom Weapon: "The seugathi applies their seugathi venom to one weapon they wield", "applies their innate seugathi venom
     // to their longsword": its own venom, the ability by that name.)
-    const venom = /^(?:The )?[^.]+? applies (?:its|their|his|her) (?:innate )?([\w' -]+? venom) to (?:one weapon (?:it|they|he|she) wields?|(?:its|their|his|her) [\w' -]+?)\.$/i.exec(first ?? "");
+    // (Batch 229, Battlezoo: "secretes its <name> poison onto its weapon", "…, the <creature> applies a dose of <affliction> to their weapon".)
+    const venom = /^(?:The )?[^.]+? applies (?:its|their|his|her) (?:innate )?([\w' -]+? venom) to (?:one weapon (?:it|they|he|she) wields?|(?:its|their|his|her) [\w' -]+?)\.$/i.exec(first ?? "")
+        ?? /^(?:The )?[^.]+? (?:secretes|smears) (?:its|their) ([\w' -]+? (?:poison|venom)) onto (?:its|their) (?:weapons?|blade)\.$/i.exec(first ?? "")
+        ?? /^(?:[^,.]+, )?(?:the )?[^.]+? applies a dose of ([\w' -]+?) to (?:its|their|his|her) (?:weapons?|blade)\.$/i.exec(first ?? "");
     if (venom && !rest.length) return ownVenom(item, actor, venom[1]);
     if (!/^(?:The )?[^.]+? (?:appl(?:y|ies|ied) (?:a |the |one of [^.]*? )?poisons? to|draws a poison and applies it to|Interacts to draw an injury poison and applies the poison to) (?:the|a|its|their|his|her) (?:piercing or slashing |required |wielded )?(?:weapon|dagger)(?: of (?:its|their|his|her) choice)?\.$/i.test(first ?? "")) return null;
     // (Its other words: the next hit that deals damage, drawing it with a free hand, a critical failure wasting it.)

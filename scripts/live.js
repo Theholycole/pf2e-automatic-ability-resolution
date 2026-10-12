@@ -561,7 +561,7 @@ async function cardsForHitBy(message) {
         const trigger = plan?.trigger;
         // (A reaction is offered to the GM instead: scripts/reactions.js.)
         if (trigger?.reaction || !hitSetsOff(trigger, { outcome: context.outcome, ranged, unarmed }) || !plan.resolution || !cardCheck(plan)) continue;
-        const tokens = plan.targeting?.target === "the attacker" ? [attacker] : plan.targeting?.area?.type === "emanation" ? tokensAround(targetToken, Number(plan.targeting.area.value) || 0) : [];
+        const tokens = plan.targeting?.target === "the attacker" ? [attacker] : plan.targeting?.area?.type === "emanation" ? tokensAround(targetToken, Number(plan.targeting.area.value) || 0, { foes: !!plan.targeting.area.foes }) : [];
         await postCard({ plan, item, sourceActor: defender, sourceToken: targetToken, tokens, cause: `hit by ${attacker.name ?? attacker.actor.name}`, warning: damageNote(trigger) });
     }
 }
@@ -577,7 +577,7 @@ async function cardsForDamaged(actor, amount) {
     const token = actor.getActiveTokens(false, true)[0] ?? null;
     const attacker = game.combat?.combatant?.token ?? null;
     for (const { item, plan } of passives) {
-        const tokens = plan.targeting?.target === "the attacker" ? (attacker && attacker.id !== token?.id ? [attacker.object ?? attacker] : []) : plan.targeting?.area?.type === "emanation" ? tokensAround(token, Number(plan.targeting.area.value) || 0) : [];
+        const tokens = plan.targeting?.target === "the attacker" ? (attacker && attacker.id !== token?.id ? [attacker.object ?? attacker] : []) : plan.targeting?.area?.type === "emanation" ? tokensAround(token, Number(plan.targeting.area.value) || 0, { foes: !!plan.targeting.area.foes }) : [];
         await postCard({ plan, item, sourceActor: actor, sourceToken: token, tokens, cause: `took ${amount} damage`, warning: damageNote(plan.trigger) });
     }
 }
@@ -768,11 +768,12 @@ async function deathHealing(item, plan, actor, token, tokens) {
 }
 
 // The creatures (on either side) within radius feet of the token's space, measured as auras are.
-export function tokensAround(token, radius) {
+// (Batch 229, foes: only the creatures of another disposition — "each foe within 5 feet".)
+export function tokensAround(token, radius, { foes = false } = {}) {
     const scene = token?.parent;
     const grid = scene ? gridOf(scene) : null;
     if (!grid || !radius) return [];
-    return scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && distanceFeet(box(token, grid.size), box(other, grid.size), grid) <= radius).map((other) => other.object ?? other);
+    return scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && (!foes || other.disposition !== token.disposition) && distanceFeet(box(token, grid.size), box(other, grid.size), grid) <= radius).map((other) => other.object ?? other);
 }
 
 // A Strike activity's results on the creature its Strike hit: the activity's save to roll, or its results by the Strike's own
