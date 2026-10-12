@@ -1513,3 +1513,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Mark for Death → `hunt-prey` with `edge: "deadly"`, `die`, `strike` (or the executioners' precision edge).
 - **Live:** the mark's note names it and says which Strikes gain deadly against it. Not run in pftest: a note line.
 - **Simulator:** its Strikes (or the named ones) against its prey gain deadly of that die (B164).
+
+## Attack of Opportunity for its allies (2026-10-12, batch 167)
+
+- **Compiled:** Tactical Direction → `grant-aoo` with `within` (the emanation's feet), `trait` (whose allies) and `uuid` (PF2e's Attack of Opportunity).
+- **Live:** each token of its disposition with that trait within that distance that lacks Attack of Opportunity or Reactive Strike gets an effect whose GrantItem adds PF2e's Attack of Opportunity; a GM note names them (or says none lacks it). PF2e times the effect a round from this turn, so the note says to remove it sooner if the ally's turn ends first; deleting the effect removes the reaction. Run in pftest: the wight 10 feet away gained it, the one 55 feet away didn't, a second use found none lacking it, and deleting the effect removed the reaction.
+- **Simulator:** worth a little per ally of that trait near it without the reaction; each gains it until its own turn ends (B167).

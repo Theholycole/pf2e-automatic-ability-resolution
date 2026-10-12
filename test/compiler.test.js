@@ -2959,3 +2959,8 @@ test("extra precision damage on its next attack only (2026-10-12, batch 166)", (
     const plan = compileMonsterAbility({ type: "action", name: "Test Trick", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p>The test rogue picks one of their weapons. The next attack with that weapon deals an extra 1d8 precision damage. In addition, the test rogue can Interact to draw the weapon.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.damage, plan.nextStrike, plan.notes[0]], ["self-effect", ["1d8[precision]"], true, "Only its next attack with that weapon (this turn): remove the effect after it."]);
 });
+
+test("Attack of Opportunity granted to its allies of a trait in an emanation (2026-10-12, batch 167)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Direction", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: ["auditory"] }, description: { value: "<p>Each ghoul ally in a @Template[emanation|distance:20] gains the Attack of Opportunity reaction until the end of their next turn.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.actions, plan.within, plan.trait], ["grant-aoo", 1, 20, "ghoul"]);
+});

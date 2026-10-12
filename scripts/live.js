@@ -235,6 +235,28 @@ async function cardForAbility(message) {
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.poison.name} on its weapon. Its card comes with the next weapon Strike that hits (apply it if the Strike deals damage; a critical miss wastes it).${plan.own ? "" : " Take a dose from its inventory."}`]);
         return;
     }
+    // (Batch 167, Tactical Direction: PF2e's own Attack of Opportunity granted to its allies of that trait in the emanation, until the end of their
+    // next turn — an effect on each, its GrantItem the glossary's ability; PF2e times it a round from this turn, so the GM ends it early by hand.)
+    if (plan?.builtin === "grant-aoo") {
+        const scene = sourceToken?.parent ?? canvas.scene;
+        const grid = gridOf(scene);
+        const reactive = (actor) => actor.itemTypes.action.some((entry) => /^(?:attack of opportunity|reactive strike)$/i.test(entry.name) || ["attack-of-opportunity", "reactive-strike"].includes(entry.system?.slug));
+        const allies = sourceToken ? scene.tokens.filter((token) => token.id !== sourceToken.id && token.actor && token.disposition === sourceToken.disposition && (!plan.trait || (token.actor.system?.traits?.value ?? []).includes(plan.trait)) && distanceFeet(box(sourceToken, grid.size), box(token, grid.size), grid) <= plan.within) : [];
+        const granted = [];
+        for (const token of allies) {
+            if (reactive(token.actor)) continue;
+            await token.actor.createEmbeddedDocuments("Item", [{
+                name: `${item.name}: Attack of Opportunity`,
+                type: "effect",
+                img: item.img ?? "icons/svg/sword.svg",
+                flags: { [MODULE_ID]: { grantedAoo: { sourceActorUuid: item.actor.uuid } } },
+                system: { description: { value: `<p>Attack of Opportunity from <strong>${item.name}</strong> (${sourceToken.name}), until the end of its next turn.</p>` }, duration: { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
+            }]);
+            granted.push(token.name);
+        }
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} Attack of Opportunity until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks Attack of Opportunity.`.replace(/ {2,}/g, " ")}`]);
+        return;
+    }
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".
     if (plan?.builtin === "hunt-prey") {
         const prey = [...game.user.targets][0];
