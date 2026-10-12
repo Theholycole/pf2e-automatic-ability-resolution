@@ -1978,3 +1978,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - `"triggering"` resists the largest type, kept by `lasts`.
   - `saveBonusReaction` checks `kind` and `area`.
 
+## Commands for an ally's reaction Strike (2026-10-12, batch 215)
+
+- **Compiled** → `ally-advance` with `reaction` and `noStride` (a Strike only):
+  - **Interest is Due!**: 1d6 mental extra damage, once a round. "Only at a creature that owes it money" is a note.
+  - **Tactical Command**: once a round. The ally's Stride instead, and its +2 against a creature it knows, are notes.
+  - **Timely Trick**: `trait: "animal"`; the animal's Step or Stride instead is a note.
+  - **Stab it! Stab it! Stab it!**: `trait: "goblin"`, `lowerLevel`. The goblins' extra damage die until its next turn is a note.
+  - **Advise Swarm** → no-effect (the ratfolk's Steps, Strides and Take Cover).
+- **Live:** the GM's whisper says the targeted ally "can Strike as its reaction", only an animal (or a lower-level goblin beside the target) where it says so, with the notes. Not run in pftest.
+- **Simulator (B215):** `bestAdvance` keeps to allies of the trait and lower level, and to Strikes needing no Stride.
+

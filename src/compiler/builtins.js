@@ -2970,6 +2970,24 @@ export function compileBuiltin(item, slug) {
     // (Batch 202, Kingpin's Command: "The crime kingpin shouts a command to an ally of their choice. That ally can spend a reaction to Stride and Strike. The
     // ally becomes immune to Kingpin's Command for 24 hours." — the ally's reaction, each ally once.)
     if (/^(?:The )?[\w' -]+? shouts a command to an ally of (?:its|their|his|her) choice\. That ally can spend a reaction to Stride and Strike\. The ally becomes immune to [A-Z][\w' -]+? for 24 hours\.$/i.test(text)) return { builtin: "ally-advance", actions, within: 60, extraDamage: [], reaction: true, oncePerAlly: true };
+    // (Batch 215: an ally's reaction Strike on its command, no Stride — Interest is Due!'s "The loan shark commands an ally within 30 feet to attack a
+    // creature who owes the loan shark money. The ally can use a reaction to Strike the debtor, dealing an additional 1d6 mental damage." (the debt a
+    // note), Tactical Command's "directs an ally. The ally can immediately use their reaction to Strike or to Stride without triggering reactions." (its
+    // Strike; the +2 for a foe it knows a note), Timely Trick's animal ally ("Step, Stride, or Strike"), Stab it!'s lower-level goblin beside the target
+    // (its extra damage die after, a note).)
+    const said = text.trim().replace(/^Frequency once per (?:round|turn) Effect /i, "").replace(/\s*Effect: [\w' !-]+$/, "");
+    const turnOnce = /^Frequency once per (?:round|turn)\b/i.test(text.trim());
+    const debt = /^(?:The )?[\w' -]+? commands an ally within (\d+) feet to attack a creature who owes (?:the [\w' -]+?|it|them) money\. The ally can use a reaction to Strike the debtor, dealing an additional (\d+d\d+) (\w+) damage\.$/i.exec(said);
+    if (debt) return { builtin: "ally-advance", actions, within: Number(debt[1]), extraDamage: [`${debt[2]}[${debt[3].toLowerCase()}]`], reaction: true, noStride: true, ...(turnOnce ? { oncePerTurn: true } : {}), notes: ["Only at a creature that owes it money."] };
+    const directs = /^(?:The )?[\w' -]+? directs an ally\. The ally can immediately use (?:their|its) reaction to Strike or to Stride without triggering reactions\.( The ally gains a \+(\d+) status bonus to (?:their|its) Strike if [^.]+\.)?$/i.exec(said);
+    if (directs) return { builtin: "ally-advance", actions, within: 60, extraDamage: [], reaction: true, noStride: true, ...(turnOnce ? { oncePerTurn: true } : {}), notes: ["Or the ally Strides (no reactions) instead.", ...(directs[1] ? [`+${directs[2]} to that Strike against a creature (or its group) it has dealt with before.`] : [])] };
+    const animal = /^(?:The )?[\w' -]+? commands an animal ally within (\d+) feet to perform a specific action; the target can spend its reaction to immediately Step, Stride, or Strike\.$/i.exec(said);
+    if (animal) return { builtin: "ally-advance", actions, within: Number(animal[1]), extraDamage: [], reaction: true, noStride: true, trait: "animal", notes: ["Or the animal Steps or Strides instead."] };
+    const goblins = /^(?:The )?[\w' -]+? picks a target (?:it|they|he|she) can see within (\d+) feet and orders any allied ([a-z]+)s to attack\. A single \2 with a lower level than (?:the [\w' -]+?|it) that is adjacent to the target can immediately use (?:their|its) reaction to Strike the target\.( In addition, [^.]+\.)?$/i.exec(said);
+    if (goblins) return { builtin: "ally-advance", actions, within: Number(goblins[1]), extraDamage: [], reaction: true, noStride: true, trait: goblins[2].toLowerCase(), lowerLevel: true, ...(goblins[3] ? { notes: [goblins[3].trim()] } : {}) };
+    // (Batch 215, Advise Swarm: "Each ratfolk from the same warren in a 15-foot emanation can spend a reaction to Step, Stride, or Take Cover." — their
+    // moves, nothing for the fight's numbers.)
+    if (/^(?:The )?[\w' -]+? issues orders to move\. Each [\w' -]+? in an? @Template\[(?:type:)?emanation\|distance:\d+\](?:\{[^}]*\})? can spend a reaction to Step, Stride, or Take Cover\.$/i.test(said)) return { builtin: "no-effect" };
     // (Batch 167, Tactical Direction: "Each wight ally in a 30-foot emanation gains the Attack of Opportunity reaction until the end of their next
     // turn." → { builtin: "grant-aoo", within, trait, uuid } — PF2e's own ability granted to those allies for that time.)
     const directed = /^Each ([a-z]+ )?ally in an? @Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})? gains the (@UUID\[([^\]]+)\]\{Attack of Opportunity\}|Attack of Opportunity) reaction until the end of their next turn\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, "").trim());
