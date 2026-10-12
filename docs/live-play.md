@@ -1149,3 +1149,8 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **The guard:** batch 69 let a reaction's save read from its Effect when its trigger read; now for any reaction or free action with a Trigger and an Effect. One whose trigger the module can't read is a card for the GM to use (as 737 reactions already were): Savvy Joinin' Me Crew? (3), No Prey, No Pay (3), Grizzly Arrival (2), Peel Face, Retributive Suplex, and Battlezoo reactions (7).
 - **New triggers:** "A creature lands a critical hit with a melee Strike against the vitalia" (hit-by, melee, critical: Blood Eruption at the attacker), a melee Strike that "succeeds" against it (hit-by, melee), "The artist is targeted with a melee or ranged Strike by a creature within 15 feet" (attacked within 15 feet, any Strike: Flick Ink).
 - Live play and the simulator: batch 16's and batch 47's offers and reactions.
+
+## A rage that says whom it attacks (2026-10-11, batch 79)
+
+- **The reading:** batch 33's triggered rage (its Hit Points at or below a number as it takes damage) when its text also has a sentence that only says whom it attacks first and whom after — its allies among them. That sentence is set aside (the GM's); the rest reads as before: temporary Hit Points, a status bonus to damage, a penalty to AC, no concentrate actions. 8 Battlezoo dragons.
+- The simulator and live play: batch 33's rage, as it takes damage at or below that number.

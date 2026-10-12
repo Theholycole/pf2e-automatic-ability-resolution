@@ -1904,3 +1904,8 @@ test("a reaction's save whose trigger names a Strike, read or not; more hit and 
     const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test ghost reduces a living creature to 0 Hit Points with a melee Strike</p><hr /><p><strong>Effect</strong> The creature must succeed at a @Check[will|dc:25] save or become @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 2}.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan?.trigger?.event, plan?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["use", "frightened"]);
 });
+
+test("a rage whose text says whom it attacks first and after, allies among them (2026-10-11, batch 79)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Rage", system: { slug: null, actionType: { value: "free" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test berserker is 50 Hit Points or below and takes damage.</p><hr /><p><strong>Effect</strong> The test berserker becomes enraged. It gains 10 temporary Hit Points and a +2 status bonus to damage rolls, and takes a –1 penalty to AC. It attacks the nearest creature first and then any others, allies included, until the fight ends.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan?.builtin, plan?.trigger, plan?.model?.tempHp, plan?.model?.modifiers], ["self-effect", { kind: "hp-at-most", value: 50 }, 10, [{ on: "damage", type: "status", value: 2 }, { on: "ac", type: "untyped", value: -1 }]]);
+});
