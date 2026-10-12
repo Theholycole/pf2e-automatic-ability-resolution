@@ -3093,3 +3093,8 @@ test("a reroll for a creature in its aura, the new result kept with a floor (202
     const plan = compileMonsterAbility({ type: "action", name: "Test Calm", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature within the test unicorn's calming aura fails a save against an emotion effect or a disease</p><hr /><p><strong>Effect</strong> The test unicorn soothes it. The triggering creature rerolls the save and takes the second result. If the second roll is a critical failure, it's a failure instead.</p>" } } }, { basicActions: {} });
     assert.deepEqual(plan, { builtin: "save-reroll", ally: true, within: 30, against: ["emotion", "disease"], keep: "new", floor: "failure" });
 });
+
+test("a shield for itself or an ally within some feet (2026-10-12, batch 182)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Wing", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature attacks the test drake or its ally within 10 feet of it</p><hr /><p><strong>Effect</strong> The test drake lifts a wing, using the Raise a Shield action. If it protects the ally, that ally keeps that bonus until the start of its next turn.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.value, plan.within, plan.self], ["ally-ac-reaction", 2, 10, true]);
+});

@@ -1684,6 +1684,14 @@ export function readReaction(item, text) {
     // targeted by a physical ranged attack … a +4 status bonus to AC against physical ranged attacks", Reactive Defense's "A creature
     // within reach attacks the garrholdion's ally … It then makes a melee Strike against the triggering creature." → { builtin:
     // "ally-ac-reaction", value, within ("reach" or feet), ranged?, strike? }.
+    // (Batch 182: a Battlezoo dragon line's shield for itself or an ally within some feet as either is attacked — Raise a Shield with its own shield's
+    // bonus (2 when there's none to read), its ally's until the start of its next turn → ally-ac-reaction with self.)
+    const shielded = /^A creature attacks (?:the [\w' -]+?|it) or (?:the [\w' -]+?['’]s|its) ally within (\d+) feet of (?:the [\w' -]+?|it)\.?$/i.exec(trigger.trim());
+    if (shielded && /\bRaise a Shield action\b/i.test(effect) && /\bally (?:gains|gets|keeps) (?:the|that) (?:circumstance )?bonus(?: to AC)? until the (?:beginning|start) of (?:the [\w' -]+?['’]s|its) next turn\.$/i.test(effect.trim())) {
+        const shield = (item?.actor?.itemTypes?.shield ?? [])[0];
+        const value = Number(shield?.system?.acBonus) || 2;
+        return { builtin: "ally-ac-reaction", value, type: "circumstance", within: Number(shielded[1]), self: true, note: `It raises its shield: +${value} circumstance bonus to AC against the attack, or for the ally until the start of its next turn.` };
+    }
     const guardedBy = /^(?:A creature or object|An? (?:[\w' -]+ )?ally) within (?:(?:the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s|its|their) reach|(\d+) feet(?: of (?:the [\w' -]+?|it|them))?) is targeted (?:by|with) (?:an? )?(?:(physical ranged|ranged or melee|melee or ranged|ranged|melee) )?attack(?: or offensive troop ability)?(?: (?:by|from) an attacker (?:she|he|it|they|the [\w' -]+?) can see)?(?:, and (?:the [\w' -]+?|it|they) can see the attacker)?\.?$/i.exec(trigger.trim())
         ?? /^An adjacent (?:[\w' -]+ )?ally is targeted by an? (?:melee or ranged|ranged or melee) attack from an attacker (?:the [\w' -]+?|it|they|she|he) can see\.?$/i.exec(trigger.trim())
         ?? /^A creature within reach attacks (?:the [\w' -]+?['’]s|its|their) ally\.?$/i.exec(trigger.trim());

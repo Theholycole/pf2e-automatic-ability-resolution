@@ -522,14 +522,15 @@ async function guardAlly(message, context, scene, combat, attacker) {
     const ranged = options.includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
     const grid = gridOf(scene);
     for (const { token: guard, actor, reactions } of reactors(scene, combat)) {
-        if (guard.id === targetToken.id || guard.disposition !== targetToken.disposition || !isFoe(guard, attacker)) continue;
-        const entry = reactions.find(({ plan }) => plan.builtin === "ally-ac-reaction" && (!plan.ranged || ranged));
+        if (guard.disposition !== targetToken.disposition || !isFoe(guard, attacker)) continue;
+        // (Batch 182: a shield for itself too.)
+        const entry = reactions.find(({ plan }) => plan.builtin === "ally-ac-reaction" && (!plan.ranged || ranged) && (guard.id !== targetToken.id || plan.self));
         if (!entry) continue;
         const within = entry.plan.within === "reach" ? provokeRadius(actor) : Number(entry.plan.within) || 5;
-        if (distanceFeet(box(guard, grid.size), box(targetToken, grid.size), grid) > within) continue;
+        if (guard.id !== targetToken.id && distanceFeet(box(guard, grid.size), box(targetToken, grid.size), grid) > within) continue;
         const change = higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, entry.plan.value);
         if (!change) continue;
-        return offer({ kind: "ac", item: entry.item, monster: guard, actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against ${targetToken.name}`, note: entry.plan.strike ? "Then its melee Strike at the attacker: roll it from its sheet." : null, attack: { messageId: message.id, value: entry.plan.value, ...change } });
+        return offer({ kind: "ac", item: entry.item, monster: guard, actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against ${targetToken.name}`, note: [entry.plan.strike ? "Then its melee Strike at the attacker: roll it from its sheet." : null, entry.plan.note ?? null].filter(Boolean).join(" ") || null, attack: { messageId: message.id, value: entry.plan.value, ...change } });
     }
 }
 

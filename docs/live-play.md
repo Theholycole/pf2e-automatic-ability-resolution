@@ -1603,3 +1603,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** a reaction for a creature in its aura that fails a save against certain kinds of effect (a Battlezoo dragon line's) → `save-reroll` with `ally`, `within` (the actor's Aura rule radius, 30 feet when none is there to read), `against` (the effect kinds), `keep: "new"` and `floor: "failure"`.
 - **Live:** the ally reroll offer as in batch 107. It keeps the new roll, and a note says a critical failure on it is a failure instead. Not run in pftest: the keep and the note on that offer.
 - **Simulator:** the ally reroll as before, a critical failure on it counted as a failure (B181).
+
+## A shield for itself or an ally (2026-10-12, batch 182)
+
+- **Compiled:** a Battlezoo dragon line's shielding reaction → `ally-ac-reaction` with `self`, `within` (its feet), `value` (its own shield's AC bonus, 2 when there's none to read) and a note.
+- **Live:** batch 66's ally-guard offer now also comes when it is itself the target, carrying the plan's note. Not run in pftest: the self case on that offer.
+- **Simulator:** the guard's +AC once a hit would land now covers itself as well (B182).
