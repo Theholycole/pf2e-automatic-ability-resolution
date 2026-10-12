@@ -1555,8 +1555,9 @@ test("Reaction Strikes at a Strike on it, a critical miss on it, damage from bes
         ["The test pig is damaged by an adjacent creature", "The test pig makes a hoof Strike at the triggering creature.", strike(["damaged-adjacent"], "hoof")],
         ["The test dragon is targeted by an attack or spell", "The test dragon channels its lightning along the attack. The test dragon attempts a storm bolt Strike against the attacker, regardless of range.", strike(["targeted"], "storm bolt")]
     ]) assert.deepEqual(compileMonsterAbility(reaction("Test", trigger, effect)), expected, trigger);
-    // Not a Strike only when it chooses another way, nor "at any range" without the trigger that allows it.
-    assert.equal(compileMonsterAbility(reaction("Test", "A creature critically fails a Strike against the test duelist", "The test duelist makes a melee Strike against or attempts to Disarm the triggering creature.")), null);
+    // A Strike or a Disarm (batch 150, the user's rule of 2026-10-11 for choices): its Strike, the Disarm a note; not "at any range" without the
+    // trigger that allows it.
+    assert.deepEqual(compileMonsterAbility(reaction("Test", "A creature critically fails a Strike against the test duelist", "The test duelist makes a melee Strike against or attempts to Disarm the triggering creature.")), { ...strike(["critical-miss"], null), note: "Or it can Disarm the attacker instead." });
     assert.equal(compileMonsterAbility(reaction("Test", "The test skull is attacked by a creature within their reach", "The test skull makes a jaws Strike against the attacker, regardless of range.")), null);
 });
 
@@ -2746,4 +2747,17 @@ test("a turn to water against energy or physical damage, staying up at 1 Hit Poi
     // (Made-up wordings; two Battlezoo dragons' reactions say the same in their own words.)
     assert.deepEqual(reaction("<p><strong>Trigger</strong> The test eel is the target of an attack or a spell able to deal sonic or physical damage</p><hr /><p><strong>Effect</strong> The test eel goes slick as oil. It gains resistance 7 to sonic and all physical damage against it.</p>"), { builtin: "resist-damage", value: 7, on: ["sonic", "physical"], types: ["sonic", "physical"] });
     assert.deepEqual(reaction("<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> An attack or another effect would bring the test drake down to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test drake grits its fangs. It stays on its feet with 1 Hit Point. It then uses the Test Second Wind ability.</p>"), { builtin: "ferocity", hp: 1, wounded: false, uses: 1 });
+});
+
+test("more wordings: a flurry with no Effect label, one roll for two picks, broken legs, a frenzy with no labels, a growl before a Strike, a clot (2026-10-12, batch 150)", () => {
+    const ability = (description, type = "action", actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    assert.deepEqual(ability("<p>Frequency once per round. The test monk makes two strikes.</p>"), { builtin: "multi-strike", actions: 1, strikes: [null, null], oncePerTurn: true });
+    const picks = ability("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test digger makes two pick Strikes against a creature within reach. The test digger rolls only one attack roll for both Strikes, then compares the result against the creature's AC. The test digger's multiple attack penalty doesn't increase until after both Strikes.</p>");
+    assert.deepEqual([picks.sameTarget, picks.sameMap, picks.notes], [true, true, ["One attack roll for both Strikes."]]);
+    const legs = ability("<p>The test brute makes a club Strike against an adjacent creature. If it hits, the creature is knocked Prone and becomes Clumsy 1 for 1 minute. As long as this clumsy condition lasts, the creature also takes a –5-foot penalty to its Speeds.</p>", "action", 2);
+    assert.deepEqual([legs.onHit.conditions.map((condition) => condition.slug), legs.notes.length], [["prone", "clumsy"], 1]);
+    assert.deepEqual(ability("<p>When the test crab is reduced to 0 hit points it can spend this reaction to make a pincer Strike before dying.</p>", "reaction"), { builtin: "death-strike", strike: "pincer" });
+    assert.equal(ability("<p><strong>Trigger</strong> A creature targets the test hound with a melee Strike</p><hr /><p><strong>Effect</strong> The test hound Demoralizes the triggering creature and does not take a penalty for not speaking a language. The results of this check occur before resolving the triggering Strike.</p>", "reaction")?.skill, "demoralize");
+    assert.deepEqual(ability("<p><strong>Trigger</strong> The test ooze is damaged by a bludgeoning attack</p><hr /><p><strong>Effect</strong> The test ooze hardens around the blow, reducing the damage taken by 3 (to a minimum of 0).</p>", "reaction"), { builtin: "resist-damage", value: 3, on: ["bludgeoning"], types: null, attack: true });
+    assert.deepEqual(ability("<p>The test knight Strikes each enemy within his reach. Each attack counts toward his multiple attack penalty, but do not increase his penalty until he has made all his attacks.</p>", "action", 3), { builtin: "multi-strike", actions: 3, strikes: [null], each: true, sameMap: true });
 });

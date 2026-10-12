@@ -1034,6 +1034,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
             })
             .replace(/^If (?:he|she|it|they|the [\w' -]+?|[A-Z][\w'-]+) moves to follow the target, that movement (?:doesn't|does not) trigger reactions\.$|^Failure The target becomes off-guard until the end of [^.]+?['’]s current turn\.$|^If (?:they|he|she|it) used a two- ?handed melee weapon \(such as a maul\) for the Strike, [^.]+\.$/i, "[gm]")
             .replace(/^This Strike has the following failure effect\.$|^An? [\w' -]+? can dash (?:their|its|his|her) foe to the ground with a single blow\.$/i, "[told]")
+            // (Batch 150, Break Legs!: "As long as this clumsy condition lasts, the creature also takes a –5-foot penalty to its Speeds and has weakness
+            // 5 to the legbreaker's Strikes. Effect: Break Legs!" — PF2e's effect has them: notes.)
+            .replace(/^As long as this clumsy condition lasts, [^.]+\.$|^Effect: [\w' -]+!?$/i, "[gm]")
             .replace(/^(?:They|He|She|It) attempts? a single melee Strike(?=\.$)/i, "It makes a melee Strike")
             .replace(/^If this Strike hits, (?:they|he|she|it) also appl(?:y|ies) the critical success effect of a Trip(?=\.$)/i, "If it hits, the target is knocked Prone and takes @Damage[1d6[bludgeoning]] damage")
             // (Batch 142, Create Boulder: "… molds a boulder from primal earth and throws it as a rock Strike. A creature hit by the Strike must
@@ -1976,7 +1979,9 @@ function effectAbility(item) {
 // simulator, which uses it only straight after such a hit: strike is the Strike's name ("claw"; null for any), on the
 // degrees ("a critical hit": criticalSuccess only). null otherwise.
 function followUp(item, actor, basicActions = {}) {
-    const html = item.system?.description?.value ?? "";
+    // (Batch 150, Gnash with no labels: "When the severed head succeeds at its jaws Strike, it can use this action immediately after to make a
+    // second jaws Strike at the same target as it …" — written as its requirement and its Strike.)
+    const html = String(item.system?.description?.value ?? "").replace(/<p>\s*When (?:the )?([\w' -]+?) succeeds at (?:its|their) ([\w' -]+?) Strike, (?:it|they) can use this action immediately after to make a second \2 Strike at the same target(?: as [^.<]+)?\.\s*/i, (_all, who, name) => `<p><strong>Requirements</strong> The ${who}'s last action was a successful ${name} Strike</p><p><strong>Effect</strong> The ${who} makes a ${name} Strike against the same target. `);
     const block = /<strong>\s*Requirements?\s*<\/strong>([\s\S]*?)(?=<\/p>|<hr|<strong>\s*Effect\s*<\/strong>)/i.exec(html);
     if (!block) return null;
     const need = htmlToPlainText(block[1].replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
