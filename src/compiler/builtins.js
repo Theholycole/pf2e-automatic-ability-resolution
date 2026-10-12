@@ -1347,7 +1347,7 @@ function readResistDamage(text, trigger, effect) {
         })
         .replace(/\s*If the triggering effect deals multiple damage types, (?:the [\w' -]+?|it|they) chooses? which type to resist\./i, (all) => (triggering ? "" : all))
         .split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
-    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports (?:to an adjacent (?:space|square)|up to \d+ feet in any direction))?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
+    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports (?:to an adjacent (?:space|square)|up to \d+ feet in any direction)| and (?:Flies|Strides|Steps) away from the attacker)?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
     // (Batch 150, Clot: "… forms a clot around the wound, reducing the damage taken by 5 (to a minimum of 0)." — resistance 5 to it.)
     const clot = /^(?:The )?[^.]*?, reducing the damage taken by (\d+) \(to a minimum of 0\)\.$/i.exec(sentences.at(-1) ?? "");
     if (clot && sentences.length === 1) return { builtin: "resist-damage", value: Number(clot[1]), on, types: null, ...(attack ? { attack: true } : {}) };
@@ -1366,7 +1366,7 @@ function readResistDamage(text, trigger, effect) {
         lashBack = { bonus: Number(lash[1]) };
         after.length = 0;
     }
-    if (!after.every((sentence) => /^(?:The [\w' -]+?['’]s|Its|Their) AC can(?:not|'t) be reduced below \d+ in this way\.$/i.test(sentence))) return null;
+    if (!after.every((sentence) => /^(?:The [\w' -]+?['’]s|Its|Their) AC can(?:not|'t) be reduced below \d+ in this way\.$|^This movement (?:does not|doesn't) trigger reactions\.$/i.test(sentence))) return null;
     const read = resist.exec(sentences[at]);
     const named = read[1] ?? read[3] ?? read[4] ?? read[5] ?? null;
     const frequency = /\bFrequency (once|twice) per day\b/i.exec(text)?.[1];
@@ -2815,6 +2815,9 @@ export function readStrikeBuff(item) {
         // saber deals an additional 1d4 spirit damage" — that weapon's Strikes.)
         .replace(/(['’]s|\bits|\btheir) Strikes gain the ([a-z]+) trait and deal an (additional|extra) ([^;.]+?) damage; (this damage increases to [^.]+)\./, "$1 Strikes deal an $3 $4 damage and gain the $2 trait, and $5.")
         .replace(/(, (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)['’]s) ([a-z][\w -]+?) deals an (additional|extra) /, (all, owner, weapon, more) => (/\bStrikes?\b/i.test(weapon) ? all : `${owner} ${weapon} Strikes deal an ${more} `))
+        // (Batch 219, Digestive Secretions: "Somnalu secretes acid for 1 round. Whenever it makes a melee Strike, it deals an additional 2d8 acid splash
+        // damage." — its melee Strikes until its next turn starts.)
+        .replace(/^(?:The )?[^.]+? for 1 round\. Whenever (?:it|they|he|she) makes? an? (melee |ranged )?Strike, (?:it|they|he|she) deals? an (additional|extra) (\u0001\d+\u0001)(?: damage)?\./, "Until the start of its next turn, its $1Strikes deal an $2 $3 damage.")
         // (Batch 155: a Battlezoo rage dragon's extra fire on its natural attacks for as long as its fury lasts — its melee Strikes while it rages.)
         .replace(/\bAll of (the [\w' -]+?['’]s) melee unarmed attacks deal an (additional|extra) ((?:\u0001\d+\u0001|\d+d\d+ [a-z]+)) damage until (?:the [\w' -]+?['’]s|its|their) rage ends\./, "Until its rage ends, $1 melee Strikes deal an $2 $3 damage.")
         // (Batch 166, Trick Attack: "The next attack with that weapon this turn deals an additional 2d6 precision damage." — its next Strike only.)
@@ -2854,6 +2857,8 @@ export function readStrikeBuff(item) {
         const [mark, dice, diceKind, diceType, flat, flatKind, flatType, die] = found.slice(offset, offset + 8);
         if (mark !== undefined) {
             const formula = formulas[Number(mark)];
+            // (Batch 219: splash damage, "(2d8[splash])[acid]" — the acid; where it splashes a note.)
+            if (/^\((\d+d\d+)\[splash\]\)\[[a-z]+\]$/i.test(formula ?? "")) return formula.replace(/^\((\d+d\d+)\[splash\]\)\[([a-z]+)\]$/i, "$1[$2]");
             return /\[[a-z,]+\]$/i.test(formula ?? "") ? formula.replace(/^\((.*)\)(\[[^\]]+\])$/, "$1$2") : null;
         }
         // ("2d8 precision damage": precision; "2d6 damage": untyped.)
@@ -3326,6 +3331,17 @@ function readHeldGuard(item, body) {
             ends = true;
             continue;
         }
+        // (Batch 219, Defensive Curl: "The ugvashi can't move while in its Defensive Curl, but it can unfurl as an action." — it lasts until it moves;
+        // "Any creatures who make unarmed attacks against the ugvashi while it's in its Defensive Curl are exposed to its serrated plates, …" — a note.)
+        if (new RegExp(String.raw`^${subject} can(?:'t|not) move while in (?:its|their) [A-Z][\w' -]+?, but (?:it|they) can unfurl as an action\.$`, "i").test(sentence)) {
+            ends = true;
+            notes.push("It can't move while it lasts; unfurling (an action) ends it.");
+            continue;
+        }
+        if (new RegExp(String.raw`^Any creatures? who makes? unarmed attacks against ${subject} while (?:it's|it is|they're) in (?:its|their) [A-Z][\w' -]+? (?:are|is) exposed to [^.]+\.$`, "i").test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
         // (A first sentence that only tells it: "… locks itself in place, becoming voluntarily Immobilized" (the GM's, a note), "… makes
         // itself as small as possible …".)
         if (index === 0 && !/\d|\b(?:damage|bonus|penalty|save|check|Strikes?)\b/i.test(sentence)) {
@@ -3558,6 +3574,10 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 219: Drag Under's "The shui gui Swims at half Speed, along with any creature it has Grabbed." — a move; Pacify's "The unit's Whirling Onslaught
+    // gains the nonlethal trait until the end of their next turn." — nothing for the fight's numbers.)
+    if (/^(?:The )?[^.]+? Swims at half Speed, along with any creature (?:it|they) (?:has|have) Grabbed\.$/i.test(said)) return true;
+    if (/^(?:The )?[^.]+?['’]s [A-Z][\w' -]+? gains the nonlethal trait until the end of (?:its|their) next turn\.$/i.test(said)) return true;
     // (Batch 208, Determined Trudge: "The augdunar Strides at a –5 foot circumstance penalty to its Speed, ignoring difficult terrain." — a move.)
     if (/^(?:The )?[^.]+? Strides at a [-\u2013\u2212]\d+ foot circumstance penalty to (?:its|their) Speed, ignoring difficult terrain\.$/i.test(said)) return true;
     // (Batch 206, Phantom Step: "Frequency once per round Effect The ghost ape moves quickly, passing through the Ethereal Plane. They teleport up to a

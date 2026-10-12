@@ -2037,3 +2037,17 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the mental bonus is offered only for a save against a mental effect. Not run in pftest.
 - **Simulator (B218):** `saveBonusReaction.against` of another trait checks the effect's traits.
 
+## Lost Omens Strike riders, curls and splashes (2026-10-12, batch 219)
+
+- **Compiled:**
+  - **Chain Shot**: "A creature hit by this Strike is Grabbed by the chain (Escape DC 41)" → Grabbed on a hit, its Escape DC a note. The reeling in is the GM's.
+  - **Drain Nutrients**: "targets a creature with a claw Strike" → its claw Strike, then a Fortitude save after a hit: Drained 2, or Drained 1 on a success. A bracketed "(X on a success, no effect on a critical success)" now sets the success. The temporary Hit Points are a note.
+  - **Impaling Charge** (Cuetzmonquali): "impaled on one of … horns. The creature becomes Grabbed" → Grabbed on a hit; on a critical hit, Grabbed and Restrained for 1 round. The Escape DC of 40 is a note.
+  - **Tactical Gnaw**: the armor made Broken "on a successful attack" is the GM's, a note.
+  - **Defensive Curl** → +2 circumstance AC until it moves ("can't move …, but it can unfurl as an action"). The exposure to its plates is a note.
+  - **Bounce Away** → resistance 3 to bludgeoning against the hit, "and Flies away from the attacker" (`shift`).
+  - **Digestive Secretions**: "secretes acid for 1 round. Whenever it makes a melee Strike, it deals an additional 2d8 acid splash damage" → its melee Strikes deal 2d8 acid until its next turn starts. Splash damage reads as its type; where it splashes is a note.
+  - **No-effect:** Drag Under (a swim with its prey) and Pacify (nonlethal for a while).
+- **Live:** cards as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+

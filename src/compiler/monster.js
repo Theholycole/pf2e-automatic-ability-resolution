@@ -1496,7 +1496,18 @@ function strikeActivity(item, actor, { after = null } = {}) {
             })
             .replace(/^If the target collides with a solid object(?: or lands on the ground)?, it takes bludgeoning damage as though it had fallen the distance it moved\.$/i, "[gm]")
             // (Gnaw Metal's armor made Broken; Big Thwunk's following the foe: the GM's.)
-            .replace(/^In addition, if the target is wearing armor with Hardness \d+ or lower, the armor becomes Broken\.$|^If the target is Off-Guard, then the [\w' -]+? can follow the foe\.$/i, "[gm]")
+            // (Batch 219: Tactical Gnaw's "On a successful attack, if the target is wearing armor with Hardness 10 or lower, the armor becomes Broken.";
+            // Chain Shot's reeling in, its ship pulling the creature along; Drain Nutrients' "On a success, Somnalu drains the creature's life through its
+            // skin." and its temporary Hit Points from what the creature loses — the GM's.)
+            .replace(/^(?:In addition|On a successful attack), if the target is wearing armor with Hardness \d+ or lower, the armor becomes Broken\.$|^If the target is Off-Guard, then the [\w' -]+? can follow the foe\.$/i, "[gm]")
+            .replace(/^(?:The )?[\w' -]+? can use Interact actions to reel in a grabbed creature \d+ feet per action spent, and when (?:the [\w' -]+?|it) moves, it pulls the grabbed creature along with it\.$|^On a success, (?:the [\w' -]+?|[A-Z][\w'-]+|it) drains the creature['’]s life through its skin\.$|^(?:The [\w' -]+?|[A-Z][\w'-]+|It) gains temporary Hit Points equal to the amount of Hit Points the creature loses from this Strike\.$/i, "[gm]")
+            // (Batch 219, Drain Nutrients: "Somnalu targets a creature with a claw Strike." — its claw Strike; Chain Shot: "A creature hit by this Strike is
+            // Grabbed by the chain ([[/act escape dc=41]])." — Grabbed on a hit, its Escape DC a note.)
+            .replace(/^(?:The )?([^.]+?) targets a creature with an? ([\w' -]+?) Strike(?=\.$)/i, "$1 makes a $2 Strike")
+            .replace(/^A creature hit by this Strike is Grabbed(?: by the [\w' -]+?)? \((?:\[\[\/act escape dc=(\d+)\]\](?:\{[^}]*\})?|Escape DC (\d+))\)(?=\.$)/i, (_all, dc, plain) => {
+                (activity.notes ??= []).push(`Escape DC ${dc ?? plain}.`);
+                return "If it hits, the target is Grabbed";
+            })
             .replace(/^If successful, after taking the normal damage from the Strike, (the target must succeed at .+? save or become [^.]+?)(?: as it becomes [a-z][^.@]*)?(?=\.$)/i, "If it hits, $1")
             .replace(/^(?:The )?([^.]+?) Strikes with (?:its|their|his|her) (?![^.]* at an? [-\u2013\u2212]?\d)([\w' -]+?)(?=\.$)/i, "$1 makes a $2 Strike")
             .replace(/^If (?:it|he|she|they) hits?, the target is (\w+)( until [^(.]+?)? \((@Check\[(?:fortitude|reflex|will)[^\]]*\](?:\{[^}]*\})?) negates\)(?=\.$)/i, "If it hits, the target must succeed at a $3 save or be $1$2")
@@ -1708,9 +1719,14 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Impaling Charge, batch 45: "On a hit, the target becomes impaled on the dragon's horn. The creature is Grabbed while on the horn
         // (and can attempt to Escape as normal). The dragon doesn't need to use additional actions to keep the impaled creature grabbed.
         // If the dragon moves, they bring the grabbed creature along with them.": Grabbed, until it Escapes.)
-        else if (/^On a hit, the target becomes impaled on (?:the [\w' -]+?'s|[A-Z][\w'-]+'s|its|their|his|her) horn\.$/i.test(text)) continue;
-        else if (/^The creature is Grabbed while on the horn(?: \(and can (?:attempt to )?Escape as normal\))?\.$/i.test(text)) activity.onHit.conditions.push({ slug: "grabbed", value: null, duration: null });
-        else if (/^(?:The [\w' -]+?|[A-Z][\w'-]+|It|They|He|She) (?:doesn't|does not) need to use additional actions to keep the (?:impaled|grabbed) creature grabbed\.$|^If (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) moves?, (?:it|they|he|she) brings? the grabbed creature along with (?:it|them|him|her)\.$/i.test(text) && activity.onHit.conditions.some((entry) => entry.slug === "grabbed")) continue;
+        // (Batch 219, Cuetzmonquali's Impaling Charge: "impaled on one of Cuetzmonquali's horns. The creature becomes Grabbed. … the creature remains grabbed as
+        // long as it's impaled. The grabbed creature can attempt to Escape as normal, but the DC to do so is 40 … If Cuetzmonquali critically hit the creature
+        // to impale it, that creature is Restrained for 1 round, in addition to being grabbed and impaled as per a success." — its Escape DC a note.)
+        else if (/^On a hit, the target becomes impaled on (?:one of )?(?:the [\w' -]+?'s|[A-Z][\w'-]+'s|its|their|his|her) horns?\.$/i.test(text)) continue;
+        else if (/^The creature is Grabbed while on the horn(?: \(and can (?:attempt to )?Escape as normal\))?\.$|^The creature becomes Grabbed\.$/i.test(text)) activity.onHit.conditions.push({ slug: "grabbed", value: null, duration: null });
+        else if (/^(?:The [\w' -]+?|[A-Z][\w'-]+|It|They|He|She) (?:doesn't|does not) need to use additional actions to keep the (?:(?:impaled|grabbed) )?creature grabbed(?:; the creature remains grabbed as long as it['’]s impaled)?\.$|^If (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) moves?, (?:it|they|he|she) brings? the grabbed creature along with (?:it|them|him|her)\.$/i.test(text) && activity.onHit.conditions.some((entry) => entry.slug === "grabbed")) continue;
+        else if ((match = /^The grabbed creature can attempt to Escape as normal, but the DC to do so is (\d+), rather than [^.]+\.$/i.exec(text)) && activity.onHit.conditions.some((entry) => entry.slug === "grabbed")) (activity.notes ??= []).push(`Escape DC ${match[1]}.`);
+        else if (/^If (?:the [\w' -]+?|[A-Z][\w'-]+|it) critically hit the creature to impale it, that creature is Restrained for 1 round, in addition to being grabbed and impaled as per a success\.$/i.test(text) && activity.onHit.conditions.some((entry) => entry.slug === "grabbed")) activity.onHit.critical = [...activity.onHit.conditions.filter((entry) => entry.slug !== "grabbed"), { slug: "grabbed", value: null, duration: null }, { slug: "restrained", value: null, duration: { value: 1, unit: "rounds" } }];
         else if (hitResults(text, activity, item, conditions)) continue;
         // "The extra damage and frightened value are doubled on a critical hit." (the damage is, as any.)
         else if ((match = /^The (?:extra|additional) damage and (\w+) value are doubled on a critical hit\.$/i.exec(text)) && activity.onHit.conditions.some((entry) => entry.slug === match[1].toLowerCase() && Number.isFinite(entry.value))) activity.onHit.critical = activity.onHit.conditions.map((entry) => (entry.slug === match[1].toLowerCase() && Number.isFinite(entry.value) ? { ...entry, value: entry.value * 2 } : entry));
@@ -1783,7 +1799,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (critical) activity.onHit.critical = conditions(critical.replace(/ on a critical hit$/i, ""));
             if (!activity.onHit.conditions.length) return reject(text);
         } else if ((match = /^On a critical hit, the (?:target|creature) is (.+?)(?: instead)?\.?$/i.exec(text) ?? /^If (?:the [\w' -]+?|it|they|he|she) critically hits with (?:this|the) Strike, the (?:creature hit|target|creature) is (.+?)\.$/i.exec(text)) && conditions(match[1]).length) activity.onHit.critical = conditions(match[1]);
-        else if (new RegExp(`${hit}the target must (?:also )?succeed at`, "i").test(text) || /^On a (?:hit|success), the (?:target|foe) must also succeed at/i.test(text) || /^On a success, the creature must (?:also )?succeed at/i.test(text) || (match = /^A (Tiny|Small|Medium|Large|Huge) or smaller creature (?:struck|hit|damaged) by this attack must succeed at/i.exec(text))) {
+        else if (new RegExp(`${hit}the target must (?:also )?succeed at`, "i").test(text) || /^On a (?:hit|success), the (?:target|foe) must also succeed at/i.test(text) || /^On a success, the creature must (?:also )?succeed at/i.test(text) || (/^The creature must succeed at/i.test(text) && activity.notes?.some((note) => /\bdrains the creature['’]s life\b/i.test(note))) || (match = /^A (Tiny|Small|Medium|Large|Huge) or smaller creature (?:struck|hit|damaged) by this attack must succeed at/i.exec(text))) {
             const raw = inlineTags(sentence, "Check")[0];
             const check = raw ? readCheck(raw) : null;
             const outcomes = check?.save && check.dc ? saveOrOutcomes(sentence, [], { afterHit: true }) : null;
@@ -1795,6 +1811,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 trigger: { event: "strike-activity" },
                 resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: false, against: { dc: "fixed", value: check.dc } }, sharedDamage: null, outcomes }
             };
+            // (Batch 219, Drain Nutrients: "… save or become Drained 2 (Drained 1 on a success, no effect on a critical success)" — the success's own.)
+            const onSuccess = /\(([A-Z][a-z]+ \d) on a success, no effect on a critical success\)/.exec(text);
+            if (onSuccess && conditions(onSuccess[1]).length && !outcomes.success?.effects?.length) outcomes.success = { ...outcomes.success, effects: conditions(onSuccess[1]).map((entry) => ({ kind: "condition", ...entry })) };
         } else if (activity.onHit.save && (match = /^On a critical failure, the (?:foe|target|creature) is (.+?)(?: instead)?\.$/i.exec(text)) && conditions(match[1]).length) {
             // (Batch 81, Stunning Strike: "On a critical failure, the foe is Stunned 2 instead." after its save: that save's.)
             const outcomes = activity.onHit.save.resolution.outcomes;
