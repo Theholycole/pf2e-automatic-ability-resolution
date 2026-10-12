@@ -1303,7 +1303,7 @@ function readResistDamage(text, trigger, effect) {
         on = damageTypesIn(match[1]);
         if (!on) return null;
         attack = true;
-    } else if ((match = /^An? (?:enemy|foe|creature)(?: within \d+ feet)? (?:is about to damage|would deal ([a-z, ]+? )?damage to) (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*)(?: with ([a-z, ]+?)(?: damage)?)?$/.exec(said))) {
+    } else if ((match = /^An? (?:enemy|foe|creature)(?: within \d+ feet)? (?:is about to damage|would deal ([a-z, ]+? )?damage to|damages) (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*)(?: with ([a-z, ]+?)(?: damage)?)?$/.exec(said))) {
         const phrase = match[1] ?? match[2] ?? "";
         on = phrase.trim() ? damageTypesIn(phrase) : null;
         if (phrase.trim() && !on) return null;
@@ -1329,7 +1329,14 @@ function readResistDamage(text, trigger, effect) {
     // damage types, the maftet chooses which type to resist." — the triggering damage's type, for a minute: types ["triggering"].)
     let triggering = false;
     let minute = false;
+    // (Batch 217, a Battlezoo thief's dream: resistance to all damage but one type against what set it off, and a short teleport — the type left out a
+    // note.)
+    let except = null;
     const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")
+        .replace(/\bresistance (\d+) (?:all|to all damage) \(except ([a-z]+)\)/i, (_all, value, kind) => {
+            except = kind.toLowerCase();
+            return `resistance ${value}`;
+        })
         .replace(/, granting (?:them|it|him|her|themself|itself) resistance (\d+) to one damage type dealt by the triggering (?:attack|effect)\./i, (_all, value) => {
             triggering = true;
             return `, gaining resistance ${value} against the triggering damage.`;
@@ -1340,7 +1347,7 @@ function readResistDamage(text, trigger, effect) {
         })
         .replace(/\s*If the triggering effect deals multiple damage types, (?:the [\w' -]+?|it|they) chooses? which type to resist\./i, (all) => (triggering ? "" : all))
         .split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
-    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports to an adjacent (?:space|square))?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
+    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports (?:to an adjacent (?:space|square)|up to \d+ feet in any direction))?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
     // (Batch 150, Clot: "… forms a clot around the wound, reducing the damage taken by 5 (to a minimum of 0)." — resistance 5 to it.)
     const clot = /^(?:The )?[^.]*?, reducing the damage taken by (\d+) \(to a minimum of 0\)\.$/i.exec(sentences.at(-1) ?? "");
     if (clot && sentences.length === 1) return { builtin: "resist-damage", value: Number(clot[1]), on, types: null, ...(attack ? { attack: true } : {}) };
@@ -1369,6 +1376,7 @@ function readResistDamage(text, trigger, effect) {
         on,
         types: triggering ? ["triggering"] : named ? [named.toLowerCase()] : null,
         ...(minute ? { lasts: 10 } : {}),
+        ...(except ? { note: `Not against ${except} damage.` } : {}),
         ...(attack ? { attack: true } : {}),
         ...(foe ? { foe: true } : {}),
         ...(/until the end of (?:its|their|his|her) next turn/i.test(read[0]) && !minute ? { lasts: 1 } : {}),
@@ -1420,6 +1428,12 @@ export function readWithdraw(text) {
         else if (/^(?:The )?[\w' -]+? is attacked with a melee weapon$/i.test(trigger)) [on, melee] = ["attacked", true];
         // (Batch 214, Tactical Retreat: "The tanuki takes damage" — any damage.)
         else if (/^(?:The )?[\w' -]+? takes damage$/i.test(trigger)) on = "damaged";
+        // (Batch 217, Battlezoo: damage dealt to it; a foe's Strike that hits it; an attempt to target it or catch it in an area (as it's attacked); a foe
+        // ending its turn with it in reach (as a foe beside it).)
+        else if (/^An? creature (?:successfully )?deals damage to (?:the )?[\w' -]+?$/i.test(trigger)) on = "damaged";
+        else if (/^An? (?:foe|enemy|creature) hits (?:the )?[\w' -]+? with a Strike$/i.test(trigger)) on = "hit";
+        else if (new RegExp(`^An? creature attempts to target ${subject}, or attempts to include ${subject} in an area of effect$`, "i").test(trigger)) on = "attacked";
+        else if (new RegExp(`^An? (?:foe|enemy) ends (?:their|its) turn,? (?:and ${subject} is|with ${subject}) within that (?:foe|enemy)['’]s reach$`, "i").test(trigger)) on = "approach";
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
         else if (new RegExp(`^An? (?:creature|enemy|foe) (?:enters ${subject}['’]s space or an adjacent square|moves into an adjacent space|moves adjacent to ${subject})$`, "i").test(trigger)) [on, enters] = ["approach", true];
@@ -1435,6 +1449,7 @@ export function readWithdraw(text) {
     // (Batch 214, Tactical Retreat: "The tanuki runs to a better tactical position. The tanuki gains the Fleeing condition until the beginning of their
     // next turn and Strides." — the Stride; Fleeing until its turn a note.)
     let fleeing = false;
+    const later = [];
     if (!legacy && sentences.length === 2 && /^(?:The )?[\w' -]+? runs to a better tactical position\.$/i.test(sentences[0]) && /^(?:The )?[\w' -]+? gains the Fleeing condition until the (?:beginning|start) of (?:its|their) next turn and Strides\.$/i.test(sentences[1])) {
         sentences.splice(0, 2, "It Strides.");
         fleeing = true;
@@ -1451,6 +1466,19 @@ export function readWithdraw(text) {
             sentences[0] = sentences[0].replace(/^.*then (Climbs or Strides up to \d+ feet)\.$/i, "It $1.");
             dropsHeld = true;
         }
+        // (Batch 217, Battlezoo: a first sentence that only tells it (an escape, a puff of smoke); a flight or swim of half its Speed (a flight); a move
+        // away with no reactions, Concealed for the attacker's turn (a note); a Leap of some feet or half its Speed (a Stride); another way to move or the
+        // trigger's choice after, notes.)
+        if (sentences.length > 1 && /^(?:The )?[\w' -]+? (?:attempts to escape|panics|disappears in a puff of [\w' -]+?)\.$/i.test(sentences[0])) sentences.shift();
+        if (/^(?:They|It|The [\w' -]+?) (?:Fly or Swim|Flies or Swims), up to half (?:their|its) Speed\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Flies.";
+        const smoke = /^(?:The )?[\w' -]+? moves (?:up to )?(\d+) feet away (?:without triggering reactions|with no reactions),? (?:and )?(?:is|becomes) Concealed until the end of (?:the triggering creature|the attacker|that creature)['’]s turn(?: by the smoke)?\.$/i.exec(sentences[0] ?? "");
+        if (smoke) sentences.splice(0, 1, `It Strides up to ${smoke[1]} feet.`, "This movement doesn't trigger reactions.");
+        const leaps = /^(?:The )?[\w' -]+? Leaps (?:up to )?(\d+ feet|half (?:its|their) Speed)(?: away from (?:the triggering|that) (?:foe|creature))?\.$/i.exec(sentences[0] ?? "");
+        if (leaps) sentences[0] = /^\d/.test(leaps[1]) ? `It Strides up to ${parseInt(leaps[1], 10)} feet.` : "It Strides.";
+        if (smoke) later.push("It's Concealed until the attacker's turn ends.");
+        for (let index = sentences.length - 1; index > 0; index--) {
+            if (/^(?:They|It) can instead use [A-Z][\w' -]+? if [^.]+\.$|^The triggering creature can select another action if [^.]+\.$/i.test(sentences[index])) later.push(...sentences.splice(index, 1));
+        }
         // (Batch 136, Crumble: "… crumbles into the ground, Burrowing down 10 feet." — a Burrow.)
         if (/^(?:The )?[\w' -]+? crumbles into the ground, Burrowing down \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*Burrowing down (\d+) feet\.$/i, "It Burrows $1 feet.");
         // (Batch 133, Slip: "… teleports to a clear space adjacent to another creature she can see within 30 feet" — away, triggering no reactions.)
@@ -1464,12 +1492,12 @@ export function readWithdraw(text) {
     let safe = move === "Step";
     let recharge = null;
     for (const sentence of sentences) {
-        if (/^This (?:movement |Burrowing )?(?:doesn't|does not) trigger reactions\.$/i.test(sentence)) safe = true;
+        if (/^This (?:movement |Burrowing )?(?:doesn't|does not) trigger reactions(?: based on movement)?\.$/i.test(sentence)) safe = true;
         // (Crumble: "The living landslide can't Crumble again for 1d4 rounds.")
         else if (/^(?:The [\w' -]+?|It|They) can(?:'t|not) [\w' -]+? again for (?:\[\[\/\w+ (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.test(sentence)) recharge = /(\d+d\d+)/.exec(sentence)[1];
-        else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$/i.test(sentence)) return null;
+        else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$|^(?:It|He|She|They) can(?:'t|not) end (?:the|its|this) movement (?:adjacent|next) to another (?:foe|enemy)\.$/i.test(sentence)) return null;
     }
-    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}), ...(dropsHeld ? { notes: ["It drops whatever it holds first."] } : {}), ...(fleeing ? { notes: ["It's Fleeing until the start of its next turn."] } : {}) };
+    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}), ...(dropsHeld || fleeing || later.length ? { notes: [...(dropsHeld ? ["It drops whatever it holds first."] : []), ...(fleeing ? ["It's Fleeing until the start of its next turn."] : []), ...later] } : {}) };
 }
 
 // Following a foe that moves away (2026-10-11, batch 99): "Trigger An enemy within reach of the guard attempts to move away Effect The guard
@@ -1485,6 +1513,8 @@ export function readFollow(text) {
     const trigger = split[1].trim();
     const prey = new RegExp(`^${subject}['’]s hunted prey is within (?:its|their|his|her) reach and attempts to move away from ${pronoun}$`, "i").test(trigger);
     const near = new RegExp(`^An? (?:adjacent (?:enemy|foe|creature)|(?:enemy|foe|creature) within (?:(?:the )?reach(?: of ${subject})?|${subject}['’]s reach)) (?:attempts to move|moves) away(?: from (?:${subject}|${pronoun}))?$`, "i").test(trigger);
+    // (Batch 217, a Battlezoo swarm: a creature leaving its space, and a Stride after it that keeps it in the swarm's space — a follow.)
+    if (new RegExp(`^An? creature leaves ${subject}['’]s space$`, "i").test(trigger) && new RegExp(`^(?:${subject} tries to chase after the triggering creature\\. )?${subject} Strides up to (?:its|their) Speed, (?:following the creature and keeping it within ${subject}['’]s space|staying on the creature) throughout its movement(?: until it stops moving or until ${subject} has moved (?:its|their) full Speed, whichever comes first)?\\.$`, "i").test(split[2].trim())) return { builtin: "follow", move: "Stride" };
     if (!prey && !near) return null;
     // (Batch 208, Deadly Pursuit: "The cursed king Strides up to its Speed, keeping the creature within reach until the creature stops or the cursed king has
     // moved its full Speed. If the creature is still within reach, the cursed king makes a jaws Strike against it." — the follow, its Strike after.)
@@ -1782,11 +1812,14 @@ export function readAllySave(text) {
     if (!split) return null;
     const [, frequency, trigger, effect] = split;
     const against = (words) => (words ? words.toLowerCase().split(/\s*(?:,|\bor\b)\s*/).filter(Boolean) : null);
-    const reroll = /^An ally within (\d+) feet(?: of (?:the [\w' -]+?|[A-Z][\w'-]+))? (fails|rolls) a saving throw against an? ((?:\w+)(?: or \w+)?) effect$/i.exec(trigger)
+    // (Batch 217, a Battlezoo chimling's luck: an ally's failed save of any kind; a first sentence that only tells it.)
+    const reroll = /^An ally within (\d+) feet(?: of (?:the [\w' -]+?|[A-Z][\w'-]+))? (fails|rolls|fails or critically fails) a saving throw(?: against an? ((?:\w+)(?: or \w+)?) effect)?$/i.exec(trigger)
         ?? /^(?:The [\w' -]+?|[A-Z][\w'-]+) or an ally within (\d+) feet (fails) a (Reflex|Fortitude|Will) save, [^.]*?check$/i.exec(trigger);
     if (reroll) {
         const self = /^(?:The [\w' -]+?|[A-Z][\w'-]+) or an ally/i.test(trigger);
-        const keeps = /^(?:The (?:target )?ally|The triggering creature) (?:can roll the save twice and take the better result|rerolls the (?:saving throw|save)(?: or check)?,? (?:taking the better of the two results|and uses the better result))\.$/i.test(effect.trim());
+        const said = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+        const told = said.length === 2 && !/\d|@|\b(?:saves?|saving throws?|checks?|rolls?|results?|bonus|penalty)\b/i.test(said[0]) ? said[1] : effect.trim();
+        const keeps = /^(?:The (?:target )?ally|The triggering creature) (?:can roll the save twice and take the better result|rerolls the (?:saving throw|save)(?: or check)?,? (?:taking the better of the two results|and uses the better result))\.$/i.test(told);
         if (!keeps) return null;
         return { builtin: "save-reroll", ally: true, ...(self ? { self: true } : {}), within: Number(reroll[1]), ...(self ? { save: reroll[3].toLowerCase() } : { against: against(reroll[3]) }), ...(frequency ? { uses: 1 } : {}) };
     }
@@ -2333,6 +2366,13 @@ export function readReaction(item, text) {
     // throw is a success." → its failed save (only a failure, that save, those traits) made a success, the damage on itself; the mask the GM's.)
     const resolve = /\bTrigger (?:The )?[^.]+? rolls a failure \(but not a critical failure\) on an? (Fortitude|Reflex|Will) save against an effect with the (\w+)(?: or (\w+))? trait(?: Requirements? (?:The )?[^.]+? features are obscured by a mask or hood)? Effect (?:The )?[^.]+? takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage, and the saving throw is a success\.$/i.exec(String(text).trim());
     if (resolve) return { builtin: "save-boost", failureOnly: true, save: resolve[1].toLowerCase(), against: [resolve[2], resolve[3]].filter(Boolean).map((trait) => trait.toLowerCase()), selfDamage: readDamage(inlineTags(resolve[4], "Damage")[0]), ...(/\bmask or hood\b/i.test(text) ? { notes: ["Only while its features are obscured by a mask or hood."] } : {}) };
+    // (Batch 217: a Battlezoo owl's foresight against spells — two rolls for its save against a spell, the higher kept: played as a reroll of a failed
+    // save against a spell; a Battlezoo drake's hardened scales — its failed save of one kind a degree better, once a minute (once a fight), its AC and
+    // Speed for a few rounds a note.)
+    if (/^(?:The )?[^.]+? (?:would make|is about to make) a saving throw against a spell(?: effect)?\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? rolls twice and uses the higher result\.$/i.test(effect.trim())) return { builtin: "save-reroll", save: null, against: "spell" };
+    const hardens = /^(?:The )?[^.]+? fails an? (Fortitude|Reflex|Will) save\.?$/i.exec(trigger.trim().replace(/;$/, ""));
+    const improved = hardens ? /^(?:The )?[^.]+? improves (?:the result of its save|its save) by (?:one|a) degree(?:, turning a failure into a success or a critical failure into a failure)?\.((?: [^.]+\.)*)$/i.exec(effect.trim().replace(/\[\[\/\w+ ([^\]#]+?)(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll).replace(/\s*@(?:Compendium|UUID)\[[^\]]*\](?:\{[^}]*\})?\s*$/, "").replace(/\s*Effect: [\w' -]+$/, "")) : null;
+    if (improved && (!improved[1].trim() || /^For the next \d+d\d+ rounds, [^.]+\.$/i.test(improved[1].trim()))) return { builtin: "save-boost", save: hardens[1].toLowerCase(), ...(/\bFrequency once per (?:minute|hour|day)\b/i.test(text) ? { uses: 1 } : {}), ...(improved[1].trim() ? { notes: [improved[1].trim()] } : {}) };
     const luck = /^(?:The )?[^.]+? fails or critically fails an? (Fortitude|Reflex|Will) saving throw\.?(?: Frequency once per day\.?)?$/i.exec(trigger.trim());
     if (luck && /^(?:(?:The )?[^.]+? rerolls (?:the|that) (?:saving throw|save) and takes the better result|Reroll that saving throw and take the better result)\.$/i.test(effect.trim())) return { builtin: "save-reroll", save: luck[1].toLowerCase() };
     // A trap that summons a creature (batch 50; the user's choice: the GM's): "Effect The trap summons a Cockatrice. The cockatrice rolls
@@ -2392,6 +2432,8 @@ export function readReaction(item, text) {
     const dodge = acDodge(text, trigger, effect);
     if (dodge) return dodge;
     if (/\btargeted by an attack\b/i.test(trigger) && /rolls the triggering attack twice and uses the worse result/i.test(effect)) return { builtin: "attack-misfortune" };
+    // (Batch 217, a Battlezoo owl's foresight: as it's the target of an attack, the attacker rolls twice and keeps the lower.)
+    if (/^(?:The )?[^.]+? is the target of an attack\.?$/i.test(trigger.trim()) && /^The attacking creature must roll twice and use the lower result\.$|^The attacker rolls twice and takes the lower result\.$/i.test(effect.trim())) return { builtin: "attack-misfortune" };
     // (Batch 193, Ray Displacement: "Trigger The dragon is targeted with a ranged spell attack Effect The dragon creates a field of distorted space
     // between themself and the caster. The creature targeting the barrage dragon must roll the spell attack twice and take the worse result." —
     // only a ranged spell attack's.)

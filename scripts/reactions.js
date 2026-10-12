@@ -750,6 +750,9 @@ async function saveAnswers(message, context, scene, combat, saver) {
             }
             // (Batch 65: "must use the new result", keep "new"; a free action's.)
             if (self && !plan.ally && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
+                // (Batch 217: only against a spell where it says so.)
+                const fromSpell = message.flags?.pf2e?.origin?.type === "spell" || (context.options ?? []).some((option) => /^origin:item:type:spell$|^item:type:spell$/.test(option));
+                if (plan.against === "spell" && !fromSpell) continue;
                 const left = Number(item.system?.frequency?.value);
                 if (Number.isFinite(left) && left <= 0) continue;
                 return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: plan.mythic ? "It costs a Mythic Point." : null });

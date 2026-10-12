@@ -3491,3 +3491,18 @@ test("a bonus to AC and saves against a spell aimed at it; a Strike at whoever a
     assert.deepEqual(plan("The test ambusher is using Tree Shape, and a creature comes near", odd), { builtin: "no-effect", gm: "state" });
     assert.deepEqual(plan("The test guide fails a Survival check", odd), { builtin: "no-effect", gm: "out-of-combat" });
 });
+
+test("an attacker rolling twice, its own save against a spell rerolled, a save made better once a fight, an ally's save rerolled; moving off as it's hurt, hit or crowded; chasing one that leaves its space; resistance and a short teleport (2026-10-12, batch 217)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (trigger, effect, frequency = "") => compileMonsterAbility(item(`${frequency}<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`), {});
+    assert.deepEqual(plan("The test bat is the target of an attack", "The attacker rolls twice and takes the lower result."), { builtin: "attack-misfortune" });
+    assert.deepEqual(plan("The test bat is about to make a saving throw against a spell", "The test bat rolls twice and uses the higher result."), { builtin: "save-reroll", save: null, against: "spell" });
+    assert.deepEqual(plan("The test drake fails a Will save", "The test drake improves its save by a degree.", "<p><strong>Frequency</strong> once per minute</p>"), { builtin: "save-boost", save: "will", uses: 1 });
+    assert.deepEqual(plan("An ally within 20 feet of the test bell fails or critically fails a saving throw", "The test bell rings. The ally rerolls the save, taking the better of the two results.", "<p><strong>Frequency</strong> once per day</p>"), { builtin: "save-reroll", ally: true, within: 20, against: null, uses: 1 });
+    assert.deepEqual(plan("The test bird takes damage", "The test bird panics. It Flies or Swims, up to half its Speed. This movement doesn't trigger reactions based on movement."), { builtin: "withdraw", on: "damaged", move: "Fly", safe: true });
+    assert.deepEqual(plan("A foe hits the test jester with a Strike", "The test jester disappears in a puff of blue smoke. The test jester moves 20 feet away with no reactions and becomes Concealed until the end of the attacker's turn."), { builtin: "withdraw", on: "hit", move: "Stride", feet: 20, safe: true, notes: ["It's Concealed until the attacker's turn ends."] });
+    assert.deepEqual(plan("A creature deals damage to the test frog", "The test frog Leaps up to 10 feet."), { builtin: "withdraw", on: "damaged", move: "Stride", feet: 10, safe: false });
+    assert.deepEqual(plan("An enemy ends its turn with the test hare within that enemy's reach", "The test hare Leaps half its Speed away from that foe. It cannot end its movement next to another enemy. This movement doesn't trigger reactions."), { builtin: "withdraw", on: "approach", move: "Stride", safe: true });
+    assert.deepEqual(plan("A creature leaves the test flock's space", "The test flock Strides up to its Speed, staying on the creature throughout its movement."), { builtin: "follow", move: "Stride" });
+    assert.deepEqual(plan("A creature damages the test sleeper", "The test sleeper gains resistance 3 to all damage (except sonic) against the triggering damage."), { builtin: "resist-damage", value: 3, on: null, types: null, note: "Not against sonic damage.", foe: true });
+});

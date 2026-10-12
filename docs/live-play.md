@@ -2006,3 +2006,21 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the save bonus offer shows its notes (Spell Dodge's AC). Not run in pftest.
 - **Simulator:** nothing new.
 
+## Battlezoo foresight, luck and quick escapes (2026-10-12, batch 217)
+
+- **Compiled** (12 Battlezoo abilities; their own words stay out of this repository):
+  - An attacker made to roll twice and keep the lower, as it's the target of an attack → `attack-misfortune`.
+  - Two rolls for its own save against a spell, the higher kept → `save-reroll` `{ against: "spell" }` (a failed save rerolled).
+  - Its failed save of one kind made a degree better, once a minute → `save-boost` `{ save, uses: 1 }`. Its AC and Speed for a few rounds after are a note.
+  - An ally's failed or critically failed save rerolled, the better kept, after a sentence that only tells it → the ally `save-reroll`.
+  - **Moves away** → `withdraw` with these triggers and moves:
+    - any damage → a flight or swim of half its Speed, with no reactions;
+    - a Strike that hits it → a move of some feet with no reactions; Concealed for the attacker's turn is a note;
+    - damage dealt to it → a short Leap (a Stride), with another way to move as a note;
+    - an attempt to target it or catch it in an area → a Step or Stride; the attacker's choice of another action is a note;
+    - a foe ending its turn beside it → half its Speed away, not next to another foe, with no reactions.
+  - A swarm Striding after a creature that leaves its space → `follow`.
+  - Resistance to all damage but one type against what hurt it, and a short teleport → `resist-damage` (the type left out a note, the teleport `shift`).
+- **Live:** offers as for these kinds. The own reroll is offered only for a spell's save. Not run in pftest.
+- **Simulator (B217):** `saveReroll.against` "spell" checks the save comes from a spell.
+
