@@ -1677,3 +1677,16 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - Aquatic Drag → `no-effect`: it only moves, carrying what it holds.
 - **Live:** no new live code. Not run in pftest.
 - **Simulator:** nothing new.
+
+## A spell attack rolled twice; resistance to spells by rank (2026-10-12, batch 193)
+
+- **Compiled:**
+  - Ray Displacement → `attack-misfortune` with `spell: true, ranged: true`.
+  - Divert Essence → `resist-damage` with `value: "rank"`, `spell: true`, `types: ["spells"]`, `lasts: 1` and `until: "turn-start"`.
+- **Live:**
+  - A spell attack roll that hits a monster with Ray Displacement brings an offer that rerolls it, keeping the lower roll (PF2e's reroll from the message). Its note says it only counts against a ranged spell attack.
+  - A spell aimed at a monster with Divert Essence (its spell attack roll, or the monster's save against a spell that isn't an area's) brings a resist offer. Use puts PF2e's resistance to spells, equal to the spell's rank, on the monster until the start of its next turn. The rank is read from the message: the cast rank, its "item:rank" option, or the spell's own. Without a rank, the note asks the GM to set it.
+  - Strike misfortune and damage resistance offers leave these spell variants out.
+  - Not run in pftest.
+- **Simulator:** see B193 in its ability decisions.
+

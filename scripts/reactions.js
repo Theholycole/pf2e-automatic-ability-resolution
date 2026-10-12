@@ -255,6 +255,12 @@ async function onMessage(message) {
         const mine = reactors(scene, combat).find((entry) => entry.token.id === event.defender.id);
         const entry = mine && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.trigger?.reaction && targetedSetsOff(plan.trigger, event)) : null;
         if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: `aimed ${event.spell ? "a spell" : "an effect"} at it (${event.traits.filter((trait) => entry.plan.trigger.traits?.includes(trait)).join(", ") || "spell"})`, free: !!entry.plan.trigger.free });
+        // (Batch 193, Divert Essence: a spell aimed at it — resistance to spells equal to the spell's rank, until the start of its next turn.)
+        const divert = mine && event.spell && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.builtin === "resist-damage" && plan.spell) : null;
+        if (divert) {
+            const rank = await spellRankOf(message);
+            await offer({ kind: "resist", item: divert.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: "aimed a spell at it", note: rank ? `Resistance ${rank} (the spell's rank) to damage from spells until the start of its next turn.` : "Resistance to damage from spells equal to the spell's rank, until the start of its next turn: the GM sets it.", retribution: { ally: { actorUuid: mine.actor.uuid, name: mine.token.name }, restore: 0, rank } });
+        }
         // Superconductor (batch 57): an attack or a spell aimed at it, its Strike back at the attacker at any range.
         const attack = event.spell || event.traits.includes("attack") || ["attack-roll", "spell-attack-roll"].includes(context?.type);
         const conductor = mine && attack && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("targeted")) : null;
@@ -281,6 +287,8 @@ async function onMessage(message) {
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
     }
+    // (Batch 193, Ray Displacement: a spell attack roll that hit it, rerolled keeping the worse.)
+    if (context?.type === "spell-attack-roll" && ["success", "criticalSuccess"].includes(context.outcome)) await spellAttackAnswers(message, context, scene, combat, token);
     // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
     if (context?.type === "saving-throw" && ["failure", "criticalFailure"].includes(context.outcome)) await saveAnswers(message, context, scene, combat, token);
     // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
@@ -538,6 +546,25 @@ async function guardAlly(message, context, scene, combat, attacker) {
     }
 }
 
+// (Batch 193, Ray Displacement: a spell attack at a monster that hit, its reaction rerolling it keeping the worse; a ranged spell's only, for the
+// GM to check.)
+async function spellAttackAnswers(message, context, scene, combat, attacker) {
+    const targetToken = context.target?.token ? fromUuidSync(context.target.token) : null;
+    if (!targetToken || !inEncounter(combat).has(targetToken.id)) return;
+    const mine = reactors(scene, combat).find((entry) => entry.token.id === targetToken.id);
+    if (!mine || !isFoe(mine.token, attacker)) return;
+    const entry = mine.reactions.find(({ plan }) => plan.builtin === "attack-misfortune" && plan.spell);
+    if (entry) await offer({ kind: "misfortune", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} with a spell attack against it`, note: entry.plan.ranged ? "Only against a ranged spell attack, not a melee one." : null, attack: { messageId: message.id } });
+}
+
+// The rank of the spell a message is about: its origin's cast rank, its roll options' "item:rank:N", or the spell's own.
+async function spellRankOf(message) {
+    const origin = message.flags?.pf2e?.origin ?? message.flags?.pf2e?.context?.origin ?? null;
+    const option = (message.flags?.pf2e?.context?.options ?? []).map((entry) => /^item:rank:(\d+)$/.exec(entry)?.[1]).find(Boolean);
+    const rank = Number(origin?.castRank ?? option ?? (origin?.uuid ? (await fromUuid(origin.uuid))?.rank : NaN));
+    return Number.isFinite(rank) && rank > 0 ? rank : null;
+}
+
 // An attack roll on a monster: Nimble Dodge when its AC bonus changes the result; Challenge Fate on a hit.
 async function defend(message, context, scene, combat, attacker) {
     const targetToken = context.target?.token ? fromUuidSync(context.target.token) : null;
@@ -569,7 +596,7 @@ async function defend(message, context, scene, combat, attacker) {
             const change = higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, plan.value);
             if (change) return offer({ kind: "ac", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against it`, note: plan.notes?.join(" ") || null, attack: { messageId: message.id, value: plan.value, ...change } });
         }
-        if (plan.builtin === "attack-misfortune" && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
+        if (plan.builtin === "attack-misfortune" && !plan.spell && hit) return offer({ kind: "misfortune", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} against it`, attack: { messageId: message.id } });
         // Wished Away (batch 29): resistance to all damage against the critical hit, for the GM as the damage is applied.
         if (plan.builtin === "crit-resistance" && context.outcome === "criticalSuccess") {
             const text = `Resistance ${plan.value} to all damage against this attack: take ${plan.value} off each damage type as you apply its damage.`;
@@ -892,7 +919,7 @@ async function onDamaged(actor, amount) {
         // an enemy's damage only when it says so; while it has a use left.
         // (The damage's types from its damage roll when there is one: no offer when none of them sets it off; the resistance off each type.)
         // (Not while its resistance from before still lasts: they don't stack.)
-        const resist = mine?.reactions.find(({ plan }) => plan.builtin === "resist-damage");
+        const resist = mine?.reactions.find(({ plan }) => plan.builtin === "resist-damage" && !plan.spell);
         const usesLeft = Number(resist?.item.system?.frequency?.value);
         const lasting = resist && actor.itemTypes.effect.some((effect) => effect.flags?.[MODULE_ID]?.resist && effect.name === resist.item.name && !effect.isExpired);
         if (resist && !lasting && !(Number.isFinite(usesLeft) && usesLeft <= 0)) {
@@ -1068,7 +1095,7 @@ async function use(message, action, slug) {
             const template = game.pf2e.ConditionManager.getCondition("quickened");
             quickened = template ? { rounds: roll.total, uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, img: template.img } : null;
         }
-        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null, quickened });
+        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null, quickened, rank: state.retribution?.rank ?? null });
         if (effects.length) {
             await actor.createEmbeddedDocuments("Item", effects);
             lines.push(effects.map((effect) => effect.name).join(", ") + " on it.");

@@ -1053,6 +1053,13 @@ function damageTypesIn(phrase) {
 }
 function readResistDamage(text, trigger, effect) {
     if (/\bRequirements?\b/.test(text)) return null;
+    // (Batch 193, Divert Essence: "Trigger A creature within 90 feet Casts a Spell that targets the dragon Effect The sage dragon steals energy from
+    // the spell to protect itself, gaining resistance to damage from spells equal to the triggering spell's rank until the beginning of their next
+    // turn." → resistance to spells, the spell's rank, until its next turn starts: { value: "rank", spell, types: ["spells"], lasts, until }.)
+    if (/^An? (?:creature|enemy|foe)(?: within \d+ feet)? Casts a Spell that targets (?:the [\w' -]+?|it|them)$/i.test(trigger.trim().replace(/\.$/, ""))) {
+        const gains = /^(?:The )?[^.]+?, gaining resistance to damage from spells equal to the triggering spell['’]s rank until the (?:beginning|start) of (?:its|their) next turn\.$/i.test(effect.trim().replace(/\s*Effect: [\w' -]+$/, ""));
+        return gains ? { builtin: "resist-damage", value: "rank", spell: true, on: null, types: ["spells"], lasts: 1, until: "turn-start" } : null;
+    }
     const said = trigger.trim().replace(/\.$/, "").replace(/,? or with a spell that has the [\w ,]+? traits?$/i, "");
     const self = String.raw`(?!An? |Any |One )(?:The )?[^.]+?`;
     let on = null;
@@ -2028,6 +2035,14 @@ export function readReaction(item, text) {
     const dodge = acDodge(text, trigger, effect);
     if (dodge) return dodge;
     if (/\btargeted by an attack\b/i.test(trigger) && /rolls the triggering attack twice and uses the worse result/i.test(effect)) return { builtin: "attack-misfortune" };
+    // (Batch 193, Ray Displacement: "Trigger The dragon is targeted with a ranged spell attack Effect The dragon creates a field of distorted space
+    // between themself and the caster. The creature targeting the barrage dragon must roll the spell attack twice and take the worse result." —
+    // only a ranged spell attack's.)
+    if (/^(?:The )?[^.]+? is targeted (?:with|by) a ranged spell attack\.?$/i.test(trigger.trim())) {
+        const said = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
+        const twice = /^The (?:creature|caster) targeting (?:the [\w' -]+?|it|them) must roll the spell attack twice and take the worse result\.$/i.test(said.at(-1) ?? "");
+        if (twice && said.slice(0, -1).every((sentence) => !/\d|@|\b(?:damage|bonus|penalty|Strikes?|saves?)\b/i.test(sentence))) return { builtin: "attack-misfortune", spell: true, ranged: true };
+    }
     // Resilient Form, Cushioned Blow, Extraneous Flesh: when it's critically hit, a flat check makes it a normal hit.
     //   Trigger The dragon is critically hit with a weapon or unarmed attack; Effect … attempts a @Check[flat|dc:14].
     //   On a success, the triggering attack becomes a normal hit.

@@ -3193,3 +3193,9 @@ test("a Strike after a teleport; a longer reach; allies' moves after a Strike; H
     assert.deepEqual([bugs.resolution.kind, bugs.notes.length], ["healing", 1]);
     assert.deepEqual(compileMonsterAbility(item("action", "<p><strong>Requirements</strong> The test lizard has a creature Grabbed</p><hr /><p><strong>Effect</strong> The test lizard Swims up to half its Speed, carrying the grabbed creature with it.</p>"), {}), { builtin: "no-effect" });
 });
+
+test("a ranged spell attack rolled twice; resistance to spells equal to the spell's rank (2026-10-12, batch 193)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test wyrm is targeted with a ranged spell attack</p><hr /><p><strong>Effect</strong> The test wyrm bends the air in front of itself. The creature targeting the test wyrm must roll the spell attack twice and take the worse result.</p>"), {}), { builtin: "attack-misfortune", spell: true, ranged: true });
+    assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> A creature within 60 feet Casts a Spell that targets the test wyrm</p><hr /><p><strong>Effect</strong> The test wyrm drinks in the magic, gaining resistance to damage from spells equal to the triggering spell's rank until the start of its next turn.</p>"), {}), { builtin: "resist-damage", value: "rank", spell: true, on: null, types: ["spells"], lasts: 1, until: "turn-start" });
+});

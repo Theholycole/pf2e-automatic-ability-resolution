@@ -172,6 +172,11 @@ test("what a resistance reaction leaves on the monster: the resistance for a whi
     const [ac] = resistEffects({ builtin: "resist-damage", value: 15, on: ["piercing", "slashing"], types: null, acPenalty: 2 }, { name: "Chipping Scales" });
     assert.deepEqual([ac.name, ac.system.rules, ac.system.duration.unit], ["Chipping Scales (AC)", [{ key: "FlatModifier", selector: "ac", type: "untyped", value: -2, label: "Chipping Scales" }], "days"]);
     assert.deepEqual(resistEffects({ builtin: "resist-damage", value: 5, on: ["piercing"], types: ["piercing"] }, { name: "Pincushion" }), []);
+    // (Batch 193: the spell's rank, to spells, until the start of its next turn; none without a rank.)
+    const divert = { builtin: "resist-damage", value: "rank", spell: true, on: null, types: ["spells"], lasts: 1, until: "turn-start" };
+    const [spells] = resistEffects(divert, { name: "Test Divert", rank: 6 });
+    assert.deepEqual([spells.system.rules, spells.system.duration.expiry], [[{ key: "Resistance", type: "spells", value: 6 }], "turn-start"]);
+    assert.deepEqual(resistEffects(divert, { name: "Test Divert" }), []);
 });
 
 test("more damage on a creature already Prone (2026-10-11, batch 83)", () => {

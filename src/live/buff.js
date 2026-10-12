@@ -69,8 +69,10 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
 // as PF2e effects' data: [] when it leaves nothing. Pure.
 // (Batch 152, Overcharge: "… and becomes Quickened for 1d4 rounds" — quickened { rounds (rolled), uuid (PF2e's condition), img }: an effect granting
 // the condition for that many rounds.)
-export function resistEffects(plan, { name, img = null, quickened = null } = {}) {
+// (Batch 193, Divert Essence: value "rank" — the rank of the spell aimed at it, given as rank; until: "turn-start", to the start of its next turn.)
+export function resistEffects(plan, { name, img = null, quickened = null, rank = null } = {}) {
     if (plan?.builtin !== "resist-damage") return [];
+    const value = plan.value === "rank" ? Number(rank) : plan.value;
     const effect = (label, rules, duration, said) => ({
         name: label,
         type: "effect",
@@ -79,7 +81,7 @@ export function resistEffects(plan, { name, img = null, quickened = null } = {})
         system: { slug: `aar-${sluggify(label)}`, description: { value: `<p>${said}</p>` }, duration: { ...duration, sustained: false }, tokenIcon: { show: true }, rules }
     });
     const effects = [];
-    if (plan.lasts) effects.push(effect(name, (plan.types ?? ["all-damage"]).map((type) => ({ key: "Resistance", type, value: plan.value })), { value: plan.lasts, unit: "rounds", expiry: "turn-end" }, `Resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}.`));
+    if (plan.lasts && value > 0) effects.push(effect(name, (plan.types ?? ["all-damage"]).map((type) => ({ key: "Resistance", type, value })), { value: plan.lasts, unit: "rounds", expiry: plan.until === "turn-start" ? "turn-start" : "turn-end" }, `Resistance ${value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}.`));
     if (plan.acPenalty) effects.push(effect(`${name} (AC)`, [{ key: "FlatModifier", selector: "ac", type: "untyped", value: -plan.acPenalty, label: name }], { value: 1, unit: "days", expiry: null }, `AC −${plan.acPenalty} for a day.`));
     if (plan.quickened && quickened?.uuid && Number(quickened.rounds) > 0) {
         const granted = effect(`${name} (Quickened)`, [{ key: "GrantItem", uuid: quickened.uuid, flag: "condition", allowDuplicate: true, onDeleteActions: { granter: "cascade", grantee: "cascade" } }], { value: Number(quickened.rounds), unit: "rounds", expiry: "turn-end" }, `Quickened for ${quickened.rounds} round${Number(quickened.rounds) === 1 ? "" : "s"}.`);
