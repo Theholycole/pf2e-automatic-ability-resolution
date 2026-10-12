@@ -39,7 +39,7 @@ const FLAG = "reaction";
 export const NO_GRAB = "pf2e-automatic-ability-resolution:no-grab";
 // PF2e's actor sizes in the words a trigger uses ("A Medium creature").
 const SIZE_WORDS = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -813,6 +813,17 @@ async function onDamaged(actor, amount) {
             const near = foe && (!beside || distanceFeet(box(token, gridOf(scene).size), box(foe, gridOf(scene).size), gridOf(scene)) <= 5) ? foe : null;
             await offer({ kind: "card", item: own.item, monster: token, actor, target: near, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: [damageNote(own.plan.trigger), beside && !near ? "At a creature beside it: target it first." : null].filter(Boolean).join(" ") || null, free: !!own.plan.trigger.free });
         }
+        // (Batch 143: its own champion reaction to a foe within 15 feet hurting it — Selfish Shield's resistance as HP back; Iron Command's choice
+        // and Destructive Vengeance's damage both ways for the GM.)
+        const vow = mine?.reactions.find(({ plan }) => plan.builtin === "champion-reaction" && plan.self);
+        const near = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) && distanceFeet(box(token, gridOf(scene).size), box(attacker, gridOf(scene).size), gridOf(scene)) <= 15 ? attacker : null;
+        if (vow && near) {
+            const plan = vow.plan;
+            const extra = plan.note ? ` ${plan.note}` : "";
+            if (plan.slug === "selfish-shield") await offer({ kind: "resist", item: vow.item, monster: token, actor, target: near, trigger: `damaged it (${amount})`, note: `Resistance ${plan.resistance} against this damage.${extra}`, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore: Math.min(amount, plan.resistance) } });
+            else if (plan.slug === "iron-command") await offer({ kind: "move", item: vow.item, monster: token, actor, target: near, trigger: `damaged it (${amount})`, note: `${near.name} chooses: kneel (drop Prone), or refuse and take ${plan.dice}d6 mental damage.${extra}`, move: { label: "command it to kneel" } });
+            else if (plan.slug === "destructive-vengeance") await offer({ kind: "move", item: vow.item, monster: token, actor, target: near, trigger: `damaged it (${amount})`, note: `It takes ${plan.selfDamage} more damage, and deals ${plan.damage.replace(/\[(\w+)\]$/, " $1")} damage to ${near.name}.${extra}`, move: { label: "take more, deal it back" } });
+        }
         // Skittish (batch 98): damage from a Strike, the creature whose turn it is taken as the attacker; the GM checks it was a Strike.
         // (Batch 136, Crumble: any foe's damage, and where it must be, for the GM.)
         const off = mine?.reactions.find(({ plan }) => plan.builtin === "withdraw" && plan.on === "damaged");
@@ -884,6 +895,17 @@ async function onDamaged(actor, amount) {
                 const taken = guard.plan.share >= 1 ? amount : Math.floor(amount / 2);
                 const ward = { boss: "its boss", master: "its master", liege: "its liege", ward: "its ward" }[guard.plan.ward] ?? null;
                 await offer({ kind: "intercept", item: guard.item, monster, actor: monsterActor, target: attacker, trigger: `damaged ${token.name} (${amount})`, note: [ward ? `Only if ${token.name} is ${ward}.` : null, guard.plan.strikes ? "Only a Strike's damage." : guard.plan.attacks ? "Only a Strike's or a spell attack's damage." : null, guard.plan.swap ? "It Strides beside the ally and they switch places: move both tokens." : null].filter(Boolean).join(" ") || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore: taken, taken, unreduced: !!guard.plan.unreduced } });
+            }
+            // (Batch 143: Glimpse of Redemption, Liberating Step — the ally's resistance, and what the foe chooses or the ally gets, for the GM.)
+            const other = reactions.find(({ plan }) => plan.builtin === "champion-reaction" && !plan.self);
+            if (other && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) <= 15 && distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid) <= 15) {
+                const resistance = other.plan.resistance ?? 0;
+                const restore = Math.min(amount, resistance);
+                const told = other.plan.slug === "glimpse-of-redemption"
+                    ? `${attacker.name} chooses: ${token.name} takes none of it (give back all ${amount}), or ${token.name} resists ${restore} and ${attacker.name} is Enfeebled 2 until the end of its next turn.`
+                    : `${token.name} resists ${restore} of it (resistance ${resistance}), then can attempt to Escape or a new save against a grab, restraint, immobilization or paralysis as a free action, and Step.`;
+                await offer({ kind: "retribution", item: other.item, monster, actor: monsterActor, target: attacker, strikes: [], trigger: `damaged ${token.name} (${amount})`, note: told, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore } });
+                continue;
             }
             const entry = reactions.find(({ plan }) => plan.builtin === "retributive-strike");
             if (!entry) continue;

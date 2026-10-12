@@ -1514,6 +1514,36 @@ export function readReaction(item, text) {
     // 15 feet of the archon; Effect The ally gains resistance 15 to all damage against the triggering damage and the archon can make
     // a Strike against the enemy" (Archon's Protection, Retributive Strikes in full): the glossary Retributive Strike's, with its
     // resistance.
+    // (Batch 143: Glimpse of Redemption's "The foe must choose one: The ally is unharmed by the triggering damage, or the ally gains resistance 10
+    // against the triggering damage, and the enemy is Enfeebled 2 until the end of its next turn" and Liberating Step's "Trigger An enemy damages,
+    // grabs, or restrains the champion's ally, and both are in the champion's aura … the ally gains resistance 10 to all damage against the
+    // triggering damage" — PF2e's redeemer's and liberator's reactions: { builtin: "champion-reaction", slug, resistance }.)
+    const glimpse = /\bunharmed by the triggering damage\b/i.test(effect) && /\bEnfeebled 2 until the end of its next turn\b/i.test(effect) ? /\bgains resistance (\d+)(?: to all damage)? (?:against|to) the triggering damage\b/i.exec(effect) : null;
+    if (glimpse && /^An? (?:enemy|foe) damages (?:the [\w' -]+?['’]s|one of (?:the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s)|[A-Z][\w'-]+['’]s) all(?:y|ies)\b/i.test(trigger.trim())) return { builtin: "champion-reaction", slug: "glimpse-of-redemption", resistance: Number(glimpse[1]) };
+    const liberating = /^An? (?:enemy|foe) damages, grabs, or restrains (?:the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) ally, and both are in (?:the [\w' -]+?['’]s|its|their|his|her) aura\.?$/i.test(trigger.trim()) ? /\bally gains resistance (\d+) to all damage against the triggering damage\b/i.exec(effect) : null;
+    if (liberating) return { builtin: "champion-reaction", slug: "liberating-step", resistance: Number(liberating[1]) };
+    // (Batch 143: the champion's own reactions to a foe near it damaging it — Iron Command's "kneels, dropping Prone … or the enemy refuses and
+    // takes 5d6 mental damage", Selfish Shield's "gains resistance 5 against the triggering damage", Destructive Vengeance's "increases the
+    // amount of damage they take by 2d6 and deals 2d6 spirit damage to the triggering enemy" — their extra damage on later Strikes a note.)
+    const hurtNear = /^(?:An? (?:enemy|foe) (?:within 15 feet|in (?:the [\w' -]+?['’]s|this creature's champion's|its|their|his|her) (?:champion's )?aura) (?:damages|injures) (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?|you|them|it|him|her)|(?:The )?[\w' -]+? (?:takes damage from|is injured by) an? (?:enemy|foe) within 15 feet)\.?$/i.test(trigger.trim());
+    if (hurtNear) {
+        const later = /\bStrikes? against the triggering (?:creature|enemy) deals? (?:an additional )?(\d+) (?:extra )?(?:(spirit|void) )?damage\b|\bdeals? (?:an additional )?(\d+) (?:extra )?(?:damage of the chosen type|(spirit|void) damage) with (?:their|its|his|her) Strikes against the triggering (?:creature|enemy)\b/i.exec(effect);
+        const lasting = /\b(?:also )?takes @Damage\[(\d+)\[persistent,(spirit|void)\]\]/i.exec(effect);
+        const notes = [
+            later ? `Its Strikes against that creature deal ${later[1] ?? later[3]} more ${later[2] ?? later[4] ?? "spirit or void"} damage until the end of its next turn.` : null,
+            lasting ? `The enemy also takes ${lasting[1]} persistent ${lasting[2].toLowerCase()} damage.` : null,
+            /\beach other enemy within 15 feet\b/i.test(effect) ? "Each other enemy within 15 feet chooses too (less damage if it refuses)." : null
+        ].filter(Boolean);
+        const note = notes.length ? notes.join(" ") : null;
+        if (/\bkneel/i.test(effect)) {
+            const dice = Math.max(0, ...[...effect.matchAll(/@Damage\[(\d+)d6\[mental\]/gi)].map((found) => Number(found[1])));
+            if (dice) return { builtin: "champion-reaction", slug: "iron-command", self: true, resistance: 0, dice, ...(note ? { note } : {}) };
+        }
+        const selfish = /^(?:This creature|The [\w' -]+?|It|They) gains? resistance (\d+) against the triggering damage, regardless of damage type\./i.exec(effect.trim());
+        if (selfish) return { builtin: "champion-reaction", slug: "selfish-shield", self: true, resistance: Number(selfish[1]), ...(note ? { note } : {}) };
+        const vengeance = /\bincreases the amount of damage (?:they|she|he|it) takes? by (?:@Damage\[(\d+d\d+)(?:\[untyped\])?\]|\[\[\/r (\d+d\d+)\]\])[^.]*? deals? (?:(\d+d\d+) (?:damage )?to the triggering enemy, choosing )?@Damage\[(\d+d\d+)\[(spirit|void)\]\]/i.exec(effect);
+        if (vengeance) return { builtin: "champion-reaction", slug: "destructive-vengeance", self: true, resistance: 0, selfDamage: vengeance[1] ?? vengeance[2], damage: `${vengeance[4]}[${vengeance[5].toLowerCase()}]`, ...(note ? { note } : {}) };
+    }
     const champion = /\bally gains resistance (\d+) to all damage against the triggering damage\b/i.exec(effect);
     if (champion && /^An? (?:enemy|foe) damages (?:the [\w' -]+?['’]s|one of [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) ally\b/i.test(trigger) && /\b(?:makes? a (?:melee )?Strike against (?:it|them|the (?:enemy|foe))|can make a Strike against the (?:enemy|foe))\b/i.test(effect) && !/\b(?:grabs|restrains|chooses?)\b/i.test(`${trigger} ${effect}`)) {
         return { builtin: "retributive-strike", resistance: Number(champion[1]) };
