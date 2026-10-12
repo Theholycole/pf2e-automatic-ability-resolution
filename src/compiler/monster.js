@@ -4233,7 +4233,11 @@ function selfCondition(item) {
     if (/@(?:Check|Damage)\[/.test(html)) return null;
     const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*conditionitems[^\]]*\]\{([^}]*)\}/g, "\u0001$1\u0002").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
     // A free action as its own turn begins (Shrieking Frenzy, Sudden Surge); other triggers stay the GM's.
-    const trigger = /\bTrigger (.+?) (?:Frequency|Requirements?|Effect)\b/.exec(plain)?.[1] ?? null;
+    // (Batch 205, Quicken: "Trigger The clay golem's turn begins. It can't trigger this free action on the first turn of combat." — not on its first
+    // turn, a note.)
+    const rawTrigger = /\bTrigger (.+?) (?:Frequency|Requirements?|Effect)\b/.exec(plain)?.[1] ?? null;
+    const notFirst = /\s*It can't trigger this free action on the first turn of combat\.$/i.test(rawTrigger ?? "");
+    const trigger = rawTrigger?.replace(/\s*It can't trigger this free action on the first turn of combat\.$/i, "") ?? null;
     const ownTurn = trigger && type === "free" && /^(?:The [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)'s? turn begins\.?$/.test(trigger) ? true : null;
     // (Batch 30: a reaction's trigger the module reads, for temporary Hit Points on itself: "The forest dragon is targeted with a
     // water spell or effect".)
@@ -4275,7 +4279,7 @@ function selfCondition(item) {
     }
     if (!found || (!found.temp && !SELF_SLUGS.has(found.slug))) return null;
     // Its other sentences: words only.
-    const notes = [];
+    const notes = notFirst ? ["Not on its first turn of the combat."] : [];
     for (const [index, sentence] of sentences.entries()) {
         if (index === at || /^Frequency\b/.test(sentence)) continue;
         if (/@|\b(?:damage|save|DC)\b|\d+d\d+/.test(sentence)) return null;
@@ -4311,11 +4315,15 @@ const HEALS_ITSELF = /^(?:(?:The |An? )?[\w' -]+?|It|They|He|She)(?:,? [^,.]*?,)
 function downsHeal(item) {
     if (!["free", "reaction"].includes(item.system?.actionType?.value)) return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
-    const parts = /^Trigger (?:The )?[\w' -]+? reduces a creature (it can smell with its true sin scent )?to 0 (?:HP|Hit Points)\.? Effect (.+)$/i.exec(plain);
+    // (Batch 205, Lifedrinker: "Trigger The balor kills a living creature that is at least 15th level. Effect The balor drinks the triggering creature's
+    // life force and regains 10d8+80 Hit Points." — a living creature of that level, a note.)
+    const parts = /^Trigger (?:The )?[\w' -]+? (?:reduces a creature (it can smell with its true sin scent )?to 0 (?:HP|Hit Points)|kills a (living )?creature(?: that is at least (\d+)(?:st|nd|rd|th) level)?)\.? Effect (.+)$/i.exec(plain);
     if (!parts) return null;
-    const heal = selfHeal(withDescription({ ...item, system: { ...item.system, actionType: { value: "action" } } }, `<p>${parts[2]}</p>`));
+    const effect = parts[4].replace(/^(?:The )?[\w' -]+? drinks the triggering creature['’]s life force and (regains?)/i, "It $1");
+    const heal = selfHeal(withDescription({ ...item, system: { ...item.system, actionType: { value: "action" } } }, `<p>${effect}</p>`));
     if (!heal) return null;
-    return { ...heal, ...base(item), trigger: { event: "downs", reaction: true, ...(item.system?.actionType?.value === "free" ? { free: true } : {}), ...(parts[1] ? { note: "Only a creature it can smell with its true sin scent." } : {}) } };
+    const note = parts[1] ? "Only a creature it can smell with its true sin scent." : parts[2] || parts[3] ? `Only a ${parts[2] ? "living " : ""}creature it kills${parts[3] ? ` at level ${parts[3]} or above` : ""} counts.` : null;
+    return { ...heal, ...base(item), trigger: { event: "downs", reaction: true, ...(item.system?.actionType?.value === "free" ? { free: true } : {}), ...(note ? { note } : {}) } };
 }
 
 function selfHeal(item) {

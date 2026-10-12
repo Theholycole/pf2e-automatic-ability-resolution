@@ -3328,3 +3328,12 @@ test("Bestiaries: Strides with a Strike each, two spikes counted as one, a jump 
     assert.deepEqual([charge.strides, charge.onHit.damage, charge.onHit.conditions[0].slug, charge.notes.length], [2, ["1d8"], "grabbed", 2]);
     assert.deepEqual(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature within the test spirit's reach attacks the test spirit's ward</p><hr /><p><strong>Effect</strong> The test spirit makes a claw Strike against the triggering creature.</p>"), {}).triggers, ["ally-attacked"]);
 });
+
+test("Bestiaries: Hit Points back as it kills a living creature of a level; Quickened as its turn begins, not the first; moves and reach (2026-10-12, batch 205)", () => {
+    const item = (type, html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const drink = compileMonsterAbility(item("free", "<p><strong>Trigger</strong> The test fiend kills a living creature that is at least 12th level.</p><hr /><p><strong>Effect</strong> The test fiend drinks the triggering creature's life force and regains @Damage[(4d8+20)[healing]] Hit Points.</p>"), {});
+    assert.deepEqual([drink.trigger.event, drink.trigger.free, drink.trigger.note], ["downs", true, "Only a living creature it kills at level 12 or above counts."]);
+    const quick = compileMonsterAbility(item("free", "<p><strong>Frequency</strong> Once per day</p><hr /><p><strong>Trigger</strong> The test golem's turn begins. It can't trigger this free action on the first turn of combat.</p><hr /><p><strong>Effect</strong> The test golem becomes @UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened} for 1 minute.</p>"), {});
+    assert.deepEqual([quick.trigger.event, quick.notes, quick.resolution.outcomes.success.effects[0].slug], ["own-turn-start", ["Not on its first turn of the combat."], "quickened"]);
+    assert.deepEqual(compileMonsterAbility(item("free", "<p><strong>Trigger</strong> The test devil hits a creature with a spear Strike.</p><hr /><p><strong>Effect</strong> The test devil moves the creature 5 feet in any direction. The destination square must be within reach of the test devil's spear. This movement doesn't trigger reactions.</p>"), {}), { builtin: "no-effect" });
+});

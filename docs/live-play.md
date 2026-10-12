@@ -1825,3 +1825,12 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** cards and offers as for their kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Healing as it kills; Quickened as its turn begins (2026-10-12, batch 205)
+
+- **Compiled:**
+  - Lifedrinker → healing on itself with trigger `downs`, free, with a note that only a living creature it kills at level 15 or above counts.
+  - Quicken → Quickened for 1 minute as its turn begins, free, with a note that it can't use it on its first turn of the combat.
+  - Reposition and Limb Extension → `no-effect` (moving the creature it hit, a longer reach).
+- **Live:** the downs-heal and turn-start offers, as for batches 140 and 72. Not run in pftest.
+- **Simulator:** nothing new; the level and the first turn are notes.
+

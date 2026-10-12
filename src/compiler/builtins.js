@@ -2291,6 +2291,11 @@ export function readReaction(item, text) {
     }
     // (Batch 145, Pack Ambush: "Trigger Another dromornis within 10 feet Strides. Effect The dromornis Strides up to half its Speed." — the same.)
     if (/^Another [\w' -]+? within \d+ feet Strides\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to half (?:its|their|his|her) Speed\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 205: Reposition's "Trigger The devil hits a creature with a glaive Strike. Effect The devil moves the creature 5 feet in any direction. The
+    // destination square must be within reach of the devil's glaive. This movement doesn't trigger reactions."; Limb Extension's "Trigger The yellow musk
+    // thrall is reduced to 4 HP or fewer Effect … The thrall's melee reach increases by 5 feet." — where creatures stand, and its reach.)
+    if (/^(?:The )?[^.]+? hits a creature with an? [\w' -]+? Strike\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? moves the creature 5 feet in any direction\. The destination square must be within reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+?\. This movement doesn't trigger reactions\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    if (/^(?:The )?[^.]+? is reduced to \d+ (?:HP|Hit Points) or fewer\.?$/i.test(trigger.trim()) && /^(?:[^.]+\. )?(?:The )?[^.]+?['’]s melee reach increases by \d+ feet\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // (Batch 203, Scuttle Away: "Trigger The ostovite's bone chariot is destroyed Effect The ostovite within Steps or Strides." — only a move.)
     if (/^(?:The )?[^.]+?['’]s [\w' -]+? is destroyed\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? (?:Steps or Strides|Strides or Steps)\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // (A Step when an ally moves next to it, Goblin Scuttle, batch 38: nothing for the fight's numbers.)
