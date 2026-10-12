@@ -50,7 +50,11 @@ const UNSEEN = [
 ];
 
 // States in a trigger (batch 216).
-const TRIGGER_UNSEEN = /\bwhile (?:it's |it is |they're |they are |he's |she's )?(?:underwater|Feigning Death|Hiding in water|hiding in water)\b|\bis using [A-Z][\w' -]+?(?:,| and\b)/;
+// (Batch 226: its liege, its passengers, its chosen egg, a lower-ranking cultist beside it; a state of its own — Retracted, transformed by an ability, an
+// ability active.)
+const TRIGGER_UNSEEN = /\bwhile (?:it's |it is |they're |they are |he's |she's )?(?:underwater|Feigning Death|Hiding in water|hiding in water|Retracted)\b|\bis using [A-Z][\w' -]+?(?:,| and\b)|\bliege\b|\bpassengers?\b|\bchosen [\w ]*egg\b|\blower-ranking cultist\b|\bis transformed (?:using|with|by) [A-Z]|\bhas [A-Z][\w' -]+? active\b/;
+// A requirement or an effect behind such a state too (batch 226): cover an animal ally gives it, a burrow hole nearby.
+const EFFECT_UNSEEN = /\bhas cover from an? [\w-]+ ally\b|\bto a burrow hole\b/;
 // A social or exploration skill check that sets it off (batch 216).
 const SKILL_TRIGGER = /\b(?:fails|critically fails|succeeds at|critically succeeds at) (?:a|an) (?:(?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|[A-Z][\w-]* Lore)(?: or (?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|Intimidation))? check|(?:Charisma-based )?skill check|check to (?:Balance|Climb|Swim)(?: or (?:Balance|Climb|Swim))?)\b|\battempts? an? (?:Deception, Diplomacy, or (?:an )?Intimidation|Diplomacy|Deception) check against\b/i;
 
@@ -69,6 +73,7 @@ export function gmFallback(item, options = {}) {
     const trigger = /\bTrigger ([^.]+?)(?=\.| (?:Effect|Requirements?|Frequency) |$)/.exec(text)?.[1] ?? null;
     if (trigger && (UNSEEN.some((pattern) => pattern.test(trigger)) || TRIGGER_UNSEEN.test(trigger))) return { builtin: "no-effect", gm: "state" };
     if (trigger && SKILL_TRIGGER.test(trigger)) return { builtin: "no-effect", gm: "out-of-combat" };
+    if (EFFECT_UNSEEN.test(text)) return { builtin: "no-effect", gm: "state" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
     if (/\b(?:has|have) no effect (?:outside(?: of)?|out of) (?:the )?water\b|\bonly (?:works|functions) underwater\b/i.test(text)) return { builtin: "no-effect", gm: "state" };
     const traits = item.system?.traits?.value ?? [];

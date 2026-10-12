@@ -2143,3 +2143,16 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
     - Merisiel's failed Escape from an Allosaurus offered nothing. The same Escape reposted as a success offered Serrated Teeth, and its card dealt her 5 damage.
 - **Simulator:** see B225 in its ability decisions.
 
+## Fear shrugged off, softened failures, costly rerolls, unseen states (2026-10-12, batch 226)
+
+- **Compiled:**
+  - **Fearless Rush** → `negate-condition` for Frightened with `reduceBy: 1` and `stride: "toward"`: the condition lands 1 lower, then it Strides toward an enemy.
+  - **Light of Diligence** → an ally's `save-boost` within 15 feet, for a critical failure only (`criticalOnly`), each ally once (`perAlly`). Other checks are the GM's, in a note.
+  - **Prescient Revision** → its own `save-reroll` keeping the better result. What it gives up for 1d4 rounds is a note.
+  - **The GM's** (`gm: "state"`) for a trigger or requirement the simulator can't see: a liege, passengers, a chosen egg, a lower-ranking cultist beside it, being Retracted, being transformed by an ability, an ability active, cover an animal ally gives it, a burrow hole. Guard's Parry, Protect the Master!, Speaker's Privilege, Burrowing Retreat, Parental Wrath, Protect Passenger, Protective Pinch, Object Lesson, End the Charade, Guardian Spirit.
+- **Live:**
+  - Fearless Rush offers "Use it: Frightened 2 1 lower" when it gains Frightened. Using it lowers the condition by 1 through PF2e and notes the Stride (the GM moves the token).
+  - A reroll's offer carries its plan's notes.
+  - **Checked in pftest (2026-10-12):** a Karkadann given Frightened 2 got the offer, beside the simulator's morale card. Using it left Frightened 1.
+- **Simulator:** see B226 in its ability decisions.
+

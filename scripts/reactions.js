@@ -716,7 +716,9 @@ async function onConditionGained(item) {
     if (!entry) return;
     const left = Number(entry.item.system?.frequency?.value);
     if (Number.isFinite(left) && left <= 0) return;
-    await offer({ kind: "negate", item: entry.item, monster: token, actor: mine.actor, target: null, trigger: `it would be ${item.name}`, negate: { itemId: item.id, name: item.name } });
+    // (Batch 226, Fearless Rush: the condition 1 lower, then a Stride toward an enemy — the GM's move.)
+    const reduceBy = Number(entry.plan.reduceBy) || 0;
+    await offer({ kind: "negate", item: entry.item, monster: token, actor: mine.actor, target: null, trigger: `it would be ${item.name}`, negate: { itemId: item.id, name: item.name, ...(reduceBy ? { reduceBy, slug } : {}) }, note: entry.plan.stride ? "Then it Strides toward an enemy: move its token." : null });
 }
 
 // A failed save in an encounter (batch 53): the saver's own Cat's Luck (that kind of save; a reroll keeping the better, while it has a use
@@ -770,7 +772,7 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 if (plan.against === "spell" && !fromSpell) continue;
                 const left = Number(item.system?.frequency?.value);
                 if (Number.isFinite(left) && left <= 0) continue;
-                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: plan.mythic ? "It costs a Mythic Point." : null });
+                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: [plan.mythic ? "It costs a Mythic Point." : null, ...(plan.notes ?? [])].filter(Boolean).join(" ") || null });
             }
             // (Batch 87, Occult Ward: a bonus to its own save, offered when it turns the failure around; against a spell, a spell's save.)
             if (self && !plan.ally && plan.builtin === "save-bonus-reaction") {
@@ -1304,11 +1306,13 @@ async function use(message, action, slug) {
         if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "negate") {
         // Shake It Off (batch 49): the condition it was about to be affected by, removed; a use of its frequency spent.
-        await actor.items.get(state.negate.itemId)?.delete();
+        // (Batch 226, Fearless Rush: only lowered.)
+        if (state.negate.reduceBy) for (let step = 0; step < state.negate.reduceBy; step++) await actor.decreaseCondition(state.negate.slug);
+        else await actor.items.get(state.negate.itemId)?.delete();
         const item = await fromUuid(state.ability.uuid);
         const left = Number(item?.system?.frequency?.value);
         if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
-        result = `${state.ability.name}: ${state.negate.name} is negated.`;
+        result = state.negate.reduceBy ? `${state.ability.name}: ${state.negate.name} is ${state.negate.reduceBy} lower.` : `${state.ability.name}: ${state.negate.name} is negated.`;
     } else if (state.kind === "ac") {
         // (Batch 81: a higher Escape DC, Tighten Coils: the creature stays held on a failure.)
         result = state.attack.what === "Escape DC"

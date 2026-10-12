@@ -2404,6 +2404,12 @@ export function readReaction(item, text) {
     const ally = /^An? ally within (\d+) feet fails a saving throw\.?$/i.exec(trigger.trim());
     const helped = ally ? new RegExp(String.raw`^The ally ${improves}${again}$`, "i").exec(effect.trim()) : null;
     if (helped) return { builtin: "save-boost", ally: true, within: Number(ally[1]), ...(helped[1] ?? helped[2] ? { recharge: helped[1] ?? helped[2] } : {}) };
+    // (Batch 226, Light of Diligence: "Trigger A willing ally within 15 feet critically fails at a check Effect The ally gets a failure instead and becomes
+    // immune to Light of Diligence for 1 minute." — an ally's critically failed save made a failure, each ally once a fight; another check the GM's.)
+    const willing = /^An? (?:willing )?ally within (\d+) feet critically fails (?:at )?a check\.?$/i.exec(trigger.trim());
+    if (willing && /^The ally gets a failure instead and becomes immune to [A-Z][\w' -]+? for 1 minute\.$/.test(effect.trim())) {
+        return { builtin: "save-boost", ally: true, within: Number(willing[1]), criticalOnly: true, perAlly: true, notes: ["Also a critically failed attack roll or skill check (the GM's). Each ally only once a minute."] };
+    }
     const own = !ally && /^(?:The )?[^.]+? fails a saving throw\.?$/i.test(trigger.trim()) ? new RegExp(String.raw`^(?:The )?[^.]+? ${improves}${again}$`, "i").exec(effect.trim()) : null;
     if (own) return { builtin: "save-boost", ...(own[1] ?? own[2] ? { recharge: own[1] ?? own[2] } : {}) };
     // Batch 65, more wordings of its own failed save: "fails a save" (any save), "… a skill check or a saving throw" (the save's part),
@@ -2431,6 +2437,10 @@ export function readReaction(item, text) {
         const free = item?.system?.actionType?.value === "free" ? { free: true } : {};
         const wait = /\bcan(?:'t|not) (?:use )?[\w' -]+? (?:again )?for (\d+d\d+) rounds\.$/i.exec(plain)?.[1];
         if (/^(?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check)(?: and (?:takes|uses) the better result)\.$/i.test(plain) && ownSave[1].toLowerCase() !== "critically fails") return { builtin: "save-reroll", save: null, ...once, ...free };
+        // (Batch 226, Prescient Revision: "… rerolls the triggering check and takes the better result. For 1d4 rounds, it loses the effects of Kiss of the
+        // Speakers and can't use Reshape Reality." — what it gives up after, a note.)
+        const cost = /^((?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check) and (?:takes|uses) the better result\.) (For (?:\d+d\d+|\d+) rounds, (?:it|they) loses? the effects of [A-Z][\w' -]+? and can(?:'t|not) use [A-Z][\w' -]+?\.)$/.exec(plain);
+        if (cost && ownSave[1].toLowerCase() !== "critically fails") return { builtin: "save-reroll", save: null, ...once, ...free, notes: [cost[2]] };
         // (Batch 84, Reroll: "Cost 1 Mythic Point Trigger The ancient one fails a check Effect The ancient one rerolls the check." — a plain
         // reroll keeps the new result; its cost a Mythic Point.)
         const mythic = /\bCost 1 Mythic Point\b/i.test(text) ? { mythic: true } : {};
@@ -2464,6 +2474,11 @@ export function readReaction(item, text) {
     // by the Immobilized, Paralyzed, Slowed, or Stunned conditions, or by an effect that would give it a penalty to its Speeds, …" →
     // those conditions only.
     // (Its labels by their capital: "adverse effect (such as …)" isn't the Effect.)
+    // (Batch 226, Fearless Rush: "Trigger The karkadann becomes Frightened Effect The karkadann reduces their frightened value by 1 (to a minimum of 0). The
+    // karkadann then Strides toward an enemy." — the condition 1 lower as it lands, then a Stride toward a foe: { conditions, reduceBy, stride }.)
+    if (/^(?:The )?[^.]+? becomes Frightened\.?$/.test(trigger.trim()) && /^(?:The )?[^.]+? reduces (?:its|their) frightened value by 1 \(to a minimum of 0\)\. (?:The )?[^.]+? then Strides toward an enemy\.$/i.test(effect.trim())) {
+        return { builtin: "negate-condition", conditions: ["frightened"], reduceBy: 1, stride: "toward" };
+    }
     const labeled = /\bTrigger (.+?) Effect (?=[A-Z])(.+)$/.exec(text);
     const negates = labeled ? /^(?:The )?[^.]+? would be affected by (?:a condition or adverse effect(?: \([^)]*\))?|the ([\w, ]+?) conditions?(?:, or by an effect that would give it a penalty to its Speeds)?(?:, from a source of \d+(?:st|nd|rd|th) level or less)?)\.?$/i.exec(labeled[1].trim()) : null;
     if (negates && /^(?:The )?[^.]+? negates the triggering condition or effect(?: by [^.]+)?\.(?: Effects from artifacts, deities, or a similarly powerful source can't be avoided in this way\.)?$/i.test(labeled[2].trim())) {

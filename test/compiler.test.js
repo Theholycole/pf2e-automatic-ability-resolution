@@ -3631,3 +3631,20 @@ test("Strikes at an auditory or a healing action; a shock back at a melee attack
     assert.deepEqual([gripped.trigger, gripped.targeting.target, gripped.resolution.check.against.value, gripped.resolution.outcomes.failure.affliction?.stage, Object.values(gripped.resolution.outcomes).map((row) => row.damage.formulas?.[0]?.formula)], [{ event: "escape-failed", reaction: true }, "the attacker", 18, 1, ["1d4[piercing]", "1d4[piercing]", "1d4[piercing]", "1d4[piercing]"]]);
     assert.deepEqual(plan("A creature the test sprite can observe attacks the sprite;", "After the attack resolves, the test sprite can Stride up to their speed. This movement doesn't trigger reactions from the triggering creature."), { builtin: "withdraw", on: "attacked", move: "Stride", safe: true });
 });
+
+test("fear shrugged off with a rush; an ally's critical failure softened; a reroll that costs it; reactions behind a state the simulator can't see (2026-10-12, batch 226)", () => {
+    const item = (html, type = "reaction") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (trigger, effect, requirement = null) => compileMonsterAbility(item(`<p><strong>Trigger</strong> ${trigger}</p>${requirement ? `<p><strong>Requirements</strong> ${requirement}</p>` : ""}<hr /><p><strong>Effect</strong> ${effect}</p>`), { basicActions: {}, pack: "pathfinder-monster-core" });
+    assert.deepEqual(plan("The test ox becomes Frightened", "The test ox reduces their frightened value by 1 (to a minimum of 0). The test ox then Strides toward an enemy."), { builtin: "negate-condition", conditions: ["frightened"], reduceBy: 1, stride: "toward" });
+    const light = plan("A willing ally within 20 feet critically fails at a check", "The ally gets a failure instead and becomes immune to Test Lantern for 1 minute.");
+    assert.deepEqual([light.builtin, light.ally, light.within, light.criticalOnly, light.perAlly], ["save-boost", true, 20, true, true]);
+    assert.deepEqual(plan("The test seer fails a check", "The test seer rerolls the triggering check and takes the better result. For 1d4 rounds, it loses the effects of Test Halo and can't use Test Rewrite."), { builtin: "save-reroll", save: null, notes: ["For 1d4 rounds, it loses the effects of Test Halo and can't use Test Rewrite."] });
+    const gm = { builtin: "no-effect", gm: "state" };
+    assert.deepEqual(plan("A creature attacks the test guard's liege, and the liege is within the test guard's melee reach", "The liege gains a +2 circumstance bonus to AC against the triggering attack."), gm);
+    assert.deepEqual(plan("An enemy within 20 feet damages one of the test raft's passengers", "The test raft makes a tentacle Strike against the triggering enemy."), gm);
+    assert.deepEqual(plan("A creature adjacent to the test crab attempts to Strike the test crab while it is Retracted.", "The test crab makes a claw Strike against the triggering creature."), gm);
+    assert.deepEqual(plan("A creature touches the test chest while the test chest is transformed using Test Disguise", "The test chest makes a jaws Strike against the triggering creature."), gm);
+    assert.deepEqual(plan("The test giant has Test Ancestors active and would take fire or mental damage", "The test giant's forebears step in and shield the test giant from harm, granting it resistance 10 to fire and mental damage until the start of its next turn."), gm);
+    assert.deepEqual(plan("The test speaker takes damage", "The animal takes the damage instead.", "The test speaker has cover from an animal ally"), gm);
+    assert.deepEqual(plan("The test mole is hit by a Strike", "The test mole immediately Burrows to a burrow hole if there is one within 20 feet."), gm);
+});
