@@ -2401,3 +2401,16 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a melee miss on the monster offers its card (`hitSetsOff` reads `missed`, and a critical miss when `critical`).
 - **Simulator:** see B246 in its ability decisions.
 
+## Battlezoo dragons' flaws, nimbuses, flicks and seed shots (2026-10-12, batch 247)
+
+- **Compiled** (26 new in Battlezoo; wordings paraphrased here):
+  - **A save whose failures apply its linked effects** (a weakness of the dragon's chosen type): a Will save at one creature, with `nativeEffects` on its rows. A failure gets the plain effect, a critical failure the "(Critical Failure)" one. The day's immunity is read too.
+  - **Concealment around itself or another**: Concealed for 1 minute on the GM's target, with a day's immunity. The light and the target's own reaction are notes.
+  - **A tail Strike at a flanker**: `reaction-strike` on a melee attack (`attacked`, `melee`), `requires: "requirement"`, since the flanking is the GM's.
+  - **A line shot only while its breath recharges**: the basic save in its line, `requires: "breath-recharging"`. Its own healing and the longer breath wait are notes.
+- **Live:**
+  - the save card applies the linked effect items (PF2e asks for the damage type);
+  - the concealment card applies Concealed;
+  - the flick's offer comes on a melee attack, with its note.
+- **Simulator:** see B247 in its ability decisions.
+

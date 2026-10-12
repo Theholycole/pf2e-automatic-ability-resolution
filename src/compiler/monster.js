@@ -3352,6 +3352,73 @@ function grabOnMiss(item, actor) {
     return triggered ? { ...triggered, notes: [...(triggered.notes ?? []), ...notes] } : null;
 }
 
+// A save whose failures apply its linked effects (2026-10-12, batch 247, a Battlezoo dragon's flaw-naming curse): a Will save at one creature, a
+// weakness of the monster's chosen type on a failure (a longer one on a critical failure), each its own linked effect, then a day's immunity →
+// the save, the failure's effect and the critical failure's ("(Critical Failure)"), PF2e's effect items (their choice asked as they're applied).
+// null otherwise.
+function linkedEffectSave(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const links = [...html.matchAll(/@UUID\[(Compendium\.[\w-]+\.(?:bestiary-effects|[\w-]*effects?)\.Item\.[A-Za-z0-9]{16})\]\{([^}]*)\}/g)];
+    const checks = inlineTags(html, "Check").map(readCheck).filter((check) => check?.save && check.dc);
+    if (links.length !== 2 || checks.length !== 1 || inlineTags(html, "Damage").length) return null;
+    const plain = htmlToPlainText(html.replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "@C").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const range = /\ba creature within (\d+) feet\b/i.exec(plain)?.[1];
+    if (!range || !/\bThe target must succeed at an? @C save or gain weakness (\d+) to the chosen damage type for 1 minute \(1 day on a critical failure\)\.|\bA failed @C save gives the target weakness (\d+) to that damage type for 1 minute, or for 1 day on a critical failure\./i.test(plain)) return null;
+    const critical = links.find((link) => /\(Critical Failure\)/i.test(link[2]));
+    const normal = links.find((link) => link !== critical);
+    if (!critical || !normal) return null;
+    const row = (link) => ({ ...none(), nativeEffects: [{ uuid: link[1], label: link[2].replace(/^Effect:\s*/i, "") }] });
+    const immunity = readImmunity(html, [item.name]);
+    return {
+        ...base(item),
+        targeting: { target: "1 creature", range: `${range} feet`, area: null },
+        trigger: { event: "use", ...(immunity ? { immunity } : {}) },
+        resolution: { kind: "save", check: { roll: "save", statistic: checks[0].statistic, basic: false, against: { dc: "fixed", value: checks[0].dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: row(normal), criticalFailure: row(critical) } },
+        notes: ["It picks the damage type; the effect asks as it's applied."]
+    };
+}
+
+// Concealment wrapped around itself or another (2026-10-12, batch 247, a Battlezoo dragon's rainbow nimbus): a glowing haze on itself or on a creature
+// some feet away that hides it for a minute, a reaction it grants, and a day's immunity after → Concealed on the GM's target (itself by default) for
+// 1 minute; the light and the target's reaction, notes. null otherwise.
+function concealOther(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const around = /^(?:The )?[^.]+? surrounds (?:itself|themselves|themself), or a creature within (\d+) feet, in [^.]+?\. The target becomes Concealed for 1 minute\. They can't use this concealment to Hide or Sneak, as normal for concealment that makes their position obvious\. A creature protected by [^.]+? can use the ([A-Z][\w' -]+?) reaction\. Whether the creature uses this reaction or the effect ends naturally, the creature becomes temporarily immune to [^.]+? for 1 day\.$/i.exec(plain)
+        ?? /^(?:The )?[^.]+? cloaks (?:itself|themselves|themself) or another creature up to (\d+) feet away in [^.]+?, which is Concealed for 1 minute(?: and then immune to [^.]+? for 1 day)?\.(?: While it lasts, that creature can use ([A-Z][\w' -]+?)\.)?$/i.exec(plain);
+    if (!around) return null;
+    const immunity = readImmunity(html, [item.name]);
+    const hidden = { damage: none().damage, effects: [{ kind: "condition", slug: "concealed", value: null, duration: readDuration("for 1 minute") }] };
+    return {
+        ...base(item),
+        targeting: { target: `itself or a creature within ${around[1]} feet`, range: `${around[1]} feet`, area: null },
+        trigger: { event: "use", ...(immunity ? { immunity } : {}) },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: hidden, failure: none(), criticalFailure: none() } },
+        notes: ["It sheds light; the creature can't Hide or Sneak with this concealment.", ...(around[2] ? [`The creature can use ${around[2]} while it lasts.`] : [])]
+    };
+}
+
+// A line it fires only while its breath recharges (2026-10-12, batch 247, a Battlezoo harvest dragon's seed shot): a requirement that its Breath Weapon is
+// recharging, its own healing first, then a basic Reflex save in a line, its breath held back longer → the save (its damage, its area), requires
+// "breath-recharging"; the healing and the longer wait, notes. null otherwise.
+function breathPauseSave(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html).replace(/\s+/g, " ").trim();
+    if (!/^Requirements? (?:The )?[^.]+?['’]s? Breath Weapon is on its \d+d\d+ round recharge and (?:the [\w' -]+?|it) can(?:'t|not) use (?:their|its) Breath Weapon\.? Effect |^Requirements? (?:Its|Their) Breath Weapon is still recharging\.? Effect /i.test(plain)) return null;
+    const tags = inlineTags(html, "Damage");
+    const heal = tags.find((raw) => /\[healing\]/i.test(raw));
+    const hurt = tags.filter((raw) => !/\[healing\]/i.test(raw));
+    const template = /@Template\[[^\]]*\]/.exec(html)?.[0];
+    const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+    if (!heal || hurt.length !== 1 || !template || !check || !/\bcan(?:'t|not) use (?:their|its) Breath Weapon for an additional\b|\bIts Breath Weapon recharges that many rounds later\b/i.test(plain)) return null;
+    const plan = inlineSave(withDescription(item, `<p>The creature deals @Damage[${hurt[0]}] damage to creatures in a ${template} (@Check[${check.statistic}|dc:${check.dc}|basic] save).</p>`), actor);
+    if (!plan?.resolution?.sharedDamage) return null;
+    return { ...plan, requires: "breath-recharging", notes: [...(plan.notes ?? []), `It regains ${readDamage(heal).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1")} Hit Points first.`, "Its Breath Weapon then waits longer to recharge (the GM rolls the extra rounds)."] };
+}
+
 function areaExposure(item, actor) {
     if (item.system?.actionType?.value === "reaction") return exposureReaction(item, actor);
     if (item.system?.actionType?.value !== "action") return null;
@@ -4658,7 +4725,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
