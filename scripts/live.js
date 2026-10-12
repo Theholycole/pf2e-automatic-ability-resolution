@@ -262,6 +262,8 @@ async function cardForAbility(message) {
     if (plan?.builtin === "multi-strike" && plan.ifFirstHits) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: only if the ${plan.strikes?.[0] ?? "first"} Strike hits, the ${plan.strikes?.[1] ?? "second"} Strike at the same multiple attack penalty${plan.instead ? `, or instead ${plan.instead}` : ""}.`]);
     // (Batch 102, Flurry of Pods: not at the creatures it holds.)
     if (plan?.builtin === "multi-strike" && plan.notGrabbed) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: a Strike at each creature in its reach except those it already has Grabbed, at the same multiple attack penalty.`]);
+    // (Batch 124: its other words for the GM, Twisting Reach's cover ignored.)
+    if (plan?.builtin === "multi-strike" && plan.notes?.length) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.notes.join(" ")}`]);
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // (Batch 108: what its Strike gains for the roll — deadly or fatal, counting as more attacks — a note for the GM.)
     // (Batch 109: only at an animal or humanoid, Flay's.)

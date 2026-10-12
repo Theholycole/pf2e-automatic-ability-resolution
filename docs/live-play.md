@@ -1363,3 +1363,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** the Strike offer as before, with notes for the damage types ("Only if it was slashing damage.") and the +2 damage; a successful Escape from its hold offers its Strike at the creature ("escaped its hold"); a cast answer at its penalty. Checked in pftest with the gibbering mouther and the leviathan louse.
 - **Simulator:** a hit or damage answered only when the Strike deals a named type; a creature it held getting free answered with its Strike; the +2 on the Strike's damage.
 
+## Multi-Strikes in more words (2026-10-12, batch 124)
+
+- **Compiled:** "If his first attack hits, the target is Off-Guard to the second attack" → `secondOffGuard: "hit"`; "If it hits the same creature with both attacks, that creature is Grabbed until the end of the mantis's next turn" → `bothHit` Grabbed for a round; "A creature hit by both claw Strikes also takes 1d4 persistent fire damage" → `bothHit` damage; "ignoring the target's cover", "can't Grab as its next action after …", "can replace any of these Strikes with Demoralize or Step" → `notes`.
+- **Live:** a GM line on use with the notes, and "if the first Strike hits, the target is off-guard against the second Strike"; checked in pftest with the myrucarx and Nishkiv.
+- **Simulator:** as before (the off-guard after a first hit and the both-hit riders were already played).
+

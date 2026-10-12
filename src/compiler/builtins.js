@@ -123,6 +123,7 @@ export function readMultiStrikes(text) {
     // (Flying Strafe), "within the shortbow's first range increment", "; no more than two can be against the same target",
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
     let penalty = 0;
+    const notes = [];
     let requires = held ? "grabbed" : stated ? "requirement" : null;
     if (held) sameTarget = true;
     first = first.trim().replace(/([^.])$/, "$1.")
@@ -132,6 +133,16 @@ export function readMultiStrikes(text) {
             return "";
         })
         .replace(/ at any point during (?:that|its|their|the) movement/i, "")
+        // (Batch 124, Furious Frenzy: "… and one Strike with his jaws, horns, or tail, in any order" — its first named; Twin-Talon Swipe's
+        // "…, targeting either the same foe or two adjacent targets" — its choice.)
+        .replace(/ and one Strike with (?:its|their|his|her) ([\w' -]+?)(?:, [\w' -]+?)*,? or [\w' -]+?(?=,? in any order\.$|\.$)/i, " and one $1 Strike")
+        .replace(/, targeting either the same (?:foe|creature|target) or two adjacent (?:foes|creatures|targets)(?=\.$)/i, "")
+        .replace(/, in (?:any|either) order(?=\.$)/i, "")
+        // (Batch 124, Twisting Reach: "…, ignoring the target's cover" — the GM's, a note.)
+        .replace(/,? ignoring the target's cover(?=\.$)/i, () => {
+            notes.push("The Strikes ignore the target's cover.");
+            return "";
+        })
         // (Batch 60: Writhing Arms' "up to four arm Strikes with different arms", the kraken's "two Strikes with two different arms or
         // tentacles, each limb targeting a different creature".)
         .replace(/ with (?:two |three |four )?different (?:arms|limbs|tentacles|heads)(?: or (?:arms|limbs|tentacles|heads))?(?=,)/i, "")
@@ -263,11 +274,22 @@ export function readMultiStrikes(text) {
             secondOffGuard = true;
             continue;
         }
+        // (Batch 124, Double Strike: "If his first attack hits, the target is Off-Guard to the second attack.")
+        if (/^If (?:its|his|her|their) first (?:attack|Strike) hits, the target is Off-Guard (?:to|against) the second (?:attack|Strike)\.$/i.test(sentence) && strikes.length === 2) {
+            secondOffGuard = "hit";
+            continue;
+        }
         // (Three-Headed Strike: "These Strikes count as only one attack for the chimera's multiple attack penalty, and the penalty
         // doesn't increase until after it has made all three attacks", "… count as two attacks …".)
         if ((match = /^These Strikes count as (only one attack|one attack|two attacks|three attacks) for [^.]*multiple attack penalty, and the penalty (?:doesn't|does not) increase until (?:after )?(?:(?:it|he|she|they) (?:has|have) made all (?:two|three|four|five) attacks|both attacks)\.?$/i.exec(sentence))) {
             sameMap = true;
             countsAs = /one/i.test(match[1]) ? 1 : count(match[1].split(" ")[0]);
+            continue;
+        }
+        // (Batch 124: "… but do not increase the penalty until it has made both attacks", "… but she doesn't increase her penalty until after she has
+        // made both attacks", "Each attack uses Talmandor's current multiple attack penalty".)
+        if (/\bmultiple attack penalty\b[^.]*\b(?:(?:doesn't|does not|do not|don't) increase (?:the|its|their|his|her) penalty until)\b|^Each attack uses (?:the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s|its|their|his|her) current multiple attack penalty\.$/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
+            sameMap = true;
             continue;
         }
         if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty applies to each attack,? but increases only after\b|\bpenalty (?:doesn't|does not) increase(?: the)? until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
@@ -276,15 +298,19 @@ export function readMultiStrikes(text) {
         }
         if (/\bmultiple attack penalty\b[^.]*\b(?:as normal|normally)\b|\bcount(?:s)? toward (?:its|their|his|her|the [\w' -]+?'s) multiple attack penalty(?: as normal)?\.$|^Apply the multiple attack penalty to these Strikes normally\.$/i.test(sentence)) continue;
         // Damage combined against resistances, and nothing more ("…, and the creature must succeed at a save" isn't).
-        if (/\bcombine(?:s|d)? (?:their|the) damages?\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
+        if (/\bcombine(?:s|d)? (?:their|the|both Strikes'|both attacks') damages?\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
         // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round", "If both attacks hit, the target is
         // also knocked Prone", "If both hit, the creature takes 2d10 bleed …", "If both attacks hit, the target is also dealt 1d8 persistent
         // bleed damage" → bothHit { conditions, damage }; on the creature both Strikes hit.)
         // (Batch 113, Bloody Flurry: "If the kholo outrider hits the same enemy with both Strikes, that enemy takes an additional … damage.")
-        sentence = sentence.replace(/^If (?:the [\w' -]+?|it|they) hits? the same (?:enemy|creature|target) with both Strikes, that (?:enemy|creature|target) /i, "If both Strikes hit the same target, the target ");
+        sentence = sentence.replace(/^If (?:the [\w' -]+?|it|they) hits? the same (?:enemy|creature|target) with both (?:Strikes|attacks), that (?:enemy|creature|target) /i, "If both Strikes hit the same target, the target ")
+            // (Batch 124, Scorching Maul: "A creature hit by both claw Strikes also takes 1d4 persistent fire damage.")
+            .replace(/^An? (?:creature|target|enemy) hit by both (?:[\w' -]+? )?(?:Strikes|attacks) (?:also )?takes /i, "If both Strikes hit the same target, the target takes ");
         const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
         if (both) {
-            const said = both[1].replace(/-stuck between the doors\b/i, "");
+            // (Batch 124, Barbed Limbs: "… is Grabbed until the end of the mantis's next turn" — for a round.)
+            const untilNext = /\buntil the end of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i.test(both[1]);
+            const said = both[1].replace(/-stuck between the doors\b/i, "").replace(/\s*\buntil the end of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i, untilNext ? " for 1 round" : "");
             const damage = [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].map((tag) => tag[1].split("|")[0]);
             const rest = said.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?/g, "").trim();
             const conditions = [...rest.matchAll(new RegExp(String.raw`\b(${BOTH_CONDITIONS})(?: (\d+))?(?: for (\d+) rounds?)?\b`, "gi"))].map((found) => ({ slug: found[1].toLowerCase().replace(/^knocked /, ""), value: found[2] ? Number(found[2]) : null, rounds: found[3] ? Number(found[3]) : null }));
@@ -332,6 +358,11 @@ export function readMultiStrikes(text) {
             after.push({ slug: match[1].toLowerCase(), value: Number(match[2]), until: "own-turn-start" });
             continue;
         }
+        // (Batch 124, Twisting Reach: "The myrucarx can't Grab as its next action after Twisting Reach." — the GM's, a note.)
+        if (/^(?:The [\w' -]+?|It|They|He|She) can(?:'t|not) (?:Grab|Strike|use [\w' -]+?) as (?:its|their|his|her) next action after [\w' -]+\.$/i.test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
         // (Wing Snap: "It can't Fly until the end of its turn.")
         if (/^(?:It|They) can(?:'t|not) Fly until the end of (?:its|their) turn\.$/i.test(sentence)) continue;
         if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) {
@@ -347,6 +378,11 @@ export function readMultiStrikes(text) {
             continue;
         }
         if (/\bcan substitute any number of the attacks with\b/i.test(sentence)) continue;
+        // (Batch 124, Battle Dance: "It can replace any of these Strikes with Demoralize or Step." — the GM's, a note.)
+        if (/^(?:It|They|He|She|The [\w' -]+?) can replace any of these Strikes with [^.]+\.$/i.test(sentence)) {
+            notes.push(sentence.replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^./, (letter) => letter.toUpperCase())));
+            continue;
+        }
         if (/^(?:Each attack takes|The attacks take|Both attacks take) the normal multiple attack penalty\.$/i.test(sentence)) continue;
         if (/\bmultiple attack penalty applies to each attack, but increases only after\b/i.test(sentence)) {
             sameMap = true;
@@ -378,7 +414,7 @@ export function readMultiStrikes(text) {
         return null;
     }
     // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
-    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}) };
+    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}) };
 }
 
 // One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
@@ -1759,7 +1795,7 @@ export function compileBuiltin(item, slug) {
     const eviscerate = /^Requirements? (?:The )?[\w' -]+? has not attacked yet this turn Effect (?:[^.]+\. )?(?:It|They|The [\w' -]+?) makes four Strikes: the first at (?:its|their) highest attack bonus, the next two with an? [-\u2013\u2212](\d+) penalty to their attack rolls, and the last one with an? [-\u2013\u2212](\d+) penalty\. This ability counts as four Strikes for the purpose of (?:its|their) multiple attack penalty\.$/i.exec(text.trim());
     if (eviscerate) return { builtin: "multi-strike", actions, strikes: [null, null, null, null], sameTarget: true, sameMap: true, penalties: [0, Number(eviscerate[1]), Number(eviscerate[1]), Number(eviscerate[2])], countsAs: 4, requires: "first-attack" };
     const multi = readMultiStrikes(text);
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}) };
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.

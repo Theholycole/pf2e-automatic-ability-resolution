@@ -2415,3 +2415,14 @@ test("a move and nothing else: safe when it triggers no reactions, otherwise not
     assert.equal(compile("The test rogue Strides up to half its Speed and attempts a Feint, in either order."), null);
     assert.equal(compile("The test shade Strides up to twice its Speed. This movement doesn't trigger reactions, but the test shade must begin and end in darkness.", 2), null);
 });
+
+test("multi-Strikes in more words: off-guard after a first hit, both hits' grab or damage, notes for the GM (2026-10-12, batch 124)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    assert.equal(compile("The test cutter makes two knife Strikes against the same target. If her first attack hits, the target is Off-Guard to the second attack. The multiple attack penalty applies to these attacks as normal.")?.secondOffGuard, "hit");
+    assert.deepEqual(compile("The test bug makes two pincer Strikes. If it hits the same creature with both attacks, that creature is Grabbed until the end of the test bug's next turn.")?.bothHit?.conditions, [{ slug: "grabbed", value: null, rounds: 1 }]);
+    assert.deepEqual(compile("The test cat makes two paw Strikes against a creature it has Grabbed. A creature hit by both paw Strikes also takes @Damage[1d6[persistent,fire]] damage.", 1)?.bothHit?.damage, ["1d6[persistent,fire]"]);
+    const reach = compile("<strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test eel makes two fang Strikes against the same target, ignoring the target's cover. The test eel can't Grab as its next action after Test.", 1);
+    assert.deepEqual([reach?.oncePerTurn, reach?.notes], [true, ["The Strikes ignore the target's cover.", "The test eel can't Grab as its next action after Test."]]);
+    assert.deepEqual(compile("The test brute makes two fist Strikes and one Strike with its horns, hooves, or tail, in any order.")?.strikes, ["fist", "fist", "horns"]);
+    assert.equal(compile("The test raptor makes two talon Strikes against different targets. Both attacks count toward its multiple attack penalty, but do not increase the penalty until it has made both attacks.")?.sameMap, true);
+});
