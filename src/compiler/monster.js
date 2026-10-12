@@ -1008,6 +1008,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 activity.attackBonus -= Number(value);
                 return made;
             })
+            // (Batch 131, Insightful Swing: "On this Strike, he gains a +2 circumstance bonus to the attack roll and ignores any concealment the target
+            // has" — the bonus, the concealment the GM's.)
+            .replace(/^On this Strike, (?:it|he|she|they) gains? a \+(\d+) circumstance bonus to the attack roll(?: and ignores? any concealment the target has)?\.$/i, (whole, value) => {
+                activity.attackBonus += Number(value);
+                if (/concealment/i.test(whole)) (activity.notes ??= []).push("This Strike ignores the target's concealment.");
+                return "[told]";
+            })
             .replace(/^(?:The )?[\w' -]+? deals (\d+) additional damage with this Strike\.$/i, (_all, value) => {
                 activity.damageBonus += Number(value);
                 return "[told]";
@@ -2850,6 +2857,11 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Aquatic Ambush (the glossary's; batch 38): from hiding in the water, a move and a Strike at a creature off-guard to it; once a
     // fight, as it starts hidden.
     if (slug === "aquatic-ambush") return { builtin: "charge", actions: Number(item.system?.actions?.value) || 1, strides: 1, strike: null, offGuard: true, oncePerFight: true };
+    // Power Attack (the glossary's, batch 131: "Frequency once per round. The monster makes a melee Strike. This counts as two attacks when
+    // calculating the monster's multiple attack penalty. If this Strike hits, the monster deals an extra die of weapon damage.").
+    if (slug === "power-attack" && /@Localize\[PF2E\.NPC\.Abilities\.Glossary\.PowerAttack\]/.test(item.system?.description?.value ?? "")) {
+        return { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 2, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, oncePerTurn: true, countsAs: 2, extraWeaponDice: 1, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
+    }
     if (["grab", "improved-grab", "knockdown", "improved-knockdown", "push", "improved-push", "pull", "improved-pull"].includes(slug)) return rider(item, slug, basicActions);
     // Retributive Strike (the glossary's): as a champion's, the ally's resistance is 2 + the monster's level.
     if (slug === "retributive-strike") {

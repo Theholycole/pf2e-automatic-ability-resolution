@@ -145,6 +145,10 @@ export function readMultiStrikes(text) {
         .replace(/ and one Strike with (?:its|their|his|her) ([\w' -]+?)(?:, [\w' -]+?)*,? or [\w' -]+?(?=,? in any order\.$|\.$)/i, " and one $1 Strike")
         .replace(/, targeting either the same (?:foe|creature|target) or two adjacent (?:foes|creatures|targets)(?=\.$)/i, "")
         .replace(/, in (?:any|either) order(?=\.$)/i, "")
+        // (Batch 131: Two-Weapon Flurry's "They Strike twice, once with each weapon"; Double Slice's "Make two Strikes, one with each of his two melee
+        // weapons" — its best melee Strikes.)
+        .replace(/^((?:The )?[^.]+?|They|It|He|She) Strikes? twice, once with each weapon(?=\.$)/i, "$1 makes two Strikes")
+        .replace(/^(?:(?:The )?[^.]+? makes?|Make) two Strikes, one with each (?:of (?:its|their|his|her) two (?:melee )?weapons|melee weapon)(?=,|\.$)/i, "It makes one Strike with each of its two melee weapons")
         // (Batch 129, Frenzied Attack: "… against one or two different creatures (splitting up the attacks any way he wishes)" — its choice; Telekinetic
         // Reach: "makes a Strike with each of its jaws, claw, and tail" — one with each.)
         .replace(/ against one or two different creatures(?: \(splitting up the attacks any way (?:he|she|it|they) wishes?\))?(?=\.$)/i, "")
@@ -410,6 +414,12 @@ export function readMultiStrikes(text) {
         // (Batch 129, Bomb Barrage: "These Strikes can be made against the same creature or different creatures, as long as all targets are within
         // 40 feet of each other." — its choice.)
         if (/^These Strikes can be made against the same creature or different creatures(?:, as long as all targets are within \d+ feet of each other)?\.$/i.test(sentence)) continue;
+        // (Batch 131, Double Slice's other words: precision damage once; the second Strike's –2 without agile, the GM's.)
+        if (/^(?:Add any precision damage only once(?:, to the attack of your choice)?|Precision damage is added only once)\.$/i.test(sentence)) continue;
+        if (/^If the second Strike is made with a weapon that (?:doesn't|does not) have the agile trait, it takes a [-\u2013\u2212]2 penalty\.$/i.test(sentence)) {
+            notes.push("The second Strike takes a –2 penalty if its weapon isn't agile.");
+            continue;
+        }
         if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) {
             each = true;
             continue;

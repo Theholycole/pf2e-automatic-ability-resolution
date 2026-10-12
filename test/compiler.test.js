@@ -2503,3 +2503,14 @@ test("Strikes in more words: an adjacent shot, a penalty and its damage, a crest
     const butcher = compile("<strong>Frequency</strong> once per round; <strong>Requirement</strong> the test butcher is wielding two melee weapons, each in a different hand</p><hr /><p><strong>Effect</strong> It makes two Strikes against its menaced prey, one with each of the required weapons. In addition, if both Strikes hit, the menaced prey is Off-Guard until the start of the test butcher's next turn.");
     assert.deepEqual(butcher?.bothHit?.conditions, [{ slug: "off-guard", value: null, rounds: 1 }]);
 });
+
+test("the glossary's Power Attack, two-weapon flurries, an attack bonus on this Strike (2026-10-12, batch 131)", () => {
+    const compile = (description, actions = 2, slug = null) => compileMonsterAbility({ type: "action", name: "Test", system: { slug, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    const power = compile("@Localize[PF2E.NPC.Abilities.Glossary.PowerAttack]", 2);
+    assert.deepEqual([power?.builtin, power?.countsAs, power?.extraWeaponDice, power?.oncePerTurn], ["strike-activity", 2, 1, true]);
+    assert.deepEqual(compile("<strong>Frequency</strong> once per round</p><p><strong>Requirements</strong> The test slayer is wielding two melee weapons, each in a different hand</p><p><strong>Effect</strong> They Strike twice, once with each weapon.", 1)?.strikes, [null, null]);
+    const slice = compile("The test captain makes two Strikes, one with each melee weapon, each using his current multiple attack penalty. Both Strikes must have the same target. If the second Strike is made with a weapon that doesn't have the agile trait, it takes a -2 penalty. Precision damage is added only once. This counts as two attacks when calculating his multiple attack penalty.");
+    assert.deepEqual([slice?.strikes, slice?.countsAs, slice?.notes?.length], [[null, null], 2, 1]);
+    const swing = compile("The test duelist makes a melee weapon Strike. On this Strike, he gains a +2 circumstance bonus to the attack roll and ignores any concealment the target has.");
+    assert.deepEqual([swing?.attackBonus, swing?.notes], [2, ["This Strike ignores the target's concealment."]]);
+});
