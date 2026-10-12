@@ -2458,6 +2458,28 @@ function fling(item) {
     };
 }
 
+// Healing itself or an ally it touches (2026-10-12, batch 161, Dero Medicine): "Requirements The dero is wearing a cytillesh toolkit and has a hand
+// free Effect The dero excises damaged flesh and crudely stitches wounds shut, healing themself or an ally in reach for 2d8 Hit Points. For 1 hour,
+// the target has slashing weakness 2 and is immune to Dero Medicine." → that healing on itself or an ally in its reach; the hour after, a note
+// (with PF2e's linked effect for it).
+function healTouch(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0])) return null;
+    const plain = htmlToPlainText(html.replace(/@Damage\[[^\]]*\]\]?(?:\{[^}]*\})?/g, "\u0000").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:Requirements? (?:The )?[\w' -]+? is wearing [^.]+? and has a hand free\.? Effect )?(?:The )?[\w' -]+? [^.,]+?, healing (?:themself|itself|himself|herself|themselves) or an ally in reach for \u0000(?: Hit Points)?\.( For 1 hour, the target has ([a-z]+) weakness (\d+) and is immune to ([A-Z][\w' -]+?)\.)?(?: Effect: [\w' ()-]+)?$/.exec(plain);
+    if (!match) return null;
+    const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
+    return {
+        ...base(item),
+        targeting: { target: "itself or an ally in its reach", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } },
+        ...(match[1] ? { notes: [`For 1 hour the creature healed has weakness ${match[3]} to ${match[2]} and can't benefit from ${match[4]} again (PF2e's effect for it is linked in the ability).`] } : {})
+    };
+}
+
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
 function ownAffliction(item, actor, phrase) {
     const owner = actor ?? item.actor ?? item.parent;
@@ -3636,7 +3658,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 

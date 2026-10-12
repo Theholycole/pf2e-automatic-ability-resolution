@@ -2926,3 +2926,8 @@ test("Fling: the creature it holds falls and is let go (2026-10-12, batch 160)",
     assert.deepEqual([fling.targeting.grabbed, fling.resolution.outcomes.success.damage.formulas, fling.resolution.outcomes.success.effects.map((effect) => effect.slug ?? effect.slugs?.join(","))], [true, [{ formula: "7[bludgeoning]" }], ["grabbed,restrained", "prone"]]);
     assert.equal(fling.notes[1], "A creature it lands on takes the same bludgeoning damage (DC 22 basic Reflex save).");
 });
+
+test("healing itself or an ally it touches, with the hour after a note (2026-10-12, batch 161)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Salve", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p><strong>Requirements</strong> The test dero is wearing a salve kit and has a hand free</p><hr /><p><strong>Effect</strong> The test dero smears a stinging salve on a wound, healing themself or an ally in reach for @Damage[(1d8+4)[healing]] Hit Points. For 1 hour, the target has fire weakness 3 and is immune to Test Salve.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.resolution.kind, plan.resolution.native.healing.components[0].formula, plan.targeting.range, plan.notes.length], ["healing", "1d8+4", "touch", 1]);
+});
