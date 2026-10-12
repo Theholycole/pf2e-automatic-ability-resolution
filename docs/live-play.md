@@ -2051,3 +2051,21 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** cards as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Chains, fury, second chances, stolen healing (2026-10-12, batch 220)
+
+- **Compiled:**
+  - **Cleanse the Forest** → `multi-strike` with three melee Strikes, each at a different enemy, `chain` (the next only after a hit), a Stride first. The Strides between and the return are notes.
+  - **Blood Fury** → as it deals bleed damage (`trigger: { kind: "deals-bleed", reaction: true }`): +1 status to attack rolls until the end of its turn and `heal: 5`.
+  - **Second Chance** (four time dragons) → `save-reroll` `{ ally, self, within: 60, keep: "new", perRound, free }`. A failed skill check and the day's immunity are notes.
+  - **Parasitic Healing** → `heal-siphon` `{ share: 0.5, selfHeal: "full" }`: the creature regains half, and the monster regains the full amount.
+- **Live:**
+  - The siphon offer says the creature regains only half and the monster the full amount, applied by hand.
+  - Second Chance is offered as a free reroll keeping the new result.
+  - Blood Fury is PF2e's own effect.
+  - Not run in pftest.
+- **Simulator (B220):**
+  - `chain` stops a sweep at its first miss;
+  - a triggered self-effect heals by `heal`;
+  - the ally reroll can keep the new result and be free once a round;
+  - the heal-siphon can heal the siphoner by the full amount.
+

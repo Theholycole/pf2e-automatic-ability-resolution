@@ -3536,3 +3536,14 @@ test("Grabbed by a chain Strike, a drain after a claw, impaled on a horn, armor 
     assert.deepEqual([acid.builtin, acid.damage, acid.melee, acid.duration.expiry], ["self-effect", ["1d6[acid]"], true, "turn-start"]);
     assert.deepEqual(plan("<p>The test eel Swims at half Speed, along with any creature it has Grabbed.</p>", "action", 1), { builtin: "no-effect" });
 });
+
+test("Strikes at enemy after enemy while each hits; Hit Points and a bonus as it deals bleed; any failed save rerolled, the new result kept; a healing half taken (2026-10-12, batch 220)", () => {
+    const item = (html, type = "action", actions = 3) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), {});
+    const chain = plan("<p>The test monkey darts about. The test monkey Strides adjacent to an enemy and attempts a melee Strike. If successful, the test monkey can Stride and attempt to Strike a different enemy. If this second attack is successful, they can Stride and attempt to Strike a third enemy.</p>");
+    assert.deepEqual([chain.builtin, chain.strikes.length, chain.each, chain.chain, chain.strides], ["multi-strike", 3, true, true, 1]);
+    assert.deepEqual(plan("<p><strong>Trigger</strong> The test butcher deals bleed damage to a creature.</p><hr /><p><strong>Effect</strong> The test butcher grins. It regains @Damage[4[healing]] HP and gains a +1 status bonus to attack rolls until the end of its turn.</p>", "reaction"), { builtin: "self-effect", actions: 0, model: { name: "Test", rounds: 0, modifiers: [{ on: "attack", type: "status", value: 1 }], tempHp: 0 }, heal: 4, trigger: { kind: "deals-bleed", reaction: true } });
+    const second = plan("<p><strong>Frequency</strong> once per round</p><p><strong>Trigger</strong> A creature within 30 feet (including the test dragon) fails a saving throw or skill check</p><hr /><p><strong>Effect</strong> The target rerolls the check, but must use the second result.</p>", "free");
+    assert.deepEqual([second.builtin, second.ally, second.self, second.within, second.keep, second.perRound, second.free], ["save-reroll", true, true, 30, "new", true, true]);
+    assert.deepEqual(plan("<p><strong>Trigger</strong> A creature within 30 feet regains Hit Points</p><hr /><p><strong>Effect</strong> The test thief smirks. The triggering creature regains only half the number of Hit Points, and the test thief regains the full amount.</p>", "reaction"), { builtin: "heal-siphon", within: 30, share: 0.5, selfHeal: "full" });
+});

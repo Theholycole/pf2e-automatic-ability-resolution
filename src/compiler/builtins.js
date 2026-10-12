@@ -276,6 +276,17 @@ export function readMultiStrikes(text) {
             earlyNotes.push(`The two creatures within ${feet} feet of each other.`, ...rest.replace(/\[\[\/act [^\]]*\]\]\{([^}]*)\}/g, "$1").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
             return `${who} makes two spike Strikes, each against a different target. This counts as one attack when calculating its multiple attack penalty.`;
         });
+    // (Batch 220, Cleanse the Forest: "The aso berang Strides adjacent to an enemy and attempts a melee Strike. If successful, the aso berang can Stride and
+    // attempt to Strike a different enemy. If this second attack is successful, they can Stride and attempt to Strike a third enemy." — three Strikes at
+    // different enemies, the next only after a hit (chain), a Stride before each.)
+    let chain = false;
+    body = body.replace(/^(?:[^.]+\. )?((?:The )?[^.]+?) Strides adjacent to an enemy and attempts a melee Strike\. If successful, (?:the [\w' -]+?|it|they) can Stride and attempt to Strike a different enemy\. If this second attack is successful, (?:the [\w' -]+?|it|they) can Stride and attempt to Strike a third enemy\.( Once (?:it|they) fails? a Strike \(or upon succeeding at (?:its|their) third Strike\), (?:the [\w' -]+?|it|they) Strides back to the space where (?:it|they) began\.)?$/i, (_all, who, back) => {
+        chain = true;
+        movesFirst = 1;
+        earlyNotes.push("It Strides before each Strike, each at a different enemy; the next only after a hit.");
+        if (back) earlyNotes.push("Afterward it Strides back to where it began.");
+        return `${who} makes three melee Strikes, each against a different target.`;
+    });
     // (Batch 212, Battlezoo: a Stride up to its Speed, then up to so many Strikes on the way, in a sentence of their own; so many Strikes "times"
     // with one weapon, each at its own creature.)
     body = body.replace(/^((?:The )?[^.]+?) Strides up to (?:its|their|his|her) Speed\. (?:It|They|He|She) can make up to (two|three|four) ([\w' -]+?) Strikes at any point during (?:its|their|his|her|the|that) movement\./i, (_all, who, number, name) => {
@@ -890,7 +901,7 @@ export function readMultiStrikes(text) {
         return null;
     }
     // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
-    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}), ...(noGrab ? { noGrab } : {}), ...(critical ? { critical } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(then ? { then } : {}), ...(strides ? { strides } : {}), ...(oncePerFight ? { oncePerFight } : {}) };
+    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(chain ? { chain: true } : {}), ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}), ...(noGrab ? { noGrab } : {}), ...(critical ? { critical } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(then ? { then } : {}), ...(strides ? { strides } : {}), ...(oncePerFight ? { oncePerFight } : {}) };
 }
 
 // One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
@@ -1811,6 +1822,11 @@ export function readAllySave(text) {
     // (the same chances), once a fight.)
     const fortune = /^Trigger (?:The )?[^,.]+?, or an ally within (\d+) feet, is about to attempt a saving throw but hasn't rolled yet\.? Frequency once per (?:hour|day|10 minutes) Effect That creature rolls the triggering saving throw twice and takes the better result\.$/i.exec(String(text).trim());
     if (fortune) return { builtin: "save-reroll", ally: true, self: true, within: Number(fortune[1]), save: null, uses: 1, note: "Two rolls for the save, made before it; the better one counts." };
+    // (Batch 220, Second Chance: "Frequency once per round Trigger A creature within 60 feet (including the time dragon) fails a saving throw or skill check
+    // Effect The target rerolls the check, but must use the second result. The target is then temporarily immune to Second Chance for 24 hours." — an ally's
+    // or its own failed save rerolled, the new result kept, once a round; a skill check and the immunity notes.)
+    const second = /^Frequency once per round Trigger A creature within (\d+) feet \(including (?:the [\w' -]+?|itself)\) fails a saving throw or skill check\.? Effect The target rerolls the check, but must use the second result\.(?: The target is then temporarily immune to [A-Z][\w' -]+? for 24 hours\.)?$/i.exec(String(text).trim());
+    if (second) return { builtin: "save-reroll", ally: true, self: true, within: Number(second[1]), save: null, keep: "new", perRound: true, free: true, note: "The new result counts. Also a failed skill check (the GM's); each creature once a day." };
     const body = String(text).trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\befect\b/g, "effect");
     const split = /^(?:Frequency (once per (?:hour|day|minute)) )?Trigger (.+?)\.? Effect (.+)$/.exec(body);
     if (!split) return null;
@@ -1909,11 +1925,15 @@ export function readInitiativeWarning(text, item = null) {
 // Points Effect … The triggering effect rolls the minimum amount on any dice rolls to restore Hit Points, and any flat values for restoring Hit
 // Points (such as the additional Hit Points for a two-action Heal spell), are cut in half. The dragon then gains 4d8 temporary Hit Points that
 // last for 1 round." → { builtin: "heal-siphon", within, tempHp, tempRounds }.
+// (Batch 220, Parasitic Healing: "Trigger A creature within 60 feet regains Hit Points Effect Taljjae takes what should belong to another. The triggering
+// creature regains only half the number of Hit Points, and Taljjae regains the full amount." → { heal-siphon, within, share: 0.5, selfHeal: "full" }.)
 export function readHealSiphon(text) {
     // (Batch 209, a Battlezoo dragon's: a vitality healing aimed at a creature near it that it can see — the creature gets half, the dragon the other
     // half as temporary Hit Points for a minute → { within, share: 0.5, tempRounds: 10 }.)
     const halved = /^Trigger an? creature (?:the [\w' -]+?|it) can see within (\d+) feet is targeted by (?:a spell or effect with the vitality trait(?:, and the spell would recover that creature['’]s Hit Point damage| that heals Hit Point damage)|a healing spell with the vitality trait)\.? Effect [^.]+\. (?:The triggering spell or effect heals half the amount of Hit Points to the triggering creature, and the (?:[\w' -]+?) receives the other half in temporary Hit Points, losing any remaining temporary Hit Points after 1 minute\.(?: This reaction doesn't affect the amount of healing to any other creatures, if any\.)?|That creature regains only half, and (?:the [\w' -]+?|it) gains the rest as temporary Hit Points for 1 minute\.)$/i.exec(String(text).trim());
     if (halved) return { builtin: "heal-siphon", within: Number(halved[1]), share: 0.5, tempRounds: 10 };
+    const parasitic = /^Trigger An? creature within (\d+) feet regains Hit Points\.? Effect (?:[^.]+\. )?The triggering creature regains only half the number of Hit Points, and (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*|it) regains the full amount\.$/i.exec(String(text).trim());
+    if (parasitic) return { builtin: "heal-siphon", within: Number(parasitic[1]), share: 0.5, selfHeal: "full" };
     const split = /^Trigger An? creature within (\d+) feet uses a healing effect that restores Hit Points\.? Effect (.+)$/i.exec(String(text).trim().replace(/\s*Effect: [^.]+$/i, ""));
     if (!split) return null;
     const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
@@ -2738,6 +2758,10 @@ function rageTrigger(trigger) {
 export function readRage(item, actor = null) {
     const type = item?.system?.actionType?.value;
     if (!["action", "free", "reaction"].includes(type)) return null;
+    // (Batch 220, Blood Fury: "Trigger The charau-ka butcher deals bleed damage to a creature. Effect The charau-ka licks blood from its weapon, becoming
+    // furious. It regains 5 HP and gains a +1 status bonus to attack rolls until the end of its turn." — as it deals bleed, its healing and the bonus.)
+    const fury = /^Trigger (?:The )?[\w' -]+? deals bleed damage to a creature\.? Effect (?:[^.]+\. )?(?:It|They|The [\w' -]+?) regains (\d+) (?:HP|Hit Points) and gains an? \+(\d+) (status|circumstance) bonus to attack rolls until the end of (?:its|their) turn\.$/i.exec(htmlToPlainText(String(item?.system?.description?.value ?? "")).replace(/@Damage\[(\d+)\[healing\]\](?:\{[^}]*\})?/g, "$1").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\s*Effect: [\w' -]+$/, "").replace(/\s+/g, " ").trim());
+    if (fury && type === "reaction") return { builtin: "self-effect", actions: 0, model: { name: item.name, rounds: 0, modifiers: [{ on: "attack", type: fury[3].toLowerCase(), value: Number(fury[2]) }], tempHp: 0 }, heal: Number(fury[1]), trigger: { kind: "deals-bleed", reaction: true } };
     // (Batch 79: a sentence that only says whom it attacks while raging, first and after — its allies among them — set aside: the GM's.)
     const text = htmlToPlainText(String(item?.system?.description?.value ?? "")).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|br|gmr) \{?([^\]}#]+?)\}?(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll).replace(/\s+/g, " ")
         .replace(/(?<=\.\s)(?:It|They|He|She) attacks? [^.]*?\bfirst\b[^.]*?\b(?:afterward|after that|then)\b[^.]*\.\s*/g, "");
@@ -3094,7 +3118,7 @@ export function compileBuiltin(item, slug) {
     const multi = readMultiStrikes(text);
     // (Batch 152, Hellfire Flurry: the flourish trait — one flourish a turn.)
     const flourish = (item.system?.traits?.value ?? []).includes("flourish");
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(flourish ? { flourish: true } : {}), ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}), ...(multi.critical ? { critical: multi.critical } : {}), ...(multi.extraDamage ? { extraDamage: multi.extraDamage } : {}), ...(multi.then ? { then: multi.then } : {}), ...(multi.strides ? { strides: multi.strides } : {}), ...(multi.oncePerFight ? { oncePerFight: true } : {}) };
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(flourish ? { flourish: true } : {}), ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}), ...(multi.critical ? { critical: multi.critical } : {}), ...(multi.extraDamage ? { extraDamage: multi.extraDamage } : {}), ...(multi.then ? { then: multi.then } : {}), ...(multi.strides ? { strides: multi.strides } : {}), ...(multi.oncePerFight ? { oncePerFight: true } : {}), ...(multi.chain ? { chain: true } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.countsAs ? { countsAs: sweep.countsAs } : {}), ...(sweep.extraDamage ? { extraDamage: sweep.extraDamage } : {}), ...(sweep.missDamage ? { missDamage: sweep.missDamage } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
