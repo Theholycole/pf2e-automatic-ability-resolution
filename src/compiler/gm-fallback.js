@@ -78,6 +78,11 @@ export function gmFallback(item, options = {}) {
     if (trigger && (UNSEEN.some((pattern) => pattern.test(trigger)) || TRIGGER_UNSEEN.test(trigger) || TRIGGER_UNSEEN_MORE.test(trigger))) return { builtin: "no-effect", gm: "state" };
     if (trigger && SKILL_TRIGGER.test(trigger)) return { builtin: "no-effect", gm: "out-of-combat" };
     if (EFFECT_UNSEEN.test(text)) return { builtin: "no-effect", gm: "state" };
+    // (Batch 232: Counterspell's kin in an action too — its whole effect an attempt to counteract a spell or magical effect (dispelling it, taking control
+    // of it), with no damage, save or Strike of its own: the GM's, as Counterspell is (the user's choice of 2026-10-11), read as batch 86's.)
+    // (A reaction's trigger about a spell, an effect or magic, as Counterspell's is — not a creature dropping, batch 86's line.)
+    const magicTrigger = !trigger || /\b(?:spells?|effects?|magic\w*|Casts?|casting|traits?)\b/i.test(trigger);
+    if (magicTrigger && /\b(?:attempts? (?:a |to )?counteract|counteract check|attempts? to (?:dispel|unravel))\b/i.test(text) && !/\b(?:Unconscious|dying)\b|@Damage|\bdamage\b|\bStrikes?\b|@Check\[(?:type:)?(?:fortitude|reflex|will)\b|\b(?:bonus|penalty|rerolls?|Concealed|Hidden|Invisible|Sickened|Frightened|Stunned|Slowed|Quickened|Clumsy|Enfeebled|Drained|Stupefied|Prone|Grabbed|Immobilized|Paralyzed|Fatigued)\b|\bcan be dispelled\b|\banyone else\b/i.test(text)) return { builtin: "no-effect" };
     // (Batch 228, Battlezoo: a sound illusion with no damage or save, at most a Perception check to see through it — narrative.)
     if (/\bcreates an auditory illusion\b/i.test(text) && !/@Damage|\bsave\b|@Check\[(?!(?:type:)?perception\b)/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)

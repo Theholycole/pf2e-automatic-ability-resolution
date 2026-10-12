@@ -2225,3 +2225,12 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** cards as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Counterspell's kin in actions (2026-10-12, batch 232)
+
+- **Compiled:** after every reading fails, an ability whose effect is only an attempt to counteract a spell or magical effect becomes `{ builtin: "no-effect" }`, like batch 86's reactions (the user's choice: Counterspell is the GM's). Examples: dispelling a flight or light, taking control of a fire or plant spell, silencing an area.
+  - **Not** when it also has damage, a save, a Strike, a bonus or penalty, a condition, a reroll, Unconscious or dying.
+  - **Not** when others need a counteract check to end its own magic ("can be dispelled", "anyone else").
+  - **Not** a reaction set off by anything other than a spell, an effect or magic.
+  - 10 new in PF2e, 13 adventure ones relabelled (still the GM's), and 14 in Battlezoo.
+- **Live / simulator:** no-effect, as before.
+

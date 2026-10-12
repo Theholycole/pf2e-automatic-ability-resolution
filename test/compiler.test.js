@@ -3762,3 +3762,13 @@ test("an older roll with its damage type as the flavour; a Strike at all within 
     const sweep = compileMonsterAbility(item("<p>The test ogre makes a club Strike against all creatures within reach, with a –1 penalty to each attack roll. These attacks count toward the test ogre's multiple attack penalty, but the multiple attack penalty doesn't increase until after it makes all its attacks. Additionally, it can use Improved Knockdown on each creature it hits.</p>"), { basicActions: {} });
     assert.deepEqual([sweep.builtin, sweep.strikes, sweep.penalty, sweep.notes], ["multi-strike", ["club"], 1, ["It can use Improved Knockdown on each creature it hits."]]);
 });
+
+test("an action that only counteracts magic is the GM's, as Counterspell is; not one with more of its own (2026-10-12, batch 232)", () => {
+    const item = (html, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {}, pack: "pathfinder-monster-core" });
+    assert.deepEqual(plan("<p>The test drake glares at a spell effect within 60 feet that lets a creature fly and attempts to counteract it (counteract modifier +18, counteract rank 5).</p>"), { builtin: "no-effect" });
+    assert.deepEqual(plan("<p><strong>Trigger</strong> An ally of the test sage within 30 feet is targeted by a fire effect</p><hr /><p><strong>Effect</strong> The test sage attempts a counteract check against the effect with a +20 modifier.</p>", "reaction"), { builtin: "no-effect" });
+    // Not with a bonus, a condition or a reroll of its own, nor magic that others must counteract to end.
+    assert.equal(plan("<p>The test herald attempts to counteract one fear effect on an ally (counteract modifier +16), and both gain a +1 status bonus to attack rolls for 1 round.</p>")?.builtin === "no-effect" && !plan("<p>The test herald attempts to counteract one fear effect on an ally (counteract modifier +16), and both gain a +1 status bonus to attack rolls for 1 round.</p>")?.gm, false);
+    assert.notDeepEqual(plan("<p>The test mist conjurer fills a @Template[burst|distance:20] with fog. Creatures in it are Concealed; anyone else trying to clear it must succeed at a counteract check.</p>"), { builtin: "no-effect" });
+});
