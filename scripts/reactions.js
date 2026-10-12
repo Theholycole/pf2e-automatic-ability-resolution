@@ -28,7 +28,7 @@ import { blocksReactions, damageNote, degreeWords, higherAC, hitSetsOff, leftRea
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
-import { isActiveGM, postCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
+import { isActiveGM, postCard, postEffectCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
@@ -766,12 +766,21 @@ async function use(message, action, slug) {
         const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
         const area = plan.targeting?.area;
         // (Its own Strike's: the creature it hit, or around it: "a 10-foot burst centered on the target".)
-        const tokens = plan.targeting?.target === "self" ? [monster.object ?? monster]
+        // (Batch 82: a PF2e effect on itself, Curl Up's; on its allies with no area, Brutal Rally's "All allies that can see the gang
+        // leader": its allies in the encounter.)
+        const applications = plan.resolution.kind === "effect" ? plan.resolution.applications ?? [] : [];
+        const ownEffect = applications.length > 0 && applications.every((application) => application.recipients === "self");
+        const allyEffect = !area && applications.some((application) => application.recipients === "allies-in-area");
+        const running = allyEffect ? runningCombat(monster.parent) : null;
+        const taking = running ? inEncounter(running) : new Set();
+        const tokens = plan.targeting?.target === "self" || ownEffect ? [monster.object ?? monster]
+            : allyEffect ? monster.parent.tokens.filter((token) => taking.has(token.id) && token.id !== monster.id && !token.hidden && token.disposition === monster.disposition && token.actor && !token.actor.isDead).map((token) => token.object ?? token)
             : ["the attacker", "the creature the Strike hits"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
             : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
-        await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: state.free ? "free action" : "reaction" });
-        result = tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;
+        if (applications.length) await postEffectCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens: ownEffect ? [] : tokens });
+        else await postCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens, cause: state.free ? "free action" : "reaction" });
+        result = applications.length ? `${state.ability.name}: its effect card is posted${ownEffect || tokens.length ? "; Apply gives the effect" : "; target the creatures it affects, then Use my targets"}.` : tokens.length ? `${state.ability.name}: its card is posted.` : `${state.ability.name}: its card is posted; target the creatures it affects, then Use my targets.`;
         // (A free action doesn't use the reaction.)
         if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "reroll") {

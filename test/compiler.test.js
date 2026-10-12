@@ -1950,3 +1950,22 @@ test("a harder Escape; a failed save's own sentence; a hit earlier this turn; bo
     assert.deepEqual(compile("<p>The test crawler makes up to three Strikes against different targets, each using a different limb.</p>", 2)?.strikes, [null, null, null]);
     assert.deepEqual(compile("<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test bat makes two wing Strikes, then falls if it's flying. It can't Fly until the end of its turn.</p>")?.strikes, ["wing", "wing"]);
 });
+
+test("a second Strike after a hit; berserk; an effect on its own critical hit; a maneuver with another skill (2026-10-11, batch 82)", () => {
+    const action = (description, actions = 1, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } });
+    const compile = (description, actions, type, basicActions = {}) => compileMonsterAbility(action(description, actions, type), { basicActions });
+    // The second Strike only after a hit, or instead a move (the GM's).
+    assert.deepEqual(compile("<p>The test mate makes a melee Strike with their boat hook. If this Strike hits, the test mate can either move the target 5 feet within the hook's reach or make a fist Strike against the target without increasing their multiple attack penalty until after the fist Strike.</p>", 2),
+        { builtin: "multi-strike", actions: 2, strikes: ["boat hook", "fist"], sameTarget: true, sameMap: true, ifFirstHits: true, instead: "move the target 5 feet within the hook's reach" });
+    // Only while berserk; "1d6 extra damage" of the Strike's type; a singular "Requirement".
+    const slam = compile("<p><strong>Requirement</strong> The test golem is berserk.</p><hr /><p><strong>Effect</strong> The test golem Strikes with its fist at a -1 circumstance penalty. If it hits, it deals 1d6 extra damage and knocks the target Prone.</p>");
+    assert.deepEqual([slam?.requires, slam?.strike, slam?.attackBonus, slam?.onHit?.damage, slam?.onHit?.conditions?.[0]?.slug], ["berserk", "fist", -1, ["1d6[strike]"], "prone"]);
+    // Its allies' effect as its own Strike critically hits.
+    const rally = compile("<p><strong>Trigger</strong> The test captain rolls a critical hit against a creature</p><hr /><p><strong>Effect</strong> All allies that can see the test captain gain a +1 circumstance bonus to attack rolls until the start of the test captain's next turn.</p>\n<p>@UUID[Compendium.pf2e.bestiary-effects.Item.7x0O2GqWBJiAk5PF]{Effect: Test Rally}</p>", null, "reaction");
+    assert.deepEqual([rally?.trigger, rally?.resolution?.applications?.[0]?.recipients], [{ event: "own-strike", reaction: true, on: ["criticalSuccess"], strike: null }, "allies-in-area"]);
+    // A Grapple with Diplomacy.
+    const grapple = { modelVersion: 13, source: { name: "Grapple", slug: "grapple", uuid: null, type: "action" }, rank: 1, traits: ["attack"], activation: { time: "1", traits: ["attack"] }, targeting: { target: "1 creature", range: "touch", area: null }, trigger: { event: "use", immunity: null },
+        resolution: { kind: "check", check: { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "fortitude" } }, sharedDamage: null, outcomes: {} } };
+    const embrace = compile("<p>The test charmer attempts to [[/act grapple skill=diplomacy]]{Grapple} a creature using their Diplomacy bonus instead of Athletics. If the creature is willing, the test charmer automatically succeeds.</p>", 1, "action", { grapple });
+    assert.deepEqual([embrace?.source?.name, embrace?.resolution?.check?.statistic, embrace?.traits], ["Test", "diplomacy", ["attack"]]);
+});

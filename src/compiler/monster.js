@@ -706,7 +706,8 @@ function hitDamage(text) {
     if (!match) return null;
     const dice = match[1].replace(/\s+/g, "");
     if (match[2]) return `${dice}[persistent,${match[3].toLowerCase()}]`;
-    return `${dice}[${(match[3] ?? "strike").toLowerCase()}]`;
+    // (Batch 82: "1d6 extra damage": no type of its own.)
+    return `${dice}[${(match[3] && !/^(?:extra|additional)$/i.test(match[3]) ? match[3] : "strike").toLowerCase()}]`;
 }
 
 // A save after a hit ("the target must succeed at a @Check[fortitude|dc:23] save or become Clumsy 2 for 1 minute"): its plan.
@@ -824,7 +825,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     // (Sudden Charge's "Strides twice. If it ends its movement within melee reach …, it makes a melee Strike against that enemy.",
     // as one sentence.)
     // (A "Trigger" in an action that only says what it needs, batch 44: "Trigger The ruffian has one hand free, …", as a requirement.)
-    const html = chargeSentences(item.system?.description?.value ?? "").replace(/<strong>\s*Trigger\s*<\/strong>(?=\s*(?:The )?[^<.]+? has (?:a|one) (?:free )?hand(?: free)?\b)/gi, "<strong>Requirements</strong>").replace(/<p>\s*<strong>\s*(?:Requirements|Frequency)\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/gi, (block) => (/Frequency/i.test(block) && /once per (?:day|hour|minute|10 minutes)/i.test(block) ? "<p>[once]</p>" : /Frequency/i.test(block) && /once per (?:round|turn)/i.test(block) ? "<p>[once a turn]</p>" : /Requirements/i.test(block) ? `<p>[requires ${htmlToPlainText(block).replace(/^Requirements\s*/i, "")}]</p>` : "")).replace(/<strong>\s*Effect\s*<\/strong>/gi, "");
+    const html = chargeSentences(item.system?.description?.value ?? "").replace(/<strong>\s*Trigger\s*<\/strong>(?=\s*(?:The )?[^<.]+? has (?:a|one) (?:free )?hand(?: free)?\b)/gi, "<strong>Requirements</strong>").replace(/<p>\s*<strong>\s*(?:Requirements?|Frequency)\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/gi, (block) => (/Frequency/i.test(block) && /once per (?:day|hour|minute|10 minutes)/i.test(block) ? "<p>[once]</p>" : /Frequency/i.test(block) && /once per (?:round|turn)/i.test(block) ? "<p>[once a turn]</p>" : /Requirements?/i.test(block) ? `<p>[requires ${htmlToPlainText(block).replace(/^Requirements?\s*/i, "")}]</p>` : "")).replace(/<strong>\s*Effect\s*<\/strong>/gi, "");
     const sentences = html.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ").split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
     let opened = false;
@@ -844,6 +845,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // against the target's Fortitude DC to Trip them" as a Trip.)
             .replace(/\bdraws an? ([\w' -]+?) and Strikes an? (?:target|creature|foe)(?: within \d+ feet)?(?=\.$)/i, "makes a $1 Strike")
             .replace(/\bimmediately rolls an? (?:@Check\[athletics[^\]]*\](?:\{[^}]*\})?|Athletics) check against the target's Fortitude DC to Trip (?:them|it|the target)(?=\.$)/i, "attempts to Trip the target")
+            // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
+            .replace(/\bStrikes with (?:its|their|his|her) ([\w' -]+?) at an? ([-\u2013\u2212]\d+) circumstance penalty(?=\.$)/i, "makes a $1 Strike with a $2 circumstance penalty to its attack roll")
             // (Stunning Strike's "makes a weapon Strike against the foe": the foe its requirement hit.)
             .replace(/\b(makes an? (?:weapon |melee )?Strike) against the foe(?=\.$)/i, "$1")
             // (Batch 80, Pierce Armor: the armor it breaks is the GM's.)
@@ -879,6 +882,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             else if (/(?:doesn't|does not) have a creature impaled on (?:its|their|his|her) horn/i.test(match[1])) activity.requires = "free-hand";
             // (Batch 81, Stunning Strike: "hit a foe earlier this turn with a weapon Strike": at a foe it hit this turn.)
             else if (/^(?:The )?[^,]*? hit an? (?:foe|creature|enemy|target) earlier this turn(?: with an? (?:weapon |melee )?Strike)?$/i.test(match[1])) activity.requires = "hit-earlier";
+            // (Batch 82, Berserk Slam: "The flesh golem is berserk": only then; the simulator doesn't play a golem's berserk state.)
+            else if (/^(?:The )?[^,]*? is berserk\.?$/i.test(match[1])) activity.requires = "berserk";
             else if (!/is wielding|is holding/i.test(match[1])) return reject(text);
         } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides?(?: twice| or Steps?)?),? (?:and |then |and then )*)?(?:makes?|attempts?) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll)(?: against the (?:grabbed|restrained) (?:creature|target))?)?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*| while keeping one hand free)?\.$/i.exec(head)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(head.slice(head.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
             // A move written into the subject ("The worm Burrows at least 10 feet and then attempts a jaws Strike"): read as a move.
@@ -1561,9 +1566,14 @@ const GRANTS = /\b(?:gains?|gaining|takes? an?|taking an?|grants?|granting|gives
 const OTHERS = /\b(?:all(?:y|ies)|allied|bodyguards?|minions?|companions?|host|rider|target|targets|creatures?|characters?|enem(?:y|ies)|foes?|constructs?|infantry)\b/i;
 const MANY_ALLIES = /\b(?:all|each|every|its|their|his|her|other|up to \w+|any number of)\b[^.]{0,30}?\b(?:all(?:y|ies)|allied)\b|\ballies\b/i;
 function effectAbility(item) {
-    const html = item.system?.description?.value ?? "";
     const type = item.system?.actionType?.value;
-    if (!["action", "free"].includes(type) || /<strong>\s*Trigger\s*<\/strong>/i.test(html)) return null;
+    // (Batch 82: a reaction whose trigger reads, Brutal Rally's "Trigger The gang leader rolls a critical hit against a creature Effect All
+    // allies that can see the gang leader gain …": the effect, set off by that; its Trigger section set aside.)
+    const raw = item.system?.description?.value ?? "";
+    const triggerText = type === "reaction" ? /<strong>\s*Trigger\s*<\/strong>([\s\S]*?)(?=<hr|<\/p>\s*<p>\s*<strong>\s*Effect|<strong>\s*Effect)/i.exec(raw)?.[1] : null;
+    const triggered = triggerText ? readReactionTrigger(htmlToPlainText(triggerText).trim()) : null;
+    const html = triggered ? raw.replace(/<p[^>]*>\s*<strong>\s*Trigger\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "") : raw;
+    if (!(["action", "free"].includes(type) || triggered) || /<strong>\s*Trigger\s*<\/strong>/i.test(html)) return null;
     if (inlineTags(html, "Check").length || inlineTags(html, "Damage").length || /\[\[\//.test(html)) return null;
     const links = [...html.matchAll(EFFECT_LINK)];
     const own = item.system?.selfEffect?.uuid ?? null;
@@ -1609,7 +1619,7 @@ function effectAbility(item) {
     return {
         ...base(item),
         targeting,
-        trigger: { event: "use" },
+        trigger: triggered ?? { event: "use" },
         resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: uuids[0], label, recipients, ...(own ? { selfEffect: true } : {}) }] }
     };
 }
@@ -1989,6 +1999,21 @@ function provokedSkill(item, basicActions) {
     return { ...plan, ...base(item, { traits: (plan.traits ?? []).filter((trait) => trait !== "attack") }), targeting: { ...plan.targeting, target: "the attacker" }, trigger };
 }
 
+// A basic maneuver with another skill (2026-10-11, batch 82): Embrace's "The succubus attempts to Grapple a creature using their
+// Diplomacy bonus instead of Athletics. If the creature is willing, the succubus automatically succeeds." → PF2e's Grapple (its
+// results and DC) rolled with that skill; a willing creature the GM's. null otherwise.
+function otherSkillManeuver(item, basicActions = {}) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[\w' -]+? attempts to (Grapple|Trip|Shove|Disarm|Reposition) an? (?:creature|foe|enemy|target) using (?:its|their|his|her) (Acrobatics|Deception|Diplomacy|Intimidation|Performance|Stealth|Thievery) (?:bonus|modifier) instead of Athletics\.(?: If the (?:creature|target) is willing, (?:the )?[\w' -]+? (?:automatically succeeds|\w+ it automatically)\.)?$/i.exec(plain);
+    const basic = match ? basicActions[match[1].toLowerCase()] : null;
+    if (!basic?.resolution?.check) return null;
+    const plan = structuredClone(basic);
+    plan.resolution.check = { ...plan.resolution.check, statistic: match[2].toLowerCase() };
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }) };
+}
+
 // A Strike at a creature that moves (or acts) in its reach, Reactive Strike's kin in its own words (2026-10-11, batch 68): "Trigger A
 // creature within reach of Racharak's tail uses a move action or leaves a square during a move action it's using. Effect Racharak makes a
 // tail Strike at the creature with a -2 penalty. If it hits, she disrupts the creature's action.", Gripping Tentacle's "… against the
@@ -2348,7 +2373,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
@@ -2421,9 +2446,10 @@ export function readReactionTrigger(text) {
     // (Batch 69: on a creature with a condition, "The stone golem hits a Slowed creature" — { condition }; "with a Strike", "with a melee
     // Strike", "with an unarmed Strike" — any Strike, or its kind of weapon; "… on its turn" — { ownTurn }.)
     const turn = / on (?:its|his|her|their) (?:own )?turn$/i.test(trigger);
-    let own = new RegExp(String.raw`^${SELF} (critically hits|critically succeeds at an attack roll against|critically succeeds at a Strike(?: or Disarm)?|hits|damages|deals damage to)(?: (?:an?|the) (?:((?:Tiny|Small|Medium|Large|Huge) or smaller) )?(?:(${OWN_HIT_CONDITIONS}) )?(?:creature|foe|enemy|target))?(?: with (?:its|his|her|their|an?) ([\w' -]+?)(?: Strike)?)?(?: and deals damage)?$`).exec(trigger.replace(/ on (?:its|his|her|their) (?:own )?turn$/i, ""));
+    // (Batch 82, Brutal Rally: "The gang leader rolls a critical hit against a creature".)
+    let own = new RegExp(String.raw`^${SELF} (critically hits|critically succeeds at an attack roll against|rolls a critical hit against|critically succeeds at a Strike(?: or Disarm)?|hits|damages|deals damage to)(?: (?:an?|the) (?:((?:Tiny|Small|Medium|Large|Huge) or smaller) )?(?:(${OWN_HIT_CONDITIONS}) )?(?:creature|foe|enemy|target))?(?: with (?:its|his|her|their|an?) ([\w' -]+?)(?: Strike)?)?(?: and deals damage)?$`).exec(trigger.replace(/ on (?:its|his|her|their) (?:own )?turn$/i, ""));
     if (own) {
-        const critical = /^critically/i.test(own[1]);
+        const critical = /^critically|critical hit/i.test(own[1]);
         const named = own[4] ? own[4].toLowerCase() : null;
         const kind = named && /^(?:strike|attack|weapon|weapon strike)$/.test(named) ? "any" : named && /^melee(?: weapon)?(?: strike| attack)?$/.test(named) ? "melee" : named && /^(?:melee )?unarmed(?: strike| attack)?$/.test(named) ? "unarmed" : null;
         return { event: "own-strike", reaction: true, on: critical ? ["criticalSuccess"] : ["success", "criticalSuccess"], strike: kind ? null : named, ...(kind && kind !== "any" ? { weapon: kind } : {}), ...(own[2] ? { maxSize: own[2].split(" ")[0].toLowerCase() } : {}), ...(own[3] ? { condition: own[3].toLowerCase() } : {}), ...(turn ? { ownTurn: true } : {}) };

@@ -119,6 +119,19 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
     });
 }
 
+// A PF2e effect a reaction gives (batch 82: Brutal Rally to its allies, Curl Up to itself): its effect card on those creatures, with
+// the GM's Apply.
+export async function postEffectCard({ plan, item, sourceActor, sourceToken, tokens }) {
+    const state = createEffectCard({
+        plan,
+        ability: { name: item.name, uuid: item.uuid },
+        source: { actorUuid: sourceActor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? sourceActor.name },
+        targets: tokens.map((token) => effectTarget(token, sourceToken))
+    });
+    if (!state) return null;
+    return ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: sourceActor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
+}
+
 // A monster's or a hazard's ability, used from its sheet (PF2e's own message for the action).
 async function cardForAbility(message) {
     if (message.flags?.pf2e?.context?.type || stateOf(message)) return;
@@ -231,6 +244,8 @@ async function cardForAbility(message) {
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
     // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round" — for the GM to apply.)
     if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if both Strikes hit the same creature, ${bothHitText(plan.bothHit)}.`]);
+    // (Batch 82, Pike and Strike: the second Strike only after a hit, at the same penalty; or instead the move, the GM's choice.)
+    if (plan?.builtin === "multi-strike" && plan.ifFirstHits) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: only if the ${plan.strikes?.[0] ?? "first"} Strike hits, the ${plan.strikes?.[1] ?? "second"} Strike at the same multiple attack penalty${plan.instead ? `, or instead ${plan.instead}` : ""}.`]);
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
