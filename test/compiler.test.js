@@ -2465,3 +2465,18 @@ test("Strike activities in more words, a Speed penalty after a save (2026-10-12,
     const volley = compile("Each creature in a @Template[type:burst|distance:20] within 60 feet must attempt a @Check[fortitude|dc:20] saving throw. On a failure, a creature takes a –10-foot circumstance penalty to its Speed for 1 minute.", 2);
     assert.deepEqual(volley?.resolution?.outcomes?.failure?.modifiers?.[0]?.selector, "land-speed");
 });
+
+test("Strike activities with a save or a rider in other words (2026-10-12, batch 128)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    const thrust = compile("The test guard makes a spear Strike. If the Strike hits, the target must attempt a @Check[reflex|dc:18] save. On a failure, the creature is @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized} until the test guard moves or lets go of the spear.");
+    assert.deepEqual([thrust?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug, thrust?.notes], ["immobilized", ["The creature stays Immobilized until the test guard moves or lets go of the spear."]]);
+    const tickle = compile("The test hound makes a jaws Strike. If successful, after taking the normal damage from the Strike, the target must succeed at a @Check[will|dc:20] save or become Slowed 1 for 1 minute as it giggles helplessly.", 3);
+    assert.equal(tickle?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug, "slowed");
+    const nerve = compile("The test monk Strikes with their fist. If they hit, the target is Paralyzed until the end of the test monk's next turn (@Check[fortitude|dc:17] negates).");
+    assert.deepEqual([nerve?.strike, nerve?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["fist", "paralyzed"]);
+    const tackle = compile("The test drake makes a jaws Strike. If the jaws Strike hits and the target is Medium or smaller, the target is knocked Prone.", 1);
+    assert.deepEqual([tackle?.onHit?.size, tackle?.onHit?.conditions?.[0]?.slug], ["medium", "prone"]);
+    assert.deepEqual(compile("The test thug makes a knife Strike. If they hit and deal damage, the damaged creature is Frightened 1 (or Frightened 2 on a critical hit).", 1)?.onHit?.critical, [{ slug: "frightened", value: 2, duration: null }]);
+    // (Not "Strikes with its fist at a -1 circumstance penalty" read as a Strike named so.)
+    assert.equal(compile("The test golem Strikes with its fist at a -1 circumstance penalty.", 1)?.strike ?? "fist", "fist");
+});

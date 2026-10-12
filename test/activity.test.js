@@ -34,9 +34,9 @@ test("a Strike activity's results on a hit, by the Strike's degree (2026-10-10, 
     // A save on a hit: the save's own card; nothing on a hit: no card.
     assert.ok(activityRider({ builtin: "strike-activity", onHit: { save: { resolution: { kind: "save" } }, size: "medium" } }).save);
     assert.equal(activityRider({ builtin: "strike-activity", onHit: { conditions: [], damage: [] } }), null);
-    // Not with a save of its own in the sentence ("… Paralyzed … (DC 19 Fortitude negates)").
+    // A save of its own in the sentence ("… Paralyzed … (DC 19 Fortitude negates)"): not Paralyzed on any hit, the save's failure (batch 128).
     const nerve = compileMonsterAbility(action("Test Nerve", `<p>The test agent Strikes with their fist. If they hit, the target is @UUID[Compendium.pf2e.conditionitems.Item.6uEgoh53GbXuHpTF]{Paralyzed} until the end of the agent's next turn (@Check[fortitude|dc:19] negates).</p>`));
-    assert.notEqual(nerve?.builtin, "strike-activity");
+    assert.deepEqual([nerve?.onHit?.conditions, nerve?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug], [[], "paralyzed"]);
 });
 
 test("which Strike is the activity's, and who fits its save", () => {

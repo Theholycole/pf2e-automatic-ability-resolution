@@ -852,7 +852,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
     // as one sentence.)
     // (A "Trigger" in an action that only says what it needs, batch 44: "Trigger The ruffian has one hand free, …", as a requirement.)
     const html = chargeSentences(item.system?.description?.value ?? "").replace(/<strong>\s*Trigger\s*<\/strong>(?=\s*(?:The )?[^<.]+? has (?:a|one) (?:free )?hand(?: free)?\b)/gi, "<strong>Requirements</strong>").replace(/<p>\s*<strong>\s*(?:Requirements?|Frequency)\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/gi, (block) => (/Frequency/i.test(block) && /once per (?:day|hour|minute|10 minutes)/i.test(block) ? "<p>[once]</p>" : /Frequency/i.test(block) && /once per (?:round|turn)/i.test(block) ? "<p>[once a turn]</p>" : /Requirements?/i.test(block) ? `<p>[requires ${htmlToPlainText(block).replace(/^Requirements?\s*/i, "")}]</p>` : "")).replace(/<strong>\s*Effect\s*<\/strong>/gi, "");
-    const sentences = html.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ").split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
+    // (Batch 128, Immobilizing Thrust: "If the Strike hits, the target must attempt a … save. On a failure, the creature is Immobilized until the
+    // kobold egg guardian moves, …" — one save sentence, its "until" the GM's.)
+    const sentences = html.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ")
+        .replace(/(If (?:the Strike|it|the attack) hits, the target must) attempt (an? @Check\[(?:fortitude|reflex|will)[^\]]*\](?:\{[^}]*\})?) save\. On a failure, the creature is (?:@UUID\[[^\]]*\]\{(\w+)\}|(\w+)) until ([^.]+)\./i, (_all, lead, check, linked, plain, until) => `${lead} succeed at ${check} save or be ${linked ?? plain}. The creature stays ${linked ?? plain} until ${until}.`)
+        .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
     let opened = false;
     let flavorSkipped = false;
@@ -949,6 +953,32 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^If (?:it|he|she|they) hits, the (?:blade|weapon|claw|jaws|bite) (?:cuts|bites|tears) deep and creates a grievous wound\.$/i, "[told]")
             .replace(/^In addition to the normal damage caused by the attack, the creature struck takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage and becomes Wounded (\d)(?: \(or increases the value of an existing wounded condition by 1, to a maximum of Wounded 4\))?\.$/i, "If it hits, the creature struck takes $1 damage and becomes Wounded $2.")
             .replace(/ \(double damage on a critical (?:success|hit)\)/i, "")
+            // (Batch 128: Immobilizing Thrust's "until" (above); Tickle Bite's "If successful, after taking the normal damage from the Strike, the
+            // target must succeed at … or become Slowed 1 for 1 minute as it becomes overcome with fits of laughter"; Nerve Strike's "Strikes with
+            // their fist. If they hit, the target is Paralyzed until the end of the agent's next turn (@Check[…] negates).")
+            .replace(/^The creature stays \w+ until [^.]+\.$/i, "[gm]")
+            // (Batch 128: "the damaged creature is Frightened 1"; Tackle's "If the jaws Strike hits and the target is Medium or smaller, the target is
+            // knocked Prone", Gnaw Metal's "… is knocked Prone if it is Medium or smaller" — the rider's size; "On a hit, it deals an extra 1d6
+            // precision damage on a hit"; Big Thwunk's "On a successful hit, the target is pushed back 5 feet, with the effects of a successful
+            // Shove"; Burrowed Ambush's automatic Grab, and its Stride after (hit or not), the GM's.)
+            .replace(/^(If (?:it|he|she|they) hits?(?: and deals? damage)?), the damaged creature is /i, "$1, the target is ")
+            .replace(/^If the (?:[\w' -]+? Strike|attack|Strike) hits and the target is (Tiny|Small|Medium|Large|Huge) or smaller, the target is knocked Prone(?=\.$)/i, (_all, size) => {
+                activity.onHit.size = size.toLowerCase();
+                return "If it hits, the target is knocked Prone";
+            })
+            .replace(/^If the (?:attack|Strike) hits, the target is knocked Prone if it is (Tiny|Small|Medium|Large|Huge) or smaller(?=\.$)/i, (_all, size) => {
+                activity.onHit.size = size.toLowerCase();
+                return "If it hits, the target is knocked Prone";
+            })
+            .replace(/^On a hit, (?:it|he|she|they) deals an (extra|additional) (.+?) damage on a hit(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
+            .replace(/^On a successful hit, the target is pushed back (\d+) feet, with the effects of a successful Shove(?=\.$)/i, "If it hits, the target is pushed $1 feet")
+            .replace(/^On a hit, (?:the [\w' -]+?|it|they) automatically Grabs the (?:creature|target)(?=\.$)/i, "If it hits, the target is Grabbed")
+            .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
+            // (Gnaw Metal's armor made Broken; Big Thwunk's following the foe: the GM's.)
+            .replace(/^In addition, if the target is wearing armor with Hardness \d+ or lower, the armor becomes Broken\.$|^If the target is Off-Guard, then the [\w' -]+? can follow the foe\.$/i, "[gm]")
+            .replace(/^If successful, after taking the normal damage from the Strike, (the target must succeed at .+? save or become [^.]+?)(?: as it becomes [a-z][^.@]*)?(?=\.$)/i, "If it hits, $1")
+            .replace(/^(?:The )?([^.]+?) Strikes with (?:its|their|his|her) (?![^.]* at an? [-\u2013\u2212]?\d)([\w' -]+?)(?=\.$)/i, "$1 makes a $2 Strike")
+            .replace(/^If (?:it|he|she|they) hits?, the target is (\w+)( until [^(.]+?)? \((@Check\[(?:fortitude|reflex|will)[^\]]*\](?:\{[^}]*\})?) negates\)(?=\.$)/i, "If it hits, the target must succeed at a $3 save or be $1$2")
             .replace(/^On a hit, (?:it|he|she|they) inflicts? an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage(?=\.$)/i, "If it hits, it deals an additional $1 damage")
             // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
             .replace(/\bStrikes with (?:its|their|his|her) ([\w' -]+?) at an? ([-\u2013\u2212]\d+) circumstance penalty(?=\.$)/i, "makes a $1 Strike with a $2 circumstance penalty to its attack roll")
