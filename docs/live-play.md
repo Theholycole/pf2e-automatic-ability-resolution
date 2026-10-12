@@ -1531,3 +1531,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Flash of Insight → `save-boost` with `toSuccess`, `uses: 1`, `free`, and a note that any other d20 roll is the GM's.
 - **Live:** its failed save brings the boost offer as before, its button "Use it: a success", its note "The save becomes a success: apply that result instead." with the GM's other rolls; a use of its frequency spent. Not run in pftest: the offer's label and note on the boost offer that batches 53 and 65 ran.
 - **Simulator:** its first failed save (a failure or a critical failure) becomes a success, once a fight, without its reaction (B169).
+
+## Its allies' initiative (2026-10-12, batch 170)
+
+- **Compiled:** Guide's Warning, Scout's Warning, Sentry's Warning, Warning Hoot → `initiative-warning` with `value`, `skills` and `free`, and a note for the guide's +2 after Scouting. Vare's version, written as a passive with no labels, compiles too.
+- **Live:** as the encounter starts, its offer says to use it only if it rolled initiative with those skills, and only for the allies that can hear or see it. "Use it: +1 to its allies' initiative" adds the bonus to each rolled initiative of its disposition, since they have rolled by then; the turn order follows. Run in pftest: the guide's offer came up at the start, its two allies went from 15 to 16 and from 9 to 10, its reaction was marked used, and the turn stayed on the first creature.
+- **Simulator:** unless it rolls Stealth for an ambush, its allies' initiative rolls get the bonus, which doesn't stack with another circumstance bonus. Its reaction is spent until its turn (B170).

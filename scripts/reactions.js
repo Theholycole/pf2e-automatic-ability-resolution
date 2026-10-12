@@ -769,6 +769,18 @@ async function onInitiative(combat) {
         const skills = entry?.plan.trigger.skills?.map((skill) => skill[0].toUpperCase() + skill.slice(1));
         if (entry) await offer({ kind: "card", item: entry.item, monster, actor, target: null, trigger: "rolls initiative", free: !!entry.plan.trigger.free, note: skills?.length ? `Only if it rolled initiative with ${skills.join(" or ")}.` : null });
     }
+    // (Batch 170, Guide's Warning, Warning Hoot: its allies' initiative higher. They've rolled by the time the encounter starts, so the bonus
+    // goes on their totals; Vare's is written as a passive.)
+    const taking = inEncounter(combat);
+    for (const monster of scene.tokens) {
+        const actor = monster.actor;
+        if (!actor || actor.type !== "npc" || monster.hidden || !taking.has(monster.id) || actor.isDead) continue;
+        const item = (actor.itemTypes?.action ?? []).find((entry) => compile(entry)?.builtin === "initiative-warning");
+        const plan = item ? compile(item) : null;
+        if (!plan || (!plan.free && reactionUsed(actor))) continue;
+        const skills = plan.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1));
+        await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value }, note: [`Only if it rolled initiative with ${skills.join(" or ")}, and for the allies that can hear or see it.`, ...(plan.notes ?? [])].join(" ") });
+    }
 }
 
 // Reduced to 0 HP: Ferocity, or Death Frenzy's last Strike.
@@ -1147,6 +1159,14 @@ async function use(message, action, slug) {
                 ? `${state.ability.name}: ${roll.total} beats the save's ${state.attack.total}, but it's still ${degreeWords(after, true)}.`
                 : `${state.ability.name}: ${roll.total} beats the save's ${state.attack.total}, so the save is ${degreeWords(after, true)}. Apply that result instead.`
             : `${state.ability.name}: ${roll.total} doesn't beat the save's ${state.attack.total}; the save stands.`;
+    } else if (state.kind === "initiative") {
+        // (Batch 170, Guide's Warning: its allies' rolled initiative that much higher — the circumstance bonus their rolls were due; the turn
+        // order follows.)
+        const combat = runningCombat(monster.parent);
+        const allies = (combat?.combatants.contents ?? []).filter((entry) => entry.tokenId !== monster.id && entry.token?.disposition === monster.disposition && Number.isFinite(entry.initiative));
+        if (allies.length) await combat.updateEmbeddedDocuments("Combatant", allies.map((entry) => ({ _id: entry.id, initiative: entry.initiative + state.attack.value })));
+        result = allies.length ? `${state.ability.name}: +${state.attack.value} to the initiative of ${allies.map((entry) => entry.name).join(", ")}.` : `${state.ability.name}: none of its allies has rolled initiative.`;
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "boost") {
         // Golden Luck, Word of Wisdom (batch 53): one degree better, for the GM to apply; a use of its frequency spent (batch 65).
         const item = await fromUuid(state.ability.uuid);

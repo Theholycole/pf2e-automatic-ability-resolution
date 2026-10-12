@@ -141,3 +141,8 @@ test("a boost's own label: a success (2026-10-12, batch 169)", () => {
     assert.match(offerHTML({ ...state, attack: { label: "a success" } }), /data-aar-reaction="use">Use it: a success</);
     assert.match(offerHTML(state), /data-aar-reaction="use">Use it: one degree better</);
 });
+
+test("an initiative warning's button: its allies' initiative (2026-10-12, batch 170)", () => {
+    const html = offerHTML({ kind: "initiative", ability: { name: "Test Warning" }, monster: { name: "Lookout" }, target: null, trigger: "rolls initiative", attack: { value: 2 }, note: null, status: "open" });
+    assert.match(html, /data-aar-reaction="use">Use it: \+2 to its allies' initiative</);
+});

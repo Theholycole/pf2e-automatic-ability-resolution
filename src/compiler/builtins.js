@@ -1416,6 +1416,31 @@ export function readSaveSkill(text) {
     return { builtin: "save-skill", skill, ...(trigger[2] ? { save: trigger[2].toLowerCase() } : {}), ...(trigger[3] ? { against: trigger[3].toLowerCase().split(/\s+or\s+/) } : {}), ...(ally ? { ally: true, within: Number(trigger[1]) } : {}), ...(higher[1] ? { allyTrait: higher[1].toLowerCase() } : {}) };
 }
 
+// (Batch 170, Guide's Warning: "Trigger The guide is about to roll a Perception or Survival check to determine their initiative Effect The guide
+// visually or audibly warns allies, granting them a +1 circumstance bonus to their initiative rolls. This bonus increases to +2 if the guide was
+// Scouting. Depending on how the guide warns allies, this action has the auditory or visual trait."; Warning Hoot's "granting each ally …",
+// Scout's Warning's "Any ally who is able to hear … gains a +1 circumstance bonus to their initiative roll." → { builtin: "initiative-warning",
+// value, skills, notes }: its allies' initiative that much higher.)
+// (Vare's in other words: "When Vare is about to roll …, she can alert her allies as a free action. Vare visually or audibly warns allies, …".)
+export function readInitiativeWarning(text, item = null) {
+    const body = String(text).trim().replace(/\s*(?:@UUID\[[^\]]*\]\{)?Effect: [^.}]+\}?$/i, "")
+        .replace(/^When ([^,]+? is about to roll [^,]+?), (?:it|they|he|she) can alert (?:its|their|his|her) allies as a free action\. /i, (_all, when) => `Trigger ${when} Effect `);
+    const free = item?.system?.actionType?.value === "free" || /^When [^,]+?, (?:it|they|he|she) can alert [^.]+? as a free action\./i.test(String(text).trim());
+    const split = /^Trigger (.+?)[.;]? Effect (.+)$/.exec(body);
+    const trigger = split ? /^(?:The )?[\w'" -]+? is about to roll (?:an? )?(Perception(?: or Survival)?)(?: check)? (?:to determine (?:(?:its|their|his|her) )?initiative|for initiative)$/i.exec(split[1]) : null;
+    if (!trigger) return null;
+    let value = null;
+    const notes = [];
+    for (const sentence of split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/)) {
+        const bonus = /^(?:(?:The )?[\w' -]+? [^.]*?\bwarns? (?:its |their )?allies(?: of imminent danger)?, granting (?:them|each ally)|Any ally who is able to (?:hear|see) [^.]*?\) gains) an? \+(\d+) circumstance bonus to (?:their|its) initiative rolls?\.$/i.exec(sentence);
+        if (bonus && value === null) value = Number(bonus[1]);
+        else if (/^This bonus increases to \+(\d+) if (?:the [\w' -]+?|it|they) (?:was|were) Scouting\.$/i.test(sentence)) notes.push(`${sentence.replace(/^This bonus/, "The bonus").replace(/\.$/, "")} (the GM's).`);
+        else if (!/^(?:Depending on how [^.]+?, this action has the auditory or visual trait|This ability gains the auditory trait if [^.]+?, and the visual trait if [^.]+?)\.$/i.test(sentence) && !(value === null && !/\d|@/.test(sentence) && /\bwarns\b/i.test(sentence))) return null;
+    }
+    if (!value) return null;
+    return { builtin: "initiative-warning", value, skills: trigger[1].toLowerCase().split(/\s+or\s+/), ...(free ? { free: true } : {}), ...(notes.length ? { notes } : {}) };
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -1439,7 +1464,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readSaveSkill(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a
@@ -2256,7 +2281,9 @@ export function compileBuiltin(item, slug) {
     if (type === "passive") {
         const momentum = slug === "draconic-momentum" || /critical hit with a Strike/i.test(text) ? readMomentum(text) : null;
         if (momentum) return { builtin: "momentum", ...momentum };
-        return readSteady(text) ?? readGolemAntimagic(text) ?? readPermanent(text) ?? readNaturallyInvisible(text);
+        // (Batch 170, Vare's Guide's Warning, a passive with no labels: "When Vare is about to roll … to determine her initiative, she can alert
+        // her allies as a free action. …".)
+        return readSteady(text) ?? readGolemAntimagic(text) ?? readPermanent(text) ?? readNaturallyInvisible(text) ?? readInitiativeWarning(text, item);
     }
     // Reactions, and free actions with a trigger (Cushioned Blow).
     if (type === "reaction" || (type === "free" && /\bTrigger\b/.test(text))) return readReaction(item, text);

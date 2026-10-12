@@ -2977,3 +2977,11 @@ test("a success instead of rolling, once a day: its failed save made a success (
     const plan = compileMonsterAbility({ type: "action", name: "Test Insight", system: { slug: null, actionType: { value: "free" }, actions: { value: null }, traits: { value: ["divination"] }, description: { value: "<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> The test seer is about to roll a d20.</p><hr /><p><strong>Effect</strong> The test seer glimpses what is to come. It gets a success (but not a critical success) instead of rolling.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.toSuccess, plan.uses, plan.free], ["save-boost", true, 1, true]);
 });
+
+test("a circumstance bonus to its allies' initiative as it rolls Perception (2026-10-12, batch 170)", () => {
+    const compile = (type, html) => compileMonsterAbility({ type: "action", name: "Test Warning", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    const reaction = compile("reaction", "<p><strong>Trigger</strong> The test lookout is about to roll a Perception or Survival check to determine its initiative</p><hr /><p><strong>Effect</strong> The lookout whistles to warn allies, granting them a +2 circumstance bonus to their initiative rolls. This bonus increases to +3 if the lookout was Scouting. Depending on how the lookout warns allies, this action has the auditory or visual trait.</p>");
+    assert.deepEqual([reaction.builtin, reaction.value, reaction.skills, reaction.free, reaction.notes], ["initiative-warning", 2, ["perception", "survival"], undefined, ["The bonus increases to +3 if the lookout was Scouting (the GM's)."]]);
+    const passive = compile("passive", "<p>When Test Lookout is about to roll a Perception check for initiative, she can alert her allies as a free action. Test Lookout visually or audibly warns allies, granting them a +1 circumstance bonus to their initiative rolls.</p>");
+    assert.deepEqual([passive.builtin, passive.value, passive.free], ["initiative-warning", 1, true]);
+});
