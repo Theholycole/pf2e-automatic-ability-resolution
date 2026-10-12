@@ -2938,3 +2938,8 @@ test("a breath of two ways written as dashed paragraphs, a condition that lasts 
     assert.deepEqual(plan.modes.map((mode) => mode.name), ["Scald", "Dulling Haze"]);
     assert.deepEqual([plan.modes[0].plan.resolution.check.basic, plan.modes[1].plan.resolution.outcomes.failure.effects[0].duration], [true, { mode: "fixed", value: 1, unit: "minutes" }]);
 });
+
+test("a storm of thrown objects: a Strike at each creature around it, or one at a single target (2026-10-12, batch 163)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Storm", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p>The test haunt hurls a whirl of cutlery, either spreading them out among multiple foes or directing them at one target.</p><ul><li>When this effect is spread out among multiple foes, the test haunt makes a flung fork Strike at a -2 penalty against each creature within @Template[emanation|distance:20]{20 feet}. These count as one attack for the test haunt's multiple attack penalty, and the penalty doesn't increase until after all the attacks.</li><li>When this effect has only one target, the test haunt makes a flung fork Strike against the target, and the damage increases to 3d10+4. It deals @Damage[1d10[untyped]] damage on a failure, and no damage on a critical failure.</li></ul>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.strikes, plan.each, plan.penalty, plan.countsAs, plan.notes[1]], ["multi-strike", ["flung fork"], true, 2, 1, "Or one Strike at a single target: its damage is 3d10+4, and 1d10 on a failure."]);
+});
