@@ -1815,6 +1815,10 @@ export function compileBuiltin(item, slug) {
     const prey = readHuntPrey(text);
     if (prey) return prey;
     if (readNoCombatEffect(text) || readPlaneShift(text) || readFormShift(item, text)) return { builtin: "no-effect" };
+    // (Batch 123: a move told otherwise, when nothing above read it — "Strides up to half its Speed. This movement doesn't provoke
+    // reactions.", a Step and a Stride, "moves up to 140 feet in a straight line through the water.")
+    const plainMove = readPlainMove(text);
+    if (plainMove) return { builtin: plainMove, actions };
     return null;
 }
 
@@ -1963,7 +1967,28 @@ function readSafeMove(text) {
     if (/\b(?:Strikes?|checks?|saves?|damage|but|if|unless|Grab|Prone|Interacts?)\b|@/i.test(said) || /\b(?:Requirements?|Trigger)\b/.test(said)) return false;
     // (Batch 59: Scuttle's "crawls on all fours, moving up to half its Speed".)
     const move = String.raw`(?:jumps|moves|moving|Strides|Flies|Flying|Swims|Leaps|Climbs|Burrows)`;
-    return new RegExp(String.raw`^(?:The |An? )?[^.;]+? ${move} (?:up to|once|twice)?[^.;]*?(?:\. This movement (?:doesn't|does not) trigger reactions\.|; this movement (?:doesn't|does not) trigger reactions\.| without triggering reactions\.| and (?:doesn't|does not) trigger reactions during this movement\.)$`, "i").test(said);
+    return new RegExp(String.raw`^(?:The |An? )?[^.;]+? ${move} (?:up to|once|twice)?[^.;]*?(?:\. This movement (?:doesn't|does not) trigger reactions\.|; this movement (?:doesn't|does not) trigger reactions\.| without triggering (?:any )?reactions\.| and (?:doesn't|does not) trigger reactions during this movement\.)$`, "i").test(said);
+}
+
+// A move and nothing else (2026-10-12, batch 123): its sentences only movement ("Strides up to half its Speed", "Strides or Climbs twice, with
+// its Speeds increased by 10 feet for this movement", "Strides and then Steps, or Steps and then Strides, ignoring difficult terrain during
+// this movement", "moves up to twice their swim Speed downward"), passing through creatures' spaces, more actions for a longer move, and
+// at most one sentence before that only tells it. "safe-move" when the movement triggers no reactions, "no-effect" otherwise (a move of
+// the creature's own, nothing for the fight's numbers); null for anything else.
+function readPlainMove(text) {
+    const sentences = String(text).replace(/’/g, "'").trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    if (sentences.length > 1 && !/\d|@|\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strikes?|Requirements?|Trigger|Frequency|moves?|jumps?)\b/i.test(sentences[0]) && !/\b(?:Strides?|Steps?|Fl(?:y|ies)|Swims?|Climbs?|Burrows?|Leaps?)\b/.test(sentences[0])) sentences.shift();
+    const verb = String.raw`(?:Strides|Steps|Flies|Swims|Climbs|Burrows|Leaps|moves|jumps)`;
+    const far = String.raw`(?: (?:up to )?(?:\d+ feet|(?:half |twice |double |three times |four times |five times )?(?:its|their|his|her) (?:\w+ )?Speed|once|twice|three times))?`;
+    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically)?))*(?:,? (?:ignoring difficult terrain(?: during this movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?))?`;
+    const move = new RegExp(String.raw`^(?:The |An? )?(?:(?!\b(?:and|then|uses?|Interacts?|Raises?|Hides?|Feints?)\b)[^.;])+? ${verb}(?:(?:,? or|,? and then| then) ${verb})*(?:,? or Steps and then Strides|,? or Strides and then Steps)?${far}${how}\.$`, "i");
+    const safe = /^(?:This|The|Its|Their) movement (?:doesn't|does not) (?:trigger|provoke) (?:any )?reactions(?: based on movement)?\.$/i;
+    const through = /^(?:It|They|He|She) can (?:pass|move) through (?:other )?creatures' spaces during this movement(?:, though (?:it|they|he|she) must end (?:its|their|his|her) movement in an unoccupied space)?\.$/i;
+    const longer = /^(?:It|They|He|She) can increase the number of actions for this activity to \d in order to (?:Stride|move) up to [^.]+? instead\.$/i;
+    if (!sentences.length || !move.test(sentences[0])) return null;
+    const rest = sentences.slice(1);
+    if (!rest.every((sentence) => safe.test(sentence) || through.test(sentence) || longer.test(sentence))) return null;
+    return rest.some((sentence) => safe.test(sentence)) ? "safe-move" : "no-effect";
 }
 
 // A teleport of its own to a space nearby (2026-10-11, batch 59): Jaunt's "The poracha teleports up to 40 feet to a location it can see.

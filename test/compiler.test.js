@@ -2404,3 +2404,14 @@ test("reaction Strikes back in more words: an ally's hit, a melee Strike from cl
     // (Not with a sentence it can't play after the Strike.)
     assert.equal(react("A creature within 10 feet makes a melee Strike against the test giant", "The test giant makes a fist Strike against the triggering creature. The creature is pushed 10 feet.")?.builtin === "reaction-strike", false);
 });
+
+test("a move and nothing else: safe when it triggers no reactions, otherwise nothing for the fight's numbers (2026-10-12, batch 123)", () => {
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    assert.equal(compile("The test weed Strides up to half its Speed. This movement doesn't provoke reactions.")?.builtin, "safe-move");
+    assert.equal(compile("The test vole Strides up to half its speed. It can pass through other creatures' spaces during this movement, though it must end its movement in an unoccupied space.")?.builtin, "no-effect");
+    assert.equal(compile("The test dancer hums a tune to tread lightly. It Strides and then Steps, or Steps and then Strides, ignoring difficult terrain during this movement.", 2)?.builtin, "no-effect");
+    assert.equal(compile("The test eel moves up to 90 feet in a straight line through the water without triggering any reactions.", 2)?.builtin, "safe-move");
+    // (Not with more than moving: a Feint, a light requirement.)
+    assert.equal(compile("The test rogue Strides up to half its Speed and attempts a Feint, in either order."), null);
+    assert.equal(compile("The test shade Strides up to twice its Speed. This movement doesn't trigger reactions, but the test shade must begin and end in darkness.", 2), null);
+});
