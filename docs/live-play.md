@@ -1549,3 +1549,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Tackle ("If it ends this movement in reach of a creature, it makes a fist Strike against that creature") → a Strike activity with its Strides; Horn Toss ("the target is flung 20 feet in a direction of its choice") → a push on a hit, with a note; Hopping Strike ("Leaps 15 feet … dealing an additional 1d6 bludgeoning damage") → a Stride and the damage on a hit; Ibis Dive (its descent) and Lurching Charge ("If it moves at least 20 feet from where it started, it gets a +2 circumstance bonus on the attack roll") → charges; Lurching Skewer → two Strikes at one creature after a Stride; the leopard's Pounce, its Hide part the GM's.
 - **Live:** no new live code. They play as the charges, Strike activities and multi-Strikes did before. Not run in pftest.
 - **Simulator:** nothing new: the same plans.
+
+## Ranged Strike activities (2026-10-12, batch 173)
+
+- **Compiled:** Hunting Throw ("within 60 feet without ranged penalties", a note; Prone on a hit; on a critical hit Prone and Immobilized), Guerrilla Tactics (its Strike, the draw after a note), Bounce Cruuk (its Strike, the return a note), Deadly Aim (its circumstance bonus to damage; "hasn't attempted a Strike during his turn yet" as `requires: "first-attack"`), Hunter's Aim (at its prey, a note, in either telling).
+- **Live:** no new live code. Their Strike cards are as before. Not run in pftest.
+- **Simulator:** nothing new: the Strike activities as before, Deadly Aim only as its first attack of a turn.

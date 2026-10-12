@@ -3007,3 +3007,15 @@ test("more ways to move and Strike: a tackle, a toss, a hop, a skewer, a lurch (
     const pounce = compile(1, "The test cat Strides and makes a Strike at the end of that movement. If the test cat successfully used [[/act hide]] before this action, the target has the Off-Guard condition against this Strike.");
     assert.deepEqual([pounce.builtin, pounce.strides], ["charge", 1]);
 });
+
+test("ranged Strike activities: a throw that knocks down, a draw after, a bounce back, an aimed shot (2026-10-12, batch 173)", () => {
+    const compile = (actions, html) => compileMonsterAbility({ type: "action", name: "Test Shot", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    const thrown = compile(2, "<p>The test hunter makes a ranged strike with their spear within 40 feet without ranged penalties. If the strike hits, it has enough force to knock the target Prone. If the strike was a critical success, the target is also Immobilized by the spear.</p>");
+    assert.deepEqual([thrown.strike, thrown.onHit.conditions.map((entry) => entry.slug), thrown.onHit.critical.map((entry) => entry.slug), thrown.notes], ["spear", ["prone"], ["prone", "immobilized"], ["Within 40 feet, without range penalties."]]);
+    const drawn = compile(1, "<p>The test scout makes a ranged Strike with their javelin and then draws their shortsword.</p>");
+    assert.deepEqual([drawn.strike, drawn.notes], ["javelin", ["Then it draws its shortsword (an Interact)."]]);
+    const bounce = compile(1, "<p>The test frog makes a ranged Strike with their boomerang against a target within 20 feet. Once the Strike is complete, the boomerang ricochets back into the test frog's hand. If their hands are full when the boomerang returns, it falls to the ground in their space.</p>");
+    assert.deepEqual([bounce.strike, bounce.notes], ["boomerang", ["The boomerang comes back to its hand after the Strike (or falls in its space if its hands are full)."]]);
+    const aimed = compile(1, "<p><strong>Requirements</strong> Test Archer hasn't attempted a Strike during his turn yet</p><hr /><p><strong>Effect</strong> Test Archer makes a ranged Strike against his target at a –1 penalty. He gains a +3 circumstance bonus to damage on that Strike.</p>");
+    assert.deepEqual([aimed.attackBonus, aimed.damageBonus, aimed.requires], [-1, 3, "first-attack"]);
+});

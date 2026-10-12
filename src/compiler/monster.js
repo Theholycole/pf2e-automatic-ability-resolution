@@ -905,6 +905,38 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/ or until (?:it|the target|the creature) (?:leaves (?:the [\w' -]+?'s|its|their|his|her) reach|is no longer within the reach of (?:the [\w' -]+?'s|its|their|his|her) hand), whichever comes first(?=\.$)/i, "")
             // (Batch 60, Savage Jaws: "makes a single Strike with its jaws" as "makes a jaws Strike".)
             .replace(/\bmakes a single Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike")
+            // (Batch 173: Hunting Throw's "makes a ranged strike with their trident within 60 feet without ranged penalties", "If the strike hits, it has
+            // enough force to knock the target Prone. If the strike was a critical success, the target is also Immobilized by the trident."; Guerrilla
+            // Tactics' "makes a ranged Strike with their hatchet and then draws their battle axe"; Bounce Cruuk's "… against a target within 30 feet.
+            // Once the Strike is complete, the cruuk ricochets back into …'s hand. If their hands are full when the cruuk returns, it falls to the
+            // ground in their space."; Deadly Aim's "He gains a +6 circumstance bonus to damage on that Strike.")
+            .replace(/\b(makes an? ranged )strike( with (?:its|their|his|her) [\w' -]+?) within (\d+) feet without (?:ranged|range) penalties(?=\.$)/i, (_all, made, weapon, feet) => {
+                (activity.notes ??= []).push(`Within ${feet} feet, without range penalties.`);
+                return `${made}Strike${weapon}`;
+            })
+            .replace(/^If the strike hits, it has enough force to knock the target Prone(?=\.$)/i, "If it hits, the target is knocked Prone")
+            .replace(/^If the strike was a critical success, the target is also Immobilized(?: by the [\w' -]+?)?(?=\.$)/i, "On a critical hit, the target is Prone and Immobilized")
+            .replace(/\b(makes an? ranged Strike with (?:its|their|his|her) [\w' -]+?) and then draws (?:its|their|his|her) ([\w' -]+?)(?=\.$)/i, (_all, made, weapon) => {
+                (activity.notes ??= []).push(`Then it draws its ${weapon} (an Interact).`);
+                return made;
+            })
+            .replace(/\b(makes an? ranged Strike with (?:its|their|his|her) [\w' -]+?) against a target within \d+ feet(?=\.$)/i, "$1")
+            .replace(/^Once the Strike is complete, the ([\w' -]+?) ricochets back into [^.]+?['’]s? hand\.$/i, (_all, weapon) => {
+                (activity.notes ??= []).push(`The ${weapon} comes back to its hand after the Strike (or falls in its space if its hands are full).`);
+                return "[told]";
+            })
+            .replace(/^If (?:their|its|his|her) hands are full when the [\w' -]+? returns, it falls to the ground in (?:their|its|his|her) space\.$/i, "[told]")
+            .replace(/^(?:He|She|It|They) gains? a \+(\d+) circumstance bonus to damage on that Strike\.$/i, (_all, value) => {
+                activity.damageBonus += Number(value);
+                return "[told]";
+            })
+            // (Batch 173, Hunter's Aim: "makes a ranged weapon Strike against her hunted prey" — only at its prey; Dmiri's "When Dmiri focuses on aiming,
+            // her attack becomes particularly accurate. Make a ranged weapon Strike against her hunted prey.")
+            .replace(/^When [^,.]+? focuses on aiming, (?:her|his|its|their) attack becomes particularly accurate\.$/i, "[told]")
+            .replace(/^((?:The )?[^.]+? makes|Make) a ranged weapon Strike against (?:its|their|his|her) hunted prey(?=\.$)/i, (_all, who) => {
+                (activity.notes ??= []).push("Only at its hunted prey.");
+                return `${who === "Make" ? "It makes" : who} a ranged Strike`;
+            })
             // (Batch 81, Tangle Prey: "draws a bola and Strikes a target within 20 feet" as a bola Strike; "immediately rolls an Athletics check
             // against the target's Fortitude DC to Trip them" as a Trip.)
             .replace(/\bdraws an? ([\w' -]+?) and Strikes an? (?:target|creature|foe)(?: within \d+ feet)?(?=\.$)/i, "makes a $1 Strike")
@@ -1238,9 +1270,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^If the Strike is a critical hit, the target is knocked Prone(?=\.$)/i, "On a critical hit, the target is knocked Prone")
             // (Batch 131, Insightful Swing: "On this Strike, he gains a +2 circumstance bonus to the attack roll and ignores any concealment the target
             // has" — the bonus, the concealment the GM's.)
-            .replace(/^On this Strike, (?:it|he|she|they) gains? a \+(\d+) circumstance bonus to the attack roll(?: and ignores? any concealment the target has)?\.$/i, (whole, value) => {
+            .replace(/^On this Strike, (?:it|he|she|they|[A-Z][\w'-]+) gains? a \+(\d+) circumstance bonus to the attack roll(?: and ignores? (?:any concealment the target has|(?:the|its|their|his|her) prey's Concealed condition))?\.$/i, (whole, value) => {
                 activity.attackBonus += Number(value);
-                if (/concealment/i.test(whole)) (activity.notes ??= []).push("This Strike ignores the target's concealment.");
+                if (/concealment|Concealed/i.test(whole)) (activity.notes ??= []).push("This Strike ignores the target's concealment.");
                 return "[told]";
             })
             .replace(/^(?:The )?[\w' -]+? deals (\d+) additional damage with this Strike\.$/i, (_all, value) => {
@@ -1313,6 +1345,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             else if (/^(?:The )?[^,]*? is berserk\.?$/i.test(match[1])) activity.requires = "berserk";
             // (Batch 109, Startled Charge: "It's the first round of combat".)
             else if (/^It['’]s the first round of (?:combat|an encounter)\.?$/i.test(match[1])) activity.requires = "first-round";
+            // (Batch 173, Deadly Aim: "Gaetane hasn't attempted a Strike during his turn yet" — its first attack this turn.)
+            else if (/^(?:The )?[^,]*? has(?:n't| not) (?:attempted a Strike during (?:its|his|her|their) turn yet|attacked yet this turn)\.?$/i.test(match[1])) activity.requires = "first-attack";
             // (Batch 109: another requirement — "The dragon is burrowed", "is enraged", "is on the deck of a ship", "has expensive bolts": a state
             // the module doesn't play. Live, the GM uses it when it's met; the simulator doesn't plan it.)
             else if (!/is wielding|is holding/i.test(match[1])) {
