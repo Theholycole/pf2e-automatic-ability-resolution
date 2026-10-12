@@ -1358,6 +1358,10 @@ export function readFollow(text) {
     const prey = new RegExp(`^${subject}['’]s hunted prey is within (?:its|their|his|her) reach and attempts to move away from ${pronoun}$`, "i").test(trigger);
     const near = new RegExp(`^An? (?:adjacent (?:enemy|foe|creature)|(?:enemy|foe|creature) within (?:(?:the )?reach(?: of ${subject})?|${subject}['’]s reach)) (?:attempts to move|moves) away(?: from (?:${subject}|${pronoun}))?$`, "i").test(trigger);
     if (!prey && !near) return null;
+    // (Batch 208, Deadly Pursuit: "The cursed king Strides up to its Speed, keeping the creature within reach until the creature stops or the cursed king has
+    // moved its full Speed. If the creature is still within reach, the cursed king makes a jaws Strike against it." — the follow, its Strike after.)
+    const pursuit = new RegExp(`^${subject} Strides up to (?:its|their|his|her) Speed, keeping the creature within reach until the creature stops or ${subject} has moved (?:its|their|his|her) full Speed\\. If the creature is still within reach, ${subject} makes an? ([\\w' -]+?) Strike against it\\.$`, "i").exec(split[2].trim());
+    if (pursuit) return { builtin: "follow", move: "Stride", ...(prey ? { prey } : {}), strike: true };
     const sentences = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
     if (new RegExp(`^${subject} keeps pace with the (?:triggering|retreating) (?:foe|enemy|creature)\\.$`, "i").test(sentences[0] ?? "")) sentences.shift();
     const main = new RegExp(`^${subject} (?:can )?(Strides?(?: or (?:Climbs?|Fl(?:ies|y)))?|Climbs or Strides|Flies) up to (?:its|their|his|her) (?:fly )?[Ss]peed, following (?:the (?:triggering creature|enemy|foe|retreating foe)|that foe|(?:its|their|his|her) hunted prey) and keeping (?:it|the enemy|the foe) in reach(?: throughout (?:its|this) movement)?(?: until (?:it|the enemy|the foe) stops moving or ${subject} (?:has moved|moves) (?:its|their|his|her) full (?:fly )?Speed)?\\.$`, "i").exec(sentences.shift() ?? "");
@@ -1640,6 +1644,11 @@ export function readGuardian(text) {
 //   mental trait Effect The ally gains a +4 status bonus to the saving throw. If the ally rolls a success, they get a critical success
 //   instead." (Free Mind) → { builtin: "save-bonus-reaction", ally, within, value, kind, against, animal, upgrade }.
 export function readAllySave(text) {
+    // (Batch 208, Good Fortune: "Trigger The pixiu, or an ally within 30 feet, is about to attempt a saving throw but hasn't rolled yet Frequency once per
+    // hour Effect That creature rolls the triggering saving throw twice and takes the better result." — its fortune, played as a reroll of a failed save
+    // (the same chances), once a fight.)
+    const fortune = /^Trigger (?:The )?[^,.]+?, or an ally within (\d+) feet, is about to attempt a saving throw but hasn't rolled yet\.? Frequency once per (?:hour|day|10 minutes) Effect That creature rolls the triggering saving throw twice and takes the better result\.$/i.exec(String(text).trim());
+    if (fortune) return { builtin: "save-reroll", ally: true, self: true, within: Number(fortune[1]), save: null, uses: 1, note: "Two rolls for the save, made before it; the better one counts." };
     const body = String(text).trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\befect\b/g, "effect");
     const split = /^(?:Frequency (once per (?:hour|day|minute)) )?Trigger (.+?)\.? Effect (.+)$/.exec(body);
     if (!split) return null;
@@ -2350,7 +2359,9 @@ export function readReaction(item, text) {
     // leaving its reach, the metal item a note for the GM.)
     const leaving = /^A creature(?: (carrying a metal item))? attempts to move out of a square within reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+?\.?$/i.exec(trigger.trim());
     const moving = leaving || /\buses a move action\b|\bleaves a square during a move action\b|\battempts to move away from [^.]+? during a move action\b/i.test(trigger);
-    const struck = /^The [^.]+? makes an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
+    // (Batch 208, Viper Tail: "The nue whips around and attempts a tail Strike against the triggering creature. This Strike doesn't count toward the nue's
+    // multiple attack penalty, …" — the Strike, set off by leaving a square near it; the flanking it would cause a note.)
+    const struck = /^The [^.]+? (?:makes|whips around and attempts) an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
     if (leaving && struck && !/\.\s+\S/.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["leave"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: false, ...(leaving[1] ? { only: `a creature ${leaving[1]}` } : {}) };
     if (moving && !leaving && struck) return { builtin: "reaction-strike", triggers: ["move", ...(/\bwith a ranged attack\b/i.test(trigger) ? ["ranged"] : [])], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect), ...(/\bOn a critical (?:success|hit), [^.]*? can also attempt an Athletics check to Trip the triggering creature\./i.test(effect) ? { criticalTrip: true } : {}) };
     // (Batch 73, Final Blow: "Berleth is reduced to 0 HP", "Berleth makes a final shovel Strike before dying.")
@@ -2934,6 +2945,9 @@ function readSelfResistance(item, body) {
         const end = /end/i.test(match[1]);
         return plan([{ type: "all-damage", value: Number(ghostly[1]), exceptions: resistanceExceptions(ghostly[2]) }], { rounds: end ? 2 : 1, duration: { value: 1, unit: "rounds", expiry: end ? "turn-end" : "turn-start" }, notes: ["It's incorporeal for that time."] });
     }
+    // (Batch 208, Defensive Coil: "The grootslang coils its body. It gains 20 resistance against physical attacks until the start of its next turn.")
+    const coil = /^(?:It|They|The [\w' -]+?) gains? (\d+) resistance against physical attacks until the start of (?:its|their) next turn\.$/i.exec(said.at(-1) ?? "");
+    if (coil && said.length <= 2 && said.slice(0, -1).every(told)) return plan([{ type: "physical", value: Number(coil[1]), exceptions: [] }], { rounds: 1, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, notes: ["Against attacks only."] });
     // Harden Chitin.
     const last = said.at(-1) ?? "";
     match = /^(?:The [\w' -]+?|It|They|He|She) gains? resistance (\d+) to all damage \(except ([^)]+)\) until (?:it|they|he|she) next takes? a move action\.$/i.exec(last);
@@ -3290,6 +3304,8 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 208, Determined Trudge: "The augdunar Strides at a –5 foot circumstance penalty to its Speed, ignoring difficult terrain." — a move.)
+    if (/^(?:The )?[^.]+? Strides at a [-\u2013\u2212]\d+ foot circumstance penalty to (?:its|their) Speed, ignoring difficult terrain\.$/i.test(said)) return true;
     // (Batch 206, Phantom Step: "Frequency once per round Effect The ghost ape moves quickly, passing through the Ethereal Plane. They teleport up to a
     // distance equal to twice their Speed within their line of sight." — a move.)
     if (/^(?:Frequency once per (?:round|turn) Effect )?(?:The )?[^.]+? moves quickly, passing through the Ethereal Plane\. (?:It|They) teleports? up to a distance equal to twice (?:its|their) Speed within (?:its|their) line of sight\.$/i.test(said)) return true;

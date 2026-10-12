@@ -3362,3 +3362,13 @@ test("Book of the Dead: a Strike then a guard, a bite that heals and drains a he
     assert.deepEqual([retort.triggers, retort.onHit.conditions[0].value, retort.onHit.critical[0].value], [["critical-miss"], 1, 2]);
     assert.equal(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> An ally within the test snake's reach is attacked</p><hr /><p><strong>Effect</strong> The test snake interposes its tail between the ally and attacker. The triggering attack targets the test snake instead of the original target.</p>"), {}).builtin, "intercept");
 });
+
+test("Lost Omens: resistance to physical attacks, a pursuit with a Strike, a tail Strike as a creature moves off, a lucky save for itself or an ally, a trudge (2026-10-12, batch 208)", () => {
+    const item = (type, html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const coil = compileMonsterAbility(item("action", "<p>The test serpent tightens its scales. It gains 10 resistance against physical attacks until the start of its next turn.</p>", 2), {});
+    assert.deepEqual([coil.model.resistances, coil.duration.expiry], [[{ type: "physical", value: 10, exceptions: [] }], "turn-start"]);
+    assert.deepEqual(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature within the test hound's reach attempts to move away</p><hr /><p><strong>Effect</strong> The test hound Strides up to its Speed, keeping the creature within reach until the creature stops or the test hound has moved its full Speed. If the creature is still within reach, the test hound makes a jaws Strike against it.</p>"), {}), { builtin: "follow", move: "Stride", strike: true });
+    assert.deepEqual(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature within 10 feet of the test chimera leaves a square during a move action it's using</p><hr /><p><strong>Effect</strong> The test chimera whips around and attempts a tail Strike against the triggering creature.</p>"), {}).triggers, ["move"]);
+    const luck = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test lion, or an ally within 20 feet, is about to attempt a saving throw but hasn't rolled yet</p><p><strong>Frequency</strong> once per hour</p><hr /><p><strong>Effect</strong> That creature rolls the triggering saving throw twice and takes the better result.</p>"), {});
+    assert.deepEqual([luck.builtin, luck.self, luck.within, luck.uses], ["save-reroll", true, 20, 1]);
+});

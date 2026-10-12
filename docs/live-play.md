@@ -1863,3 +1863,14 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** the offers and cards as before. The retort's note says what it inflicts. Not run in pftest.
 - **Simulator:** see B207 in its ability decisions.
 
+## A coil, a pursuit, a tail Strike, a lucky save (2026-10-12, batch 208)
+
+- **Compiled:**
+  - Defensive Coil → `self-effect` with resistance 20 to physical damage until its next turn starts, with a note that it's against attacks only.
+  - Deadly Pursuit → `follow` with `strike` (its jaws Strike when it ends in reach).
+  - Viper Tail → `reaction-strike` on a creature leaving a square near it ("whips around and attempts a tail Strike").
+  - Good Fortune → `save-reroll` for itself or an ally within 30 feet, once a fight, with a note that it's rolled twice before the roll. The simulator plays it as a reroll of a failed save, which gives the same chances.
+  - Determined Trudge → `no-effect` (a move).
+- **Live:** offers and buffs as for their kinds. Not run in pftest.
+- **Simulator:** nothing new.
+
