@@ -1875,8 +1875,17 @@ function modernItem(item) {
 // below".)
 const MODES = /\bin one of (?:two|three|four) ways\b|\bone of (?:two|three|four) effects\b|\bone of the following (?:ways|modes|forms)\b|\bchooses? one effect\b|\bfrom one of (?:its|their) (?:two|three|four|five) heads\b|\bone of the (?:effects|(?:two|three|four) options)(?: listed)? below\b/i;
 function compileModes(item, options) {
-    const html = item.system?.description?.value ?? "";
+    let html = item.system?.description?.value ?? "";
     if (!MODES.test(htmlToPlainText(html))) return null;
+    // (Batch 162, a construct's Breath Weapon: its ways as "<p>- Flame (arcane, evocation, fire) A blast of flame …</p>" paragraphs in place of
+    // a list — read as one.)
+    const dashed = [...html.matchAll(/<p>\s*-\s+([A-Z][\w' -]+?) (\([^)]*\)) ([\s\S]*?)<\/p>/g)];
+    if (html.search(/<ul\b/i) < 0 && dashed.length >= 2) {
+        dashed.forEach((found, index) => {
+            html = html.replace(found[0], `${index === 0 ? "<ul>" : ""}<li><strong>${found[1]}</strong> ${found[2]} ${found[3]}</li>${index === dashed.length - 1 ? "</ul>" : ""}`);
+        });
+        item = withDescription(item, html);
+    }
     const start = html.search(/<ul\b/i);
     const end = html.search(/<\/ul>/i);
     if (start < 0 || end < start) return null;
@@ -1909,6 +1918,9 @@ function compileModes(item, options) {
         } catch {
             plan = null;
         }
+        // (Batch 162, Weakening Gas: "…; the effect lasts 1 minute." — its conditions' time.)
+        const lasts = /\bthe effect lasts (\d+) minutes?\b/i.exec(htmlToPlainText(body))?.[1];
+        if (lasts && plan?.resolution?.outcomes) for (const row of Object.values(plan.resolution.outcomes)) for (const effect of row.effects ?? []) if (effect.kind === "condition" && !effect.duration) effect.duration = { mode: "fixed", value: Number(lasts), unit: "minutes" };
         return { name, plan: plan?.resolution ? plan : null };
     });
     if (modes.some((mode) => !mode) || !modes.some((mode) => mode.plan)) return null;
