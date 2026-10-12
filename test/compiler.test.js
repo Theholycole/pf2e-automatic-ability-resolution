@@ -3349,3 +3349,16 @@ test("Howl of the Wild: a charge with extra damage, a sting at an Off-Guard crea
     const flee = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test critter takes damage from a melee Strike</p><hr /><p><strong>Effect</strong> The test critter drops any items held in their hands, then Climbs or Strides up to 10 feet.</p>"), {});
     assert.deepEqual([flee.builtin, flee.on, flee.feet, flee.notes.length], ["withdraw", "damaged", 10, 1]);
 });
+
+test("Book of the Dead: a Strike then a guard, a bite that heals and drains a held creature, a leap and three Strikes, a retort that frightens, an ally's attack taken, a surge with its recharge (2026-10-12, batch 207)", () => {
+    const item = (type, html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const parry = compileMonsterAbility(item("action", "<p>The test fencer makes a melee Strike, then Steps, positioning their blade defensively. They gain a +2 circumstance bonus to AC until the end of their next turn.</p>"), {});
+    assert.deepEqual([parry.selfAfter, parry.notes], [[{ ac: 2, type: "circumstance" }], ["Then it Steps."]]);
+    const devour = compileMonsterAbility(item("action", "<p><strong>Requirements</strong> The test ghoul has a creature Grabbed</p><hr /><p><strong>Effect</strong> The test ghoul makes a jaws Strike against the grabbed creature. On a success, the test ghoul successfully devours some of the flesh and regains @Damage[2d6[healing]] Hit Points. The grabbed creature becomes Drained 1 (or Drained 2 if the jaws Strike was a critical success).</p>", 2), {});
+    assert.deepEqual([devour.requires, devour.onHit.selfHeal, devour.onHit.conditions[0].value, devour.onHit.critical[0].value], ["grabbed", "2d6", 1, 2]);
+    const leap = compileMonsterAbility(item("action", "<p>The test beast Leaps up to 15 feet horizontally and up to 5 feet vertically and then makes one claw Strike, one horn Strike, and one tail Strike in any order.</p>", 3), {});
+    assert.deepEqual([leap.strikes, leap.strides], [["claw", "horn", "tail"], 1]);
+    const retort = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature within the test duelist's reach critically fails at a melee Strike against the test duelist</p><hr /><p><strong>Effect</strong> The test duelist attempts a Strike against the creature, mocking its clumsy swing. If this Strike succeeds, the creature is Frightened 1, or Frightened 2 on a critical success.</p>"), {});
+    assert.deepEqual([retort.triggers, retort.onHit.conditions[0].value, retort.onHit.critical[0].value], [["critical-miss"], 1, 2]);
+    assert.equal(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> An ally within the test snake's reach is attacked</p><hr /><p><strong>Effect</strong> The test snake interposes its tail between the ally and attacker. The triggering attack targets the test snake instead of the original target.</p>"), {}).builtin, "intercept");
+});

@@ -242,6 +242,13 @@ export function readMultiStrikes(text) {
         earlyNotes.push(`It High Jumps or Long Jumps; two ${name} Strikes only if it jumps at least ${up} feet up or ${across} feet across (else one).`);
         return `${who} makes two ${name} Strikes against the same target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
     });
+    // (Batch 207, Leap into the Fray: "Leaps up to 20 feet horizontally and up to 10 feet vertically and then makes one claw Strike, one jaws Strike, and
+    // one tail Strike in any order. If … spends 1 Mythic Point as part of this action, …" — a jump and the three Strikes; the Mythic Point a note.)
+    body = body.replace(/^((?:The )?[^.]+?) Leaps up to (\d+) feet horizontally and up to (\d+) feet vertically and then makes one ([\w' -]+?) Strike, one ([\w' -]+?) Strike, and one ([\w' -]+?) Strike in any order\.((?: [^.]+\.)*)$/i, (_all, who, across, up, one, two, three, rest) => {
+        movesFirst = 1;
+        earlyNotes.push(`It Leaps up to ${across} feet across and ${up} feet up first.`, ...rest.trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
+        return `${who} makes a ${one} Strike, a ${two} Strike, and a ${three} Strike.`;
+    });
     // (Batch 206: Paired Spikes' "flings two spikes from their tail, targeting up to two creatures within 20 feet of each other. They make a separate
     // ranged Strike against each creature, which counts as a single Strike for the barded manticore's multiple attack penalty, and the penalty doesn't
     // increase until they've made both Strikes. …" (its one-creature way a note); Razor-Edged Flight's "glides violently forward, Flying twice. It makes a
@@ -2031,6 +2038,13 @@ export function readReaction(item, text) {
     // (Batch 104: Bodyguard's Reprisal — "Trigger A creature attacks the subject of bodyguard's defense Effect The bodyguard makes a Strike
     // against the triggering creature." → triggers ["ally-attacked"], its charge only (the GM's: a note), its best melee Strike.)
     if (/^A creature attacks the subject of (?:the )?[\w' -]+?['’]s? defense$/i.test(trigger.trim().replace(/\.$/, "")) && /^(?:The )?[^.]+? makes a Strike against the triggering creature\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, ward: true };
+    // (Batch 207: Repartee Riposte's "Trigger A creature within the cadaverous rake's reach critically fails at a melee Strike against the rake Effect …
+    // attempts a Strike against the creature, firing back a witty retort. If this Strike succeeds, the creature is Frightened 1, or Frightened 2 on a
+    // critical success." — the Strike, Frightened on a hit; Divine Guardian's "Trigger An ally within the hollow serpent's reach is attacked Effect … The
+    // triggering attack targets the hollow serpent instead of the original target." — the ally's attack taken on itself.)
+    const repartee = /^A creature within (?:the [\w' -]+?['’]s|its) reach critically fails at a melee Strike against (?:the [\w' -]+?|it|them)$/i.test(trigger.trim().replace(/\.$/, "")) ? /^(?:The )?[^.]+? attempts a Strike against the creature, [^.]+\. If this Strike succeeds, the creature is (Frightened|Sickened|Clumsy|Enfeebled|Stupefied) (\d), or \1 (\d) on a critical success\.$/i.exec(effect.trim()) : null;
+    if (repartee) return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, onHit: { conditions: [{ slug: repartee[1].toLowerCase(), value: Number(repartee[2]) }], critical: [{ slug: repartee[1].toLowerCase(), value: Number(repartee[3]) }] }, note: `On a hit, the creature is ${repartee[1]} ${repartee[2]} (${repartee[1]} ${repartee[3]} on a critical hit).` };
+    if (/^An ally within (?:the [\w' -]+?['’]s|its) reach is attacked$/i.test(trigger.trim().replace(/\.$/, "")) && /^(?:The )?[^.]+? interposes [^.]+ between the ally and attacker\. The triggering attack targets (?:the [\w' -]+?|it) instead of the original target\.$/i.test(effect.trim())) return { builtin: "intercept", ward: "ally", share: 1, attacks: true, note: "The attack is aimed at it instead: against its AC, not the ally's." };
     // (Batch 204, Retaliate: "Trigger A creature within the tattoo guardian's reach attacks the guardian's ward Effect The tattoo guardian makes an ink
     // blade Strike against the triggering creature." — its named Strike, its ward played as any ally.)
     const warded = /^A creature within (?:the [\w' -]+?['’]s|its) reach attacks (?:the [\w' -]+?['’]s|its) ward$/i.test(trigger.trim().replace(/\.$/, "")) ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the triggering creature\.$/i.exec(effect.trim()) : null;

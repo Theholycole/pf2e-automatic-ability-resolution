@@ -1846,3 +1846,15 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** cards and offers as for their kinds. Not run in pftest.
 - **Simulator:** see B206 in its ability decisions.
 
+## A guard after a Strike; a bite that heals; a retort that frightens (2026-10-12, batch 207)
+
+- **Compiled:**
+  - Parry Dance → a melee Strike, then +2 circumstance AC on itself (`selfAfter`), with a note for the Step.
+  - Devour Flesh → a jaws Strike at the creature it holds: on a hit `onHit.selfHeal: "3d6"` and Drained 1 (Drained 2 on a critical hit); releasing the creature and once an hour are notes.
+  - Leap into the Fray → a claw, a jaws and a tail Strike after a Leap; its Mythic Point a note.
+  - Repartee Riposte → `reaction-strike` on a critical miss, with `onHit` conditions (Frightened 1, Frightened 2 on a critical hit) and a note saying so.
+  - Divine Guardian → `intercept` of an ally's attack, with a note that the attack is aimed at it, against its AC.
+  - Sudden Surge → Quickened this turn as its turn begins, with its 1d4-round recharge (`trigger.recharge`); its first Strike's Off-Guard is a note.
+- **Live:** the offers and cards as before. The retort's note says what it inflicts. Not run in pftest.
+- **Simulator:** see B207 in its ability decisions.
+

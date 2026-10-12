@@ -902,6 +902,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 207, Parry Dance: "makes a melee Strike, then Steps, positioning their blade defensively." — the Strike; the Step a note.)
+        .replace(/\b(makes an? (?:melee )?Strike), then Steps, positioning (?:its|their) [\w' -]+? defensively\./i, "$1. [then steps]")
         // (Batch 206, Goring Charge: "Strides twice and makes an antlers Strike after either Stride." — two Strides and the Strike, after either a note.)
         .replace(/\b((?:The )?[\w' -]+?) Strides twice and makes an? ([\w' -]+?) Strike after either Stride\./i, "$1 Strides twice and makes a $2 Strike. [after either stride]")
         // (Batch 204: Water Sprint's "Strides up to three times in a straight line across smooth water. They can make a single Strike against a creature at
@@ -1049,6 +1051,27 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
             // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
             // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            // (Batch 207: Parry Dance's "They gain a +2 circumstance bonus to AC until the end of their next turn." — on itself after the Strike; Devour
+            // Flesh's "On a success, the ghul successfully devours some of the flesh and regains 3d6 Hit Points. The grabbed creature becomes Drained 1 (or
+            // Drained 2 if the jaws Strike was a critical success). The violent consumption requires the ghul to release the creature as it feasts. …")
+            .replace(/^(?:They|It|He|She) gains? an? \+(\d) circumstance bonus to AC until the end of (?:its|their|his|her) next turn\.$/i, (_all, value) => {
+                (activity.selfAfter ??= []).push({ ac: Number(value), type: "circumstance" });
+                return "[told]";
+            })
+            .replace(/^(?:The [\w' -]+?|It) attempts to eat a portion of the grabbed creature['’]s flesh\.$/i, "[told]")
+            // (Its "Hit Points." comes as a sentence of its own after the tag, which the selfHeal sentence below takes.)
+            .replace(/^On a success, (?:the [\w' -]+?|it) successfully devours some of the flesh and regains @Damage\[(\d+d\d+)\[healing\]\](?:\{[^}]*\})?(?: (?:Hit Points|HP))?\.?$/i, (_all, dice) => {
+                activity.onHit.selfHeal = dice;
+                return "[told]";
+            })
+            .replace(/^The grabbed creature becomes (?:@UUID\[[^\]]*\]\{)?Drained (\d)\}? \(or (?:@UUID\[[^\]]*\]\{)?Drained (\d)\}? if the [\w' -]+? Strike was a critical success\)\.$/i, (_all, hit, critical) => {
+                activity.onHit.critical = [{ slug: "drained", value: Number(critical), duration: null }];
+                return `On a hit, the target is Drained ${hit}.`;
+            })
+            .replace(/^The violent consumption requires (?:the [\w' -]+?|it) to release the creature as (?:it|they) feasts?\.$|^An? [\w' -]+? can regain Hit Points from consuming the flesh of a given creature only once per hour; [^.]+\.$/i, (said) => {
+                (activity.notes ??= []).push(said);
+                return "[told]";
+            })
             // (Batch 206: Goring Charge's "If the Strike hits, the blooming guardian deals an extra 2d12 bludgeoning damage, and the target takes a –2
             // circumstance penalty to its next Fortitude save against blossom siphon."; Scorpion Sting's "Strikes an Off-Guard creature with its stinger. The
             // attack injects venom deeply, dealing an additional 4d8 poison damage and giving the target a –2 circumstance penalty to their initial save
@@ -4303,8 +4326,15 @@ function selfCondition(item) {
     if (!found || (!found.temp && !SELF_SLUGS.has(found.slug))) return null;
     // Its other sentences: words only.
     const notes = notFirst ? ["Not on its first turn of the combat."] : [];
+    let recharge = null;
     for (const [index, sentence] of sentences.entries()) {
         if (index === at || /^Frequency\b/.test(sentence)) continue;
+        // (Batch 207, Sudden Surge: "The withered can't use Sudden Surge for 1d4 rounds." — its recharge.)
+        const again = /^(?:The [\w' -]+?|It|They) can(?:'t|not) use [A-Z][\w' -]+? (?:again )?for (\d+d\d+) rounds\.$/i.exec(sentence);
+        if (again) {
+            recharge = again[1];
+            continue;
+        }
         if (/@|\b(?:damage|save|DC)\b|\d+d\d+/.test(sentence)) return null;
         notes.push(sentence.replace(/[\u0001\u0002]/g, ""));
     }
@@ -4318,7 +4348,7 @@ function selfCondition(item) {
     return {
         ...base(item),
         targeting: found.allies ? { target: found.within ? null : "allies", range: null, area: found.within ? { type: "emanation", value: found.within } : null, allies: true } : { target: "self", range: null, area: null },
-        trigger: reacting ? { ...reacting, reaction: true, ...(type === "free" ? { free: true } : {}) } : { event: ownTurn ? "own-turn-start" : "use", ...(ownTurn ? { reaction: true, free: true } : {}) },
+        trigger: reacting ? { ...reacting, reaction: true, ...(type === "free" ? { free: true } : {}) } : { event: ownTurn ? "own-turn-start" : "use", ...(ownTurn ? { reaction: true, free: true } : {}), ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
         resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } },
         ...(requires ? { requires } : {}),
         ...(notes.length ? { notes } : {})
