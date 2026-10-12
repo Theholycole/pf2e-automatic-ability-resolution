@@ -672,7 +672,8 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 if (plan.uses && Number.isFinite(left) && left <= 0) continue;
                 // (Each helper's own offer; the GM picks.)
                 if (plan.builtin === "save-reroll") {
-                    await offer({ kind: "reroll", item, monster: token, actor, target: self ? null : saver, trigger: `failed ${self ? "its" : "a"} ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: "higher" } });
+                    // (Batch 181: the new result kept, a critical failure on it a failure — the GM's to apply.)
+                    await offer({ kind: "reroll", item, monster: token, actor, target: self ? null : saver, trigger: `failed ${self ? "its" : "a"} ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, note: plan.floor ? "If the reroll is a critical failure, it's a failure instead." : null });
                     break;
                 }
                 const roll = message.rolls?.[0];

@@ -3088,3 +3088,8 @@ test("ways written as paragraphs one after another, the last one's degrees after
     assert.deepEqual(plan.modes.map((mode) => [mode.name, mode.plan.resolution.check.statistic]), [["Sparks", "reflex"], ["Slow Fog", "fortitude"]]);
     assert.deepEqual(plan.modes[1].plan.resolution.outcomes.failure.effects.map((effect) => [effect.slug, effect.value]), [["slowed", 2]]);
 });
+
+test("a reroll for a creature in its aura, the new result kept with a floor (2026-10-12, batch 181)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Calm", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature within the test unicorn's calming aura fails a save against an emotion effect or a disease</p><hr /><p><strong>Effect</strong> The test unicorn soothes it. The triggering creature rerolls the save and takes the second result. If the second roll is a critical failure, it's a failure instead.</p>" } } }, { basicActions: {} });
+    assert.deepEqual(plan, { builtin: "save-reroll", ally: true, within: 30, against: ["emotion", "disease"], keep: "new", floor: "failure" });
+});

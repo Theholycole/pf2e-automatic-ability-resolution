@@ -1535,6 +1535,28 @@ export function readRedirect(text) {
     return { builtin: "redirect-attack", ...(step ? { step: true } : {}) };
 }
 
+// (Batch 181: a creature in its aura that fails a save against some kinds of effect rerolls it, the new result kept and a critical failure on it a
+// failure — a Battlezoo dragon's purifying reaction; its distance the aura's (the actor's Aura rule, 30 feet when there's none to read) →
+// { builtin: "save-reroll", ally, within, against, keep: "new", floor: "failure" }.)
+export function readAuraReroll(text, item = null) {
+    const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim().replace(/\s*Effect: [^.]+$/i, ""));
+    const trigger = split ? /^An? creature within (?:the [\w' -]+?['’]s|its) ([\w' -]+? aura) fails a (?:saving throw|save) against (.+)$/i.exec(split[1]) : null;
+    if (!trigger) return null;
+    const against = [...new Set(trigger[2].split(/\s*,\s*(?:or\s+)?|\s+or\s+/).map((part) => /^(?:an? )?(\w+)(?: effect)?$/i.exec(part.trim())?.[1]?.toLowerCase()))];
+    if (!against.length || against.some((trait) => !trait)) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const at = said.findIndex((sentence) => /^The triggering creature rerolls the (?:failed )?(?:saving throw|save) and (?:uses|takes) the (?:new|second) result\.$/i.test(sentence));
+    if (at < 0 || said.slice(0, at).some((sentence) => /\d|@|\b(?:damage|bonus|penalty|save|saving throw)\b/i.test(sentence))) return null;
+    const rest = said.slice(at + 1);
+    const floor = rest.length === 1 && /^If (?:they|it|he|she) rolls? a critical failure on the second save, (?:they|it|he|she) gets? a failure instead\.$|^If the second (?:roll|save) is a critical failure, it(?:'s| is) a failure instead\.$/i.test(rest[0]);
+    if (rest.length && !floor) return null;
+    const owner = item?.actor ?? item?.parent ?? null;
+    const name = trigger[1].toLowerCase().replace(/ aura$/, "");
+    const aura = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => new RegExp(`\\b${name}\\b`, "i").test(String(entry.name ?? "").replace(/purifying/i, "purification")) && /aura/i.test(String(entry.name ?? "")));
+    const radius = Number((aura?.system?.rules ?? []).find((rule) => rule.key === "Aura")?.radius) || 30;
+    return { builtin: "save-reroll", ally: true, within: radius, against, keep: "new", ...(floor ? { floor: "failure" } : {}) };
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -1558,7 +1580,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readAuraReroll(text, item) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a

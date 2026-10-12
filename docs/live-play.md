@@ -1597,3 +1597,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** when a choose-a-way ability has no list but bold-named paragraphs one after another (with only rules between them), those paragraphs are its ways. The last way's degrees of success after them stay with it. Veksciralenix's Breath Weapon (Storm, and Time Displacement's stunned 1/4/6) and Saint Fang's Dragon Breath (Blade and Forge Breath, once read as one) are such abilities.
 - **Live:** no new live code: the mode card as before. Not run in pftest.
 - **Simulator:** nothing new: each way one of its abilities, sharing the recharge.
+
+## An aura reroll with a floor (2026-10-12, batch 181)
+
+- **Compiled:** a reaction for a creature in its aura that fails a save against certain kinds of effect (a Battlezoo dragon line's) → `save-reroll` with `ally`, `within` (the actor's Aura rule radius, 30 feet when none is there to read), `against` (the effect kinds), `keep: "new"` and `floor: "failure"`.
+- **Live:** the ally reroll offer as in batch 107. It keeps the new roll, and a note says a critical failure on it is a failure instead. Not run in pftest: the keep and the note on that offer.
+- **Simulator:** the ally reroll as before, a critical failure on it counted as a failure (B181).
