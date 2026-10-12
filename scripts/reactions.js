@@ -320,7 +320,8 @@ async function onMessage(message) {
     // (Batch 225: an auditory action — a spell with the trait, or a check with it, Demoralize — and a healing one, a spell or Battle Medicine: the
     // reaction Strikes that say so (Auditory Swipe, Disruptive Screech, Clinch Victory), not Reactive Strike.)
     const checkTraits = context?.type === "skill-check" ? (context.traits ?? []).map((trait) => trait?.name ?? trait) : [];
-    for (const [kind, words] of [["auditory", "used an auditory action"], ["healing", "used a healing action"]]) {
+    // (Batch 254, Objection!: a linguistic action too.)
+    for (const [kind, words] of [["auditory", "used an auditory action"], ["healing", "used a healing action"], ["linguistic", "used a linguistic action"]]) {
         if (!castTraits?.includes(kind) && !checkTraits.includes(kind)) continue;
         await reachTrigger(scene, combat, token, words, kind, { own: true });
         await provokeTrigger(scene, combat, token, kind, words);

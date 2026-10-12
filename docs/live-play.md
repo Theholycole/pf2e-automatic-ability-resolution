@@ -2471,3 +2471,11 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Compiled** (2 new in PF2e, 4 in Battlezoo; after every reading fails): **the GM's** (`gm: "state"`) for a trigger "in the … vortex" (the bronze dragon's Vortex Pull) and a teleport "to any location within its sanctuary" — areas the simulator can't see.
 - **Live / simulator:** the GM's, as before.
 
+## Hurtful Critique, Objection! (2026-10-12, batch 254)
+
+- **Compiled** (2 new in PF2e):
+  - **A penalty that ends on a hit against it** (Hurtful Critique): "… for 1 minute or until it makes a successful Strike against …" is read as the minute, with the early end and the immunity after as a note. A bracketed "(–2 on a critical failure)" now sets the critical failure's penalty (it was left at the failure's).
+  - **A save to keep a linguistic action** (Objection!): the trigger "takes an action with the linguistic trait" → `provoke` with `linguistic`. A failure disrupts the action (a note on the card).
+- **Live:** a spell or check with the linguistic trait sets off the monster's card, as auditory ones do.
+- **Simulator:** see B254 in its ability decisions.
+

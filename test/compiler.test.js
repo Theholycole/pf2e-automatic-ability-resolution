@@ -4045,3 +4045,12 @@ test("A swim in its vortex and a teleport within its sanctuary to the GM (2026-1
     assert.deepEqual(plan("<p><strong>Trigger</strong> A creature in the test drake's vortex tries to swim away</p><hr /><p><strong>Effect</strong> The current drags it back toward the test drake.</p>", "reaction"), gm);
     assert.deepEqual(plan("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Effect</strong> The test drake teleports to any location within its sanctuary.</p>"), gm);
 });
+
+test("A penalty that ends on a hit against it with a worse one on a critical failure, a save to keep a linguistic action (2026-10-12, batch 254)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const jibe = plan("<p>The test bard mocks a target within 30 feet.</p><p>The target must succeed at a @Check[will|dc:18] save or take a –1 circumstance penalty to attack rolls (–2 on a critical failure) for 1 minute or until it makes a successful Strike against the test bard.</p>");
+    assert.deepEqual([jibe?.resolution?.outcomes?.failure?.modifiers?.[0]?.value, jibe?.resolution?.outcomes?.criticalFailure?.modifiers?.[0]?.value, jibe?.notes?.length], [-1, -2, 1]);
+    const objection = plan("<p><strong>Trigger</strong> A creature within 20 feet takes an action with the linguistic trait</p><hr /><p><strong>Effect</strong> The triggering creature must succeed a @Check[will|dc:20] saving throw or their action is disrupted.</p>", "reaction");
+    assert.deepEqual([objection?.trigger?.triggers, objection?.trigger?.within, objection?.resolution?.outcomes?.failure?.manualInstructions?.length], [["linguistic"], 20, 1]);
+});

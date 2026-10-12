@@ -757,7 +757,9 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     const pulling = (outcome, critical = false) => (pull && !outcome.forcedMovement ? { ...outcome, forcedMovement: { ...pull, distance: Number((critical && farther?.[1]) || pull.distance) } } : outcome);
     // (Batch 127: "on a critical failure, … and the penalty to Speed lasts for 1 minute" — the critical failure's penalty for that long.)
     const penaltyLasts = critical ? /\bthe penalty(?: to [\w ]+?)? lasts for ((?:\d+|one|ten) (?:round|minute|hour)s?)\b/i.exec(htmlToPlainText(critical)) : null;
-    const critPenalties = penaltyLasts ? penalties.map((penalty) => ({ ...penalty, duration: readDuration(`for ${penaltyLasts[1]}`) })) : penalties;
+    // (Batch 254, Hurtful Critique: "(–2 on a critical failure)" — the penalty's value on a critical failure.)
+    const critValue = critical && penalties.length ? /^\s*[–-](\d+)\s*$/.exec(htmlToPlainText(critical))?.[1] : null;
+    const critPenalties = (penaltyLasts ? penalties.map((penalty) => ({ ...penalty, duration: readDuration(`for ${penaltyLasts[1]}`) })) : penalties).map((penalty) => (critValue ? { ...penalty, value: -Number(critValue) } : penalty));
     const ending = (outcome, criticalRow = false) => ({ ...(dies ? { ...outcome, terminal: { kind: "death" } } : outcome), ...(penalties.length ? { modifiers: structuredClone(criticalRow ? critPenalties : penalties) } : {}) });
     return {
         criticalSuccess: row([], [], regardless ? 1 : 0),
@@ -2074,6 +2076,14 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     // (Batch 142: degrees listed in brackets, as sections.)
     const listed = degreeListHtml(item.system?.description?.value ?? "");
     if (listed) return inlineSave(withDescription(item, listed), actor, { afterHit });
+    // (Batch 254, Hurtful Critique: "… for 1 minute or until it makes a successful Strike against the sharpshooter" — the minute; ending early on a hit
+    // against the monster, and the immunity that follows (its own sentence), notes.)
+    const until = / or until it makes a successful Strike against (?:the [\w' -]+?|it|them)(?=\.)/i.exec(item.system?.description?.value ?? "");
+    if (until) {
+        const html = String(item.system.description.value).replace(until[0], "").replace(/<p>\s*A creature that critically succeeds or who Strikes (?:the [\w' -]+?|it) after failing is immune to (?:that [\w' -]+?['’]s|its) [A-Z][\w' -]+? for 1 hour\.\s*<\/p>/i, "");
+        const plan = inlineSave(withDescription(item, html), actor, { afterHit });
+        return plan?.resolution ? { ...plan, notes: [...(plan.notes ?? []), "It ends early once the creature hits the monster with a Strike; a creature that critically succeeds, or hits it after failing, is immune for 1 hour."] } : null;
+    }
     // (Batch 142, Eye Beams: "2d6 cold or 2d6 fire damage" — one roll, its type the monster's pick: PF2e's caster choice, a GM button live, the
     // simulator's best.)
     // (Batch 229: a formula in brackets, "(1d6+3)[piercing] or (1d6+3)[slashing]".)
@@ -3282,6 +3292,26 @@ function flightFrenzy(item, actor, options = {}) {
     }
     if (plan?.builtin !== "multi-strike") return null;
     return { ...plan, actions: Number(item.system?.actions?.value) || plan.actions, strides: 1, each: true, max: plan.strikes.length, sameTarget: false, notes: [...(plan.notes ?? []), `It Flies, making its ${match[1]} attacks at any point along the way, each at a different creature.`] };
+}
+
+// A save to keep its action (2026-10-12, batch 254, Objection!): "Trigger A creature within 30 feet takes an action with the linguistic trait Effect The
+// triggering creature must succeed a … Will saving throw or their action is disrupted." → the save at that creature; on a failure its action is
+// disrupted (a note for the GM). null otherwise.
+function disruptingSave(item) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "@C")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+    if (trigger?.event !== "provoke" || !check || !/^The triggering creature must succeed (?:at |on )?an? @C (?:saving throw|save) or (?:their|its) action is disrupted\.$/i.test(split[2].trim())) return null;
+    const lost = { ...none(), manualInstructions: ["{target}'s triggering action is disrupted."] };
+    return {
+        ...base(item),
+        targeting: { target: "the triggering creature", range: typeof trigger.within === "number" ? `${trigger.within} feet` : "touch", area: null },
+        trigger,
+        resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: false, against: { dc: "fixed", value: check.dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: lost, criticalFailure: structuredClone(lost) } }
+    };
 }
 
 // A pull to it, then a Strike (2026-10-12, batch 250, Hungry Winds): one creature in range saves or is drawn in beside the harpy, which then bites it;
@@ -4826,7 +4856,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -5280,7 +5310,7 @@ function provokeTrigger(text) {
     const sized = /^An? (Tiny|Small|Medium|Large|Huge|Gargantuan) creature\b/.exec(trigger);
     if (sized) trigger = trigger.replace(sized[0], "A creature");
     // (Batch 68: "in the grick's reach", "within a clockwork sentry's reach", "within reach of Racharak's tail".)
-    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: (?:within|in) (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|(?:${SELF}|an? [\w' -]+?)'s? reach|reach|(${SELF}))(?: of ${SELF}(?:['’]s [\w' -]+?)?)?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves|attempts|tries)\b.*)$`).exec(trigger);
+    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: (?:within|in) (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|(?:${SELF}|an? [\w' -]+?)'s? reach|reach|(${SELF}))(?: of ${SELF}(?:['’]s [\w' -]+?)?)?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves|attempts|tries|takes)\b.*)$`).exec(trigger);
     if (!subject) return null;
     const rest = subject[6];
     const triggers = new Set();
@@ -5316,6 +5346,8 @@ function provokeTrigger(text) {
             within = Number(/within (\d+) feet/.exec(part)[1]);
         }
         else if (/^uses? an action that would restore Hit Points$/i.test(part)) triggers.add("healing");
+        // (Batch 254, Objection!: "takes an action with the linguistic trait".)
+        else if (/^(?:takes|uses) an action (?:with|that has) the (linguistic|auditory) trait$/i.test(part)) triggers.add(/linguistic/i.test(part) ? "linguistic" : "auditory");
         else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during (?:a|its|their) move action)?$/i.test(part)) triggers.add("leave");
         else if (/^Strides$/.test(part)) triggers.add("move");
         // (Batch 244, Cling: "A creature leaves the swarm's space" — one in its space leaving it.)
