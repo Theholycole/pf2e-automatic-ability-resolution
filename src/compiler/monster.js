@@ -902,6 +902,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 202, Fencing Brawl: "attempts a rapier Strike followed by a Disarm or Grapple attempt against the same enemy. These count as one attack for
+        // the kingpin's multiple attack penalty, and the penalty doesn't increase until after both attacks." — the Strike, then the Grapple (the
+        // simulator's pick; the Disarm instead a note).)
+        .replace(/\b((?:The )?[\w' -]+?) attempts an? ([\w' -]+?) Strike followed by an? (?:\[\[\/act disarm[^\]]*\]\](?:\{[^}]*\})?|Disarm) or (?:\[\[\/act grapple[^\]]*\]\](?:\{[^}]*\})?|Grapple) attempt against the same enemy\. These count as one attack for (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, and the penalty doesn't increase until after both attacks\./i, "$1 makes a $2 Strike. [after-strike grapple] [or disarm, one attack]")
         // (Batch 201, Daredevil Strike: "Strides up to their Speed, makes a melee Strike, then Steps." — the Stride and the Strike; the Step a note.)
         .replace(/\b((?:The )?[\w' -]+?) Strides up to (?:its|their|his|her) Speed, makes an? ([\w' -]+?) Strike, then Steps\./i, "$1 Strides and makes a $2 Strike. [then steps]")
         // (Batch 200, Swinging Strike: "swings on a rope or trapeze, moving up to double their Speed. At any point during the swing, they can make a melee
@@ -1035,6 +1039,17 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
             // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
             // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            // (Batch 202, Musketeer's Advance: "If the Strike hits, the target is Off-Guard to melee attacks by the musketeer until the end of the musketeer's
+            // next turn. Regardless of whether the Strike hit, the musketeer then Interacts to swap their flintlock musket for their rapier and Strides toward
+            // the creature they attacked.")
+            .replace(/^If the Strike hits, the target is Off-Guard to melee attacks by (?:the [\w' -]+?|it|them) until the end of (?:the [\w' -]+?['’]s|its|their) next turn\.$/i, () => {
+                (activity.notes ??= []).push("On a hit, the target is Off-Guard to its melee attacks until the end of its next turn.");
+                return "[told]";
+            })
+            .replace(/^Regardless of whether the Strike hit, (?:the [\w' -]+?|it|they) then Interacts to swap (?:its|their) [\w' -]+? for (?:its|their) [\w' -]+? and Strides toward the creature (?:it|they) attacked\.$/i, (said) => {
+                (activity.notes ??= []).push(said.replace(/^Regardless of whether the Strike hit, (?:the [\w' -]+?|it|they) then/i, "Hit or miss, it then"));
+                return "[told]";
+            })
             // (Batch 201: Disrupt Qi's "attempts an unarmed Strike against a living creature. On a hit, the creature takes 3d6 persistent void damage and is
             // Enfeebled 2 until the persistent damage ends."; Head Shot's "The target is Dazzled until the end of the lucky courser's next turn on a successful
             // Strike (or Blinded on a critical hit)."; Will Not Falter's allies' bonus on a hit, its PF2e effect; Wrangling Whip's "can either knock the target
@@ -1490,6 +1505,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         if (text === "[boat boarding]") {
             activity.requires = "requirement";
             (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
+            continue;
+        }
+        if (text === "[or disarm, one attack]") {
+            (activity.notes ??= []).push("It can Disarm instead of Grappling; the Strike and the maneuver count as one attack for its multiple attack penalty.");
             continue;
         }
         if (text === "[then steps]") {

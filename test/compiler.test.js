@@ -3297,3 +3297,12 @@ test("NPC Core: Strike riders on a hit or a critical hit, a choice of Prone, two
     assert.deepEqual(compileMonsterAbility(item("<p>The test climber Strides twice and Leaps up to 15 feet horizontally.</p>"), {}), { builtin: "no-effect" });
     assert.deepEqual(compileMonsterAbility(item("<p>The test coward Strides three times and gains a +2 circumstance bonus to AC during those actions.</p>"), {}), { builtin: "safe-move", actions: 2 });
 });
+
+test("NPC Core: an ally's Stride and Strike as its reaction, a Strike then a Grapple, a bounce after a hit, a musket opening (2026-10-12, batch 202)", () => {
+    const item = (html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    assert.deepEqual(compileMonsterAbility(item("<p>The test boss shouts a command to an ally of their choice. That ally can spend a reaction to Stride and Strike. The ally becomes immune to Test Command for 24 hours.</p>"), {}), { builtin: "ally-advance", actions: 1, within: 60, extraDamage: [], reaction: true, oncePerAlly: true });
+    const brawl = compileMonsterAbility(item("<p>The test duelist attempts a sabre Strike followed by a [[/act disarm]] or [[/act grapple]] attempt against the same enemy. These count as one attack for the test duelist's multiple attack penalty, and the penalty doesn't increase until after both attacks.</p>", 2), {});
+    assert.deepEqual([brawl.strike, brawl.afterStrike, brawl.notes.length], ["sabre", "grapple", 2]);
+    const bounce = compileMonsterAbility(item("<p>The test juggler Strikes with a thrown weapon they're juggling. If the Strike hits, the weapon bounces to a different creature in the weapon's first range increment. The test juggler repeats the Strike, which uses the same multiple attack penalty and doesn't increase their multiple attack penalty.</p>"), {});
+    assert.deepEqual([bounce.max, bounce.ifFirstHits, bounce.sameMap], [2, true, true]);
+});

@@ -245,7 +245,10 @@ async function cardForAbility(message) {
         const effect = plan.uuid ? await fromUuid(plan.uuid).catch(() => null) : null;
         if (effect) for (const token of allies) await token.actor.createEmbeddedDocuments("Item", [{ ...effect.toObject(), flags: { ...(effect.toObject().flags ?? {}), [MODULE_ID]: { allyAdvance: { sourceActorUuid: item.actor.uuid } } } }]);
         const extra = (plan.extraDamage ?? []).map((formula) => formula.replace(/\[(\w+)\]/, " $1")).join(" + ");
-        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${allies.length ? `${allies.map((token) => token.name).join(", ")} can Stride once and Strike once, in any order; ${effect ? "its effect adds" : "add"} ${extra} damage on a hit.` : `target an ally within ${plan.within} feet first: it can Stride once and Strike once, in any order, adding ${extra} damage on a hit.`}`]);
+        // (Batch 202, Kingpin's Command: with the ally's reaction, each ally once; no extra damage.)
+        const how = plan.reaction ? "can Stride and Strike as its reaction" : "can Stride once and Strike once, in any order";
+        const once = plan.oncePerAlly ? " Each ally only once a day." : "";
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${allies.length ? `${allies.map((token) => token.name).join(", ")} ${how}${extra ? `; ${effect ? "its effect adds" : "add"} ${extra} damage on a hit` : ""}.${once}` : `target an ally within ${plan.within} feet first: it ${how}${extra ? `, adding ${extra} damage on a hit` : ""}.${once}`}`]);
         return;
     }
     // (Batch 167, Tactical Direction: PF2e's own Attack of Opportunity granted to its allies of that trait in the emanation, until the end of their

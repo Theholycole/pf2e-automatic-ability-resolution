@@ -2628,6 +2628,12 @@ export function compileBuiltin(item, slug) {
     // after the fist Strike." → the two Strikes, the second only after a hit, at the same penalty; the move instead the GM's choice.)
     const pike = /^(?:The )?[\w' -]+? (?:makes an? (?:melee )?Strike with (?:its|their|his|her) ([\w' -]+?)|Strikes with (?:its|their|his|her) ([\w' -]+?))\. If this Strike hits, (?:the )?[\w' -]+? can either (move the target 5 feet within the [\w' -]+?['’]s reach) or make an? ([\w' -]+?) Strike against the target without increasing (?:its|their|his|her) multiple attack penalty until after the (?:[\w' -]+? )?Strike\.$/i.exec(text.trim());
     if (pike) return { builtin: "multi-strike", actions, strikes: [(pike[1] ?? pike[2]).toLowerCase(), pike[4].toLowerCase()], sameTarget: true, sameMap: true, ifFirstHits: true, instead: pike[3] };
+    // (Batch 202, Juggling Bounce: "The juggler Strikes with a thrown weapon they're juggling. If the Strike hits, the weapon bounces to a different creature
+    // in the weapon's first range increment. The juggler repeats the Strike, which uses the same multiple attack penalty and doesn't increase their
+    // multiple attack penalty." — a second Strike at another creature only after a hit, at the same penalty.)
+    if (/^(?:The )?[\w' -]+? Strikes with a thrown weapon (?:it's|they're|he's|she's) juggling\. If the Strike hits, the weapon bounces to a different creature in the weapon's first range increment\. (?:The [\w' -]+?|It|They) repeats? the Strike, which uses the same multiple attack penalty and doesn't increase (?:its|their) multiple attack penalty\.$/i.test(text)) {
+        return { builtin: "multi-strike", actions, strikes: [null, null], each: true, max: 2, sameMap: true, countsAs: 1, ifFirstHits: true, notes: ["With a thrown weapon it's juggling; the second Strike at a different creature in the first range increment, only after a hit."] };
+    }
     // (Batch 84, Chase Prey: "rushes forward on all fours, Striding and then making two claw Strikes"; Frumious Charge: "Strides, ignoring
     // difficult terrain, then makes two claw Strikes at the end of its movement" → a Stride, then the Strikes at one creature.)
     // (Batch 129, Hatchet Onslaught: "Requirements Each of Kargstaad's four hands wields a hatchet. Effect Kargstaad Strides up to half his speed, then
@@ -2718,6 +2724,9 @@ export function compileBuiltin(item, slug) {
         const uuid = /@UUID\[(Compendium\.[^\]]+)\]\{Effect: [^}]+\}/.exec(advising)?.[1] ?? null;
         return { builtin: "ally-advance", actions, within: Number(advance[1]), extraDamage: [`${advance[2]}${type ? `[${type}]` : ""}`], ...(uuid ? { uuid } : {}), ...(/\bFrequency<\/strong> once per (?:round|turn)\b/i.test(advising) ? { oncePerTurn: true } : {}) };
     }
+    // (Batch 202, Kingpin's Command: "The crime kingpin shouts a command to an ally of their choice. That ally can spend a reaction to Stride and Strike. The
+    // ally becomes immune to Kingpin's Command for 24 hours." — the ally's reaction, each ally once.)
+    if (/^(?:The )?[\w' -]+? shouts a command to an ally of (?:its|their|his|her) choice\. That ally can spend a reaction to Stride and Strike\. The ally becomes immune to [A-Z][\w' -]+? for 24 hours\.$/i.test(text)) return { builtin: "ally-advance", actions, within: 60, extraDamage: [], reaction: true, oncePerAlly: true };
     // (Batch 167, Tactical Direction: "Each wight ally in a 30-foot emanation gains the Attack of Opportunity reaction until the end of their next
     // turn." → { builtin: "grant-aoo", within, trait, uuid } — PF2e's own ability granted to those allies for that time.)
     const directed = /^Each ([a-z]+ )?ally in an? @Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})? gains the (@UUID\[([^\]]+)\]\{Attack of Opportunity\}|Attack of Opportunity) reaction until the end of their next turn\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, "").trim());

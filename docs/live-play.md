@@ -1790,3 +1790,13 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** cards and buffs as before. Not run in pftest.
 - **Simulator:** nothing new.
 
+## An ally's reaction Strike; a Strike then a maneuver (2026-10-12, batch 202)
+
+- **Compiled:**
+  - Kingpin's Command → `ally-advance` with `reaction`, `oncePerAlly` and no extra damage.
+  - Fencing Brawl → a rapier Strike with `afterStrike: "grapple"`, with a note for the Disarm instead and the one attack.
+  - Juggling Bounce → two Strikes at different creatures, the second only after a hit, at the same penalty.
+  - Musketeer's Advance → its flintlock musket Strike, with notes for the Off-Guard on a hit and the swap and Stride after.
+- **Live:** the GM's ally-advance note says the ally can Stride and Strike as its reaction, and that each ally gets it once a day. With no extra damage, the note leaves the damage out. Not run in pftest.
+- **Simulator:** see B202 in its ability decisions.
+
