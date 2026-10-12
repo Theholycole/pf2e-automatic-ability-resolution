@@ -221,6 +221,7 @@ async function onMessage(message) {
         await guardAlly(message, context, scene, combat, token);
         await ownStrike(message, context, scene, combat, token);
         await strikeAnswers(context, scene, combat, token);
+        await allyHitAnswers(context, scene, combat, token);
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
     }
@@ -278,6 +279,22 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
             break;
         }
+    }
+}
+
+// One of its allies hitting a creature in its reach with a melee Strike (batch 94, Opportune Backstab): its Strike offer at that creature.
+async function allyHitAnswers(context, scene, combat, attacker) {
+    if (!["success", "criticalSuccess"].includes(context.outcome) || (context.options ?? []).includes("item:ranged")) return;
+    const target = context.target?.token ? fromUuidSync(context.target.token) : null;
+    if (!target) return;
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (monster.id === attacker.id || monster.disposition !== attacker.disposition || !isFoe(monster, target)) continue;
+        const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("ally-hit"));
+        if (!entry) continue;
+        const distance = distanceFeet(box(monster, grid.size), box(target, grid.size), grid);
+        const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`).filter((strike) => distance <= strike.reach);
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target, strikes, penalty: entry.plan.penalty ?? 0, trigger: `was hit by ${attacker.name}` });
     }
 }
 

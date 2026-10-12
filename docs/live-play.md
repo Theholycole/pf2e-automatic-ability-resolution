@@ -1255,3 +1255,10 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Fewer actions than moves:** batch 25 read a charge only when it took at least as many actions as its moves (Swoop's 2 actions for one Fly and a Strike). The text decides now: the knight's "Frequency once per turn Effect The knight Strides twice. If they end their movement within melee reach of at least one enemy, the knight can make a melee Strike against that enemy." (1 action), Eagle Dive's "Flies up to double his fly Speed in a straight line, descending at least 10 feet, and then makes a talon Strike" (1 action), Breach (1 action).
 - **Its frequency:** a charge's "Frequency once per turn" or "once per round" is kept as oncePerTurn (the simulator, as batch 70's charges already could; live play as before): 8 charges that had it in their text gain it.
 - **Allies only moving closer:** an ability that lets its allies in range take a Step or a Stride, as long as they end up nearer to it → no-effect (moves only, as batch 73's).
+
+## A Strike at a creature an ally just hit (2026-10-11, batch 94)
+
+- **The reading:** batch 57's reaction Strikes with a new trigger, "A creature within Fayati's reach is hit by a melee Strike from one of her allies" (also "melee attack", "within melee reach", a name of several words) → { builtin: "reaction-strike", triggers: ["ally-hit"], strike: null } when the effect only Strikes ("makes|attempts a Strike against the triggering creature", "Strikes the triggering creature"). Not Falrok's or Delamar's, whose effects say more.
+- **The simulator** (B114): after a melee hit, each of the attacker's allies in the struck creature's Melee with it uses its reaction Strike (its best melee Strike, B90's) at that creature.
+- **Live play:** as one of its allies' melee Strikes hits a creature within its reach, the offer with its melee Strikes that reach.
+- **Checked live in pftest** (PFTEST SIM B94 Fayati, a gang leader and a copy of Valeros; deleted afterwards): the leader's fist hit on Valeros → Fayati's Opportune Backstab offer with her Main-Gauche and Rapier.

@@ -2115,3 +2115,11 @@ test("a charge in fewer actions than its moves, its frequency kept; allies only 
     assert.deepEqual(compile("<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test knight Strides twice. If they end their movement within melee reach of at least one enemy, the test knight can make a melee Strike against that enemy.</p>"), { builtin: "charge", actions: 1, strides: 2, strike: null, oncePerTurn: true });
     assert.deepEqual(compile("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test chief bellows a summons. Each ally within 30 feet that hears it can immediately Step or Stride; the move must bring them closer to the test chief.</p>"), { builtin: "no-effect" });
 });
+
+test("a Strike at a creature one of its allies just hit (2026-10-11, batch 94)", () => {
+    const reaction = (trigger, effect) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    const answer = { builtin: "reaction-strike", triggers: ["ally-hit"], strike: null, penalty: 0, disrupts: false };
+    assert.deepEqual(reaction("A creature within Test Vela's reach is hit by a melee Strike from one of her allies", "Test Vela makes a Strike against the triggering creature."), answer);
+    assert.deepEqual(reaction("A creature within melee reach is hit by a melee attack from one of the test ambusher's allies", "The test ambusher attempts a Strike against the triggering creature."), answer);
+    assert.deepEqual(reaction("A creature within Test Ola's melee reach is hit by a melee attack from one of her allies", "Test Ola Strikes the triggering creature."), answer);
+});

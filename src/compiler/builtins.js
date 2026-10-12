@@ -794,7 +794,9 @@ export function readReaction(item, text) {
         // (Batch 63: a creature in its reach failing or critically failing an attack roll against it.)
         [new RegExp(String.raw`^A creature (?:within ${reachOf} )?fails or critically fails an attack roll against ${its}$`, "i"), "missed"],
         [new RegExp(String.raw`^(?:The )?[^.]+? is damaged by an adjacent creature$`, "i"), "damaged-adjacent"],
-        [new RegExp(String.raw`^(?:The )?[^.]+? is targeted by an attack or spell$`, "i"), "targeted"]
+        [new RegExp(String.raw`^(?:The )?[^.]+? is targeted by an attack or spell$`, "i"), "targeted"],
+        // (Batch 94, Opportune Backstab: "A creature within Fayati's reach is hit by a melee Strike from one of her allies".)
+        [new RegExp(String.raw`^A creature within (?:(?:the [\w' -]+?['’]s|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*['’]s|its|their|his|her) )?(?:melee )?reach is hit by a melee (?:attack|Strike) from one of (?:its|their|his|her|the [\w' -]+?['’]s) allies$`, "i"), "ally-hit"]
     ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
     const told = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
@@ -802,6 +804,9 @@ export function readReaction(item, text) {
     // (Batch 63: the Strike rolled twice, the better kept, a fortune effect → fortune.)
     const backAt = answered ? /^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) (?:the (?:triggering )?creature|that creature|the attacker)(, regardless of range)?(, rolling the attack roll twice and taking the better result; this is a fortune effect)?\.$/i.exec(lastOnly ? told.at(-1) : effect.trim()) : null;
     if (backAt && (answered === "targeted") === Boolean(backAt[2])) return { builtin: "reaction-strike", triggers: [answered], strike: backAt[1].toLowerCase(), penalty: 0, disrupts: false, ...(backAt[3] ? { fortune: true } : {}) };
+    // (Batch 94: a Strike with no weapon named — "makes a Strike against the triggering creature", "attempts a Strike against …", "Strikes the
+    // triggering creature": its best melee Strike, B90's.)
+    if (answered === "ally-hit" && /^(?:The )?[^.]+? (?:(?:makes|attempts) a Strike against|Strikes) the triggering creature\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: [answered], strike: null, penalty: 0, disrupts: false };
     // (Batch 88: a basic maneuver back in place of the Strike — Ripping Disarm's "Trigger A creature rolls a critical failure on a melee
     // weapon Strike against the Tree that Weeps Effect … attempts to Disarm the creature.", Bully's Push's "… misses the thug with a melee
     // Strike … attempts to Shove the triggering creature at a -2 penalty", Absorb Weapon's "A creature hits the omox with a melee weapon",
