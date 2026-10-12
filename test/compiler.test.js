@@ -2309,3 +2309,10 @@ test("Strike activities: a bonus to the attack roll or a status bonus to damage,
     const swing = compile("<p>The test laborer makes a sledge Strike against a creature. If it hits, the creature is pushed 5 feet. If the target is wearing metal armor, its armor also takes the damage, which bypasses 5 of the armor's Hardness.</p>");
     assert.deepEqual([swing?.strike, swing?.onHit?.push, swing?.notes?.length], ["sledge", 5, 1]);
 });
+
+test("multi-Strikes: a Step between, more damage when both hit the same enemy, a melee and a ranged Strike, a state it must be in (2026-10-12, batch 113)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    assert.deepEqual(compile("<p>The test raider Strikes, Steps, then Strikes again. If the test raider hits the same enemy with both Strikes, that enemy takes an additional @Damage[1d4[persistent,bleed]] damage.</p>"), { builtin: "multi-strike", actions: 2, strikes: [null, null], sameTarget: true, bothHit: { conditions: [], damage: ["1d4[persistent,bleed]"] } });
+    assert.deepEqual(compile("<p>The test rogue can Step, attempt a melee knife Strike, and attempt a ranged knife Strike, taking the actions in any order. Both Strikes count toward the test rogue's multiple attack penalty, but it doesn't increase until after both attacks.</p>"), { builtin: "multi-strike", actions: 2, strikes: ["knife", "knife"], sameMap: true });
+    assert.deepEqual(compile("<p><strong>Requirements</strong> The test brawler is raging</p><hr /><p><strong>Effect</strong> The test brawler attempts two fist Strikes, each against a different creature.</p>", 1), { builtin: "multi-strike", actions: 1, strikes: ["fist", "fist"], each: true, max: 2, requires: "requirement" });
+});

@@ -97,7 +97,19 @@ export function readMultiStrikes(text) {
         oncePerTurn = true;
         body = body.slice(frequency[0].length);
     }
+    // (Batch 113: a requirement that names its own state — Drunken Flailing's "The drunkard is raging" — the GM's live, not planned by the
+    // simulator: requires "requirement".)
+    let stated = false;
+    body = body.replace(/^Requirements? (?:The )?[\w' -]+? is (?:raging|enraged|berserk|in [\w' -]+? stance)\.? Effect /i, () => {
+        stated = true;
+        return "";
+    });
     if (/^(?:Requirements?|Trigger|Prerequisites?)\b/i.test(body)) return null;
+    // (Batch 113, Dancing Dagger: "can Step, attempt a melee dagger Strike, and attempt a ranged dagger Strike, taking the actions in any
+    // order" — its two Strikes, the Step the GM's.)
+    body = body.replace(/^((?:The )?[^.]+?) can Step, attempt an? (?:melee|ranged) ([\w' -]+?) Strike, and attempt an? (?:melee|ranged) ([\w' -]+?) Strike, taking the actions in any order\./i, "$1 makes a $2 Strike and a $3 Strike.");
+    // (Batch 113, Bloody Flurry: "Strikes, Steps, then Strikes again" — two Strikes, the Step between the GM's.)
+    body = body.replace(/^((?:The )?[^.]+?) Strikes, Steps, then Strikes again\./i, "$1 makes two Strikes.");
     const sentences = body.replace(/,? which (?:it|they) can make in any order\./i, ".").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 42: a first sentence that only tells what it does, "The test slayer swiftly attacks their prey with both weapons,
     // potentially combining their damage into a single devastating attack.")
@@ -111,7 +123,7 @@ export function readMultiStrikes(text) {
     // (Flying Strafe), "within the shortbow's first range increment", "; no more than two can be against the same target",
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
     let penalty = 0;
-    let requires = held ? "grabbed" : null;
+    let requires = held ? "grabbed" : stated ? "requirement" : null;
     if (held) sameTarget = true;
     first = first.trim().replace(/([^.])$/, "$1.")
         .replace(/\b(attempts|attempt)\b(?= (?:up to )?(?:a|an|one|two|three|four) )/i, "makes")
@@ -244,7 +256,7 @@ export function readMultiStrikes(text) {
     // What may follow: the order, the attack penalty, damage combined against resistances, who it's against.
     let secondOffGuard = null;
     let bothHit = null;
-    for (const sentence of sentences) {
+    for (let sentence of sentences) {
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
         // (Twin Feint, batch 43: "The target is automatically Off-Guard against the second attack.")
         if (/^The target is automatically Off-Guard against the second attack\.$/i.test(sentence) && strikes.length === 2) {
@@ -268,6 +280,8 @@ export function readMultiStrikes(text) {
         // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round", "If both attacks hit, the target is
         // also knocked Prone", "If both hit, the creature takes 2d10 bleed …", "If both attacks hit, the target is also dealt 1d8 persistent
         // bleed damage" → bothHit { conditions, damage }; on the creature both Strikes hit.)
+        // (Batch 113, Bloody Flurry: "If the kholo outrider hits the same enemy with both Strikes, that enemy takes an additional … damage.")
+        sentence = sentence.replace(/^If (?:the [\w' -]+?|it|they) hits? the same (?:enemy|creature|target) with both Strikes, that (?:enemy|creature|target) /i, "If both Strikes hit the same target, the target ");
         const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
         if (both) {
             const said = both[1].replace(/-stuck between the doors\b/i, "");
@@ -275,7 +289,7 @@ export function readMultiStrikes(text) {
             const rest = said.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?/g, "").trim();
             const conditions = [...rest.matchAll(new RegExp(String.raw`\b(${BOTH_CONDITIONS})(?: (\d+))?(?: for (\d+) rounds?)?\b`, "gi"))].map((found) => ({ slug: found[1].toLowerCase().replace(/^knocked /, ""), value: found[2] ? Number(found[2]) : null, rounds: found[3] ? Number(found[3]) : null }));
             // (Nothing else in it: not an exposure to a poison, a Disarm, temporary Hit Points.)
-            const left = rest.replace(new RegExp(String.raw`\b(?:${BOTH_CONDITIONS})(?: \d+)?(?: for \d+ rounds?)?\b`, "gi"), "").replace(/\b(?:and|also|knocked|is|the target|becomes|dealt|takes)\b|[,\s]/gi, "");
+            const left = rest.replace(new RegExp(String.raw`\b(?:${BOTH_CONDITIONS})(?: \d+)?(?: for \d+ rounds?)?\b`, "gi"), "").replace(/\b(?:and|also|knocked|is|the target|becomes|dealt|takes|an additional|an extra)\b|[,\s]/gi, "");
             if ((conditions.length || damage.length) && !left) {
                 bothHit = { conditions, damage };
                 continue;
