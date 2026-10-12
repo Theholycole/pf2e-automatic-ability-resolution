@@ -2020,7 +2020,9 @@ function otherSkillManeuver(item, basicActions = {}) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
     const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
-    const match = /^(?:The )?[\w' -]+? attempts to (Grapple|Trip|Shove|Disarm|Reposition) an? (?:creature|foe|enemy|target) using (?:its|their|his|her) (Acrobatics|Deception|Diplomacy|Intimidation|Performance|Stealth|Thievery) (?:bonus|modifier) instead of Athletics\.(?: If the (?:creature|target) is willing, (?:the )?[\w' -]+? (?:automatically succeeds|\w+ it automatically)\.)?$/i.exec(plain);
+    // (Batch 92, Cutting Remarks: "The courtesan levies insults or backhanded compliments, attempting to Demoralize a creature using their
+    // Performance modifier instead of Intimidation.")
+    const match = /^(?:The )?[^.]+?,? (?:attempts|attempting) to (Grapple|Trip|Shove|Disarm|Reposition|Demoralize) an? (?:creature|foe|enemy|target) using (?:its|their|his|her) (Acrobatics|Athletics|Deception|Diplomacy|Intimidation|Performance|Stealth|Thievery) (?:bonus|modifier) instead of (?:Athletics|Intimidation)\.(?: If the (?:creature|target) is willing, (?:the )?[\w' -]+? (?:automatically succeeds|\w+ it automatically)\.)?$/i.exec(plain);
     const basic = match ? basicActions[match[1].toLowerCase()] : null;
     if (!basic?.resolution?.check) return null;
     const plan = structuredClone(basic);

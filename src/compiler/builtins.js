@@ -99,6 +99,7 @@ export function readMultiStrikes(text) {
     let sameMap = false;
     let sameTarget = false;
     let grab = false;
+    let countsAs = null;
     // (Batch 30: the first sentence's extras, taken out: "at a -2 penalty" (each Strike's), "at any point during that movement"
     // (Flying Strafe), "within the shortbow's first range increment", "; no more than two can be against the same target",
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
@@ -121,7 +122,7 @@ export function readMultiStrikes(text) {
         .replace(/, applying (?:its|their|his|her) multiple attack penalty as normal(?=\.$)/i, "")
         // (Batch 80: "They make two hoof Strikes against the same target", "… two claw Strikes at the same target, each using her current
         // multiple attack penalty".)
-        .replace(/^(They|You) make (?=(?:up to )?(?:a|an|one|two|three|four) )/, "$1 makes ")
+        .replace(/^(They|You) make (?=(?:up to )?(?:a|an|one|two|three|four|five|six) )/, "$1 makes ")
         // (Batch 81: "…, each using a different limb"; Wing Snap's "…, then falls if it's flying" (the fall the GM's).)
         .replace(/, each using a different (?:limb|arm|head|tentacle)(?=\.$)/i, "")
         .replace(/, then falls if (?:it's|it is|they're|they are) flying(?=\.$)/i, "")
@@ -139,6 +140,13 @@ export function readMultiStrikes(text) {
         // (Batch 87, Dual Disarm: "makes two Strikes, one with their rapier and one with their main-gauche (in either order)".)
         .replace(/\bmakes two Strikes, one with (?:its|their|his|her) ([\w' -]+?) and one with (?:its|their|his|her) ([\w' -]+?)(?: \(in either order\))?(?=\.$)/i, "makes a $1 Strike and a $2 Strike")
         .replace(/, each using (?:its|their|his|her|the [\w' -]+?['’]s) current multiple attack penalty(?=\.$)/i, "")
+        // (Batch 92, Vine Forest: "…, each against a different target; this counts as one attack for their multiple attack penalty, increasing
+        // only after all the attacks are made".)
+        .replace(/; this counts as one attack for (?:its|their|his|her) multiple attack penalty, increasing only after all the attacks are made(?=\.$)/i, () => {
+            sameMap = true;
+            countsAs = 1;
+            return "";
+        })
         // (Batch 91, Twin Shot: "makes two Strikes with her bow using her current multiple attack penalty" — both at it.)
         .replace(/ using (?:its|their|his|her) current multiple attack penalty(?=\.$)/i, () => {
             sameMap = true;
@@ -227,7 +235,6 @@ export function readMultiStrikes(text) {
     if (strikes.length < 2) return null;
     // What may follow: the order, the attack penalty, damage combined against resistances, who it's against.
     let secondOffGuard = null;
-    let countsAs = null;
     let bothHit = null;
     for (const sentence of sentences) {
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
@@ -1310,6 +1317,10 @@ export function compileBuiltin(item, slug) {
     if (stride && along.slice(2).every((sentence) => /^These attacks count toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after [^.]*attacks\.$|^(?:His|Her|Its|Their) multiple attack penalty applies as usual\.$|^If (?:it|they|he|she) moves? half (?:its|their|his|her) speed or less during [^,.]+, that movement (?:doesn't|does not) trigger reactions\.$/i.test(sentence))) {
         return { builtin: "multi-strike", actions, strikes: [stride[2].toLowerCase()], each: true, max: { two: 2, three: 3, four: 4, five: 5 }[stride[1].toLowerCase()], strides: 1, ...(along.slice(2).some((sentence) => /doesn't increase until|does not increase until/i.test(sentence)) ? { sameMap: true } : {}) };
     }
+    // (Batch 92, Vicious Strafe: "The tylosaurus Swims up to its Speed. It can make one jaws Strike and one tail Strike at any points during its
+    // movement, each attacking a different target.")
+    const strafe = along.length === 2 && /^(?:The )?[\w' -]+? (?:Strides|Swims|Flies) up to (?:its|their|his|her) (?:swim |fly )?Speed\.$/i.test(along[0]) ? /^(?:It|They|He|She) can make one ([\w' -]+?) Strike and one ([\w' -]+?) Strike at any points? during (?:its|their|his|her|this) movement, each attacking a different target\.$/i.exec(along[1]) : null;
+    if (strafe) return { builtin: "multi-strike", actions, strikes: [strafe[1].toLowerCase(), strafe[2].toLowerCase()], each: true, max: 2, strides: 1 };
     // (Batch 89, Flying Fists: "The akhana Flies and makes up to four fist Strikes against different targets at any points during this
     // movement. The attacks count toward its multiple attack penalty normally, but the penalty does not increase until after Flying Fists is
     // complete.")
@@ -1605,6 +1616,10 @@ function readNoCombatEffect(text) {
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    // (Batch 92: Fancy Footwork's "Steps and Strides in any order"; Coiled Leap's "Leaps up to 10 feet vertically or 30 feet horizontally".)
+    if (/^(?:The )?[^.]+? (?:Steps and Strides in any order|Leaps up to \d+ feet vertically or \d+ feet horizontally)\.$/i.test(said)) return true;
+    // (Batch 92, Unnatural Leap: "jumps up to their Speed horizontally, or half that vertically" — a move.)
+    if (/^(?:The )?[^.]+? jumps up to (?:its|their|his|her) Speed horizontally, or half that vertically\.$/i.test(said)) return true;
     // (Batch 91, On All Fours: "Requirements The festrog has nothing in their hands Effect The festrog Strides with a +10-foot circumstance
     // bonus to their Speed." — a Stride.)
     if (/^(?:Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect )?(?:The )?[^.]+? Strides with a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(said)) return true;
