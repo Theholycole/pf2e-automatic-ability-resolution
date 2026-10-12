@@ -98,6 +98,8 @@ export function readMultiStrikes(text) {
         held = true;
         return `The creature makes ${strikes} against the same target.`;
     }).replace(/(?<=\. )Those Strikes count as one attack when determining (?:an? [\w' -]+?['’]s|its|their) multiple attack penalty, and the penalty doesn't increase until after both Strikes\.$/i, "This counts as one attack for its multiple attack penalty, and the penalty doesn't increase until after both attacks.");
+    // (Batch 138, Spirit Shot: "Frequency once per round Requirements … Effect …" — the requirement read below.)
+    body = body.replace(/^(Frequency once per (?:turn|round)) (?=Requirements? )/i, "$1 Effect ");
     const frequency = /^Frequency (.+?) Effect /i.exec(body);
     if (frequency) {
         if (!/^once per (?:turn|round)$/i.test(frequency[1].trim())) return null;
@@ -110,7 +112,13 @@ export function readMultiStrikes(text) {
     body = body.replace(/^Requirements? (?:The )?[\w' -]+? is (?:raging|enraged|berserk|in [\w' -]+? stance|affected by [A-Z][\w' -]+?)\.? Effect /i, () => {
         stated = true;
         return "";
-    });
+    })
+        // (Batch 138: Sanguine Mauling's "The vrykolakas ancient's last action was to Drink Blood", Spirit Shot's "The duskwalker has designated
+        // a creature as their prey using Spirit Hunter" — the same: the GM's live, not planned.)
+        .replace(/^Requirements? (?:The )?[\w' -]+?(?:['’]s last action was (?:to )?[A-Z][\w' -]+?| has designated a creature as (?:its|their|his|her) prey using [A-Z][\w' -]+?)\.? Effect /i, () => {
+            stated = true;
+            return "";
+        });
     if (/^(?:Requirements?|Trigger|Prerequisites?)\b/i.test(body)) return null;
     // (Batch 113, Dancing Dagger: "can Step, attempt a melee dagger Strike, and attempt a ranged dagger Strike, taking the actions in any
     // order" — its two Strikes, the Step the GM's.)
@@ -182,6 +190,8 @@ export function readMultiStrikes(text) {
         .replace(/, each using a different (?:limb|arm|head|tentacle)(?=\.$)/i, "")
         .replace(/, then falls if (?:it's|it is|they're|they are) flying(?=\.$)/i, "")
         .replace(/ at the same (target|creature)(?=[,.])/i, " against the same $1")
+        // (Batch 138, Spirit Shot: "… two ranged Strikes against their prey" — one creature.)
+        .replace(/ against (?:its|their|his|her) (?:designated |hunted )?prey(?=\.$)/i, " against the same target")
         // (Batch 90: Two-Headed Strike's "makes a Strike with each set of jaws, each against a different creature", Bloody Dance's "makes a
         // Strike with up to four arms, each against a different target and using a claw or scimitar as appropriate", Axe Swipe's "makes two
         // Strikes with their greataxe against two adjacent enemies, both of whom are within their reach".)
@@ -301,8 +311,19 @@ export function readMultiStrikes(text) {
     // What may follow: the order, the attack penalty, damage combined against resistances, who it's against.
     let secondOffGuard = null;
     let bothHit = null;
+    let noGrab = false;
     for (let sentence of sentences) {
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
+        // (Batch 138, Tentacle Stab: "These Strikes deal piercing damage instead of bludgeoning, and the quoppopak can't Grab with them." —
+        // for the GM; no Grab after them.)
+        if ((match = /^These Strikes deal (\w+) damage instead of (\w+)(, and (?:the [\w' -]+?|it|they|he|she) can(?:'t|not) Grab with them)?\.$/i.exec(sentence))) {
+            notes.push(`These Strikes deal ${match[1].toLowerCase()} damage instead of ${match[2].toLowerCase()}.`);
+            if (match[3]) {
+                noGrab = true;
+                notes.push("It can't Grab with them: skip a Grab card after them.");
+            }
+            continue;
+        }
         // (Twin Feint, batch 43: "The target is automatically Off-Guard against the second attack.")
         if (/^The target is automatically Off-Guard against the second attack\.$/i.test(sentence) && strikes.length === 2) {
             secondOffGuard = true;
@@ -351,7 +372,9 @@ export function readMultiStrikes(text) {
             // (Batch 130, Twin Butchery: "In addition, if both Strikes hit, the menaced prey is Off-Guard until …".)
             .replace(/^In addition, if both (Strikes|attacks) hit, the (?:menaced |hunted )?prey is /i, "If both $1 hit, the target is ")
             // (Batch 124, Scorching Maul: "A creature hit by both claw Strikes also takes 1d4 persistent fire damage.")
-            .replace(/^An? (?:creature|target|enemy) hit by both (?:[\w' -]+? )?(?:Strikes|attacks) (?:also )?takes /i, "If both Strikes hit the same target, the target takes ");
+            .replace(/^An? (?:creature|target|enemy) hit by both (?:[\w' -]+? )?(?:Strikes|attacks) (?:also )?takes /i, "If both Strikes hit the same target, the target takes ")
+            // (Batch 138, Sanguine Mauling: "If it hits with both claws, the target takes 1d6 bleed.")
+            .replace(/^If (?:the [\w' -]+?|it|they|he|she) hits? (?:the same (?:creature|target) )?with both [\w' -]+?, the (?:target|creature) /i, "If both Strikes hit the same target, the target ");
         const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
         if (both) {
             // (Batch 124, Barbed Limbs: "… is Grabbed until the end of the mantis's next turn" — for a round.)
@@ -469,7 +492,7 @@ export function readMultiStrikes(text) {
         return null;
     }
     // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
-    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}) };
+    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}), ...(noGrab ? { noGrab } : {}) };
 }
 
 // One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
@@ -1895,7 +1918,7 @@ export function compileBuiltin(item, slug) {
     const eviscerate = /^Requirements? (?:The )?[\w' -]+? has not attacked yet this turn Effect (?:[^.]+\. )?(?:It|They|The [\w' -]+?) makes four Strikes: the first at (?:its|their) highest attack bonus, the next two with an? [-\u2013\u2212](\d+) penalty to their attack rolls, and the last one with an? [-\u2013\u2212](\d+) penalty\. This ability counts as four Strikes for the purpose of (?:its|their) multiple attack penalty\.$/i.exec(text.trim());
     if (eviscerate) return { builtin: "multi-strike", actions, strikes: [null, null, null, null], sameTarget: true, sameMap: true, penalties: [0, Number(eviscerate[1]), Number(eviscerate[1]), Number(eviscerate[2])], countsAs: 4, requires: "first-attack" };
     const multi = readMultiStrikes(text);
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}) };
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
@@ -1971,7 +1994,16 @@ export function readSelfGuard(item) {
     if (/\bTrigger\b/.test(text) || /@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item?.system?.description?.value ?? "")) return null;
     const required = /^Requirements? (.+?) Effect /.exec(text)?.[1] ?? "";
     if (required && !/^(?:The )?[\w' -]+? (?:is wielding [^.]+|has (?:a|an|one|two|his|her|its|their) [^.]*?(?:weapon|shield|hand)[^.]*)$/i.test(required.trim())) return null;
-    const body = text.replace(/^Requirements? .+? Effect /, "").replace(/^Frequency [^.]*? Effect /, "");
+    const body = text.replace(/^Requirements? .+? Effect /, "").replace(/^Frequency [^.]*? Effect /, "")
+        // (Batch 138, Defender of the Seas: "The triton Interacts to raise their trident, gaining a +1 circumstance bonus to AC until …".)
+        .replace(/^((?:The )?[\w' -]+?) Interacts to [^,.]+, gaining (?=an? \+\d+ (?:circumstance|status) bonus to AC\b)/, "$1 gains ");
+    // (Batch 138: a guard that lasts until it moves — Cower's "It gains a +4 circumstance bonus to AC but takes a –2 penalty to attack rolls.
+    // This lasts until the pusk moves from its current space, falls Unconscious, or ends the effect as a free action."; Entrench's "… locks
+    // itself in place, becoming voluntarily Immobilized. While Entrenched, the archon can't be forcibly moved or tripped, and it gains a +2
+    // circumstance bonus to AC and Reflex saves. Entrench ends automatically as soon as the bastion archon uses another move action." — a
+    // stance that ends when it moves, what it can't be the GM's.)
+    const held = readHeldGuard(item, body);
+    if (held) return held;
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/);
     const until = String.raw`until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn`;
     const gains = new RegExp(String.raw`^(?:(?:Until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn), )?(?:The [\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?) gains? an? \+(\d+) (circumstance|status) bonus to (?:its |their |his |her )?AC(?: ${until})?((?:, or an? \+\d+ circumstance bonus if [^.,]+)?(?:,? (?:as long as|but loses this bonus if) [^.]+)?(?:, and [^.]+)?)\.$`, "i");
@@ -2008,6 +2040,44 @@ export function readSelfGuard(item) {
         model: { name: item.name, rounds, modifiers: [{ on: "ac", type: found[3].toLowerCase(), value: Number(found[2]) }], tempHp: 0 },
         duration: { value: 1, unit: "rounds", expiry: rounds === 2 ? "turn-end" : "turn-start" },
         ...(notes.length ? { notes } : {})
+    };
+}
+
+function readHeldGuard(item, body) {
+    const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/);
+    const subject = String.raw`(?:The [\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)`;
+    const notes = [];
+    let modifiers = null;
+    let ends = false;
+    for (const [index, sentence] of sentences.entries()) {
+        let match;
+        if (!modifiers && (match = new RegExp(String.raw`^(?:While [A-Z][\w' -]+?, )?${subject} (?:can't be forcibly moved or tripped, and (?:it|they|he|she) )?gains? an? \+(\d+) (circumstance|status) bonus to (?:its |their )?AC( and Reflex saves)?(?: but takes an? [-\u2013\u2212](\d+) penalty to (?:its |their )?attack rolls)?\.$`, "i").exec(sentence))) {
+            const type = match[2].toLowerCase();
+            modifiers = [{ on: "ac", type, value: Number(match[1]) }, ...(match[3] ? [{ on: "reflex", type, value: Number(match[1]) }] : []), ...(match[4] ? [{ on: "attack", type: "untyped", value: -Number(match[4]) }] : [])];
+            if (/can't be forcibly moved or tripped/i.test(sentence)) notes.push("It can't be forcibly moved or tripped while it lasts.");
+            continue;
+        }
+        if (new RegExp(String.raw`^This lasts until ${subject} moves from (?:its|their|his|her) current space(?:, falls Unconscious)?,? (?:or )?ends the effect as a free action\.$`, "i").test(sentence) || new RegExp(String.raw`^[A-Z][\w' -]+? ends automatically as soon as ${subject} uses another move action\.$`, "i").test(sentence)) {
+            ends = true;
+            continue;
+        }
+        // (A first sentence that only tells it: "… locks itself in place, becoming voluntarily Immobilized" (the GM's, a note), "… makes
+        // itself as small as possible …".)
+        if (index === 0 && !/\d|\b(?:damage|bonus|penalty|save|check|Strikes?)\b/i.test(sentence)) {
+            if (/\bvoluntarily Immobilized\b/i.test(sentence)) notes.push("It's voluntarily Immobilized: moving ends it.");
+            continue;
+        }
+        return null;
+    }
+    if (!modifiers || !ends) return null;
+    return {
+        builtin: "self-effect",
+        actions: Number(item.system?.actions?.value) || 1,
+        model: { name: item.name, rounds: 10, modifiers, tempHp: 0 },
+        stance: true,
+        endsOnMove: true,
+        duration: { value: -1, unit: "unlimited", expiry: null },
+        notes: ["It ends when it moves.", ...notes]
     };
 }
 

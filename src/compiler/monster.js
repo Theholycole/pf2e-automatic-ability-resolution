@@ -1912,7 +1912,8 @@ function followUp(item, actor, basicActions = {}) {
         const plan = effectAbility(own);
         return plan?.resolution?.applications?.every((application) => ["target", "self"].includes(application.recipients)) ? plan : null;
     };
-    for (const read of [() => inlineSave(own, actor), () => compileSkillAction(own, { actor }), atStruck, () => automaticEffect(own, actor), () => followUpResults(own, effect), () => followUpSkill(own, effect, basicActions)]) {
+    // (Batch 138, Rattling Spear: a basic maneuver in its own words, at each foe around it — variedManeuver's.)
+    for (const read of [() => inlineSave(own, actor), () => compileSkillAction(own, { actor }), atStruck, () => automaticEffect(own, actor), () => followUpResults(own, effect), () => followUpSkill(own, effect, basicActions), () => variedManeuver(own, basicActions)]) {
         try {
             plan = read();
         } catch {
@@ -2497,7 +2498,9 @@ function variedManeuver(item, basicActions = {}) {
     // (Batch 126: "attempt to" (a troop's), "makes an Intimidation check to Demoralize", "He Demoralizes all enemies within 30 feet, rolling once and
     // comparing the result to each target's Will DC", "…; these Demoralize attempts don't take any penalty for not sharing a language".)
     // (Its subject only: not "Strides and then either Interacts to reload her gun or makes …", a choice after a move.)
-    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language)?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
+    // (Batch 138: not a requirement or a frequency read as its subject; Rattling Spear's "(compare the check result to the targets' Will DCs
+    // individually)".)
+    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?|Requirements?|Effect|Frequency|Trigger)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language| \(compare (?:the|the [\w' -]+?['’]s) (?:Intimidation |Athletics )?check result to the targets' (?:Will|Fortitude|Reflex) DCs individually\))?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
     if (!first) return null;
     const slug = (first[1] ?? first[2] ?? first[3] ?? first[4] ?? first[5]).toLowerCase();
     const basic = basicActions[slug];

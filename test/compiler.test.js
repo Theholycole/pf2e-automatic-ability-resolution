@@ -2581,3 +2581,26 @@ test("reaction Strikes at a creature leaving with metal, trying to Escape or jus
     const ground = reaction("A creature within 15 feet uses a move action (move actions using only a fly Speed don't trigger this reaction)", "The test digger attempts an Athletics check to Trip the triggering creature. Regardless of the result, the space of the triggering creature becomes difficult terrain for 1 round.");
     assert.deepEqual([ground.trigger.within, ground.resolution.reminders.length], [15, 1]);
 });
+
+test("guards that last until it moves, a guard raised with a weapon, more multi-Strike wordings, a Demoralize after a hit (2026-10-12, batch 138)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const action = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const cower = action("<p>The test grub curls up tight. It gains a +4 circumstance bonus to AC but takes a –2 penalty to attack rolls. This lasts until the test grub moves from its current space, falls Unconscious, or ends the effect as a free action.</p>");
+    assert.deepEqual([cower.builtin, cower.model.modifiers, cower.stance, cower.endsOnMove, cower.duration.unit], ["self-effect", [{ on: "ac", type: "circumstance", value: 4 }, { on: "attack", type: "untyped", value: -2 }], true, true, "unlimited"]);
+    const entrench = action("<p>The test bulwark locks itself in place, becoming voluntarily Immobilized. While Entrenched, the test bulwark can't be forcibly moved or tripped, and it gains a +2 circumstance bonus to AC and Reflex saves. Entrench ends automatically as soon as the test bulwark uses another move action.</p>");
+    assert.deepEqual([entrench.model.modifiers.map((modifier) => modifier.on), entrench.endsOnMove, entrench.notes.length], [["ac", "reflex"], true, 3]);
+    const raised = action("<p>The test sailor Interacts to raise their harpoon, gaining a +1 circumstance bonus to AC until the start of their next turn. During this time, any of their allies also gains the bonus while adjacent to the test sailor.</p>");
+    assert.deepEqual([raised.model.modifiers, raised.duration.expiry, raised.notes.length], [[{ on: "ac", type: "circumstance", value: 1 }], "turn-start", 1]);
+    // Two Strikes that change their damage type and can't Grab; two claws after its own action, a bleed if both hit; two at its prey.
+    const stab = action("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test squid makes two tentacle Strikes against the same creature. These Strikes deal piercing damage instead of bludgeoning, and the test squid can't Grab with them. Its multiple attack penalty doesn't increase until after both attacks.</p>");
+    assert.deepEqual([stab.strikes, stab.sameMap, stab.noGrab, stab.notes.length], [["tentacle", "tentacle"], true, true, 2]);
+    const mauling = action("<p><strong>Requirements</strong> The test vampire's last action was to Drink Blood</p><hr /><p><strong>Effect</strong> The test vampire makes two claw Strikes. Both count toward its multiple attack penalty, but the penalty increases only after it makes both attacks. If it hits with both claws, the target takes @Damage[1d6[bleed]].</p>");
+    assert.deepEqual([mauling.requires, mauling.bothHit.damage], ["requirement", ["1d6[bleed]"]]);
+    const prey = action("<p><strong>Frequency</strong> once per round</p><p><strong>Requirements</strong> The test stalker has designated a creature as their prey using Spirit Mark</p><hr /><p><strong>Effect</strong> The test stalker makes two ranged Strikes against their prey. If both Strikes hit, combine their damage for the purpose of resistances and weaknesses.</p>");
+    assert.deepEqual([prey.builtin, prey.sameTarget, prey.oncePerTurn, prey.requires], ["multi-strike", true, true, "requirement"]);
+    // A Demoralize at each foe within 30 feet, straight after a hit with its spear.
+    const rattle = action("<p><strong>Requirements</strong> The test lizard's last action was a successful pike Strike</p><hr /><p><strong>Effect</strong> The test lizard bangs the butt of their pike, attempting an Intimidation check to [[/act demoralize]] all enemies within @Template[emanation|distance:30]{30 feet} (compare the test lizard's Intimidation check result to the targets' Will DCs individually).</p>");
+    assert.deepEqual([rattle.trigger.followUp.strike, rattle.targeting.area, rattle.resolution.check.statistic], ["pike", { type: "emanation", value: 30 }, "intimidation"]);
+    // Not a requirement read as its subject.
+    assert.equal(action("<p><strong>Requirements</strong> The test lizard is in the water</p><hr /><p><strong>Effect</strong> The test lizard attempts to Demoralize all enemies within 30 feet.</p>")?.resolution?.check?.statistic === "intimidation", false);
+});
