@@ -3985,3 +3985,17 @@ test("Battlezoo dragons: regeneration after a fresh save, a Stride through thin 
     assert.deepEqual([wing?.builtin, wing?.value, wing?.spellOnly, wing?.against], ["ac-reaction", 4, true, "ranged"]);
     assert.deepEqual(react("The test wyrm critically succeeds at a save against a spell", "It turns the spell back on its caster as Spell Turning would."), { builtin: "no-effect" });
 });
+
+test("One of two spells cast, spells turned back or steered, a pulse through its aura with a push or healing (2026-10-12, batch 249)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, type, actions), { basicActions: {}, ...(actor ? { actor } : {}) });
+    const react = (trigger, effect) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction");
+    const size = plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test genie resizes a creature. This works as a 2nd-rank @UUID[Compendium.pf2e.spells-srd.Item.wzctak6BxOW8xvFV]{Enlarge} or @UUID[Compendium.pf2e.spells-srd.Item.PjhUmyKnq6K5uDby]{Shrink} spell but can target an unwilling creature (@Check[fortitude|dc:20] save negates).</p>", "action", 2);
+    assert.deepEqual([size?.builtin, size?.modes?.map((mode) => [mode.name, mode.plan.builtin, mode.plan.rank, mode.plan.dc])], ["modes", [["Enlarge", "cast-spell", 2, 20], ["Shrink", "cast-spell", 2, 20]]]);
+    assert.deepEqual(react("The test dragon critically succeeds at a saving throw against a spell", "The spell is reflected back upon the caster, with the effect of @UUID[Compendium.pf2e.spells-srd.Item.OOELvfkTedBMlWtq]{Spell Turning}."), { builtin: "no-effect" });
+    assert.deepEqual(react("A creature within 60 feet casts a cold spell, or a cold spell otherwise comes into effect from a source within 60 feet", "The test dragon makes all the choices to determine the targets, destination, or other effects of the spell, as though it were the caster."), { builtin: "no-effect" });
+    const dragon = { name: "Test Dragon", items: [{ type: "action", name: "Glowing Presence", system: { rules: [{ key: "Aura", radius: 15 }], description: { value: "<p>15 feet.</p>" } } }] };
+    const pulse = plan("<p>The test dragon chooses one effect to impose on creatures in their glowing presence aura.</p><ul><li><strong>Push</strong> Each creature must succeed at a @Check[fortitude|dc:20] save or be pushed until it's no longer in the aura.</li><li><strong>Mend</strong> Each creature recovers @Damage[2d8[healing]]{2d8 Hit Points}.</li></ul>", "action", 2, dragon);
+    assert.deepEqual(pulse?.modes?.map((mode) => [mode.name, mode.plan?.targeting?.area?.value, mode.plan?.resolution?.kind]), [["Push", 15, "save"], ["Mend", 15, "healing"]]);
+    assert.equal(pulse.modes[0].plan.resolution.outcomes.failure.forcedMovement.distance, 15);
+});

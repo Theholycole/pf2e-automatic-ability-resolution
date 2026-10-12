@@ -2428,3 +2428,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - the spell-only AC offer comes only for a spell attack roll (`item:type:spell`).
 - **Simulator:** see B248 in its ability decisions.
 
+## Change Size, Reflect Spell, Redirect Fire, Halo Pulse (2026-10-12, batch 249)
+
+- **Compiled** (10 new in PF2e, 2 in Battlezoo, plus adventure copies):
+  - **One of two spells** (Change Size: "works as a 4th-rank Enlarge or Shrink spell but can target an unwilling creature (… save negates)") → `modes`, each a `cast-spell` at that rank with the save's DC. The unwilling target's save is a note.
+  - **Spells turned back or steered** (the silver dragon's Reflect Spell; Redirect Fire's choices for fire spells near it) → `no-effect`, the GM's, as Counterspell's kin.
+  - **Ways through its aura** (Halo Pulse): "creatures in their … aura" become that aura's emanation (its Aura rule's radius).
+    - "pushed until it's no longer in the aura" → a push as far as the radius;
+    - "Each creature … recovers 5d8 Hit Points" → a healing plan for every creature in it (`areaHealing`).
+- **Live:** a GM button for each way, as before.
+- **Simulator:** nothing new.
+

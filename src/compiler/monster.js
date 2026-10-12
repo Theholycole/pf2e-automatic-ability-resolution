@@ -2470,6 +2470,12 @@ function compileModes(item, options) {
     }) : opening;
     // Results written after the list belong to its last way (a duel dragon's Demoralizing Cry).
     const after = html.slice(end + "</ul>".length);
+    // (Batch 249, Halo Pulse: "… on creatures in their inspiring presence aura" — that aura's emanation, from its Aura rule; "pushed until it's no longer
+    // in the aura" — pushed that far.)
+    const auraName = /\bcreatures in (?:their|its) ([\w' -]+?) aura\b/i.exec(htmlToPlainText(preamble))?.[1];
+    const aura = auraName ? [...(options.actor?.items ?? [])].find((entry) => String(entry.name ?? "").toLowerCase() === auraName.toLowerCase()) : null;
+    const auraRadius = Number((aura?.system?.rules ?? []).find((rule) => rule.key === "Aura")?.radius) || null;
+    const auraTemplate = auraRadius ? `@Template[emanation|distance:${auraRadius}]` : null;
     const parts = html.slice(start, end).split(/<li\b[^>]*>/i).slice(1).map((part) => part.replace(/<\/li>\s*$/i, ""));
     if (parts.length < 2) return null;
     const modes = parts.map((part, index) => {
@@ -2479,7 +2485,8 @@ function compileModes(item, options) {
         // read on from the save before them.)
         const bare = part.replace(/^\s*(?:<p>)?\s*<strong>[^<]+<\/strong>\s*/i, "");
         const body = /^\([^)]*\)\s*@Template\[/i.test(bare) ? bare : bare.replace(/^(?:\([^)]*\))?\s*;?\s*/i, "");
-        const description = { ...(item.system?.description ?? {}), value: `${preamble}<p>${body}</p>${waits.join("")}${index === parts.length - 1 ? after : ""}` };
+        const wayBody = auraTemplate ? body.replace(/^Each creature\b/i, `Each creature in a ${auraTemplate}`).replace(/\bbe pushed until it['’]s no longer in the aura\b/i, `be pushed ${auraRadius} feet away`) : body;
+        const description = { ...(item.system?.description ?? {}), value: `${preamble}<p>${wayBody}</p>${waits.join("")}${index === parts.length - 1 ? after : ""}` };
         const system = new Proxy(item.system, { get: (target, key) => (key === "description" ? description : key === "slug" ? null : Reflect.get(target, key)) });
         const way = new Proxy(item, { get: (target, key) => (key === "system" ? system : key === "name" ? `${item.name} (${name})` : Reflect.get(target, key)) });
         let plan = null;
@@ -3243,6 +3250,20 @@ function healTouch(item) {
         resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } },
         ...(match[1] ? { notes: [`For 1 hour the creature healed has weakness ${match[3]} to ${match[2]} and can't benefit from ${match[4]} again (PF2e's effect for it is linked in the ability).`] } : {})
     };
+}
+
+// Healing for every creature in an area (2026-10-12, batch 249, Halo Pulse's Restoration): "Each creature in a @Template[emanation|distance:20]
+// recovers 5d8 Hit Points." → the healing family's plan in that area, any creature. null otherwise.
+function areaHealing(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    const template = inlineTags(html, "Template").map(readTemplate).find(Boolean);
+    if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0]) || !template) return null;
+    const plain = htmlToPlainText(html.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T")).replace(/\s+/g, " ").trim();
+    if (!/(?:^|\.\s)Each creature in an? @T (?:recovers|regains) @D(?: Hit Points| HP)?\.$/i.test(plain.replace(/(?:\s*(?:The )?[^.]+? can(?:'t|not) use [^.]+? again for [^.]+\.)+$/i, ""))) return null;
+    const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
+    return { ...base(item), targeting: { target: null, range: null, area: template }, trigger: { event: "use" }, resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } } };
 }
 
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
@@ -4086,6 +4107,24 @@ function variedManeuver(item, basicActions = {}) {
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}), ...(proneOnly ? { requires: "requirement" } : {}) };
 }
 
+// One of two spells (2026-10-12, batch 249, Change Size): "This works as a 4th-rank Enlarge or Shrink spell but can target an unwilling creature
+// (… Fortitude save negates)." → { builtin: "modes" }: each spell's cast at that rank (castSpell), an unwilling target's save a note. null otherwise.
+function eitherSpell(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const match = /\bThis works as an? (\d+)(?:st|nd|rd|th)-rank (@UUID\[[^\]]+\]\{[^}]+\}) or (@UUID\[[^\]]+\]\{[^}]+\}) spell but can target an unwilling creature \(@Check\[(?:type:)?(fortitude|reflex|will)\|dc:(\d+)[^\]]*\](?:\{[^}]*\})? save negates\)\./i.exec(html);
+    if (!match) return null;
+    const [, rank, first, second, statistic, dc] = match;
+    const way = (link) => {
+        const plan = castSpell(withDescription(item, `<p>This works as a ${rank}th-rank ${link} spell.</p>`), actor);
+        if (plan?.builtin !== "cast-spell") return null;
+        const name = /\{([^}]+)\}$/.exec(link)[1];
+        return { name, plan: { ...plan, dc: Number(dc), notes: [...(plan.notes ?? []), `It can target an unwilling creature: a DC ${dc} ${statistic[0].toUpperCase()}${statistic.slice(1)} save negates.`] } };
+    };
+    const modes = [way(first), way(second)];
+    return modes.every(Boolean) ? { builtin: "modes", actions: Number(item.system?.actions?.value) || 1, modes } : null;
+}
+
 // A Stride, then one of two maneuvers at many (2026-10-12, batch 241, Thunder of Hooves): "Strides. At the end of their movement, the cavalry
 // can either attempt an Athletics check to Trip each adjacent enemy or an Intimidation check to Demoralize each enemy within 30 feet. Roll only
 // once and compare …" → { builtin: "modes" }: each way PF2e's maneuver at the foes in that emanation (variedManeuver), the Stride a note.
@@ -4700,7 +4739,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     }
     if (slug === "engulf") return engulf(item, actor);
     // Used in one of several ways (two breath weapons): a plan for each.
-    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor }) ?? strideThenEither(item, basicActions);
+    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor }) ?? strideThenEither(item, basicActions) ?? eitherSpell(item, actor);
     if (modes) return modes;
     // Damage by the number of actions spent (a troop's attacks): one plan, the damage for each count.
     const byActions = actionCountSave(item, actor);
@@ -4725,7 +4764,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
