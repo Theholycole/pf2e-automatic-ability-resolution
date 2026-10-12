@@ -2551,7 +2551,8 @@ function selfCondition(item) {
     const going = new RegExp(String.raw`^${SUBJECT} [^,.]+?, becoming \u0001(\w+)\u0002(${DURATION})\.$`);
     // (Batch 26: "Each ally who hears and understands this command", "Allies within 120 feet who hear and understand his order",
     // "All allies within the dragon's heartening aura", "Each other zombie within 10 feet of the dirge piper".)
-    const allies = new RegExp(String.raw`^(?:All |Each )?(?:other )?(?:of (?:its|their|his|her) )?(?:allies|ally|zombies?|undead)(?: within (\d+) feet(?: of [^,.]+?)?| within [^,.]+? aura)?(?: who (?:can )?(?:hears?|sees?)(?: (?:or|and) (?:hears?|sees?|understands?))? [^,.]*?)? (?:become|becomes|are|is) \u0001(\w+)\u0002(${DURATION})${EXTRA}\.$`);
+    // (Batch 89, Bellowing Command: "Each ogre ally who hears and understands this command becomes Quickened …": its own kind.)
+    const allies = new RegExp(String.raw`^(?:All |Each )?(?:other )?(?:of (?:its|their|his|her) )?(?:[a-z]+ )?(?:allies|ally|zombies?|undead)(?: within (\d+) feet(?: of [^,.]+?)?| within [^,.]+? aura)?(?: who (?:can )?(?:hears?|sees?)(?: (?:or|and) (?:hears?|sees?|understands?))? [^,.]*?)? (?:become|becomes|are|is) \u0001(\w+)\u0002(${DURATION})${EXTRA}\.$`);
     // Temporary Hit Points on itself (batch 30): "The forest dragon gains 40 temporary Hit Points that last for 1 minute", "gaining 6d8
     // temporary Hit Points that last for 1 minute", "… gains 3 temporary Hit Points that last until the end of her next turn".
     const TEMP_LAST = String.raw`(?:,? (?:that|which) lasts? (?:for )?((?:\d+|one) (?:round|minute|hour)s?|until the (?:end|start|beginning) of (?:its|their|his|her) (?:next )?turn)| for ((?:\d+|one) (?:round|minute)s?))?`;

@@ -253,6 +253,8 @@ async function cardForAbility(message) {
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
     // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round" — for the GM to apply.)
     if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if both Strikes hit the same creature, ${bothHitText(plan.bothHit)}.`]);
+    // (Batch 89, Claw Rake: both Strikes at its highest attack bonus.)
+    if (plan?.builtin === "multi-strike" && plan.noMap) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: each Strike at its highest attack bonus (no multiple attack penalty).`]);
     // (Batch 83, Eviscerate: each Strike's own penalty.)
     if (plan?.builtin === "multi-strike" && plan.penalties?.some(Boolean)) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.penalties.map((value, index) => `Strike ${index + 1} ${value ? `at −${value}` : "at its full bonus"}`).join(", ")}${plan.requires === "first-attack" ? "; only before any other attack this turn" : ""}.`]);
     // (Batch 82, Pike and Strike: the second Strike only after a hit, at the same penalty; or instead the move, the GM's choice.)
@@ -1262,7 +1264,7 @@ function bothHitText(rider) {
     const conditions = (rider.conditions ?? []).map((entry) => `${entry.slug.replace(/^\w/, (letter) => letter.toUpperCase())}${Number.isFinite(entry.value) ? ` ${entry.value}` : ""}${entry.rounds ? ` for ${entry.rounds} round${entry.rounds === 1 ? "" : "s"}` : ""}`);
     const damage = (rider.damage ?? []).map((formula) => `${formula} damage`);
     // (Batch 87, Dual Disarm: a basic action at it.)
-    return [conditions.length ? `it is ${conditions.join(" and ")}` : null, damage.length ? `it takes ${damage.join(" and ")}` : null, rider.follow ? `the attacker can attempt to ${rider.follow.replace(/^\w/, (letter) => letter.toUpperCase())} it` : null].filter(Boolean).join(", and ");
+    return [conditions.length ? `it is ${conditions.join(" and ")}` : null, damage.length ? `it takes ${damage.join(" and ")}` : null, rider.follow ? `the attacker can attempt to ${rider.follow.replace(/^\w/, (letter) => letter.toUpperCase())} it` : null, rider.strikeDamage ? `it takes extra damage equal to one ${rider.strikeDamage} Strike (roll its damage again)` : null].filter(Boolean).join(", and ");
 }
 
 // A condition at least at this value (PF2e's conditions take the higher value, not the sum).

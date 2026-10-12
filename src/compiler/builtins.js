@@ -217,7 +217,7 @@ export function readMultiStrikes(text) {
             countsAs = /one/i.test(match[1]) ? 1 : count(match[1].split(" ")[0]);
             continue;
         }
-        if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty (?:doesn't|does not) increase(?: the)? until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
+        if (/\bmultiple attack penalty\b[^.]*\b(?:doesn't|does not) increase until\b|\bmultiple attack penalty increases only after\b|\bpenalty applies to each attack,? but increases only after\b|\bpenalty (?:doesn't|does not) increase(?: the)? until\b|\bpenalty increases only after\b|\buses? the same multiple attack penalty as the first\b|\beach using the [\w' -]+?'s current multiple attack penalty\b/i.test(sentence) && !/-\d+|–\d+/.test(sentence)) {
             sameMap = true;
             continue;
         }
@@ -336,7 +336,7 @@ export function readSweep(text) {
     const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 47, Thrash: "attempts individual Strikes against each creature in its reach", "Strikes once against each creature in its reach".)
     // (Batch 83, Whirlwind of Hooks: "… against every creature within its reach", after a first sentence that only tells it.)
-    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??Strike (?:once )?|attempts individual Strikes |Strikes once )against (?:each|every) (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i;
+    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:each|every) (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i;
     if (sentences.length > 1 && !SWEEP.test(sentences[0]) && SWEEP.test(sentences[1]) && !/\b(?:damage|bonus|penalty|save|check|DC|Strikes?)\b|\d/i.test(sentences[0])) sentences.shift();
     const match = SWEEP.exec(sentences.shift() ?? "");
     if (!match) return null;
@@ -359,6 +359,8 @@ export function readSweep(text) {
             continue;
         }
         if (/^(?:Each attack|These attacks) counts? toward [^.]*multiple attack penalty(?: as normal)?\.$/i.test(sentence)) continue;
+        // (Batch 89, Scimitar Storm: "The first enemy they damage is subject to Matriarch's Caress." — its other ability, the GM's.)
+        if (/^The first (?:enemy|creature) (?:it|they|he|she) damages? is subject to [A-Z][\w' -]+\.$/.test(sentence)) continue;
         // "It can Strike up to once with its jaws and any number of times with its body": its Strikes, the best one played.
         if (/^(?:It|They) can Strike up to once with (?:its|their) [\w' -]+(?:, up to once with (?:its|their) [\w' -]+)*,? and any number of times with (?:its|their) [\w' -]+\.$/i.test(sentence)) continue;
         if (/^This counts as (?:two|three|four|\w+) attacks for [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until [^.]*\.$/i.test(sentence)) {
@@ -806,6 +808,9 @@ export function readReaction(item, text) {
     // A trap that summons a creature (batch 50; the user's choice: the GM's): "Effect The trap summons a Cockatrice. The cockatrice rolls
     // initiative and remains for 2d6 rounds; …".
     if (/^(?:The|This) trap summons\b[^.]*\.\s+(?:The [\w' -]+?|It) rolls initiative and remains for\b/i.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 89: "This trap summons a specific level -1 creature, determined when the trap is created. The squares above … summon … The
+    // creature rolls initiative and remains for …".)
+    if (/^(?:The|This) trap summons\b/i.test(effect.trim()) && /\brolls initiative and remains for\b/i.test(effect)) return { builtin: "no-effect" };
     // Shake It Off, Slough Skin (batch 49; the user's choice): "Trigger The purple worm would be affected by a condition or adverse effect
     // (such as Cursed Metamorphosis) Effect The purple worm negates the triggering condition or effect. Effects from artifacts, deities, or
     // a similarly powerful source can't be avoided in this way." → { builtin: "negate-condition" }; Dogged Persistence's "would be affected
@@ -1246,6 +1251,19 @@ export function compileBuiltin(item, slug) {
     if (stride && along.slice(2).every((sentence) => /^These attacks count toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after [^.]*attacks\.$|^(?:His|Her|Its|Their) multiple attack penalty applies as usual\.$|^If (?:it|they|he|she) moves? half (?:its|their|his|her) speed or less during [^,.]+, that movement (?:doesn't|does not) trigger reactions\.$/i.test(sentence))) {
         return { builtin: "multi-strike", actions, strikes: [stride[2].toLowerCase()], each: true, max: { two: 2, three: 3, four: 4, five: 5 }[stride[1].toLowerCase()], strides: 1, ...(along.slice(2).some((sentence) => /doesn't increase until|does not increase until/i.test(sentence)) ? { sameMap: true } : {}) };
     }
+    // (Batch 89, Flying Fists: "The akhana Flies and makes up to four fist Strikes against different targets at any points during this
+    // movement. The attacks count toward its multiple attack penalty normally, but the penalty does not increase until after Flying Fists is
+    // complete.")
+    const fists = along.length === 2 ? /^(?:The )?[\w' -]+? (?:Strides|Flies) and makes up to (two|three|four|five) ([\w' -]+?) Strikes against different targets at any points? during this movement\.$/i.exec(along[0]) : null;
+    if (fists && /^The attacks count toward [^.]*multiple attack penalty normally, but the penalty (?:doesn't|does not) increase until after [^.]+ is complete\.$/i.test(along[1])) return { builtin: "multi-strike", actions, strikes: [fists[2].toLowerCase()], each: true, max: { two: 2, three: 3, four: 4, five: 5 }[fists[1].toLowerCase()], strides: 1, sameMap: true };
+    // (Batch 89, Double Bite: "Strides and then makes a jaws Strike with each of their heads, each against a different target. Both attacks
+    // count toward …, but the multiple attack penalty doesn't increase until after …" → two jaws Strikes at different creatures after a Stride.)
+    const heads = along.length === 2 ? /^(?:The )?[\w' -]+? Strides and then makes an? ([\w' -]+?) Strike with each of (?:its|their|his|her) heads, each against a different target\.$/i.exec(along[0]) : null;
+    if (heads && /^Both attacks count toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after [^.]+\.$/i.test(along[1])) return { builtin: "multi-strike", actions, strikes: [heads[1].toLowerCase()], each: true, max: 2, strides: 1, sameMap: true };
+    // (Batch 89, Claw Rake: "makes two claw Strikes at the same target, using the same attack bonus as their highest melee attack. If both attacks
+    // deal damage, the target takes extra damage equal to one claw Strike." → both at its full bonus; both hits, a claw's damage more.)
+    const rake = along.length >= 2 ? /^(?:The )?[\w' -]+? (?:rears back on (?:its|their|his|her) hind legs and )?makes two ([\w' -]+?) Strikes at the same target, using the same attack bonus as (?:its|their|his|her) highest melee attack\.$/i.exec(along.at(-2)) : null;
+    if (rake && along.length === 2 && new RegExp(String.raw`^If both attacks deal damage, the target takes extra damage equal to one ${rake[1]} Strike\.$`, "i").test(along[1])) return { builtin: "multi-strike", actions, strikes: [rake[1].toLowerCase(), rake[1].toLowerCase()], sameTarget: true, noMap: true, bothHit: { conditions: [], damage: [], strikeDamage: rake[1].toLowerCase() } };
     const blitz = /^(?:The )?[\w' -]+? Strides up to (?:its|their|his|her) Speed, Striking once with each of (?:its|their|his|her) ([\w' -]+?)s at any point during the movement\.$/i.exec(text.trim());
     if (blitz) return { builtin: "multi-strike", actions, strikes: [blitz[1].toLowerCase(), blitz[1].toLowerCase()], sameTarget: true, strides: 1 };
     // (Batch 83, Eviscerate: "Requirements The rivka has not attacked yet this turn Effect … It makes four Strikes: the first at its highest
@@ -1521,6 +1539,9 @@ function readNoCombatEffect(text) {
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    // (Batch 89, Summon Steed: "The dullahan summons a war horse with elite adjustments … This steed remains until it is slain, the dullahan
+    // Dismisses this effect, or …" — a creature summoned, the GM's as summons are (the user's choice of 2026-10-11).)
+    if (/^(?:The )?[^.]+? summons an? [^.]+?\. This (?:steed|creature|mount|servant) remains until it is slain, [^.]+\.$/i.test(said)) return true;
     if (/^(?:Frequency one per hour Effect |Frequency once per hour Effect )?(?:The )?[^.]+? infuses (?:their|its) body with adamantine\. For the next minute, (?:their|its) melee Strikes are treated as adamantine and ignore half the Hardness of any object hit\.$/i.test(said)) return true;
     // (Batch 45: capsizing a vessel with its check, "must succeed at a @Check[athletics|dc:35] check … or the pilot's Sailing Lore DC,
     // whichever is higher"; Drench, "puts out all fires in a @Template[emanation|distance:5]. … attempts to counteract magical fires".)
