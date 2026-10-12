@@ -2371,3 +2371,21 @@ test("an effect whose bonuses name checks or Strikes: what it gives isn't what i
     // (Still not one that makes a check or a Strike.)
     assert.equal(compile("<p>The test bard makes a Performance check. Allies within 30 feet gain a +1 status bonus to attack rolls.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.cccccccccccccccc]{Effect: Test Song}</p>"), null);
 });
+
+test("a special attack with a fixed modifier of its own: manacles, a thrown net, a check against a DC (2026-10-12, batch 121)", () => {
+    const compile = (description, traits = []) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: traits }, description: { value: description } } }, { basicActions: {} });
+    const capture = compile("<p><strong>Requirements</strong> The test warden holds manacles and is adjacent to a creature.</p><hr /><p><strong>Effect</strong> The test warden tries to bind the creature's wrists or ankles with the manacles. If the test warden succeeds at an attack roll with a @Check[test-capture|against:ac]{+12} modifier against the target's AC, it applies the manacles.</p>", ["attack"]);
+    assert.deepEqual(capture?.resolution?.check, { roll: "skill", statistic: "test-capture", against: { dc: "target", statistic: "ac" }, modifier: 12 });
+    assert.equal(capture.resolution.outcomes.success.nativeEffects[0].uuid, "Compendium.pf2e.equipment-effects.Item.OJg3cA6viR3sA3jB");
+    assert.equal(capture.targeting.range, "touch");
+    // (No result said at all: the manacles still.)
+    const bare = compile("<p><strong>Effect</strong> The test warden tries to bind the creature's wrists or ankles with the manacles. It must succeed at an attack roll with a @Check[test-capture|against:ac]{+12} modifier against the target's AC.</p>");
+    assert.equal(bare?.resolution?.outcomes?.criticalSuccess?.nativeEffects?.length, 1);
+    const net = compile("<p><strong>Effect</strong> The test hunter makes a ranged Strike (with a @Check[test-net|against:ac]{+9} modifier) against a creature within 20 feet. On a hit, the target is @UUID[Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg]{Off-Guard} and takes a –10-foot circumstance penalty to its Speeds. On a critical hit, the creature is instead @UUID[Compendium.pf2e.conditionitems.Item.VcDeM8A5oI6VqhbM]{Restrained}. The DC to [[/act escape dc=15]] the net is 15.</p>");
+    assert.deepEqual([net?.traits, net?.targeting?.range, net?.resolution?.outcomes?.success?.modifiers?.[0]?.selector, net?.resolution?.outcomes?.criticalSuccess?.effects?.map((effect) => effect.slug)], [["attack"], "20 feet", "all-speeds", ["restrained"]]);
+    assert.deepEqual(net.notes, ["The DC to Escape the net is 15."]);
+    const wrap = compile("<p>The test cloak makes an attack roll with a @Check[test-wrap|against:reflex]{+11} bonus against an adjacent creature's Reflex DC. If it succeeds, it wraps the target, who is @UUID[Compendium.pf2e.conditionitems.Item.VcDeM8A5oI6VqhbM]{Restrained}. It can't Fly while wrapping a creature.</p>", ["attack"]);
+    assert.deepEqual([wrap?.resolution?.check?.against?.statistic, wrap?.resolution?.outcomes?.success?.effects?.[0]?.slug, wrap?.notes], ["reflex", "restrained", ["It can't Fly while wrapping a creature."]]);
+    // (Its results all the GM's: not this plan.)
+    assert.equal(compile("<p>The test hatter throws a hat with a @Check[test-hat|against:ac]{+20} modifier. On a hit, the target must succeed at a @Check[will|dc:30] save or suffer the listed effect.</p>"), null);
+});

@@ -1223,6 +1223,9 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     if (/\bdepends on the number of actions\b|\bfor each additional action\b/i.test(htmlToPlainText(html))) return null;
     // An effect picked from a roll on a list ("Roll on the alchemical chambers list to determine which one shatters"): the GM's.
     if (/\broll on (?:the|a|an|its) [^.]*?\b(?:list|table)\b|\broll [^.]*? to determine which\b/i.test(htmlToPlainText(html))) return null;
+    // A save its terrain sets off later ("The first time each round a creature takes piercing damage from these splintered bones, it
+    // must succeed at …"; batch 121): not on use.
+    if (/\bThe first time each round an? (?:creature|enemy) takes [^.]*? damage from (?:these|this|the)\b[^.]*?, (?:it|they) must (?:succeed at|attempt)\b/i.test(htmlToPlainText(html))) return null;
     let components = damageComponents(withoutAlternatives(html.split(/<strong>\s*(?:Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/i)[0]));
     const sections = degreeSections(html);
     const basicDamage = check.basic && components.length ? basicSaveDamage(html) : [];

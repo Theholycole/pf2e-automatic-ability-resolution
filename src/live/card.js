@@ -6,8 +6,11 @@
 export const CARD_VERSION = 1;
 export const DEGREE_LABELS = Object.freeze({ criticalFailure: "critical failure", failure: "failure", success: "success", criticalSuccess: "critical success" });
 
-const STATISTIC_LABELS = { fortitude: "Fortitude", reflex: "Reflex", will: "Will", perception: "Perception", athletics: "Athletics", acrobatics: "Acrobatics", intimidation: "Intimidation", deception: "Deception" };
-export const statisticLabel = (slug) => STATISTIC_LABELS[slug] ?? String(slug ?? "").replace(/^./, (letter) => letter.toUpperCase());
+const STATISTIC_LABELS = { ac: "AC", fortitude: "Fortitude", reflex: "Reflex", will: "Will", perception: "Perception", athletics: "Athletics", acrobatics: "Acrobatics", intimidation: "Intimidation", deception: "Deception" };
+// (A special attack's slug, batch 121: "efficient-capture" → "Efficient Capture".)
+export const statisticLabel = (slug) => STATISTIC_LABELS[slug] ?? String(slug ?? "").split("-").map((word) => word.replace(/^./, (letter) => letter.toUpperCase())).join(" ");
+// PF2e selectors as the card says them ("all-speeds", batch 121: its Speeds).
+export const selectorLabel = (selector) => ({ "all-speeds": "Speeds" })[selector] ?? selector;
 
 const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
@@ -267,7 +270,7 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 // "Valeros takes −2 status to will (1 minutes)"
                 if (change.effect?.kind === "modifier") {
                     const modifier = change.effect.modifier;
-                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${modifier.selector}${modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit})` : ""}`);
+                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}${modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit})` : ""}`);
                 }
                 // A dropped weapon is named by the Foundry side, which knows which one fell.
                 if (change.effect?.kind === "disarm" && change.effect.what === "weaken") lines.push(`${who}'s grip is weakened (−${change.effect.penalty ?? 2} to attacks with that weapon)`);

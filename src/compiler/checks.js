@@ -23,7 +23,16 @@ export function readSkillCheck(html) {
         const defense = /\|(?:against|defense):(fortitude|reflex|will|perception)\b/i.exec(raw)?.[1]?.toLowerCase();
         if (defense && SKILLS.includes(statistic)) return { roll: statistic === "perception" ? "perception" : "skill", statistic, against: { dc: "target", statistic: DEFENSES[defense] } };
     }
-    return null;
+    return readSpecialCheck(html);
+}
+
+// A special attack of the monster's own (PF2e's SpecialStatistic rule: "an attack roll with a @Check[efficient-capture|against:ac]{+16}
+// modifier", "@Check[envelop|against:reflex]{+14} bonus"; batch 121): its fixed modifier against the target's AC or DC.
+export function readSpecialCheck(html) {
+    const match = /@Check\[([a-z0-9-]+)\|(?:[^\]|]*\|)*?(?:against|defense):(ac|fortitude|reflex|will|perception)\b[^\]]*\]\{([+–-]?\d+)\}/i.exec(String(html ?? ""));
+    const statistic = match?.[1].toLowerCase();
+    if (!match || SKILLS.includes(statistic) || ["flat", "fortitude", "reflex", "will"].includes(statistic) || /-lore$/.test(statistic)) return null;
+    return { roll: "skill", statistic, against: { dc: "target", statistic: DEFENSES[match[2].toLowerCase()] }, modifier: Number(match[3].replace("–", "-")) };
 }
 
 // "takes a –3 status penalty to Perception and Will saves for 1 minute" →
@@ -35,6 +44,9 @@ const PENALTY_TARGETS = [
 ];
 export function readPenalties(text) {
     const match = /\btakes? an? [–-](\d+) (status|circumstance|item)? ?penalty to ([^.]+?)(?=(?: for \d+ \w+| until\b|\.|$))/i.exec(htmlToPlainText(String(text ?? "")));
+    // "takes a –10-foot circumstance penalty to its Speeds" (batch 121): all of its Speeds.
+    const speeds = /\btakes? an? [–-](\d+)-foot (status|circumstance|item)? ?penalty to (?:its|their|all(?: of)?(?: its| their)?) Speeds\b(?! until (?:it|they) leaves?\b)/i.exec(htmlToPlainText(String(text ?? "")));
+    if (!match && speeds) return [{ selector: "all-speeds", value: -Number(speeds[1]), type: speeds[2]?.toLowerCase() ?? "untyped", duration: readDuration(htmlToPlainText(String(text ?? ""))) }];
     if (!match) return [];
     // "Perception and Will saves" → the saves word belongs to the last of them.
     const names = match[3].replace(/,? and /g, ", ").split(/,\s*/).map((name) => name.trim()).filter(Boolean);
@@ -107,14 +119,18 @@ const CHECK_LEADS = {
     criticalFailure: new RegExp(String.raw`(?:On a critical failure|If ${WHO_CHECKS} critically fails?(?: (?:at|on) (?:the|this|its|their|his|her) check)?)\s*,?\s*`, "i"),
     failure: new RegExp(String.raw`(?:On a failure|If ${WHO_CHECKS} (?<!critically )fails?(?: (?:at|on) (?:the|this|its|their|his|her) check)?)\s*,?\s*`, "i")
 };
-function proseChecks(html) {
-    const start = String(html).search(/@Check\[|\bcheck against\b/i);
+// A special attack's (batch 121), "On a critical hit, the creature is instead Restrained" too: its own roll's critical success.
+const ATTACK_LEADS = { ...CHECK_LEADS, criticalSuccess: new RegExp(String.raw`(?:On a critical hit|${CHECK_LEADS.criticalSuccess.source.slice(3)}`, "i") };
+function proseChecks(html, { sentence = false } = {}) {
+    let start = String(html).search(/@Check\[|\bcheck against\b/i);
     if (start < 0) return null;
+    // (A special attack's, batch 121: from the start of its sentence, "If the sneak succeeds at an attack roll with a @Check…".)
+    if (sentence) start -= /[^.>]*$/.exec(String(html).slice(0, start))[0].length;
     const text = String(html).slice(start).replace(/<\/?(?:p|hr|strong|em|br)[^>]*>/gi, " ").replace(/\s+/g, " ");
     // Brackets masked, so a degree named inside them isn't taken for a clause of its own.
     const masked = text.replace(/\([^()]*\)/g, (group) => `(${"_".repeat(group.length - 2)})`);
     const found = {};
-    for (const [degree, lead] of Object.entries(CHECK_LEADS)) {
+    for (const [degree, lead] of Object.entries(sentence ? ATTACK_LEADS : CHECK_LEADS)) {
         for (const match of masked.matchAll(new RegExp(lead.source, "gi"))) {
             // A lead that ends its sentence ("… closer on a success (60 feet on a critical success).") closes a clause.
             if (/^(?:[.;)]|$|\s*\(_*\)\s*(?:[.;]|$))/.test(masked.slice(match.index + match[0].length))) continue;
@@ -169,11 +185,17 @@ export function compileSkillAction(item, { rank = 1, actor = null } = {}) {
     let sections = degreeSections(html);
     // No result sections: the results said after the check (an action's, not a passive's rider).
     // (Not a choice of what to try: "attempts to either pull the target closer or Disarm it".)
-    const prose = Object.keys(sections).length || item.system?.actionType?.value === "passive" || /\b(?:attempts? to|can|may) either\b/i.test(htmlToPlainText(html)) ? null : proseChecks(html);
+    // A special attack (batch 121): its results from its sentence on. Manacles (Efficient Capture, Shackle): "attempts to bind the
+    // creature's wrists or ankles with the manacles" — a hit applies PF2e's Effect: Manacles (legs or wrists, picked as it's applied).
+    const special = Number.isFinite(check.modifier);
+    const manacles = special && /\bbind (?:the|a|its) (?:creature|target)'s wrists or ankles with (?:the |its )?manacles\b/i.test(htmlToPlainText(html));
+    const prose = Object.keys(sections).length || item.system?.actionType?.value === "passive" || /\b(?:attempts? to|can|may) either\b/i.test(htmlToPlainText(html)) ? null : proseChecks(html, { sentence: special }) ?? (manacles ? { sections: { success: "" }, criticalBracket: null } : null);
     if (!Object.keys(sections).length && !prose) return null;
     if (prose) sections = prose.sections;
     const traits = [...(item.system?.traits?.value ?? [])];
     const plain = htmlToPlainText(html);
+    // (A special attack made as a Strike or an attack roll, Hurl Net: an attack, for the multiple attack penalty.)
+    if (special && !traits.includes("attack") && /\b(?:Strike|attack roll)\b/i.test(plain)) traits.push("attack");
     // What the text may call the monster, for a pull toward it ("moved 5 feet toward the elasmosaurus's body").
     const owner = actor ?? item.actor ?? item.parent;
     const names = [owner?.name, owner?.prototypeToken?.name].filter(Boolean).flatMap((name) => [name, name.replace(/\s*\([^)]*\)\s*/g, " ").trim().split(/\s+/).at(-1)]);
@@ -188,6 +210,7 @@ export function compileSkillAction(item, { rank = 1, actor = null } = {}) {
         failure: ownFailure(sections.failure),
         criticalFailure: ownFailure(sections.criticalFailure)
     }, sections);
+    if (manacles) for (const degree of ["criticalSuccess", "success"]) if (sections[degree] !== undefined && emptyRow(outcomes[degree])) outcomes[degree].nativeEffects = [{ uuid: MANACLES, label: "Effect: Manacles" }];
     if (prose) {
         const empty = (entry) => entry.damage.mode === "none" && !entry.effects.length && !entry.forcedMovement && !entry.modifiers?.length;
         // Prose that names only a success: a critical success is that too, with its bracket's own.
@@ -214,6 +237,8 @@ export function compileSkillAction(item, { rank = 1, actor = null } = {}) {
         // Results it can't apply: their text, for the GM.
         noteUnread(outcomes, Object.entries({ criticalSuccess: "Critical Success", success: "Success", failure: "Failure", criticalFailure: "Critical Failure" }).filter(([degree]) => sections[degree]).map(([degree, label]) => `<p><strong>${label}</strong> ${sections[degree]}</p>`).join(""));
     }
+    // (A special attack whose results are all the GM's, Hat Toss's save against a listed hat: not this plan.)
+    if (special && Object.values(outcomes).every(emptyRow)) return null;
     // An area of its own ("in a @Template[emanation|distance:5], … comparing the result to each target's Reflex DC";
     // "against the Will DCs of all enemies within 30 feet"), or its range.
     const many = /\b(?:all|each|any number of) (?:enemies|foes|creatures|targets)\b[^.]*?\bwithin (\d+) feet\b/i.exec(plain)?.[1];
@@ -228,8 +253,19 @@ export function compileSkillAction(item, { rank = 1, actor = null } = {}) {
         targeting: { target: area ? null : "1 creature", range: area ? null : prose && within ? `${within} feet` : /within 30 feet/i.test(plain) ? "30 feet" : traits.includes("attack") ? "touch" : "30 feet", area },
         trigger: { event: "use", immunity: readImmunity(html) },
         resolution: { kind: "check", check, sharedDamage: null, outcomes },
-        automation: { level: "automatic" }
+        automation: { level: "automatic" },
+        ...(special && specialNotes(html).length ? { notes: specialNotes(html) } : {})
     };
+}
+
+const MANACLES = "Compendium.pf2e.equipment-effects.Item.OJg3cA6viR3sA3jB";
+const emptyRow = (row) => row.damage.mode === "none" && !row.effects.length && !row.forcedMovement && !row.modifiers?.length && !row.nativeEffects?.length;
+
+// A special attack's other sentences, after its check and its results (the net's Escape DC, the cloaker's shared damage): for the GM.
+function specialNotes(html) {
+    const after = String(html).slice(String(html).search(/@Check\[/)).replace(/^@Check\[[^\]]*\](?:\{[^}]*\})?/, "").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (whole, slug, label) => label ?? slug.replace(/^./, (letter) => letter.toUpperCase()));
+    const leads = Object.values(ATTACK_LEADS).map((lead) => new RegExp(`^${lead.source}`, "i"));
+    return readableText(after).split(/(?<=\.)\s+/).slice(1).map((sentence) => sentence.trim()).filter((sentence) => sentence && !/^Effect: /.test(sentence) && !leads.some((lead) => lead.test(sentence)));
 }
 
 // Escape: PF2e's text asks for the DC "of the effect"; the simulation and the

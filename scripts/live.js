@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { strikeBuffEffect } from "../src/live/buff.js";
@@ -1180,12 +1180,12 @@ async function penaltyEffect(actor, modifier, state) {
     const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const sign = modifier.value > 0 ? "+" : "−";
     await actor.createEmbeddedDocuments("Item", [{
-        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${modifier.selector}`,
+        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${selectorLabel(modifier.selector)}`,
         type: "effect",
         img: "icons/svg/downgrade.svg",
         flags: { [MODULE_ID]: { modifier: { selector: modifier.selector, source: state.source.actorUuid } } },
         system: {
-            description: { value: `<p>${sign}${Math.abs(modifier.value)} ${modifier.type} to ${modifier.selector}, from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
+            description: { value: `<p>${sign}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}, from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
             rules: [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value }]
