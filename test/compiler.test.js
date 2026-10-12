@@ -2141,3 +2141,11 @@ test("a trap's slab that drops: its damage and the Reflex save that avoids it (2
     // Not with a condition or a curse.
     assert.equal(trap("The test gate falls. Any creature under it takes @Damage[2d10[piercing]] damage and is Immobilized. A creature that succeeds at a @Check[reflex|dc:15] save takes no damage."), null);
 });
+
+test("a save succeeded on, or made successfully (2026-10-11, batch 96)", () => {
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const gas = compile("<p>Gas fills the test chamber. Creatures within the chamber must succeed on a @Check[fortitude|dc:25] save or become @UUID[Compendium.pf2e.conditionitems.Item.e1XGnhKNSQIm5IXg]{Stupefied 1} (Stupefied 2 on a critical failure).</p>");
+    assert.deepEqual([gas?.resolution?.outcomes?.failure?.effects?.[0]?.slug, gas?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], ["stupefied", 2]);
+    const fear = compile("<p>Test figures appear. All living creatures in the test hall must make a successful @Check[will|dc:20] save or become @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1} (Frightened 3 on a critical failure).</p>");
+    assert.deepEqual([fear?.resolution?.outcomes?.failure?.effects?.[0]?.value, fear?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value], [1, 3]);
+});
