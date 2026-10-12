@@ -58,7 +58,9 @@ const TRIGGER_UNSEEN = /\bwhile (?:it's |it is |they're |they are |he's |she's )
 const TRIGGER_UNSEEN_MORE = /\bwhile (?:the [\w' -]+?|it|they) (?:is|are) [^.;]*?\busing [A-Z]|\bits victim\b|\bthe area of (?:the [\w' -]+?['’]s|its|their) [A-Z]|\bwhile (?:its|their|his|her) [A-Z][\w' -]+? is active\b|\bwhile [A-Z][a-z]+ing\b|\bhas (?:fewer|more) than \w+ (?:arms|heads|limbs|tentacles|legs)\b|\battached creature\b|\bcreature attached to\b|\bremoved from (?:the )?water\b|\bgains the broken condition\b|\blight source\b/;
 // A requirement or an effect behind such a state too (batch 226): cover an animal ally gives it, a burrow hole nearby.
 // (Batch 228: a teleport to darkness far away as it drops — where it goes, the GM's.)
-const EFFECT_UNSEEN = /\bhas cover from an? [\w-]+ ally\b|\bto a burrow hole\b|\bteleports to an area of darkness\b/;
+// (Batch 238: a persona change; its aura moved to another place; an energy picked for its runes; a rider on its next action; a blessing of its own
+// some allies carry.)
+const EFFECT_UNSEEN = /\bhas cover from an? [\w-]+ ally\b|\bto a burrow hole\b|\bteleports to an area of darkness\b|\bChanges Characters\b|\baura instead emanates from\b|\bchooses between [a-z, ]+,? or [a-z]+ damage\b(?:[^.]*\.){1,3}[^.]*\bgains? immunity to that damage type\b|(?:^(?:Frequency [^.]*? Effect )?|\.\s+)If the next action (?:the [\w' -]+?|it|they) uses? is\b|\bbenefited from (?:the [\w' -]+?['’]s|its|their) [\w' -]+? in the last (?:hour|minute|round)\b/;
 // A social or exploration skill check that sets it off (batch 216).
 const SKILL_TRIGGER = /\b(?:fails|critically fails|succeeds at|critically succeeds at) (?:a|an) (?:(?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|[A-Z][\w-]* Lore)(?: or (?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|Intimidation))? check|(?:Charisma-based )?skill check|check to (?:Balance|Climb|Swim)(?: or (?:Balance|Climb|Swim))?)\b|\battempts? an? (?:Deception, Diplomacy, or (?:an )?Intimidation|Diplomacy|Deception) check against\b/i;
 

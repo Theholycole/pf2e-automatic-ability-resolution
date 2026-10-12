@@ -3806,3 +3806,14 @@ test("resistance against a melee attack from beside it, and damage back on a hit
     const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> An adjacent creature targets the test lion with a melee attack</p><hr /><p><strong>Effect</strong> The test lion parries with its claws. The test lion gains resistance 3 to physical damage from the attack, and if the attack hits, the attacker takes @Damage[(1d6+2)[slashing]] damage.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.value, plan.on, plan.melee, plan.retort], ["resist-damage", 3, ["physical"], true, "(1d6+2)[slashing]"]);
 });
+
+test("more states the simulator can't see: a persona change, an aura moved away, an energy picked for its runes, a rider on its next action, a blessing some allies carry (2026-10-12, batch 238)", () => {
+    const item = (html, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {}, pack: "pathfinder-monster-core" });
+    const gm = { builtin: "no-effect", gm: "state" };
+    assert.deepEqual(plan("<p><strong>Trigger</strong> The test dancer's turn begins</p><hr /><p><strong>Effect</strong> The test dancer spins faster. It Changes Characters.</p>", "free"), gm);
+    assert.deepEqual(plan("<p>The test drake hurls its crown to a square within 60 feet. While it's there, its aura instead emanates from the crown.</p>"), gm);
+    assert.deepEqual(plan("<p>The test drake chooses between cold, fire, or sonic damage. Its scales glow. The test drake gains immunity to that damage type, and its breath deals that damage type.</p>"), gm);
+    assert.deepEqual(plan("<p>If the next action the test mage uses is to Cast a Spell, the spell ignores 5 resistance to fire damage.</p>"), gm);
+    assert.deepEqual(plan("<p><strong>Trigger</strong> An ally within 30 feet that benefited from the test spark's glow in the last hour is targeted by an attack</p><hr /><p><strong>Effect</strong> The test spark bursts, granting temporary Hit Points to those allies.</p>", "reaction"), gm);
+});

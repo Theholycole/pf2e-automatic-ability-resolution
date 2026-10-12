@@ -319,6 +319,7 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 - **Self-effects with no time of their own, live** (2026-10-12, batch 235): using such an ability now applies its effect for its model's rounds (Raise Shields, rages without a PF2e effect of their own, Shielded Charge…), and its healing too. Before, it did nothing live.
 - **A claw after two fist hits** (2026-10-12, batch 236): Swift Claw (and an adventure athach's) — its claw Strike at a creature it has just hit twice this turn with its fists, outside its multiple attack penalty.
 - **A parry with claws** (2026-10-12, batch 237): Sharp Riposte — resistance 5 against a melee attack from beside it, and 1d8+4 slashing back at the attacker when it hits.
+- **More states the simulator can't see** (2026-10-12, batch 238): 38 new in PF2e and 11 in Battlezoo are the GM's (`gm: "state"`): a persona change (Changes Characters), an aura moved to another place, an energy picked for its runes, a rider on its next action ("If the next action … is …"), a blessing only some allies carry.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -2274,3 +2274,13 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the resistance offer as before, with "Only a melee attack from a creature beside it" and the damage back.
 - **Simulator:** see B237 in its ability decisions.
 
+## More states the simulator can't see (2026-10-12, batch 238)
+
+- **Compiled** (after every reading fails; `gm: "state"`): 38 new in PF2e and 11 in Battlezoo.
+  - A persona change ("Changes Characters", Second Act).
+  - Its aura moved to another place (Direct Halo).
+  - An energy picked for its runes, its immunity and breath with it (Shifting Runes).
+  - A rider on its next action ("If the next action … uses is …": Volcanic Purge, Overwhelming Energy, metamagic-like Battlezoo abilities).
+  - A blessing only some allies carry ("benefited from … in the last hour", Accord Essence).
+- **Live / simulator:** the GM's, as before.
+
