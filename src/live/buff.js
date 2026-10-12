@@ -67,7 +67,9 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
 // What a resistance reaction leaves on the monster (2026-10-11, batch 71): the resistance until the end of its next turn (Liquefy's
 // "fire resistance 20 … until the end of their next turn"), its AC lower for a day (Chipping Scales' "AC is reduced by 2 for 1 day"),
 // as PF2e effects' data: [] when it leaves nothing. Pure.
-export function resistEffects(plan, { name, img = null } = {}) {
+// (Batch 152, Overcharge: "… and becomes Quickened for 1d4 rounds" — quickened { rounds (rolled), uuid (PF2e's condition), img }: an effect granting
+// the condition for that many rounds.)
+export function resistEffects(plan, { name, img = null, quickened = null } = {}) {
     if (plan?.builtin !== "resist-damage") return [];
     const effect = (label, rules, duration, said) => ({
         name: label,
@@ -79,5 +81,12 @@ export function resistEffects(plan, { name, img = null } = {}) {
     const effects = [];
     if (plan.lasts) effects.push(effect(name, (plan.types ?? ["all-damage"]).map((type) => ({ key: "Resistance", type, value: plan.value })), { value: plan.lasts, unit: "rounds", expiry: "turn-end" }, `Resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}.`));
     if (plan.acPenalty) effects.push(effect(`${name} (AC)`, [{ key: "FlatModifier", selector: "ac", type: "untyped", value: -plan.acPenalty, label: name }], { value: 1, unit: "days", expiry: null }, `AC −${plan.acPenalty} for a day.`));
+    if (plan.quickened && quickened?.uuid && Number(quickened.rounds) > 0) {
+        const granted = effect(`${name} (Quickened)`, [{ key: "GrantItem", uuid: quickened.uuid, flag: "condition", allowDuplicate: true, onDeleteActions: { granter: "cascade", grantee: "cascade" } }], { value: Number(quickened.rounds), unit: "rounds", expiry: "turn-end" }, `Quickened for ${quickened.rounds} round${Number(quickened.rounds) === 1 ? "" : "s"}.`);
+        // (Not the resistance's own effect: its use stays open while only this lasts.)
+        delete granted.flags["pf2e-automatic-ability-resolution"].resist;
+        if (quickened.img) granted.img = quickened.img;
+        effects.push(granted);
+    }
     return effects;
 }

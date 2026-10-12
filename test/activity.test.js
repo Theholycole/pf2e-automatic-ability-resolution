@@ -179,3 +179,13 @@ test("more damage on a creature already Prone (2026-10-11, batch 83)", () => {
     assert.equal(activityRider(stomp), null, "not on a creature standing");
     assert.deepEqual(activityRider(stomp, { targetProne: true }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "2d6[bleed]" }]);
 });
+
+test("Quickened for its rolled rounds after a resistance; damage a critical hit alone brings (2026-10-12, batch 152)", () => {
+    const plan = { builtin: "resist-damage", value: 20, on: ["electricity"], types: ["electricity"], quickened: "1d4" };
+    const [quick] = resistEffects(plan, { name: "Test Surge", quickened: { rounds: 3, uuid: "Compendium.pf2e.conditionitems.Item.quickened", img: "q.webp" } });
+    assert.deepEqual([quick.name, quick.system.rules[0].key, quick.system.rules[0].uuid, quick.system.duration.value, quick.flags["pf2e-automatic-ability-resolution"].resist, quick.img], ["Test Surge (Quickened)", "GrantItem", "Compendium.pf2e.conditionitems.Item.quickened", 3, undefined, "q.webp"]);
+    assert.deepEqual(resistEffects(plan, { name: "Test Surge" }), [], "none without PF2e's condition");
+    const rider = activityRider({ builtin: "strike-activity", source: { name: "Test Fan" }, onHit: { conditions: [], critical: [{ slug: "blinded", value: null, duration: null }], damage: [], criticalDamage: ["2d10[bleed]"] } });
+    const outcomes = rider.plan.resolution.outcomes;
+    assert.deepEqual([outcomes.criticalSuccess.damage.formulas, outcomes.criticalSuccess.effects.map((effect) => effect.slug), outcomes.success.damage.mode, outcomes.success.effects], [[{ formula: "2d10[bleed]" }], ["blinded"], "none", []]);
+});

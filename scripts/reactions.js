@@ -854,7 +854,7 @@ async function onDamaged(actor, amount) {
             const fits = (type, types) => !types || types.includes(type) || (types.includes("physical") && ["bludgeoning", "piercing", "slashing"].includes(type));
             if ((!plan.foe || foe) && (!kinds || kinds.some(({ type }) => fits(type, plan.on)))) {
                 const restore = Math.min(amount, kinds ? kinds.filter(({ type }) => fits(type, plan.types)).reduce((sum, { total }) => sum + Math.min(plan.value, total), 0) : plan.value);
-                const note = [kinds ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? "It keeps the resistance until the end of its next turn." : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null, plan.shift ? "It then teleports to an adjacent space: move its token." : null].filter(Boolean).join(" ");
+                const note = [kinds ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? "It keeps the resistance until the end of its next turn." : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null, plan.shift ? "It then teleports to an adjacent space: move its token." : null, plan.quickened ? `It also becomes Quickened for ${plan.quickened} rounds.` : null].filter(Boolean).join(" ");
                 await offer({ kind: "resist", item: resist.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: note || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore } });
             }
         }
@@ -1013,7 +1013,14 @@ async function use(message, action, slug) {
         }
         const item = await fromUuid(state.ability.uuid);
         const plan = item ? compile(item) : null;
-        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null });
+        // (Batch 152, Overcharge: Quickened for its rolled rounds.)
+        let quickened = null;
+        if (plan?.quickened) {
+            const roll = await new Roll(String(plan.quickened)).evaluate();
+            const template = game.pf2e.ConditionManager.getCondition("quickened");
+            quickened = template ? { rounds: roll.total, uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, img: template.img } : null;
+        }
+        const effects = resistEffects(plan, { name: state.ability.name, img: item?.img ?? null, quickened });
         if (effects.length) {
             await actor.createEmbeddedDocuments("Item", effects);
             lines.push(effects.map((effect) => effect.name).join(", ") + " on it.");

@@ -142,8 +142,21 @@ export function readMultiStrikes(text) {
     let penalty = 0;
     const notes = [];
     let requires = held ? "grabbed" : stated ? "requirement" : null;
+    // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
+    let then = null;
     if (held) sameTarget = true;
     first = first.trim().replace(/([^.])$/, "$1.")
+        // (Batch 152, Fan of Daggers: "…, each against a separate target; he ignores the multiple attack penalty until after making all three
+        // Strikes".)
+        .replace(/, each against a separate (target|creature|foe|enemy)(?=[;.])/i, ", each against a different $1")
+        .replace(/; (?:it|they|he|she) ignores? the multiple attack penalty until after making all (?:two|three|four) Strikes(?=\.$)/i, () => {
+            sameMap = true;
+            return "";
+        })
+        .replace(/, then Demoralizes that (?:creature|target)(?=\.$)/i, () => {
+            then = "demoralize";
+            return "";
+        })
         .replace(/\b(attempts|attempt)\b(?= (?:up to )?(?:a|an|one|two|three|four) )/i, "makes")
         .replace(/,? (?:each )?at an? [-\u2013\u2212](\d+) penalty(?: to (?:its|their|the) attack rolls?)?/i, (_all, value) => {
             penalty = Number(value);
@@ -324,7 +337,28 @@ export function readMultiStrikes(text) {
     let secondOffGuard = null;
     let bothHit = null;
     let noGrab = false;
+    // (Batch 152: what each Strike's critical hit brings, Fan of Daggers' "On a critical hit, the target takes 2d10 bleed damage and is Blinded for
+    // 1 round"; extra damage on each, Hellfire Flurry's "These attacks deal an extra 1d4 fire damage".)
+    let critical = null;
+    const extraDamage = [];
+    const damageTags = (said) => [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].map((tag) => tag[1].split("|")[0]);
     for (let sentence of sentences) {
+        const extra = /^(?:These|The|Both) (?:attacks|Strikes) deal an? (?:extra|additional) (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage\.$/i.exec(sentence);
+        if (extra && !extraDamage.length) {
+            extraDamage.push(...damageTags(extra[1]));
+            continue;
+        }
+        const crit = /^On a critical hit, the (?:target|creature) (?:also )?(?:takes |is dealt )?(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+        if (crit && !critical) {
+            const damage = damageTags(crit[1]);
+            const rest = crit[1].replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?/g, "").trim();
+            const conditions = [...rest.matchAll(new RegExp(String.raw`\b(${BOTH_CONDITIONS})(?: (\d+))?(?: for (\d+) rounds?)?\b`, "gi"))].map((found) => ({ slug: found[1].toLowerCase(), value: found[2] ? Number(found[2]) : null, rounds: found[3] ? Number(found[3]) : null }));
+            const left = rest.replace(new RegExp(String.raw`\b(?:${BOTH_CONDITIONS})(?: \d+)?(?: for \d+ rounds?)?\b`, "gi"), "").replace(/\b(?:and|also|knocked|is|becomes)\b|[,\s]/gi, "");
+            if ((conditions.length || damage.length) && !left) {
+                critical = { conditions, damage };
+                continue;
+            }
+        }
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
         // (Batch 150, Dig In: "The rhino warrior rolls only one attack roll for both Strikes, then compares the result against the creature's AC.")
         if (/^(?:The [\w' -]+?|It|They|He|She) rolls only one attack roll for both Strikes, then compares the result against the creature's AC\.$/i.test(sentence)) {
@@ -526,7 +560,7 @@ export function readMultiStrikes(text) {
         return null;
     }
     // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
-    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}), ...(noGrab ? { noGrab } : {}) };
+    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}), ...(notes.length ? { notes } : {}), ...(noGrab ? { noGrab } : {}), ...(critical ? { critical } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(then ? { then } : {}) };
 }
 
 // One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
@@ -706,7 +740,11 @@ export function readCharge(text) {
     // (Batch 145, Implacable Advance: "…; they can ignore difficult terrain during these Strides if they advance toward their murderer. If they
     // Strike and Grab their murderer this turn, they can Constrict as a free action immediately after the Grab." — the GM's.)
     text = String(text).replace(/(Strike); (?:they|it|he|she) can ignore difficult terrain during these Strides if (?:they|it|he|she) advances? toward (?:their|its|his|her) murderer\./i, "$1.").replace(/\s*If (?:they|it|he|she) Strikes? and Grabs? (?:their|its|his|her) murderer this turn, (?:they|it|he|she) can Constrict as a free action immediately after the Grab\.$/i, "");
-    const told = chargeSentences(String(text).replace(/^Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect /i, "").replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1"))
+    // (Batch 152: Determined Charge's "Strides, ignoring non-magical difficult terrain and uneven ground. If the shobhad ends their movement …" —
+    // one Stride; the hurlilu's Dive Bomb, "Strides using its fly Speed and makes a Strike at the end of that movement".)
+    const told = chargeSentences(String(text).replace(/^Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect /i, "").replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")
+        .replace(/\b(Strides), ignoring (?:non-magical )?difficult terrain(?: and uneven ground)?(?=\. If )/i, "$1 up to its Speed")
+        .replace(/\bStrides using (?:its|their|his|her) (?:fly|swim|climb) Speed and makes\b/i, "Strides and makes"))
         .replace(/\b((?:Strides|Flies|Swims)(?: or (?:Strides|Flies|Swims))? (?:twice|up to (?:double|twice) (?:its|their|his|her) Speed)),? (?:ignoring (?:any )?difficult terrain(?: caused by [^.;]+?)?|during which (?:it|they|he|she) attempts a High Jump or a Long Jump)(?=[.;])/i, "$1")
         .replace(/\bStrides twice, Leaps twice, or Strides once and Leaps once\. (?:It|They|He|She) then makes an? ([\w' -]+?) Strike at the end of the movement\./i, "Strides twice and makes a $1 Strike.");
     const sentences = told.trim().split(/(?<=\.)\s+/);
@@ -835,8 +873,9 @@ function readResistDamage(text, trigger, effect) {
     } else return null;
     // Its effect: the resistance, perhaps after a sentence that only tells it; an AC that drops for a day ("cannot be reduced below 16").
     const T = DAMAGE_WORDS;
-    const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
-    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports to an adjacent (?:space|square))?\.?$`, "i");
+    // (Batch 152, Overcharge: "… and becomes Quickened for [[/gmr 1d4 #Quickened Duration]]{1d4 rounds}" — the roll as its label.)
+    const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1").split(/(?<=\.)\s+(?=[A-Z])/);
+    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports to an adjacent (?:space|square))?(?: and becomes Quickened for (\d+d\d+|\d+) rounds?)?\.?$`, "i");
     // (Batch 150, Clot: "… forms a clot around the wound, reducing the damage taken by 5 (to a minimum of 0)." — resistance 5 to it.)
     const clot = /^(?:The )?[^.]*?, reducing the damage taken by (\d+) \(to a minimum of 0\)\.$/i.exec(sentences.at(-1) ?? "");
     if (clot && sentences.length === 1) return { builtin: "resist-damage", value: Number(clot[1]), on, types: null, ...(attack ? { attack: true } : {}) };
@@ -859,6 +898,8 @@ function readResistDamage(text, trigger, effect) {
         ...(read[6] ? { acPenalty: Number(read[6]) } : {}),
         // (Batch 136, Gnomish Shift: "… and teleports to an adjacent space" — the GM's move.)
         ...(read[7] ? { shift: true } : {}),
+        // (Batch 152, Overcharge: Quickened for 1d4 rounds after it.)
+        ...(read[8] ? { quickened: read[8] } : {}),
         ...(frequency ? { uses: frequency.toLowerCase() === "twice" ? 2 : 1 } : {})
     };
 }
@@ -1399,9 +1440,12 @@ export function readReaction(item, text) {
     // benefiting from Twin Parry Effect Ilora attempts a melee Strike or uses a Disarm action against the triggering opponent." — its stance the
     // GM's (requires); "A creature within your reach critically fails to Strike you … Make a melee Strike or Disarm action against the triggering
     // opponent.")
-    const riposte = /^A creature within (?:your|(?:the )?[\w' -]+?['’]s) reach critically fails (?:a melee Strike against (?:you|him|her|them|it)|to Strike (?:you|him|her|them|it))$/i.test(trigger.trim().replace(/\s*Requirements? .*$/i, "").replace(/\.$/, ""));
-    const parried = /\bRequirements? (?:The )?[\w' -]+? is benefiting from ([A-Z][\w' -]+?)\.? Effect\b/i.exec(text)?.[1] ?? null;
-    if (riposte && /^(?:A clever parry with one weapon leaves your opponent open to an attack with the other weapon\. )?(?:(?:The )?[\w' -]+? attempts a melee Strike or uses a Disarm action|Make a melee Strike or Disarm action) against the triggering opponent\.$/i.test(effect.trim())) {
+    // (Batch 152, Ledorick's Dueling Riposte: "Requirements Ledorick is using Dueling Parry Trigger A creature within Ledorick's reach critically
+    // fails a Strike against him Effect Ledorick makes a melee Strike against the triggering creature or attempts to Disarm the triggering
+    // creature.")
+    const riposte = /^A creature within (?:your|(?:the )?[\w' -]+?['’]s) reach critically fails (?:a (?:melee )?Strike against (?:you|him|her|them|it)|to Strike (?:you|him|her|them|it))$/i.test(trigger.trim().replace(/\s*Requirements? .*$/i, "").replace(/\.$/, ""));
+    const parried = /\bRequirements? (?:The )?[\w' -]+? is (?:benefiting from|using) ([A-Z][\w' -]+?)\.? (?:Effect|Trigger)\b/i.exec(text)?.[1] ?? null;
+    if (riposte && /^(?:A clever parry with one weapon leaves your opponent open to an attack with the other weapon\. )?(?:(?:The )?[\w' -]+? attempts a melee Strike or uses a Disarm action|Make a melee Strike or Disarm action) against the triggering opponent\.$|^(?:The )?[\w' -]+? makes a melee Strike against the triggering creature or attempts to (?:\[\[\/act disarm\]\]|Disarm) the triggering creature\.$/i.test(effect.trim())) {
         return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, note: `${parried ? `Only while it benefits from ${parried}. ` : ""}Or it can Disarm the attacker instead.`, ...(parried ? { requires: "requirement" } : {}) };
     }
     // (Batch 103: Retaliatory Strike — "Trigger A creature within reach of the frost drake's tail successfully damages the frost drake with a
@@ -1896,6 +1940,8 @@ export function readStrikeBuff(item) {
         .replace(/\bUntil the beginning of /g, "Until the start of ")
         // (Batch 147, Primal Weapon: "…, the priestess deals an extra 1d6 slashing damage with her melee Strikes.")
         .replace(/, (?:the [\w' -]+?|it|they|he|she) deals? an? (extra|additional) (\u0001\d+\u0001) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./i, ", its $3Strikes deal an $1 $2 damage.")
+        // (Batch 152, Demon-Touched Weapon: "Until the end of her next turn, Shenga deals 1d6 bleed damage with her melee Strikes.")
+        .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) next turn), (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) deals? (\d+d\d+(?:\s*[+-]\s*\d+)? [a-z]+) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./, "$1, its $3Strikes deal an additional $2 damage.")
         .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
     // (Batch 147, Primal Weapon: "Frequency once per turn Requirements the false priestess' most recent action was to cast a non-cantrip spell
     // Effect …" — straight after a spell: requires "after-cast".)
@@ -2070,7 +2116,9 @@ export function compileBuiltin(item, slug) {
     const eviscerate = /^Requirements? (?:The )?[\w' -]+? has not attacked yet this turn Effect (?:[^.]+\. )?(?:It|They|The [\w' -]+?) makes four Strikes: the first at (?:its|their) highest attack bonus, the next two with an? [-\u2013\u2212](\d+) penalty to their attack rolls, and the last one with an? [-\u2013\u2212](\d+) penalty\. This ability counts as four Strikes for the purpose of (?:its|their) multiple attack penalty\.$/i.exec(text.trim());
     if (eviscerate) return { builtin: "multi-strike", actions, strikes: [null, null, null, null], sameTarget: true, sameMap: true, penalties: [0, Number(eviscerate[1]), Number(eviscerate[1]), Number(eviscerate[2])], countsAs: 4, requires: "first-attack" };
     const multi = readMultiStrikes(text);
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}) };
+    // (Batch 152, Hellfire Flurry: the flourish trait — one flourish a turn.)
+    const flourish = (item.system?.traits?.value ?? []).includes("flourish");
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(flourish ? { flourish: true } : {}), ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}), ...(multi.critical ? { critical: multi.critical } : {}), ...(multi.extraDamage ? { extraDamage: multi.extraDamage } : {}), ...(multi.then ? { then: multi.then } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.

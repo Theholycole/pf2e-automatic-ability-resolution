@@ -985,7 +985,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^On a hit, (?:it|he|she|they) deals an (extra|additional) (.+?) damage on a hit(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
             .replace(/^On a successful hit, the target is pushed back (\d+) feet, with the effects of a successful Shove(?=\.$)/i, "If it hits, the target is pushed $1 feet")
             .replace(/^On a hit, (?:the [\w' -]+?|it|they) automatically Grabs the (?:creature|target)(?=\.$)/i, "If it hits, the target is Grabbed")
-            .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
+            // (Batch 152, Disorienting Shot: "He must then Stride." — the GM's.)
+            .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^(?:It|They|He|She|The [\w' -]+?) must then Stride\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
             // (Batch 140: what it does to itself — Defensive Slam's "Strikes once and gains a +2 circumstance bonus to AC until the start of their
             // next turn", Punishing Strike's "… in a reckless attack that makes him Off-Guard until the start of his next turn", "The skelm is
             // Off-Guard until the start of his next turn" → selfAfter, a note live.)

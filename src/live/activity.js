@@ -24,13 +24,18 @@ export function activityRider(activity, { strikeType = null, targetProne = false
     const pushOf = (distance) => (Number(distance) > 0 ? { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } : null);
     const push = pushOf(onHit.push);
     const criticalPush = pushOf(onHit.criticalPush) ?? push;
-    if (!hit.length && !critical.length && !formulas.length && !push && !criticalPush) return save;
+    // (Batch 152, Fan of Daggers: damage a critical hit alone brings, "On a critical hit, the target takes 2d10 bleed damage", as written.)
+    const criticalOnly = (onHit.criticalDamage ?? []).filter(Boolean);
+    if (!hit.length && !critical.length && !formulas.length && !criticalOnly.length && !push && !criticalPush) return save;
     // (A critical hit doubles the Strike's damage, its extra dice too.)
-    const row = (effects, double, moved = push) => ({
-        damage: formulas.length ? { mode: "formulas", formulas: formulas.map((formula) => ({ formula: double ? doubled(formula) : formula })), rollScope: "outcome" } : { ...NONE },
-        effects,
-        ...(moved ? { forcedMovement: { ...moved } } : {})
-    });
+    const row = (effects, double, moved = push, more = []) => {
+        const all = [...formulas.map((formula) => ({ formula: double ? doubled(formula) : formula })), ...more.map((formula) => ({ formula }))];
+        return {
+            damage: all.length ? { mode: "formulas", formulas: all, rollScope: "outcome" } : { ...NONE },
+            effects,
+            ...(moved ? { forcedMovement: { ...moved } } : {})
+        };
+    };
     const source = activity.source ?? { name: "Strike activity" };
     return {
         ...(save ?? {}),
@@ -47,7 +52,7 @@ export function activityRider(activity, { strikeType = null, targetProne = false
                 kind: "check",
                 check: { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } },
                 sharedDamage: null,
-                outcomes: { criticalSuccess: row(critical, true, criticalPush), success: row(hit, false), failure: row([], false, null), criticalFailure: row([], false, null) }
+                outcomes: { criticalSuccess: row(critical, true, criticalPush, criticalOnly), success: row(hit, false), failure: row([], false, null), criticalFailure: row([], false, null) }
             }
         }
     };

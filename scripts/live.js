@@ -264,6 +264,20 @@ async function cardForAbility(message) {
     if (plan?.builtin === "multi-strike" && plan.notGrabbed) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: a Strike at each creature in its reach except those it already has Grabbed, at the same multiple attack penalty.`]);
     // (Batch 124: its other words for the GM, Twisting Reach's cover ignored.)
     if (plan?.builtin === "multi-strike" && plan.notes?.length) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.notes.join(" ")}`]);
+    // (Batch 152: Hellfire Flurry's extra damage on its Strikes until the end of its turn — its own switch when PF2e gives it one; Fan of
+    // Daggers' critical hits, a card on each crit among its next Strikes; Haunting Assault's Demoralize after its Strikes, on the GM's target.)
+    if (plan?.builtin === "multi-strike" && plan.extraDamage?.length) await strikeBuff(item, { builtin: "self-effect", actions: plan.actions, model: { name: item.name, rounds: 0, modifiers: [], tempHp: 0 }, damage: plan.extraDamage, strike: null, melee: false, duration: { value: 0, unit: "rounds", expiry: "turn-end" } }, sourceToken);
+    if (plan?.builtin === "multi-strike" && plan.critical) {
+        const critical = (plan.critical.conditions ?? []).map((entry) => ({ slug: entry.slug, value: entry.value ?? null, duration: entry.rounds ? { mode: "fixed", value: entry.rounds, unit: "rounds", expiry: "turn-start", anchor: "source-turn" } : null }));
+        const strike = plan.strikes?.every((name) => name && name === plan.strikes[0]) ? plan.strikes[0] : null;
+        pendingActivities.set(item.actor.uuid, { item, plan: { builtin: "strike-activity", strike, onHit: { conditions: [], critical, push: null, damage: [], criticalDamage: [...(plan.critical.damage ?? [])], save: null, size: null } }, token: sourceToken, at: Date.now(), left: plan.strikes?.length ?? 1, critOnly: true });
+    }
+    if (plan?.builtin === "multi-strike" && plan.then) {
+        const basic = basics()?.[plan.then];
+        const tokens = [...game.user.targets].slice(0, 1);
+        if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: "After its Strikes." });
+        else await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: after its Strikes, it attempts to ${plan.then.replace(/^\w/, (letter) => letter.toUpperCase())} that creature. Target it before using it for its card.`]);
+    }
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // (Batch 108: what its Strike gains for the roll — deadly or fatal, counting as more attacks — a note for the GM.)
     // (Batch 109: only at an animal or humanoid, Flay's.)
@@ -432,8 +446,10 @@ async function cardsForRiders(message) {
     const pending = pendingActivities.get(actor.uuid);
     if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
     else if (pending && strikeMatches(pending.plan, strike)) {
-        pendingActivities.delete(actor.uuid);
-        if (hit && target?.actor) await activityCard(message, pending, { actor, strike, target, targetToken, context });
+        // (Batch 152, Fan of Daggers: each of its Strikes, a card on a critical hit only.)
+        if (pending.left > 1) pending.left--;
+        else pendingActivities.delete(actor.uuid);
+        if (hit && target?.actor && !(pending.critOnly && context.outcome !== "criticalSuccess")) await activityCard(message, pending, { actor, strike, target, targetToken, context });
         // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
         else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${strike.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
     }
