@@ -2146,14 +2146,18 @@ function readSkillSweep(text) {
     });
     const sentences = said.split(/(?<=\.)\s+(?=[A-Z])/);
     if (sentences.length > 1 && !/\b(?:Strikes?|checks?|damage|save|DC|\d)\b/i.test(sentences[0])) sentences.shift();
-    const match = /^(?:The [\w' -]+?|[A-Z][\w'-]+|They|It|He|She) attempts? separate Athletics checks? to (Trip|Shove|Disarm|Grapple) any number of creatures within (?:their|its|his|her) reach\.$/i.exec(sentences.shift() ?? "");
+    // (Batch 125: "attempts an Athletics check to Disarm against each enemy within their melee reach", "attempts to Grab all adjacent creatures".)
+    const opening = sentences.shift() ?? "";
+    const match = /^(?:The [\w' -]+?|[A-Z][\w'-]+|They|It|He|She) attempts? separate Athletics checks? to (Trip|Shove|Disarm|Grapple) any number of creatures within (?:their|its|his|her) reach\.$/i.exec(opening)
+        ?? /^(?:The [\w' -]+?|[A-Z][\w'-]+|They|It|He|She) attempts? an Athletics check to (Trip|Shove|Disarm|Grapple) against each (?:enemy|foe|creature) within (?:(?:their|its|his|her) )?(?:melee )?reach\.$/i.exec(opening)
+        ?? /^(?:The [\w' -]+?|[A-Z][\w'-]+|They|It|He|She) attempts? to (Grab|Trip|Shove) all adjacent creatures\.$/i.exec(opening);
     if (!match) return null;
     let sameMap = false;
     for (const sentence of sentences) {
-        if (/^Each attempt counts toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after (?:they|it|he|she) makes? all the (?:attacks|attempts)\.$/i.test(sentence)) sameMap = true;
+        if (/^Each attempt counts toward [^.]*multiple attack penalty, but the (?:multiple attack )?penalty (?:doesn't|does not) increase until (?:after )?(?:they|it|he|she) (?:makes?|ha(?:ve|s) made) all the (?:attacks|attempts)\.$/i.test(sentence)) sameMap = true;
         else return null;
     }
-    return { action: match[1].toLowerCase(), ...(sameMap ? { sameMap } : {}), ...(oncePerTurn ? { oncePerTurn } : {}) };
+    return { action: match[1].toLowerCase().replace(/^grab$/, "grapple"), ...(sameMap ? { sameMap } : {}), ...(oncePerTurn ? { oncePerTurn } : {}) };
 }
 
 // Only a Strike, with what comes with it the simulation doesn't play (2026-10-10, batch 37): "Calmont draws his weapon and attacks

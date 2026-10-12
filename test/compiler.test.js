@@ -2426,3 +2426,17 @@ test("multi-Strikes in more words: off-guard after a first hit, both hits' grab 
     assert.deepEqual(compile("The test brute makes two fist Strikes and one Strike with its horns, hooves, or tail, in any order.")?.strikes, ["fist", "fist", "horns"]);
     assert.equal(compile("The test raptor makes two talon Strikes against different targets. Both attacks count toward its multiple attack penalty, but do not increase the penalty until it has made both attacks.")?.sameMap, true);
 });
+
+test("a basic maneuver in its own words, and at each creature around it (2026-10-12, batch 125)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions });
+    const cry = compile("The test hound bays and snarls as it attempts to Demoralize a creature. It gains a +2 circumstance bonus to this Intimidation check, and the attempt is not penalized if the target can't understand the test hound.");
+    assert.deepEqual(cry?.resolution?.check?.bonus, { value: 2, type: "circumstance" });
+    const flourish = compile("The test duelist attempts an Intimidation check to Demoralize each enemy within 30 feet, without suffering penalties for not sharing a language. Regardless of the result, each creature is temporarily immune to Test for 1 minute.");
+    assert.deepEqual([flourish?.targeting?.area, flourish?.trigger?.immunity?.duration], [{ type: "emanation", value: 30 }, { value: 1, unit: "minutes" }]);
+    assert.deepEqual(compile("The test ram attempts to Shove the nearest creature and then Strides with a +20-foot circumstance bonus to Speed.")?.notes, ["Then it Strides with a +20-foot circumstance bonus to Speed."]);
+    // (Not one with a critical success of its own.)
+    assert.equal(compile("The test bouncer attempts to Demoralize a creature. If the test bouncer rolls a critical success, the target can't reduce its frightened value for 1 round."), null);
+    assert.deepEqual(compile("The test dancer spins. The test dancer attempts an Athletics check to Disarm against each enemy within melee reach. Each attempt counts toward the test dancer's multiple attack penalty, but the penalty doesn't increase until they have made all the attempts.", 2), { builtin: "skill-sweep", actions: 2, action: "disarm", sameMap: true });
+    assert.deepEqual(compile("The test engine attempts to Grab all adjacent creatures.", 3), { builtin: "skill-sweep", actions: 3, action: "grapple" });
+});
