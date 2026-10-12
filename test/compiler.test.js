@@ -2836,3 +2836,42 @@ test("while its rage lasts: a charge into a sweep, extra fire on its Strikes; a 
     const lash = ability("<p><strong>Trigger</strong> A foe within 5 feet is about to damage the test drake with physical damage</p><hr /><p><strong>Effect</strong> The test drake gains resistance 5 to physical damage against the incoming damage. In addition, it attacks the triggering foe with a +12 modifier. On a hit, the attacker takes the resisted damage back.</p>", "reaction");
     assert.deepEqual([lash.builtin, lash.value, lash.on, lash.foe, lash.lashBack], ["resist-damage", 5, ["physical"], true, { bonus: 12 }]);
 });
+
+test("Strikes along two Strides, six tentacles, short ranges, a Strike then a Shove, a charge with Improved Knockdown, a Feint and a Step, a Demoralize after a Step, short Steps, Reactive Strike behind a state, a Trip with its own bonus (2026-10-12, batch 156)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const ability = (description, type = "action", actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    assert.deepEqual(ability("<p>Tess Strides twice and makes two staff Strikes at any point along its movement.</p>"), { builtin: "multi-strike", actions: 2, strikes: ["staff", "staff"], notes: ["It Strides twice, making the Strikes at any point along the way."], strides: 2 });
+    assert.deepEqual(ability("<p>The test kraken attacks with its tentacles six times.</p>", "action", 3).strikes.length, 6);
+    assert.deepEqual(ability("<p>The test dancer makes three spear Strikes, each with a range of 10 feet.</p>").notes, ["Each Strike has a range of 10 feet."]);
+    const blow = ability("<p>The test guard Strikes an adjacent creature, then Shoves the same creature.</p>", "action", 1);
+    assert.deepEqual([blow.builtin, blow.afterStrike], ["strike-activity", "shove"]);
+    const ram = ability("<p>The test ram Strides up to two times, then makes a horn Strike with Improved Knockdown.</p>");
+    assert.deepEqual([ram.builtin, ram.strides, ram.strike, ram.onHit.follow], ["strike-activity", 2, "horn", "trip"]);
+    const feint = ability("<p>The test rebel Feints, Steps, and Strikes in any order.</p>");
+    assert.deepEqual([feint.resolution.check.statistic, feint.then], ["deception", { strike: null }]);
+    assert.equal(ability("<p>The test sage Steps or Feints, then Demoralizes.</p>", "action", 1).resolution.check.statistic, "intimidation");
+    assert.deepEqual(ability("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test ant Steps, moving up to 15 feet.</p>", "action", 1), { builtin: "safe-move", actions: 1, oncePerTurn: true });
+    assert.deepEqual(ability("<p>As Reactive Strike, but the test snake can use this reaction only if it's Coiled.</p>", "reaction"), { builtin: "reactive-strike", requires: "requirement", note: "The test snake can use this reaction only if it's Coiled." });
+    const trip = ability("<p>The test haunt attempts to Trip a living creature within 60 feet with a bonus of [[/r 1d20+7]]{+7}.</p>", "action", 1);
+    assert.deepEqual([trip.resolution.check.modifier, trip.targeting.range, trip.notes], [7, "60 feet", ["Only a living creature."]]);
+});
+
+test("aimed shots, a deep wound, damage three times, a push its size or smaller, a far reach, a Strike from afar, a Strike with the GM's armor rule, two at one creature with a Stride between, a sweep in its own words, a Feint with a ranged rider, a Grapple with Deception (2026-10-12, batch 156)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const ability = (description, actions = 2, actor = undefined) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions, actor });
+    const unfair = ability("<p>The test lord lines up a shot and then attempts a ranged Strike against a hunted prey. On this strike, he treats the target as if they were Off-Guard.</p>");
+    assert.deepEqual([unfair.strike, unfair.offGuard, unfair.notes], ["ranged", true, ["Only at its hunted prey."]]);
+    assert.deepEqual(ability("<p>The test sniper makes a Strike with their musket, gaining a +2 circumstance bonus to this Strike's attack roll and ignoring the target's concealment.</p>").attackBonus, 2);
+    assert.deepEqual(ability("<p>The test raider makes a melee dagger Strike and twists the blade, dealing an extra @Damage[2d4[persistent,bleed]] damage on a hit (4d4 on a critical hit).</p>", 1).onHit.damage, ["2d4[persistent,bleed]"]);
+    assert.equal(ability("<p>Tess Strikes with her whip. On a hit, she rolls damage three times. This damage is combined (for resistances).</p>", 1).damageTimes, 3);
+    const sweep = ability("<p>The test brute makes a melee greataxe Strike. If he hits a creature of his size or smaller, he can move it 5 feet in any direction, or 10 feet on a critical hit.</p>", 1, { system: { traits: { size: { value: "lg" } } }, items: [] });
+    assert.deepEqual([sweep.onHit.push, sweep.onHit.criticalPush, sweep.onHit.size], [5, 10, "large"]);
+    assert.deepEqual(ability("<p>The test monk makes a fist Strike against a creature within 15 feet.</p>").notes, ["Its reach is 15 feet for this Strike."]);
+    assert.deepEqual(ability("<p>The test beast makes a claw Strike against a creature wearing stone or metal armor. If the Strike hits and the armor's Hardness is 10 or lower, that armor is broken.</p>").notes, ["If the Strike hits and the armor's Hardness is 10 or lower, that armor is broken."]);
+    assert.deepEqual(ability("<p>The test wolf makes a jaws Strike against a creature within range. The test wolf can then Stride and make a second jaws Strike against the same creature.</p>"), { builtin: "multi-strike", actions: 2, strikes: ["jaws", "jaws"], sameTarget: true, notes: ["It can Stride between the two Strikes."] });
+    assert.deepEqual(ability("<p>Tess Strikes all creatures within her reach with a glaive Strike. Her multiple attack penalty doesn't increase until the end of this activity.</p>", 3), { builtin: "multi-strike", actions: 3, strikes: ["glaive"], each: true, sameMap: true });
+    const feint = ability("<p>The test pirate Feints. If the target becomes Off-Guard to the test pirate's melee attacks, it becomes off-guard to the test pirate's ranged attacks as well.</p>", 1);
+    assert.deepEqual([feint.resolution.check.statistic, feint.notes], ["deception", ["A target off-guard to its melee attacks is off-guard to its ranged attacks too."]]);
+    const grab = ability("<p>The test seer attempts to [[/act grapple skill=deception]] a creature using Deception instead of Athletics. If the creature is willing, she grapples it automatically.</p>", 1);
+    assert.deepEqual([grab.resolution.check.statistic, grab.notes], ["deception", ["It rolls Deception for the check.", "A willing creature is grabbed without a check."]]);
+});

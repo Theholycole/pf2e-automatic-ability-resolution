@@ -870,6 +870,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 130, Hammerhead: "makes a bone crest Strike; on a hit, the mjolgat deals an extra die of damage. This counts as two attacks when
         // calculating the mjolgat's multiple attack penalty" — its own sentence, and the last one's period.)
         .replace(/(Strike); on a hit, (?:the [\w' -]+?|it|he|she|they) deals an extra die of damage\./i, "$1. If it hits, it deals an extra die of weapon damage.")
+        // (Batch 156: Battering Blow's "The Firebrand bastion Strikes an adjacent creature, then Shoves the same creature." — its Strike, then PF2e's
+        // Shove at that creature, hit or miss; Ramming Charge's "Strides up to two times, then makes a horn Strike with Improved Knockdown" — a Trip
+        // after a hit.)
+        .replace(/\b((?:The )?[\w' -]+?|He|She|It|They) Strikes an adjacent creature, then (?:@UUID\[[^\]]*\]\{(Shoves|Trips|Grapples|Disarms|Demoralizes)\}|(Shoves|Trips|Grapples|Disarms|Demoralizes)) the same creature\./i, (_all, who, linked, plain) => `${who} makes a melee Strike. [after-strike ${(linked ?? plain).toLowerCase().replace(/s$/, "")}]`)
+        .replace(/\bStrides up to two times, then makes an? ([\w' -]+?) Strike with (?:@UUID\[[^\]]*\]\{Improved Knockdown\}|Improved Knockdown)\./i, "Strides twice and makes a $1 Strike. If it hits, it can attempt to Trip the target.")
         // (Batch 151, Rolling Charge: "Strides twice, and can then make a Strike with its jaws. This jaws Strike gains Knockdown." — a Trip after a hit.)
         .replace(/\b(Strides twice), and can then make a Strike with (?:its|their|his|her) ([\w' -]+?)\. This \2 Strike gains (?:@UUID\[[^\]]*\]\{Knockdown\}|Knockdown)\./i, "$1 and makes a $2 Strike. If it hits, it can attempt to Trip the target.")
         // (Batch 147: Residual Force's "makes a tentacle Strike that has a reach of 20 feet and deals 2d4 additional force damage", Addling Strike's
@@ -956,7 +961,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^If it hits, (?:it|he|she|they) [a-z]+s(?: and [a-z]+s)? (?:[^,.])+, dealing (\d+d\d+) (persistent )?(\w+) damage to the (?:creature|target)(?=\.$)/i, (_all, dice, persistent, type) => `If it hits, it deals an additional ${dice} ${persistent ?? ""}${type} damage`)
             .replace(/ or until the creature is fully healed(?=\.$)/i, "")
             // (Batch 83, Portal Strike: "makes a claw Strike against a creature within 120 feet" — the distance the GM's.)
-            .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy|target) within \d+ feet(?=\.$)/i, "$1")
+            // (Batch 156, Reach Beyond: the distance a note for the GM.)
+            .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy|target) within (\d+) feet(?=\.$)/i, (_all, made, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike.`);
+                return made;
+            })
             // (Batch 112, Demolishing Swing: "makes a maul Strike against a creature"; "If it hits, the creature is pushed 10 feet"; "If the target
             // is wearing metal armor, its armor also takes the damage, which bypasses 5 of the armor's Hardness." — the armor the GM's; Sentry's
             // Aim's "The Strike ignores the Concealed condition, lesser cover, and standard cover, …" — the GM's too.)
@@ -1040,6 +1049,62 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 if (!activity.noDamage) return all;
                 activity.onHit.conditions.push({ slug: "off-guard", value: null, duration: null });
                 return "[told]";
+            })
+            // (Batch 156: Unfair Aim's "lines up a shot and then attempts a ranged Strike against a hunted prey. On this strike, he treats the target
+            // as if they were Off-Guard."; Aimed Shot's "makes a single mammoth bow Strike against his prey; he gains a +2 circumstance bonus to the
+            // attack roll and ignores his prey's Concealed condition"; Sniping Shot's "makes a Strike with their longrifle, gaining a +2
+            // circumstance bonus to this Strike's attack roll and ignoring the target's concealment" — the prey and concealment notes.)
+            .replace(/^((?:The )?[^.]+?) lines up a shot and then attempts a ranged Strike against a hunted prey\.$/i, (_all, who) => {
+                (activity.notes ??= []).push("Only at its hunted prey.");
+                return `${who} makes a ranged Strike.`;
+            })
+            .replace(/^On this strike, (?:he|she|it|they) treats? the target as if (?:they|it) (?:were|was) Off-Guard\.$/i, () => {
+                activity.offGuard = true;
+                return "[told]";
+            })
+            .replace(/^((?:The )?[^.]+?) makes a single ([\w' -]+?) Strike against (?:its|their|his|her) prey; (?:he|she|it|they) gains? a \+(\d+) circumstance bonus to the attack roll and ignores (?:its|their|his|her) prey's Concealed condition\.$/i, (_all, who, name, value) => {
+                (activity.notes ??= []).push("Only at its prey; it ignores the prey's Concealed condition.");
+                return `${who} makes a ${name} Strike with a +${value} circumstance bonus to its attack roll.`;
+            })
+            .replace(/^((?:The )?[^.]+?) makes a Strike with (?:its|their|his|her) ([\w' -]+?), gaining a \+(\d+) circumstance bonus to this Strike's attack roll and ignoring the target's concealment\.$/i, (_all, who, name, value) => {
+                (activity.notes ??= []).push("It ignores the target's concealment.");
+                return `${who} makes a ${name} Strike with a +${value} circumstance bonus to its attack roll.`;
+            })
+            // (Batch 156: Furious Power Attack's "This counts as one attack when calculating her multiple attack penalty. If the Strike hits, she deals
+            // an extra die of weapon damage."; To the Hilt's "makes a melee jambiya Strike and buries the blade deep, dealing an extra 3d6 persistent
+            // bleed damage on a hit (6d6 on a critical hit)"; Flog Mercilessly's "Strikes with her scourge. On a hit, she rolls damage three times.")
+            .replace(/^This counts as one attack when calculating (?:its|their|his|her) multiple attack penalty\.$/i, "[told]")
+            .replace(/^If the Strike hits, (?:he|she|it|they) deals? an extra die of weapon damage\.$/i, "If it hits, it deals an extra die of weapon damage.")
+            .replace(/^((?:The )?[^.]+?) makes a melee ([\w' -]+?) Strike and [^,.]+, dealing an extra (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage on a hit \((\d+d\d+) on a critical hit\)\.$/i, (all, who, name, tag, critical) => {
+                const formula = /^@Damage\[((?:[^[\]]|\[[^\]]*\])*)\]/.exec(tag)[1];
+                const dice = /^\(?(\d+)d(\d+)/.exec(formula);
+                const crit = /^(\d+)d(\d+)$/.exec(critical);
+                if (!dice || !crit || Number(crit[1]) !== 2 * Number(dice[1]) || crit[2] !== dice[2]) return all;
+                activity.onHit.damage.push(readDamage(formula));
+                return `${who} makes a ${name} Strike.`;
+            })
+            .replace(/^((?:The )?[^.]+?) Strikes with (?:its|their|his|her) ([A-Za-z' ]+?)\.$/i, (all, who, name) => (activity.strike || /\b(?:Strike|at|with|against)\b/i.test(name) ? all : `${who} makes a ${name.trim()} Strike.`))
+            .replace(/^On a hit, (?:he|she|it|they) rolls? damage three times\.$/i, () => {
+                activity.damageTimes = 3;
+                (activity.notes ??= []).push("On a hit, roll its damage three times and add them up (one total against resistances and weaknesses).");
+                return "[told]";
+            })
+            .replace(/^This damage is combined \([^)]*\)\.$/i, (all) => (activity.damageTimes ? "[told]" : all))
+            // (Batch 156: Sweep Aside's "If he hits a creature of his size or smaller, he can move it 5 feet in any direction, or 10 feet on a critical
+            // hit." — a push, its direction the GM's; Shattering Scrape's broken armor and Sporewarp's far origin, the GM's.)
+            .replace(/^If (?:he|she|it|they) hits a creature of (?:his|her|its|their) size or smaller, (?:he|she|it|they) can move it (\d+) feet in any direction, or (\d+) feet on a critical hit\.$/i, (_all, feet, crit) => {
+                activity.onHit.push = Number(feet);
+                activity.onHit.criticalPush = Number(crit);
+                const size = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" }[actor?.system?.traits?.size?.value];
+                if (size) activity.onHit.size = size;
+                (activity.notes ??= []).push(`On a hit it moves a creature its size or smaller ${feet} feet in any direction (${crit} on a critical hit).`);
+                return "[told]";
+            })
+            .replace(/^((?:The )?[^.]+? makes an? [\w' -]+? Strike) against a creature wearing stone or metal armor\.$/i, "$1.")
+            .replace(/^If the Strike hits and the armor's Hardness is \d+ or lower, that armor is broken\.$/i, "[gm]")
+            .replace(/^((?:The )?[^.]+?) attempts an? ([\w' -]+?) Strike but treats [^.]+? as the point of origin of that [\w' -]+? Strike\.$/i, (all, who, name) => {
+                (activity.notes ??= []).push(all.replace(/^(?:The )?[^.]+? attempts an? [\w' -]+? Strike but /i, "It "));
+                return `${who} makes a ${name} Strike.`;
             })
             // (Batch 152, Disorienting Shot: "He must then Stride." — the GM's.)
             .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^(?:It|They|He|She|The [\w' -]+?) must then Stride\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
@@ -1199,6 +1264,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
         if (/^\[grab time\]\.?$/.test(text) || text === "[told]") continue;
+        if ((match = /^\[after-strike (shove|trip|grapple|disarm|demoralize)\]$/.exec(text))) {
+            activity.afterStrike = match[1];
+            (activity.notes ??= []).push(`After the Strike, hit or miss, it attempts to ${match[1].replace(/^\w/, (letter) => letter.toUpperCase())} the same creature.`);
+            continue;
+        }
         // (Batch 112: what the GM handles, kept as a note.)
         if (text === "[gm]") {
             (activity.notes ??= []).push(htmlToPlainText(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim());
@@ -1379,11 +1449,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
     activity.strike = sheetStrikeName(actor, activity.strike);
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage && !rider.allyStrike && !activity.noDamage;
+    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage && !rider.allyStrike && !activity.noDamage && !activity.afterStrike && !activity.damageTimes;
     // (Batch 90, Feathered Charge: every sentence read, and only a Stride and a Strike for as many actions — terrain it ignores, a fall the
     // GM's: nothing more than its Strike.)
     if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };
-    if (!opened || bare) return null;
+    // (Batch 156: a Strike whose only extra is the GM's — Shattering Scrape's broken armor — still posts its note.)
+    if (!opened || (bare && !activity.notes?.length)) return null;
     if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length && !rider.follow) return null;
     return activity;
 }
@@ -2728,6 +2799,11 @@ function maneuverThenStrike(item, actor, basicActions = {}) {
         slug = "trip";
         then = { strike: null, onSuccess: true, sameMap: true, fatal: Number(match[1].slice(1)) };
         notes.push(`The Strike after it has fatal ${match[1]}.`);
+    } else if ((match = new RegExp(String.raw`^${who} Feints, Steps, and Strikes in any order\.$`, "i").exec(plain))) {
+        // (Batch 156, Darting Feint: "The exiled revolutionary Feints, Steps, and Strikes in any order." — its Feint, then the Strike; the Step the GM's.)
+        slug = "feint";
+        then = { strike: null };
+        notes.push("It also Steps, before, between or after them.");
     } else if ((match = new RegExp(String.raw`^${who} attempts to Demoralize a foe within (?:its|his|her|their) melee reach, then makes a melee Strike against that foe\. If the creature is Frightened and takes damage, it takes an additional (\d+d\d+) damage and is knocked Prone\. This counts as two attacks toward (?:the [\w' -]+?['’]s|its|his|her|their) multiple attack penalty\.$`, "i").exec(plain))) {
         slug = "demoralize";
         then = { strike: null, sameMap: true, ifFrightened: { damage: match[1], prone: true } };
@@ -2759,8 +2835,34 @@ function variedManeuver(item, basicActions = {}) {
     // circumstance bonus." and Condemn's "The grand inquisitor Demoralizes." — at a creature; Stampeding Shove's "…, gaining a +2 circumstance
     // bonus to their Athletics check if the target is Prone" — a note.)
     const extra = [];
+    let fixed = null;
+    let statistic = null;
     const told = plain.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? must have two free hands or be wielding an? [\w' -]+?\.? Effect /i, "")
         .replace(/\b(to Grapple) with a \+(\d) circumstance bonus\./i, "$1 a creature, with a +$2 circumstance bonus.")
+        // (Batch 156: Telekinetic Interference's "The haunt attempts to Trip a living creature within 60 feet with a bonus of +8." — that modifier
+        // of its own; living creatures only, a note.)
+        .replace(/\b(attempts to (?:Trip|Shove|Grapple|Disarm|Reposition)) a living creature within (\d+) feet with a bonus of (?:\[\[\/r 1d20\+(\d+)[^\]]*\]\](?:\{[^}]*\})?|\+(\d+))\./i, (_all, act, feet, rolled, plainBonus) => {
+            fixed = Number(rolled ?? plainBonus);
+            extra.push("Only a living creature.");
+            return `${act} a creature within ${feet} feet.`;
+        })
+        // (Batch 156: Pirate's Feint's "If the target becomes Off-Guard to the buccaneer's melee attacks, it becomes off-guard to the buccaneer's
+        // ranged attacks as well." — a note; Grab Attention's "attempts to Grapple a creature using Deception instead of Athletics. If the creature is
+        // willing, she grapples it automatically." — Deception for the check, the willing creature a note.)
+        .replace(/(?<=\.) If the target becomes Off-Guard to (?:the [\w' -]+?['’]s|its|their|his|her) melee attacks, it becomes off-guard to (?:the [\w' -]+?['’]s|its|their|his|her) ranged attacks as well\.$/i, () => {
+            extra.push("A target off-guard to its melee attacks is off-guard to its ranged attacks too.");
+            return "";
+        })
+        .replace(/\b(attempts to (?:Grapple|Trip|Shove|Disarm|Reposition) a creature) using (Deception|Intimidation|Acrobatics|Performance) instead of Athletics\.(?: If the creature is willing, (?:he|she|it|they) grapples? it automatically\.)?/i, (_all, act, skill) => {
+            statistic = skill.toLowerCase();
+            extra.push(`It rolls ${skill} for the check.`, ...(/willing/.test(_all) ? ["A willing creature is grabbed without a check."] : []));
+            return `${act}.`;
+        })
+        // (Batch 156: Looming Threat's "The master xun Steps or Feints, then Demoralizes." — the Step or Feint before it the GM's.)
+        .replace(/^((?:The )?[^.]+?) Steps or Feints, then Demoralizes\.(?=\s|$)/i, (_all, who) => {
+            extra.push("It first Steps or Feints.");
+            return `${who} Demoralizes a creature.`;
+        })
         .replace(/^((?:The )?[^.]+? (?:Demoralizes|Feints))\.(?=\s|$)/i, "$1 a creature.")
         .replace(/, gaining a \+(\d) circumstance bonus to (?:its|their|his|her) Athletics check if the target is Prone\./i, (_all, value) => {
             extra.push(`+${value} circumstance bonus to the check if the target is Prone.`);
@@ -2774,7 +2876,8 @@ function variedManeuver(item, basicActions = {}) {
         }).split(/(?<=\.)\s+(?=[A-Z])/);
     const sentences = told.length > 1 && !/^(?:Requirements?|Frequency|Trigger|Cost)\b/.test(told[0]) && !/\d|@|\b(?:Demoraliz\w*|Disarm\w*|Trip\w*|Shove\w*|Grappl\w*|checks?|damage|save|bonus|penalty)\b/i.test(told[0]) ? told.slice(1) : told;
     // (Batch 144: Reposition too.)
-    const action = String.raw`(Demoralize|Disarm|Trip|Shove|Grapple|Reposition)`;
+    // (Batch 156: Feint too, Pirate's Feint's.)
+    const action = String.raw`(Demoralize|Disarm|Trip|Shove|Grapple|Reposition|Feint)`;
     // (Batch 126: "all living creatures within 60 feet that can hear the durnolith", "all enemies within 30 feet", "… and applies the result to
     // every opponent within 30 feet".)
     // (Batch 126: "all living creatures within 60 feet that can hear the minotaur but not see them" — those it can't see, a note; "up to 4 creatures".)
@@ -2785,7 +2888,7 @@ function variedManeuver(item, basicActions = {}) {
     // (Its subject only: not "Strides and then either Interacts to reload her gun or makes …", a choice after a move.)
     // (Batch 138: not a requirement or a frequency read as its subject; Rattling Spear's "(compare the check result to the targets' Will DCs
     // individually)".)
-    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?|Requirements?|Effect|Frequency|Trigger)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple|Reposition)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language| \(compare (?:the|the [\w' -]+?['’]s) (?:Intimidation |Athletics )?check result to the targets' (?:Will|Fortitude|Reflex) DCs individually\))?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
+    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?|Requirements?|Effect|Frequency|Trigger)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple|Reposition|Feint)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language| \(compare (?:the|the [\w' -]+?['’]s) (?:Intimidation |Athletics )?check result to the targets' (?:Will|Fortitude|Reflex) DCs individually\))?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
     if (!first) return null;
     const slug = (first[1] ?? first[2] ?? first[3] ?? first[4] ?? first[5]).toLowerCase();
     const basic = basicActions[slug];
@@ -2852,6 +2955,8 @@ function variedManeuver(item, basicActions = {}) {
         row.damage = row.damage?.mode === "formulas" ? { ...row.damage, formulas: [...row.damage.formulas, { formula }] } : { mode: "formulas", formulas: [{ formula }], rollScope: "target" };
     }
     if (bonus) plan.resolution.check = { ...plan.resolution.check, bonus: { value: (Number(plan.resolution.check.bonus?.value) || 0) + bonus, type: "circumstance" } };
+    if (fixed !== null) plan.resolution.check = { ...plan.resolution.check, modifier: fixed };
+    if (statistic) plan.resolution.check = { ...plan.resolution.check, statistic };
     const radius = Number(first[8] ?? first[10]) || 0;
     const reach = Number(first[7]) || null;
     const many = first[11] ? { one: 1, two: 2, three: 3, four: 4 }[String(first[11]).toLowerCase()] ?? Number(first[11]) : null;

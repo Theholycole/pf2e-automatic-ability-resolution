@@ -1489,3 +1489,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** sweeps and multi-Strikes behind "is enraged" or "is raging" → `requires: "raging"` (a sweep after a Stride with `strides: 1`, `noMomentum`); a Strike buff behind it → `requires: "raging"`, unlimited (until its rage ends); `resist-damage` with `lashBack: { bonus }` and a note.
 - **Live:** the resistance offer now carries its plan's note (the lash back, for the GM to roll); the rest as before (multi-Strike notes, the buff's effect). Not run in pftest: the only live change is that note line.
 - **Simulator:** `isRaging` (a rage on itself that keeps it from concentrating) gates what needs it; the lash back rolls d20 + its modifier against the attacker's AC and deals what it resisted, of that type; Strikes marked `noMomentum` don't recharge its Breath Weapon (B155).
+
+## Short wordings: a Strike then a Shove, Reactive Strike behind a state (2026-10-12, batch 156)
+
+- **Compiled:** Strike activities with `afterStrike` (a basic action at the creature, hit or miss), `damageTimes`, more notes (a reach, the GM's armor rule), pushes by size; multi-Strikes with Strides along the way; maneuvers with Feint, a check `statistic` (Deception for a Grapple) or a fixed `modifier`; `reactive-strike` with `requires` and a `note`.
+- **Live:** Battering Blow posts PF2e's Shove card at the GM's target ("After its Strike, hit or miss.") beside its notes; Grab Attention's card rolls Deception against Fortitude; Coiled Strike's offer as a creature leaves its reach says "The goblin snake can use this reaction only if it's Coiled." Checked in pftest.
+- **Simulator:** the basic action after the Strike, hit or miss; damage multiplied for `damageTimes`; Reactive Strike behind a state not loaded (B156).

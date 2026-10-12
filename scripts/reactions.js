@@ -234,7 +234,7 @@ async function onMove(token, movement) {
             await offer({
                 kind: "strike", item, monster, actor, target: token, strikes, penalty: plan.penalty ?? 0,
                 trigger: leaves ? "left a square in its reach" : "moved in its reach",
-                note: [plan.only ? `Only at ${plan.only}.` : null, squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null].filter(Boolean).join(" ") || null
+                note: [plan.only ? `Only at ${plan.only}.` : null, squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null, plan.builtin === "reactive-strike" ? plan.note ?? null : null].filter(Boolean).join(" ") || null
             });
             break;
         }
@@ -475,7 +475,7 @@ async function reachTrigger(scene, combat, token, trigger, kind = null) {
         const strikes = (entry.plan.within && entry.plan.builtin === "reaction-strike"
             ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(entry.plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: entry.plan.within }))
             : meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name)).filter((strike) => distance <= strike.reach);
-        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: entry.plan.criticalTrip ? CRITICAL_TRIP : null });
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: [entry.plan.criticalTrip ? CRITICAL_TRIP : null, entry.plan.builtin === "reactive-strike" ? entry.plan.note ?? null : null].filter(Boolean).join(" ") || null });
     }
 }
 

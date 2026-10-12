@@ -172,6 +172,18 @@ export function readMultiStrikes(text) {
             then = "demoralize";
             return "";
         })
+        // (Batch 156: Circling the Kingdom's "Strides twice and makes two quarterstaff Strikes at any point along its movement" — the moves first;
+        // Spear Dance's "…, each with a range of 10 feet" — a note; What Lurks Beneath's "attacks with their tentacles six times".)
+        .replace(/^((?:The )?[^.]+?) Strides (twice|once) and makes (two|three) ([\w' -]+?) Strikes at any point (?:along|during) (?:its|their|his|her) movement(?=\.$)/i, (_all, who, times, number, name) => {
+            strides = /twice/i.test(times) ? 2 : 1;
+            notes.push(`It Strides ${times.toLowerCase()}, making the Strikes at any point along the way.`);
+            return `${who} makes ${number} ${name} Strikes`;
+        })
+        .replace(/, each with a range of (\d+) feet(?=\.$)/i, (_all, feet) => {
+            notes.push(`Each Strike has a range of ${feet} feet.`);
+            return "";
+        })
+        .replace(/^((?:The )?[^.]+?) attacks with (?:its|their|his|her) ([\w' -]+?)s (two|three|four|five|six) times(?=\.$)/i, "$1 makes $3 $2 Strikes")
         // (Batch 153: Heads Will Roll!'s "The dragon Flies twice; at any point during this movement, the dragon makes up to two chin blade Strikes,
         // …" — two moves first; Combat Current's "makes a Strike with its cutlass or hand crossbow, then Flies up to half their Speed and makes a
         // Strike with the other attack" — one of each, the flight a note; Tail Thrash's "makes a tail Strike against the creature whose soul it's
@@ -687,6 +699,8 @@ export function readSweep(text) {
             return "";
         })
         .replace(/^((?:The )?[^.]+?) unleashes [^,.]+, making (a single (?:melee )?Strike) with (?:its|their|his|her) [\w' -]+?(?: or [\w' -]+?)? against each opponent within reach\./i, "$1 makes $2 against each enemy within reach.")
+        // (Batch 156, Slagblade Storm: "Temperbrand Strikes all creatures within her reach with a slagblade Strike.")
+        .replace(/^((?:The )?[^.]+?) Strikes all creatures within (?:its|their|his|her) reach with an? ([\w' -]+?) Strike\./i, "$1 makes a $2 Strike against all creatures within reach.")
         // (Batch 150, Whirlwind Strike: "Ordulf Strikes each enemy within his reach.")
         .replace(/^((?:The )?[^.]+?) Strikes each (enemy|creature|foe) within (?:its|their|his|her) reach\./i, "$1 makes a Strike against each $2 within reach.").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 102: "makes three jaws Strikes, each against a different target", "makes up to six longsword Strikes, each against a different
@@ -1377,6 +1391,10 @@ export function readAllySave(text) {
 export function readReaction(item, text) {
     // (Linked names as words: "@UUID[…]{Concealment}" → "Concealment".)
     text = text.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
+    // (Batch 156: Coiled Strike's "As Reactive Strike, but the goblin snake can use this reaction only if it's Coiled.", Aquatic Opportunity's "As
+    // Attack of Opportunity, but both the bunyip and the triggering creature must be in water." — Reactive Strike behind a state the GM checks.)
+    const kin = /^As (?:Reactive Strike|Attack of Opportunity), but (.+?)\.?$/i.exec(text.trim());
+    if (kin && /\b(?:only (?:if|while|when)|must be)\b/i.test(kin[1])) return { builtin: "reactive-strike", requires: "requirement", note: `${kin[1][0].toUpperCase()}${kin[1].slice(1)}.` };
     // Undying Myth (batch 41): "Cost all the creature's Mythic Points Trigger The creature would die and has at least 1 Mythic Point Effect
     // The creature remains standing and conscious, and recovers 50% of its maximum Hit Points."
     const undying = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious, and recovers (\d+)% of (?:its|their|his|her) maximum Hit Points\.?$/i.exec(text.trim());
@@ -2185,6 +2203,8 @@ export function compileBuiltin(item, slug) {
     if (type === "free") {
         const quickened = readQuickenedCasting(text);
         if (quickened) return quickened;
+        // (Batch 156, Shifting Scuttle: "Frequency once per turn Effect The scarecophagus Steps up to 10 feet." — a free Step.)
+        if (/^(?:Frequency once per (?:turn|round) Effect )?(?:The )?[^.]+? Steps,? (?:moving )?up to \d+ feet\.$/i.test(text.trim())) return { builtin: "safe-move", actions: 0, ...(/\bFrequency once per (?:turn|round)\b/i.test(text) ? { oncePerTurn: true } : {}) };
         // (Batch 55: a free action with nothing for the fight's numbers, Reel In's pull.)
         return readGmSpellcasting(text) || readNoCombatEffect(text) ? { builtin: "no-effect" } : null;
     }
@@ -2246,6 +2266,10 @@ export function compileBuiltin(item, slug) {
     // Strikes for the purpose of its multiple attack penalty." → four Strikes at those penalties, before any other attack this turn.)
     const eviscerate = /^Requirements? (?:The )?[\w' -]+? has not attacked yet this turn Effect (?:[^.]+\. )?(?:It|They|The [\w' -]+?) makes four Strikes: the first at (?:its|their) highest attack bonus, the next two with an? [-\u2013\u2212](\d+) penalty to their attack rolls, and the last one with an? [-\u2013\u2212](\d+) penalty\. This ability counts as four Strikes for the purpose of (?:its|their) multiple attack penalty\.$/i.exec(text.trim());
     if (eviscerate) return { builtin: "multi-strike", actions, strikes: [null, null, null, null], sameTarget: true, sameMap: true, penalties: [0, Number(eviscerate[1]), Number(eviscerate[1]), Number(eviscerate[2])], countsAs: 4, requires: "first-attack" };
+    // (Batch 156, Strafing Strike: "makes a jaws Strike against a creature within range. The mirror wolf can then Stride and make a second jaws
+    // Strike against the same creature." — two at one creature; the Stride between the GM's.)
+    const strafing = /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against a creature within range\. (?:The [\w' -]+?|It|They|He|She) can then Stride and make a second \1 Strike against the same creature\.$/i.exec(text.trim());
+    if (strafing) return { builtin: "multi-strike", actions, strikes: [strafing[1].toLowerCase(), strafing[1].toLowerCase()], sameTarget: true, notes: ["It can Stride between the two Strikes."] };
     const multi = readMultiStrikes(text);
     // (Batch 152, Hellfire Flurry: the flourish trait — one flourish a turn.)
     const flourish = (item.system?.traits?.value ?? []).includes("flourish");
@@ -2265,6 +2289,9 @@ export function compileBuiltin(item, slug) {
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
     // (Batch 60, Elf Step: "The elementalist Steps twice.")
     if (/^(?:The )?[^.]+? Steps twice\.$/i.test(text.trim())) return { builtin: "safe-move", actions };
+    // (Batch 156: Hasty Reposition's "Frequency once per round Effect The wereant sentinel Steps, moving up to 15 feet.", Shifting Scuttle's free
+    // "Steps up to 10 feet".)
+    if (/^(?:Frequency once per (?:turn|round) Effect )?(?:The )?[^.]+? Steps,? (?:moving )?up to \d+ feet\.$/i.test(text.trim())) return { builtin: "safe-move", actions: item.system?.actionType?.value === "free" ? 0 : actions, ...(/\bFrequency once per (?:turn|round)\b/i.test(text) ? { oncePerTurn: true } : {}) };
     const teleport = readTeleport(text);
     if (teleport) return { builtin: "safe-move", actions, ...(teleport.recharge ? { recharge: teleport.recharge } : {}) };
     // (Batch 48, Disperse as a move: "Strides or Flies. This movement doesn't trigger reactions. During the movement, … It then coalesces

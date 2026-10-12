@@ -279,6 +279,12 @@ async function cardForAbility(message) {
         if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: "After its Strikes." });
         else await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: after its Strikes, it attempts to ${plan.then.replace(/^\w/, (letter) => letter.toUpperCase())} that creature. Target it before using it for its card.`]);
     }
+    // (Batch 156, Battering Blow: PF2e's Shove at the GM's target after the Strike, hit or miss.)
+    if (plan?.builtin === "strike-activity" && plan.afterStrike) {
+        const basic = basics()?.[plan.afterStrike];
+        const tokens = [...game.user.targets].slice(0, 1);
+        if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: "After its Strike, hit or miss." });
+    }
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // (Batch 108: what its Strike gains for the roll — deadly or fatal, counting as more attacks — a note for the GM.)
     // (Batch 109: only at an animal or humanoid, Flay's.)
