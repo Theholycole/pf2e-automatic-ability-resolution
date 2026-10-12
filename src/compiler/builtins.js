@@ -82,6 +82,8 @@ export function readMultiStrikes(text) {
     let oncePerTurn = false;
     // (Batch 42: what it wields, "Requirements The test slayer is wielding two melee weapons, each in a different hand Effect".)
     body = body.replace(/(^|Frequency once per (?:turn|round) )Requirements? (?:The |You )?[^.]+? (?:is wielding|are wielding|wields) two melee weapons, each in a different hand\.? Effect /i, (_all, before) => (before ? `${before}Effect ` : ""));
+    // (Batch 91: Paired Strike's "Requirements The maftet is wielding two scimitars Effect …"; the "diferent" of some texts.)
+    body = body.replace(/^Requirements? (?:The |You )?[^.]+? (?:is|are) wielding two [\w' -]+?s\.? Effect /i, "").replace(/\bdiferent\b/g, "different");
     const frequency = /^Frequency (.+?) Effect /i.exec(body);
     if (frequency) {
         if (!/^once per (?:turn|round)$/i.test(frequency[1].trim())) return null;
@@ -128,11 +130,20 @@ export function readMultiStrikes(text) {
         // Strike with up to four arms, each against a different target and using a claw or scimitar as appropriate", Axe Swipe's "makes two
         // Strikes with their greataxe against two adjacent enemies, both of whom are within their reach".)
         .replace(/\bmakes a Strike with each set of jaws, each against a different creature(?=\.$)/i, "makes two jaws Strikes, each against a different creature")
+        // (Batch 91: Twin Bites' "makes a fangs Strike with each of its heads, each against a different target"; Paired Strike's "makes two
+        // Strikes against the same target, one with each of their scimitars".)
+        .replace(/\bmakes an? ([\w' -]+?) Strike with each of (?:its|their|his|her) heads, each against a different (?:target|creature)(?=\.$)/i, "makes two $1 Strikes, each against a different creature")
+        .replace(/\bmakes two Strikes against the same target, one with each of (?:its|their|his|her) ([\w' -]+?)s(?=\.$)/i, "makes two $1 Strikes against the same target")
         .replace(/\bmakes a Strike with up to (two|three|four) arms, each against a different target and using an? [\w' -]+? or [\w' -]+? as appropriate(?=\.$)/i, "makes up to $1 Strikes, each against a different target")
         .replace(/\bmakes two Strikes with (?:its|their|his|her) ([\w' -]+?) against two adjacent enemies, both of whom are within (?:its|their|his|her) reach(?=\.$)/i, "makes two $1 Strikes, each against a different creature")
         // (Batch 87, Dual Disarm: "makes two Strikes, one with their rapier and one with their main-gauche (in either order)".)
         .replace(/\bmakes two Strikes, one with (?:its|their|his|her) ([\w' -]+?) and one with (?:its|their|his|her) ([\w' -]+?)(?: \(in either order\))?(?=\.$)/i, "makes a $1 Strike and a $2 Strike")
         .replace(/, each using (?:its|their|his|her|the [\w' -]+?['’]s) current multiple attack penalty(?=\.$)/i, "")
+        // (Batch 91, Twin Shot: "makes two Strikes with her bow using her current multiple attack penalty" — both at it.)
+        .replace(/ using (?:its|their|his|her) current multiple attack penalty(?=\.$)/i, () => {
+            sameMap = true;
+            return "";
+        })
         .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
         .replace(/(Strikes), or one [\w' -]+? Strike and an? [\w' -]+? Strike(?=\.$)/i, "$1")
         .replace(/, making ([\w' -]+? Strikes against )/i, " and makes $1")
@@ -266,6 +277,14 @@ export function readMultiStrikes(text) {
         // multiple attack penalty."; Bloody Dance's "… can use Grab following this activity, separately attempting to Grapple each creature hit
         // by a claw."; Fervent Frenzy's off-guard against them while frightened by its other ability (the GM's) and "becomes Clumsy 1 until the
         // start of their next turn".)
+        // (Batch 91: Extend Limbs' "… reach increases to 20 feet for these Strikes" — the GM's; Paired Strike's "This counts as one attack when
+        // calculating the maftet's multiple attack penalty".)
+        if (/^(?:The [\w' -]+?['’]s|Its|Their|His|Her) reach increases to \d+ feet for these Strikes\.$/i.test(sentence)) continue;
+        if ((match = /^This counts as (one|two) attacks? when calculating [^.]*multiple attack penalty\.$/i.exec(sentence))) {
+            sameMap = true;
+            countsAs = /one/i.test(match[1]) ? 1 : 2;
+            continue;
+        }
         if (/^No single creature can be targeted by more than one [\w' -]+? Strike during one use of this ability\.$/i.test(sentence)) {
             each = true;
             continue;
@@ -1296,6 +1315,13 @@ export function compileBuiltin(item, slug) {
     // complete.")
     const fists = along.length === 2 ? /^(?:The )?[\w' -]+? (?:Strides|Flies) and makes up to (two|three|four|five) ([\w' -]+?) Strikes against different targets at any points? during this movement\.$/i.exec(along[0]) : null;
     if (fists && /^The attacks count toward [^.]*multiple attack penalty normally, but the penalty (?:doesn't|does not) increase until after [^.]+ is complete\.$/i.test(along[1])) return { builtin: "multi-strike", actions, strikes: [fists[2].toLowerCase()], each: true, max: { two: 2, three: 3, four: 4, five: 5 }[fists[1].toLowerCase()], strides: 1, sameMap: true };
+    // (Batch 91, Dual Pounce: "Strides and makes two claw Strikes against the same creature at the end of that movement. Each attack counts
+    // against …'s multiple attack penalty, but the penalty doesn't increase until after … both attacks. If both attacks hit, combine their
+    // damage for the purpose of resistances and weaknesses." → a Stride, then the Strikes at one creature.)
+    const pounce = along.length >= 1 ? /^(?:The )?[\w' -]+? Strides and makes two ([\w' -]+?) Strikes against the same creature at the end of that movement\.$/i.exec(along[0]) : null;
+    if (pounce && along.slice(1).every((sentence) => /^Each attack counts against [^.]*multiple attack penalty, but the penalty (?:doesn't|does not) increase until after [^.]+\.$|^If both attacks hit, combine their damage for the purpose of resistances and weaknesses\.$/i.test(sentence))) {
+        return { builtin: "multi-strike", actions, strikes: [pounce[1].toLowerCase(), pounce[1].toLowerCase()], sameTarget: true, strides: 1, ...(along.length > 1 ? { sameMap: true } : {}) };
+    }
     // (Batch 89, Double Bite: "Strides and then makes a jaws Strike with each of their heads, each against a different target. Both attacks
     // count toward …, but the multiple attack penalty doesn't increase until after …" → two jaws Strikes at different creatures after a Stride.)
     const heads = along.length === 2 ? /^(?:The )?[\w' -]+? Strides and then makes an? ([\w' -]+?) Strike with each of (?:its|their|his|her) heads, each against a different target\.$/i.exec(along[0]) : null;
@@ -1579,6 +1605,9 @@ function readNoCombatEffect(text) {
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    // (Batch 91, On All Fours: "Requirements The festrog has nothing in their hands Effect The festrog Strides with a +10-foot circumstance
+    // bonus to their Speed." — a Stride.)
+    if (/^(?:Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect )?(?:The )?[^.]+? Strides with a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(said)) return true;
     // (Batch 89, Summon Steed: "The dullahan summons a war horse with elite adjustments … This steed remains until it is slain, the dullahan
     // Dismisses this effect, or …" — a creature summoned, the GM's as summons are (the user's choice of 2026-10-11).)
     if (/^(?:The )?[^.]+? summons an? [^.]+?\. This (?:steed|creature|mount|servant) remains until it is slain, [^.]+\.$/i.test(said)) return true;
