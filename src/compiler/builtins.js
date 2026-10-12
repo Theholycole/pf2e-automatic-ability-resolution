@@ -152,6 +152,15 @@ export function readMultiStrikes(text) {
         .replace(/^((?:The )?[^.]+?) makes two Strikes with (?:its|their|his|her) ([\w' -]+?) against two adjacent foes, both of whom are within (?:its|their|his|her) reach\./i, "$1 makes two $2 Strikes, each against a different target.")
         .replace(/ \(or an? [-–−]\d+ multiple attack penalty for (?:its|their|his|her) [\w' -]+?\)(?=\.)/i, "")
         .replace(/, increasing (?:its|their|his|her) reach to (\d+) feet for these Strikes\./i, ". Its reach increases to $1 feet for these Strikes.");
+    // (Batch 186: Graceful Double Slice's "makes two Strikes, one with each kukri, using her current multiple attack penalty"; Thrashing Retreat's
+    // "makes two paddle Strikes, each of which must be against separate targets, and each of which takes the normal multiple attack penalty. It then Swims
+    // up to its swim Speed. This Swim does not trigger reactions based on movement." — the Swim after a note.)
+    let swimAfter = false;
+    body = body.replace(/^((?:[^.]+\. )?(?:The )?[^.]+?) makes two Strikes, one with each ([\w' -]+?), using (?:its|their|his|her) current multiple attack penalty\./i, "$1 makes two $2 Strikes against the same target.")
+        .replace(/\bmakes two ([\w' -]+?) Strikes, each of which must be against separate targets, and each of which takes the normal multiple attack penalty\. (?:It|They|He|She) then Swims up to (?:its|their|his|her) swim Speed\. This Swim (?:does not|doesn't) trigger reactions based on movement\./i, (_all, name) => {
+            swimAfter = true;
+            return `makes two ${name} Strikes, each against a different target.`;
+        });
     // (Batch 175: Dancing Blade's "makes a Strike against a creature, then Strides. This Stride doesn't trigger reactions. If the guard ends this Stride
     // in a different space adjacent to the same creature, they make another Strike against it. If both Strikes succeed, …" — two Strikes at it, the
     // Stride between the GM's; Hunter's Wound's "Prerequisites … with a reload of 0 … two ranged Strikes against their prey".)
@@ -182,6 +191,7 @@ export function readMultiStrikes(text) {
     const notes = [];
     if (strideBetween) notes.push("Between the Strikes it Strides (no reactions) to another space beside the creature; the second Strike only if it gets there.");
     if (preyOnly) notes.push("Only at its prey.");
+    if (swimAfter) notes.push("Then it Swims up to its swim Speed; that Swim triggers no reactions.");
     let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
@@ -2480,6 +2490,14 @@ export function compileBuiltin(item, slug) {
     // count toward …, but the multiple attack penalty doesn't increase until after …" → two jaws Strikes at different creatures after a Stride.)
     const heads = along.length === 2 ? /^(?:The )?[\w' -]+? Strides and then makes an? ([\w' -]+?) Strike with each of (?:its|their|his|her) heads, each against a different target\.$/i.exec(along[0]) : null;
     if (heads && /^Both attacks count toward [^.]*multiple attack penalty, but the multiple attack penalty (?:doesn't|does not) increase until after [^.]+\.$/i.test(along[1])) return { builtin: "multi-strike", actions, strikes: [heads[1].toLowerCase()], each: true, max: 2, strides: 1, sameMap: true };
+    // (Batch 186, Ravage: "makes two talon Strikes against a Paralyzed, Restrained, or Unconscious creature, using the same attack modifier as its highest
+    // attack modifier. These Strikes gain the death trait. If Ravage kills the target, the intellect devourer may use Body Thief against it as a free
+    // action." → both at its full bonus, only at a helpless creature (requires "helpless"); the rest notes.)
+    const ravage = /^(?:The )?[\w' -]+? makes two ([\w' -]+?) Strikes against a Paralyzed, Restrained, or Unconscious creature, using the same attack modifier as (?:its|their|his|her) highest attack modifier\.(.*)$/i.exec(text.trim());
+    const ravaged = ravage ? ravage[2].trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean) : null;
+    if (ravaged && ravaged.every((sentence) => /^These Strikes gain the death trait\.$|^If [\w' -]+? kills the target, (?:the [\w' -]+?|it) may use [A-Z][\w' -]+? against it as a free action\.$/i.test(sentence))) {
+        return { builtin: "multi-strike", actions, strikes: [ravage[1].toLowerCase(), ravage[1].toLowerCase()], sameTarget: true, noMap: true, requires: "helpless", notes: ["Only at a Paralyzed, Restrained or Unconscious creature.", ...ravaged] };
+    }
     // (Batch 89, Claw Rake: "makes two claw Strikes at the same target, using the same attack bonus as their highest melee attack. If both attacks
     // deal damage, the target takes extra damage equal to one claw Strike." → both at its full bonus; both hits, a claw's damage more.)
     const rake = along.length >= 2 ? /^(?:The )?[\w' -]+? (?:rears back on (?:its|their|his|her) hind legs and )?makes two ([\w' -]+?) Strikes at the same target, using the same attack bonus as (?:its|their|his|her) highest melee attack\.$/i.exec(along.at(-2)) : null;

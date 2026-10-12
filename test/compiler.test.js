@@ -3116,3 +3116,13 @@ test("a Strike only after boarding a boat; Strikes at different creatures with a
     const blink = compile(3, "<p>The test drake flickers about. The test drake teleports up to 30 feet to a space adjacent to a creature and makes a tail Strike against that creature. The test drake can do this up to three times, teleporting to a different creature each time. Each attack counts toward its multiple attack penalty, but the penalty does not increase until all attacks have been made.</p>");
     assert.deepEqual([blink.builtin, blink.strikes, blink.each, blink.max, blink.sameMap], ["multi-strike", ["tail"], true, 3, true]);
 });
+
+test("two Strikes one with each weapon; two at separate targets then a Swim; two at a helpless creature (2026-10-12, batch 186)", () => {
+    const compile = (actions, html) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${html}</p>` } } }, { basicActions: {} });
+    const slice = compile(2, "Test Duelist makes two Strikes, one with each sickle, using her current multiple attack penalty. This counts as one attack when calculating her multiple attack penalty.");
+    assert.deepEqual([slice.strikes, slice.sameTarget, slice.sameMap, slice.countsAs], [["sickle", "sickle"], true, true, 1]);
+    const retreat = compile(2, "The test turtle flails as it flees. It makes two flipper Strikes, each of which must be against separate targets, and each of which takes the normal multiple attack penalty. It then Swims up to its swim Speed. This Swim does not trigger reactions based on movement.");
+    assert.deepEqual([retreat.each, retreat.max, retreat.notes.length], [true, 2, 1]);
+    const ravage = compile(3, "The test brain makes two claw Strikes against a Paralyzed, Restrained, or Unconscious creature, using the same attack modifier as its highest attack modifier. These Strikes gain the death trait.");
+    assert.deepEqual([ravage.noMap, ravage.requires, ravage.sameTarget], [true, "helpless", true]);
+});

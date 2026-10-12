@@ -1627,3 +1627,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Boarding Action → a Strike activity with two Strides and the extra weapon die, `requires: "requirement"` (only after boarding or leaving a boat), and a note. Blinking Barrage → a multi-Strike at different creatures (up to four, or any number), at the same penalty, its teleports and its later teleportation limit as notes.
 - **Live:** no new live code. Not run in pftest.
 - **Simulator:** Boarding Action isn't planned (its requirement). Blinking Barrage plays as a multi-Strike at the creatures in its melee.
+
+## At a helpless creature; a retreat; one with each weapon (2026-10-12, batch 186)
+
+- **Compiled:** Ravage → a multi-Strike with `noMap`, at one creature, `requires: "helpless"`, its death trait and Body Thief as notes. Thrashing Retreat → two Strikes at different creatures, the Swim after a note. Graceful Double Slice ("one with each kukri, using her current multiple attack penalty") → its two Strikes at one creature, counted as one attack.
+- **Live:** no new live code: the multi-Strike notes. Not run in pftest.
+- **Simulator:** Ravage only at a Paralyzed, Restrained or Unconscious creature (B186); the others as before.
