@@ -2266,6 +2266,37 @@ function actionUsesTwice(item, actor, options) {
     };
 }
 
+// An action that brings another of its abilities to everyone in an area (2026-10-12, batch 154, Exhale Miasma): "The green hag exhales a miasma of
+// green vapors. Each living creature in a 15-foot cone is affected by her enfeebling humors (attempting a save as normal). She can't use Exhale
+// Miasma again for 1d4 rounds." → that ability's save and results, in that area, with this action's cost and recharge; "living" a note.
+function areaUsesAbility(item, actor, options) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const template = /@Template\[(?:type:)?(burst|cone|emanation|line)\|distance:(\d+)[^\]]*\]/i.exec(html);
+    if (!template) return null;
+    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:[^.@]+\. )?Each (living )?creature in an? @T is affected by (?:the [\w' -]+?['’]s|its|their|his|her) ([a-z][\w' -]+?) \(attempt?ing a save as normal\)\.(?: (?:The )?[^.]+? can(?:'t|not) use [\w' -]+? again for (\d+d\d+|\d+) rounds\.?)?$/i.exec(plain);
+    if (!match) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const other = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && String(entry.name ?? "").toLowerCase() === match[2].toLowerCase());
+    if (!other) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(other, { ...options, actor: owner });
+    } catch {
+        plan = null;
+    }
+    if (plan?.resolution?.kind !== "save") return null;
+    return {
+        ...plan,
+        source: base(item).source,
+        activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] },
+        targeting: { target: null, range: null, area: { type: template[1].toLowerCase(), value: Number(template[2]) } },
+        trigger: { event: "use", ...(match[3] ? { recharge: { formula: match[3], unit: "rounds" } } : {}) },
+        ...(match[1] || plan.notes?.length ? { notes: [...(plan.notes ?? []), ...(match[1] ? ["Only living creatures in the area."] : [])] } : {})
+    };
+}
+
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
 function ownAffliction(item, actor, phrase) {
     const owner = actor ?? item.actor ?? item.parent;
@@ -3376,13 +3407,19 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
     const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    // (Batch 154, Exit Stage: once per mask it carries, each use breaking one — the masks on its sheet; with no creature given, the GM counts.)
+    if (plan?.builtin === "ferocity" && plan.perMask) {
+        delete plan.perMask;
+        const masks = [...(actor?.items ?? [])].filter((entry) => entry?.type === "equipment" && /\bmask\b/i.test(entry.name ?? "")).length;
+        if (masks > 0) plan.uses = masks;
+    }
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -3602,7 +3639,7 @@ function selfCondition(item) {
 // { resolution: { kind: "healing", native: { healing: { components, recipients: "any" } } }, targeting: { target: "self" },
 // requires? } (requires: its requirements, which the simulator can't check). Its other sentences are notes for the GM when
 // they're only words; not one that also heals or harms others, or heals only sometimes ("If …", "for each enemy …").
-const HEALS_ITSELF = /^(?:(?:The |An? )?[\w' -]+?|It|They|He|She)(?:,? [^,.]*?,)? (?:regains?|restores?|heals?)\s+\u0000(?: (?:Hit Points|HP))?(?: to (?:itself|himself|herself|themselves|themself))?(?:,? (?:gaining|with) any excess (?:healing )?as temporary (?:Hit Points|HP)[^.]*)?\.$|,? (?:restoring|regaining) \u0000 (?:Hit Points|HP)(?: to (?:itself|himself|herself|themselves|themself))?\.$/;
+const HEALS_ITSELF = /^(?:(?:The |An? )?[\w' -]+?|It|They|He|She)(?:,? [^,.]*?,)? (?:regains?|restores?|heals?)\s+\u0000(?: (?:Hit Points|HP))?(?: to (?:itself|himself|herself|themselves|themself))?(?:,? (?:gaining|with) any excess (?:healing )?as temporary (?:Hit Points|HP)[^.]*)?\.$|,? (?:restoring|regaining) \u0000 (?:Hit Points|HP)(?: to (?:itself|himself|herself|themselves|themself))?(?: in the process)?\.$/;
 // Hit Points back as it downs a creature (2026-10-12, batch 140, Absorb Sin): "Trigger The atrixyl reduces a creature it can smell with its
 // true sin scent to 0 Hit Points Effect The atrixyl regains 6d6 Hit Points." → the self-heal, set off by downing a creature; which creature
 // counts, a note for the GM.
@@ -3640,6 +3677,11 @@ function selfHeal(item) {
     for (const [index, sentence] of sentences.entries()) {
         if (index === at || (!elsewhere && /^(?:It|They|He|She|The [\w' -]+?) can(?:'t|not) use [^.]+ again for \d+d\d+ rounds\.$/i.test(sentence))) continue;
         if (/^If it has Gone Dark, its glow reignites\.$/i.test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
+        // (Batch 154, Change Characters: its masks and what comes with them — the GM's.)
+        if ((/\bmasks?\b/i.test(sentence) && !/@|\u0000|\d/.test(sentence)) || /^When [^.]+? Changes Characters, (?:it|they|he|she) gains? access to the listed abilities\.$/i.test(sentence)) {
             notes.push(sentence);
             continue;
         }

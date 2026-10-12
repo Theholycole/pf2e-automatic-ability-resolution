@@ -783,7 +783,7 @@ async function onDown(actor) {
             const left = Number(item.system?.frequency?.value);
             if (plan.builtin === "ferocity" && (plan.wounded === false || (actor.getCondition?.("wounded")?.value ?? 0) < 3) && !(plan.uses && Number.isFinite(left) && left <= 0)) {
                 const hp = plan.hp ?? 1;
-                await offer({ kind: "ferocity", item, monster: token, actor, target: null, trigger: "is reduced to 0 HP", free: !!plan.free, note: [plan.mythic ? "It costs a Mythic Point." : null, plan.strike ? `Then its ${plan.strike} Strike at a creature in its reach: roll it from its sheet.` : null].filter(Boolean).join(" ") || null, survive: { hp, wounded: plan.wounded !== false } });
+                await offer({ kind: "ferocity", item, monster: token, actor, target: null, trigger: "is reduced to 0 HP", free: !!plan.free, note: [plan.mythic ? "It costs a Mythic Point." : null, plan.strike ? `Then its ${plan.strike} Strike at a creature in its reach: roll it from its sheet.` : null, plan.note ?? null].filter(Boolean).join(" ") || null, survive: { hp, wounded: plan.wounded !== false } });
             }
             if (plan.builtin === "death-strike") {
                 const strikes = meleeStrikes(actor, plan.strike ? `(${plan.strike} only)` : item.name);

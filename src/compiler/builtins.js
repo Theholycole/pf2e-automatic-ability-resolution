@@ -1153,6 +1153,12 @@ function readMoreReactionStrikes(trigger, effect) {
         [new RegExp(String.raw`^${it} is hit by a melee weapon or melee unarmed attack by a creature within \d+ feet;?$`, "i"), () => ({ triggers: ["hit"] })],
         [new RegExp(String.raw`^A creature damages ${it} with a melee Strike$`, "i"), () => ({ triggers: ["damaged-adjacent"] })],
         [new RegExp(String.raw`^A creature within reach of ${reachOf} [\w' -]+? Casts a Spell$`, "i"), () => ({ triggers: ["cast"] })],
+        // (Batch 154: Watch over Evil's "A creature within 30 feet of the aso berang Casts a Spell"; Mutually Assured's "A creature within 10 feet
+        // deals damage to the Ashen Man"; Tail Sweep's "A creature moves from beyond the reach of the benthic reaver's tail to within the reach of
+        // the benthic reaver's tail".)
+        [new RegExp(String.raw`^A creature within \d+ feet of ${it} Casts a Spell$`, "i"), () => ({ triggers: ["cast"] })],
+        [new RegExp(String.raw`^A creature within (?:5|10) feet (?:deals damage to|damages) ${it}$`, "i"), () => ({ triggers: ["damaged-adjacent"] })],
+        [new RegExp(String.raw`^A creature moves from beyond the reach of ${reachOf} ([\w' -]+?) to within the reach of ${reachOf} \1$`, "i"), () => ({ triggers: ["approach"] })],
         [new RegExp(String.raw`^A creature ${it} had Grabbed or Restrained successfully Escapes$`, "i"), () => ({ triggers: ["escaped"] })],
         // (Batch 137, Punish Flight: "A creature attempts to Escape from the hatred siktempora" — as it tries, whatever the result.)
         [new RegExp(String.raw`^A creature attempts to Escape from ${it}$`, "i"), () => ({ triggers: ["escape"] })],
@@ -1186,15 +1192,34 @@ function readMoreReactionStrikes(trigger, effect) {
 // before it; after it, no multiple attack penalty (the reaction isn't on its turn), "If the Strike hits, Athervox disrupts the creature's
 // action", "She suffers a -2 penalty on the attack roll but gains a +2 bonus on the damage roll if the Strike hits". null for anything else.
 function strikeBack(sentences) {
+    // (Batch 154, Tail Sweep: "… makes a tail Strike against the triggering creature and can use Improved Knockdown if the attack hits, even if it
+    // isn't the benthic reaver's turn." — its Knockdown the GM's, a note.)
+    let knockdown = false;
+    sentences = sentences.map((sentence) => sentence.replace(/(Strike against the triggering creature) and can use Improved Knockdown if the attack hits, even if it isn't [^.]+?['’]s turn\.$/i, (_all, made) => {
+        knockdown = true;
+        return `${made}.`;
+    }));
     const at = sentences.findIndex((sentence) => /\bStrike (?:against|at) the (?:triggering|attacking) creature\b|\bStrike (?:against|at) the creature\b/i.test(sentence));
     if (at < 0 || sentences.slice(0, at).some((sentence) => /\d|@|\b(?:damage|save|check|bonus|penalty|Strikes?|Grab\w*|Prone|Hit Points|condition|Step\w*|Stride\w*)\b/i.test(sentence))) return null;
     const struck = /^(?:The )?(?:[^.]+? (?:shifts (?:its|their|his|her) position and )?makes|It makes) an? (?:([\w' -]+?) )?Strike (?:against|at) the (?:triggering |attacking )?creature(?: with an? [–-](\d+) penalty)?\.$/i.exec(sentences[at]);
     if (!struck) return null;
-    const answer = { strike: !struck[1] || /^melee$/i.test(struck[1]) ? null : struck[1].toLowerCase(), penalty: Number(struck[2]) || 0, disrupts: false };
+    const answer = { strike: !struck[1] || /^melee$/i.test(struck[1]) ? null : struck[1].toLowerCase(), penalty: Number(struck[2]) || 0, disrupts: false, ...(knockdown ? { knockdown: true } : {}) };
     for (const sentence of sentences.slice(at + 1)) {
         if (/^This Strike (?:doesn't|does not|neither applies nor) counts? toward (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty(?:,? and (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty (?:doesn't|does not) apply to this Strike)?\.$/i.test(sentence)) continue;
         if (/^If the Strike hits, (?:the [\w' -]+?|[A-Z][\w'-]+|it|they) disrupts? the (?:creature's|triggering) action\.$/i.test(sentence)) {
             answer.disrupts = true;
+            continue;
+        }
+        // (Batch 154, Watch over Evil: "If the Strike hits a creature with the tanggal trait or is a critical hit, the triggering action is disrupted.")
+        const traitOrCrit = /^If the Strike hits a creature with the ([a-z]+) trait or is a critical hit, the triggering action is disrupted\.$/i.exec(sentence);
+        if (traitOrCrit) {
+            answer.disrupts = "critical";
+            answer.note = `A hit on a creature with the ${traitOrCrit[1].toLowerCase()} trait disrupts its action too.`;
+            continue;
+        }
+        // (Batch 154, Tail Sweep: "If the benthic reaver knocks the target Prone, it disrupts the triggering move action.")
+        if (/^If (?:the [\w' -]+?|it|they) knocks? the target Prone, (?:it|they) disrupts? the triggering move action\.$/i.test(sentence) && answer.knockdown) {
+            answer.note = "If it hits, it can use Improved Knockdown even on another creature's turn; knocking the target Prone disrupts its move.";
             continue;
         }
         // (Batch 137, Punish Flight: "This Strike doesn't have Improved Grab.")
@@ -1206,6 +1231,10 @@ function strikeBack(sentences) {
         if (!both) return null;
         answer.penalty = Number(both[1]);
         answer.damageBonus = Number(both[2]);
+    }
+    if (answer.knockdown) {
+        delete answer.knockdown;
+        answer.note ??= "If it hits, it can use Improved Knockdown even on another creature's turn.";
     }
     return answer;
 }
@@ -1397,6 +1426,10 @@ export function readReaction(item, text) {
         const stays = /^(?:The )?[^.]+? avoids being knocked out and (?:remains at (1|half its maximum) (?:Hit Points?|HP)|regains (\d+d\d+(?:\s*[+-]\s*\d+)?|\d+) Hit Points)(?:,? (?:and|but) (?:her|his|its|their) (?:Wounded condition|wounded value) increases by 1|, then can make an? ([\w' -]+?) Strike against a creature in (?:its|their|his|her) reach)?\.$/i.exec(body)
             ?? /^(?:They|He|She|It|The [\w' -]+?) remains? standing with (\d+) Hit Points\.$/i.exec(body)
             ?? /^(?:They|He|She|It|The [\w' -]+?) (?:remains? at (1) Hit Point and stays standing|stays? on (?:its|their) feet with (1) Hit Point)\.(?: (?:They|He|She|It|The [\w' -]+?) then (?:immediately )?uses (?:the )?[A-Z][\w' -]+? ability\.)?$/i.exec(body);
+        // (Batch 154, Exit Stage: "Taljjae retains 1 Hit Point and teleports to an empty space within 30 feet. One of its masks remains behind and is
+        // broken." — the teleport and the mask the GM's.)
+        const exit = stays ? null : /^(?:They|He|She|It|The [\w' -]+?|[A-Z][\w'-]+) retains? 1 Hit Point and teleports to an empty space within (\d+) feet\.( One of (?:its|their|his|her) masks remains behind and is broken\.)?$/i.exec(body);
+        if (exit) return { builtin: "ferocity", hp: 1, wounded: false, note: `It then teleports to an empty space within ${exit[1]} feet: move its token.${exit[2] ? " One of its masks stays behind, broken." : ""}`, ...(exit[2] ? { perMask: true } : {}), ...(item?.system?.actionType?.value === "free" ? { free: true } : {}) };
         if (stays) {
             const wounded = /\bwounded\b/i.test(body);
             const hp = /^half/i.test(stays[1] ?? "") ? "half" : stays[2] ?? Number(stays[1]);
