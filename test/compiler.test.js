@@ -3683,7 +3683,7 @@ test("a Trip at a creature moving away nearby (2026-10-12, batch 227)", { skip: 
 
 test("resistance to the triggering type for a minute; an ally's Strike taken whole, or a critical hit shared; a lunge that bares its guard; a kin's bite followed up; more states, a raising and an illusion to the GM (2026-10-12, batch 228)", () => {
     const item = (html, type = "reaction") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
-    const plan = (trigger, effect, type = "reaction") => compileMonsterAbility(item(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type), { basicActions: {}, pack: "battlezoo-bestiary-pf2e" });
+    const plan = (trigger, effect, type = "reaction") => compileMonsterAbility(item(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type), { basicActions: {} });
     assert.deepEqual(plan("The test chameleon takes damage", "The test chameleon's scales ripple. For the next minute, the test chameleon has resistance 10 to the triggering damage type (its pick if several). A new use swaps out the old resistance. Cold iron weapons get through it."), { builtin: "resist-damage", value: 10, on: null, types: ["triggering"], lasts: 10, note: "Not against cold iron weapons' damage. A new use replaces the last one." });
     assert.deepEqual(plan("An ally of the test drake is struck by a Strike that the test drake was also in range of", "The test drake suffers that Strike's results in its place."), { builtin: "intercept", ward: "ally", share: 1, strikes: true });
     assert.deepEqual(plan("A creature critically hits a creature adjacent to the test seal", "The triggering Strike's damage is split evenly between the test seal and the struck creature. Both take the Strike's hit effects, and neither takes its critical-hit-only ones.").share, 0.5);
@@ -3820,7 +3820,7 @@ test("more states the simulator can't see: a persona change, an aura moved away,
 
 test("a curse of misfortune on the creature that hit it, as its effect; rage that allows concentrate actions, a snare it sets; a doubled ward and an aura's pull to the GM (2026-10-12, batch 239)", () => {
     const item = (html, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
-    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {}, pack: "battlezoo-bestiary-pf2e" });
+    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {} });
     const curse = plan("<p><strong>Trigger</strong> A creature within the test imp's reach damages the test imp with a Strike</p><hr /><p><strong>Effect</strong> The test imp hisses a curse. For a round, the attacker rolls each of its attack rolls twice and takes the lower result.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.ya8r3IdzQ7QGNH8N]{Effect: Test Curse}</p>", "reaction");
     assert.deepEqual([curse.targeting.target, curse.trigger.event, curse.resolution.applications[0].recipients], ["the attacker", "hit-by", "target"]);
     assert.deepEqual(plan("<p><strong>Requirements</strong> The test drake is raging</p><hr /><p><strong>Effect</strong> Until the end of its turn, the test drake can use actions with the concentrate trait while raging.</p>"), { builtin: "no-effect" });
@@ -3828,4 +3828,18 @@ test("a curse of misfortune on the creature that hit it, as its effect; rage tha
     const gm = { builtin: "no-effect", gm: "state" };
     assert.deepEqual(plan("<p><strong>Trigger</strong> A creature within 10 feet deals damage to the test drake</p><hr /><p><strong>Effect</strong> The test drake flickers and doubles its resistance from its ward against the triggering damage.</p>", "reaction"), gm);
     assert.deepEqual(plan("<p>The test siren sings at one creature within 30 feet, which must attempt a @Check[will|dc:30] save. If it fails, it is affected by the test siren's charm aura.</p>"), gm);
+});
+
+test("states the simulator can't see in Battlezoo dragons: its own snares' victims, a refused offer, its prey, a larger battle, an emotion on it, a stored roll, magical sight; a counteract against a spell of its energy (2026-10-12, batch 240)", () => {
+    const item = (html, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {} });
+    const react = (trigger, effect, type = "reaction") => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type);
+    const gm = { builtin: "no-effect", gm: "state" };
+    assert.deepEqual(react("A creature is hurt by one of the test imp's Prank Pits", "The test imp jeers at it, and the creature feels small and silly."), gm);
+    assert.deepEqual(react("The test drake downs a creature that turned down its bargain", "The test drake gains 10 temporary Hit Points.", "free")?.builtin === "no-effect", false);
+    assert.deepEqual(react("The test drake downs a creature that refused its offer of service", "The test drake gains 10 temporary Hit Points.", "free"), gm);
+    assert.deepEqual(react("The test drake's last action was a melee Strike that slew one of its prey", "The test drake roars and gains a +1 status bonus to attack rolls for 1 minute.", "free"), gm);
+    assert.deepEqual(plan("<p>The test seer rolls a d20 and keeps the result as its omen, to use in place of a later d20 roll this turn.</p>", "free"), gm);
+    assert.deepEqual(plan("<p>The test drake perceives magical auras within 60 feet as a precise sense until the end of its turn.</p>"), gm);
+    assert.deepEqual(react("A creature within 60 feet casts a spell of the test drake's current energy, its damage type", "The test drake tries to stop that spell with a counteract check (modifier +20)."), { builtin: "no-effect" });
 });

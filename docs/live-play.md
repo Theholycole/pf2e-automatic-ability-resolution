@@ -2294,3 +2294,17 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the misfortune curse posts its effect card on the attacker when the reaction is used.
 - **Simulator:** nothing new.
 
+## Battlezoo dragons' unseen states (2026-10-12, batch 240)
+
+- **Compiled** (after every reading fails; 32 new in Battlezoo):
+  - **The GM's** (`gm: "state"`), set off by or about:
+    - one of its own named creations ("one of its Snares", but not "one of its Strikes");
+    - a creature that refused its offer;
+    - one of its prey;
+    - an encounter that's part of a larger battle;
+    - an emotion effect on it;
+    - a d20 it rolls ahead to keep;
+    - its sight of magical auras.
+  - **Counterspell's kin** also takes a trigger naming a "damage type" now (`damage` was refused before).
+- **Live / simulator:** the GM's, as before.
+

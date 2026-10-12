@@ -55,12 +55,15 @@ const UNSEEN = [
 // (Batch 228, Battlezoo: a pose it holds by an ability, its chosen victim, an area its ability made, an ability active or one it's in the middle of, a
 // count of its arms, a creature attached to it, being out of water, a broken keepsake, a light in its space.)
 const TRIGGER_UNSEEN = /\bwhile (?:it's |it is |they're |they are |he's |she's )?(?:underwater|Feigning Death|Hiding in water|hiding in water|Retracted)\b|\bis using [A-Z][\w' -]+?(?:,| and\b)|\bliege\b|\bpassengers?\b|\bchosen [\w ]*egg\b|\blower-ranking cultist\b|\bis transformed (?:using|with|by) [A-Z]|\bhas [A-Z][\w' -]+? active\b/;
+// (Batch 240, Battlezoo: one of its own named creations doing it, a creature that refused its offer, one of its prey, a larger battle, an emotion effect
+// on it.)
+const TRIGGER_UNSEEN_DRAGONS = /\bone of (?:the [\w' -]+?['’]s|its|their) (?!Strikes\b)[A-Z][\w' -]+?s\b|\brefused (?:the [\w' -]+?['’]s|its|their) offer\b|\bone of (?:its|their) prey\b|\bunder the effect of a beneficial\b/;
 const TRIGGER_UNSEEN_MORE = /\bwhile (?:the [\w' -]+?|it|they) (?:is|are) [^.;]*?\busing [A-Z]|\bits victim\b|\bthe area of (?:the [\w' -]+?['’]s|its|their) [A-Z]|\bwhile (?:its|their|his|her) [A-Z][\w' -]+? is active\b|\bwhile [A-Z][a-z]+ing\b|\bhas (?:fewer|more) than \w+ (?:arms|heads|limbs|tentacles|legs)\b|\battached creature\b|\bcreature attached to\b|\bremoved from (?:the )?water\b|\bgains the broken condition\b|\blight source\b/;
 // A requirement or an effect behind such a state too (batch 226): cover an animal ally gives it, a burrow hole nearby.
 // (Batch 228: a teleport to darkness far away as it drops — where it goes, the GM's.)
 // (Batch 238: a persona change; its aura moved to another place; an energy picked for its runes; a rider on its next action; a blessing of its own
 // some allies carry.)
-const EFFECT_UNSEEN = /\bhas cover from an? [\w-]+ ally\b|\bto a burrow hole\b|\bteleports to an area of darkness\b|\bChanges Characters\b|\baura instead emanates from\b|\bchooses between [a-z, ]+,? or [a-z]+ damage\b(?:[^.]*\.){1,3}[^.]*\bgains? immunity to that damage type\b|(?:^(?:Frequency [^.]*? Effect )?|\.\s+)If the next action (?:the [\w' -]+?|it|they) uses? is\b|\bbenefited from (?:the [\w' -]+?['’]s|its|their) [\w' -]+? in the last (?:hour|minute|round)\b|\bdoubles? (?:its|their) resistance from\b|\b(?:it's|it is|is) affected by (?:the [\w' -]+?['’]s|its|their) [\w' -]+? aura\b/;
+const EFFECT_UNSEEN = /\bhas cover from an? [\w-]+ ally\b|\bto a burrow hole\b|\bteleports to an area of darkness\b|\bChanges Characters\b|\baura instead emanates from\b|\bchooses between [a-z, ]+,? or [a-z]+ damage\b(?:[^.]*\.){1,3}[^.]*\bgains? immunity to that damage type\b|(?:^(?:Frequency [^.]*? Effect )?|\.\s+)If the next action (?:the [\w' -]+?|it|they) uses? is\b|\bbenefited from (?:the [\w' -]+?['’]s|its|their) [\w' -]+? in the last (?:hour|minute|round)\b|\bdoubles? (?:its|their) resistance from\b|\b(?:it's|it is|is) affected by (?:the [\w' -]+?['’]s|its|their) [\w' -]+? aura\b|\bpart of (?:a )?larger warfare\b|\bperceives magical auras\b|\brolls a d20\. The result is\b|\brolls a d20 and keeps the result\b/;
 // A social or exploration skill check that sets it off (batch 216).
 const SKILL_TRIGGER = /\b(?:fails|critically fails|succeeds at|critically succeeds at) (?:a|an) (?:(?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|[A-Z][\w-]* Lore)(?: or (?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|Intimidation))? check|(?:Charisma-based )?skill check|check to (?:Balance|Climb|Swim)(?: or (?:Balance|Climb|Swim))?)\b|\battempts? an? (?:Deception, Diplomacy, or (?:an )?Intimidation|Diplomacy|Deception) check against\b/i;
 
@@ -77,14 +80,14 @@ export function gmFallback(item, options = {}) {
     // (Batch 216: a trigger behind such a state too — "while they're underwater", "while Feigning Death", "is using Perfect Camouflage, and …"; one set off
     // by a social or exploration skill check, the GM's as out of combat.)
     const trigger = /\bTrigger ([^.]+?)(?=\.| (?:Effect|Requirements?|Frequency) |$)/.exec(text)?.[1] ?? null;
-    if (trigger && (UNSEEN.some((pattern) => pattern.test(trigger)) || TRIGGER_UNSEEN.test(trigger) || TRIGGER_UNSEEN_MORE.test(trigger))) return { builtin: "no-effect", gm: "state" };
+    if (trigger && (UNSEEN.some((pattern) => pattern.test(trigger)) || TRIGGER_UNSEEN.test(trigger) || TRIGGER_UNSEEN_MORE.test(trigger) || TRIGGER_UNSEEN_DRAGONS.test(trigger))) return { builtin: "no-effect", gm: "state" };
     if (trigger && SKILL_TRIGGER.test(trigger)) return { builtin: "no-effect", gm: "out-of-combat" };
     if (EFFECT_UNSEEN.test(text)) return { builtin: "no-effect", gm: "state" };
     // (Batch 232: Counterspell's kin in an action too — its whole effect an attempt to counteract a spell or magical effect (dispelling it, taking control
     // of it), with no damage, save or Strike of its own: the GM's, as Counterspell is (the user's choice of 2026-10-11), read as batch 86's.)
     // (A reaction's trigger about a spell, an effect or magic, as Counterspell's is — not a creature dropping, batch 86's line.)
     const magicTrigger = !trigger || /\b(?:spells?|effects?|magic\w*|Casts?|casting|traits?)\b/i.test(trigger);
-    if (magicTrigger && /\b(?:attempts? (?:a |to )?counteract|counteract check|attempts? to (?:dispel|unravel))\b/i.test(text) && !/\b(?:Unconscious|dying)\b|@Damage|\bdamage\b|\bStrikes?\b|@Check\[(?:type:)?(?:fortitude|reflex|will)\b|\b(?:bonus|penalty|rerolls?|Concealed|Hidden|Invisible|Sickened|Frightened|Stunned|Slowed|Quickened|Clumsy|Enfeebled|Drained|Stupefied|Prone|Grabbed|Immobilized|Paralyzed|Fatigued)\b|\bcan be dispelled\b|\banyone else\b/i.test(text)) return { builtin: "no-effect" };
+    if (magicTrigger && /\b(?:attempts? (?:a |to )?counteract|counteract check|attempts? to (?:dispel|unravel))\b/i.test(text) && !/\b(?:Unconscious|dying)\b|@Damage|\bdamage\b(?! type)|\bStrikes?\b|@Check\[(?:type:)?(?:fortitude|reflex|will)\b|\b(?:bonus|penalty|rerolls?|Concealed|Hidden|Invisible|Sickened|Frightened|Stunned|Slowed|Quickened|Clumsy|Enfeebled|Drained|Stupefied|Prone|Grabbed|Immobilized|Paralyzed|Fatigued)\b|\bcan be dispelled\b|\banyone else\b/i.test(text)) return { builtin: "no-effect" };
     // (Batch 228, Battlezoo: a sound illusion with no damage or save, at most a Perception check to see through it — narrative.)
     if (/\bcreates an auditory illusion\b/i.test(text) && !/@Damage|\bsave\b|@Check\[(?!(?:type:)?perception\b)/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
