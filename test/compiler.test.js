@@ -2361,3 +2361,13 @@ test("an action that uses its breath twice: that breath's plan, this cost and re
     const plan = compileMonsterAbility(twice, { basicActions: {}, actor: { name: "Test", items: [breath, twice] } });
     assert.deepEqual([plan?.source?.name, plan?.activation?.time, plan?.targeting?.area?.type, plan?.trigger?.recharge?.formula, plan?.notes?.length], ["Test Double Spit", "3", "line", "2d4", 2]);
 });
+
+test("an effect whose bonuses name checks or Strikes: what it gives isn't what it does (2026-10-12, batch 120)", () => {
+    const compile = (description, type = "action") => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const heroism = compile("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test sage inspires. An ally within 60 feet of the test sage gains a +2 status bonus to attack rolls, Perception checks, saving throws, and skill checks for 1 minute.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.aaaaaaaaaaaaaaaa]{Effect: Test Heroism}</p>");
+    assert.deepEqual([heroism?.resolution?.kind, heroism?.targeting?.range], ["effect", "60 feet"]);
+    const chug = compile("<p><strong>Requirements</strong> The test brewer is holding a flagon</p><hr /><p><strong>Effect</strong> The test brewer drinks. For 1 minute, the test brewer gains a +2 item bonus to Athletics checks and damage rolls.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.bbbbbbbbbbbbbbbb]{Effect: Test Chug}</p>");
+    assert.equal(chug?.resolution?.applications?.[0]?.recipients, "self");
+    // (Still not one that makes a check or a Strike.)
+    assert.equal(compile("<p>The test bard makes a Performance check. Allies within 30 feet gain a +1 status bonus to attack rolls.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.cccccccccccccccc]{Effect: Test Song}</p>"), null);
+});

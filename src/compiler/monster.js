@@ -1722,7 +1722,10 @@ function effectAbility(item) {
     const text = html.replace(EFFECT_LINK, "").replace(/(?:\ban?\s+)?@Template\[(?:type:)?(\w+)\|distance:(\d+)[^\]]*\](?:\{[^}]*\})?/gi, "a $2-foot $1").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1");
     const plain = htmlToPlainText(text).replace(/\bEffect:\s*$/i, "").trim();
     // Something else to do: a Strike, a check, a spell, a choice, movement, terrain, an area everyone's in.
-    if (/\bStrikes?\b|\bchecks?\b|\bDemoralize\b|\bone of the following\b|\b(?:its|the [\w' -]+?'s) choice\b|\bchooses?\b|\bcasts?\b|\bspells?\b|\bsummons?\b|\bteleports?\b|\b(?:Strides?|Steps?|Flies|Burrows?|Swims?|Leaps?)\b|\bterrain\b|\ball creatures in the area\b|\bsaving throw against\b/i.test(plain)) return null;
+    // (Batch 120: not the effect's own bonuses, "a +2 status bonus to attack rolls, Perception checks, saving throws, and skill checks" —
+    // what it gives isn't what it does.)
+    const doing = plain.replace(/\b(?:bonus|penalty) to [^.]*/gi, "");
+    if (/\bStrikes?\b|\bchecks?\b|\bDemoralize\b|\bone of the following\b|\b(?:its|the [\w' -]+?'s) choice\b|\bchooses?\b|\bcasts?\b|\bspells?\b|\bsummons?\b|\bteleports?\b|\b(?:Strides?|Steps?|Flies|Burrows?|Swims?|Leaps?)\b|\bterrain\b|\ball creatures in the area\b|\bsaving throw against\b/i.test(doing)) return null;
     let recipients = "self";
     let targeting = { target: null, range: null, area: null };
     if (!own) {
@@ -1802,7 +1805,12 @@ function followUp(item, actor, basicActions = {}) {
     const own = withDescription(item, effect);
     // (The first reading with results: batch 36's after the others, each in turn.)
     let plan = null;
-    for (const read of [() => inlineSave(own, actor), () => compileSkillAction(own, { actor }), () => effectAbility(own), () => automaticEffect(own, actor), () => followUpResults(own, effect), () => followUpSkill(own, effect, basicActions)]) {
+    // (Batch 120: an effect for its allies — Keep Up With Me!'s "one ally within 30 feet … gains" — isn't the struck creature's.)
+    const atStruck = () => {
+        const plan = effectAbility(own);
+        return plan?.resolution?.applications?.every((application) => ["target", "self"].includes(application.recipients)) ? plan : null;
+    };
+    for (const read of [() => inlineSave(own, actor), () => compileSkillAction(own, { actor }), atStruck, () => automaticEffect(own, actor), () => followUpResults(own, effect), () => followUpSkill(own, effect, basicActions)]) {
         try {
             plan = read();
         } catch {
