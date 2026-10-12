@@ -1730,7 +1730,10 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - Dying Wish → `no-effect`: back at 1 HP miles away, out of the fight as Mist Escape is.
   - Haul Away and a giant ant's carry → `no-effect`: a move with what it holds.
   - Ink Cloud → `{ builtin: "no-effect", gm: "state" }`: "no effect outside water" is where it is, which the simulator can't see.
-- **Live:** Use puts an effect on the monster with PF2e's Resistance rules (exceptions kept) and a TempHP rule, for the plan's time. The effect's text says what it gives and when it ends. Osseous Defense instead turns on its own PF2e switch, which holds its resistance and Strikes. Not run in pftest: the same path as batch 39's AC bonuses.
+- **Live:** Use puts an effect on the monster with PF2e's Resistance rules (exceptions kept) and a TempHP rule, for the plan's time. The effect's text says what it gives and when it ends. An ability with its own PF2e switch (Osseous Defense, Harden Chitin, Shifting Form) gets an effect that turns the switch on instead.
+  - **Live-checked in pftest (2026-10-12):**
+    - An ancient coral dragon's Reef Armor gave it resistance 10 to piercing and slashing and 50 temporary HP, for 1 minute.
+    - A zecui's Harden Chitin and a joseung saja's Shifting Form turned on their PF2e switches. They had resistance 5 to all damage except mental and spirit, and 10 except force, void and ghost touch.
 - **Simulator:** see B196 in its ability decisions.
 
 ## Multi-Strikes on the move; a Strike as it grabs (2026-10-12, batch 197)
@@ -1741,7 +1744,8 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - Flurry of Strands → six strand Strikes at different creatures, with a note for those Immobilizing.
   - Ravenous Embrace → four arm Strikes; the beak Strike after is a note.
   - Deadly Mandibles → `reaction-strike` with trigger `grabs`, and a note for the pull.
-- **Live:** when a monster's card grabs a creature and the monster has Deadly Mandibles, the GM gets a note: its mandibles Strike at that creature, to roll from its sheet. The multi-Strikes are cards as before. Not run in pftest.
+- **Live:** when a monster's card grabs a creature and the monster has Deadly Mandibles, the GM gets a note: its mandibles Strike at that creature, to roll from its sheet. The multi-Strikes are cards as before.
+  - **Live-checked in pftest (2026-10-12):** a giant mantis's leg hit Valeros and its Grab card critically succeeded. Apply made him Restrained and whispered the GM "Deadly Mandibles (its reaction): … its mandibles Strike at Valeros".
 - **Simulator:** see B197 in its ability decisions.
 
 ## Both hits with an affliction; Strikes at the creature it holds (2026-10-12, batch 198)
@@ -1758,7 +1762,8 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 ## A Stride and a Strike as it rolls initiative (2026-10-12, batch 199)
 
 - **Compiled:** Uncanny Pounce → a Strike activity with `actions: 0`, one Stride, its claw (or jaws) and `initiative: true`, with a note naming the Lore it rolls.
-- **Live:** as the encounter starts, a siktempora in it brings a free Strike offer with its named Strike. The note names the Lore it rolls for initiative and says it Strides once, before or after the Strike. Not run in pftest: the same path as batch 170's initiative offers.
+- **Live:** as the encounter starts, a siktempora in it brings a free Strike offer with its named Strike. The note names the Lore it rolls for initiative and says it Strides once, before or after the Strike.
+  - **Live-checked in pftest (2026-10-12):** a misery siktempora's encounter start brought the offer with its Claw button. A love siktempora brought none: PF2e gives it no claw Strike, only Emotional Bolt, and the simulator also skips it.
 - **Simulator:** see B199 in its ability decisions.
 
 ## NPC Core Strikes and moves (2026-10-12, batch 200)
