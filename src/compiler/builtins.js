@@ -2486,6 +2486,26 @@ function readHeldGuard(item, body) {
 // precision damage. …" → { builtin: "hunt-prey", edge: "precision", dice, die }; with only the bonuses to Seek and Track and the
 // range increment (no damage), nothing for the fight's numbers. null when it isn't Hunt Prey.
 function readHuntPrey(text) {
+    // (Batch 164, Mark for Death: "Requirements Siora can see the target she intends to mark Effect Siora designates a single target as her mark. She
+    // gains a +2 circumstance bonus to Perception checks to Seek her target, and her spectral hand Strikes against her target gain the deadly d8
+    // weapon trait." — deadly on those Strikes against the mark.)
+    // (The Gray Gardener assassin's: "… designates a single creature they can see and hear as their mark. This effect lasts until … The assassin
+    // gains a +2 circumstance bonus to Perception checks to Seek the mark and on Deception checks to Feint against the mark. The assassin's melee and
+    // ranged Strikes gain the deadly d8 weapon traits when attacking the mark." — all its Strikes.)
+    const marking = String(text).trim().replace(/^Requirements? [^.]+? can (?:see|observe) the (?:target|creature) (?:she|he|it|they) intends? to mark\.? Effect /i, "");
+    if (/^(?:The )?[\w' -]+? designates a single (?:target|creature)(?: (?:she|he|it|they) can see(?: and hear)?)? as (?:her|his|its|their) mark\./i.test(marking)) {
+        const sentences = marking.split(/(?<=\.)\s+(?=[A-Z])/).slice(1);
+        const deadly = sentences.map((sentence) => /^(?:(?:She|He|It|They) gains? a \+\d circumstance bonus to Perception checks to Seek (?:her|his|its|their) target, and )?(?:(?:her|his|its|their)|(?:The )?[\w' -]+?['’]s) ([\w' -]+?) Strikes (?:against (?:her|his|its|their) target )?gain the deadly d(\d+) weapon traits?(?: when attacking the mark)?\.$/i.exec(sentence)).find(Boolean);
+        const told = (sentence) => /\bcircumstance bonus to Perception checks to Seek\b|^This (?:effect )?lasts until\b/i.test(sentence) && !/\bdeadly\b/i.test(sentence);
+        if (deadly && sentences.every((sentence) => told(sentence) || /\bdeadly d\d+\b/i.test(sentence))) {
+            const strike = /^melee and ranged$/i.test(deadly[1]) ? null : deadly[1].toLowerCase();
+            return { builtin: "hunt-prey", edge: "deadly", strike, die: Number(deadly[2]), notes: ["+2 circumstance bonus to Perception checks to Seek its mark (and to Feint against it, when it says so)."] };
+        }
+    }
+    // (The executioner's: "marks a single creature they can see for death. The first time each round the executioner Strikes that creature, the
+    // Strike deals an extra 1d12 precision damage. The creature remains marked for death until …" — Hunt Prey's precision edge.)
+    const death = /^(?:The )?[\w' -]+? marks a single creature (?:it|they|he|she) can see for death\. The first time each round (?:the [\w' -]+?|it|they|he|she) Strikes that creature, the Strike deals (?:an extra (\d+)d(\d+)|(\d+)d(\d+) additional) precision damage\.(?: The creature remains marked for death until [^.]+\.)?$/i.exec(String(text).trim());
+    if (death) return { builtin: "hunt-prey", edge: "precision", dice: Number(death[1] ?? death[3]), die: Number(death[2] ?? death[4]) };
     // (Batch 153, Lawbringer: "The shieldmarshal marks a foe for judgment, granting the shieldmarshal a +10-foot circumstance bonus to Speed whenever
     // it Strides toward that creature. The shieldmarshal's Strikes against that creature deal an additional 2d8 precision damage." — every hit.)
     const marked = /^(?:The )?[^.]+? marks a foe for judgment, granting (?:the [\w' -]+?|it|them|him|her) a \+(\d+)-foot circumstance bonus to Speed whenever (?:it|they|he|she) Strides? toward that creature\. (?:The [\w' -]+?['’]s|Its|Their|His|Her) Strikes against that creature deal an additional (\d+)d(\d+) precision damage\.$/i.exec(String(text).trim());

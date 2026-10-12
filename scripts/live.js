@@ -238,8 +238,10 @@ async function cardForAbility(message) {
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".
     if (plan?.builtin === "hunt-prey") {
         const prey = [...game.user.targets][0];
-        // (Batch 153, Lawbringer: every Strike against the creature it marks.)
-        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its ${plan.every ? "mark" : "prey"}` : `its ${plan.every ? "mark" : "prey"} is the creature it named`}. ${plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`}`, ...(plan.notes ?? [])]);
+        // (Batch 153, Lawbringer: every Strike against the creature it marks; batch 164, Mark for Death: deadly on its Strikes against it.)
+        const marked = plan.every || plan.edge === "deadly";
+        const edgeText = plan.edge === "deadly" ? `Its ${plan.strike ?? ""} Strikes against that creature gain deadly d${plan.die}.`.replace(/ {2,}/g, " ") : plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`;
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its ${marked ? "mark" : "prey"}` : `its ${marked ? "mark" : "prey"} is the creature it named`}. ${edgeText}`, ...(plan.notes ?? [])]);
         return;
     }
     // Knocking Sweep (batch 45): the basic action's card at each creature the GM targets (separate checks, each at the multiple attack

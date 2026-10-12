@@ -1507,3 +1507,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Mountain Stance → a stance self-effect (+4 status AC) with notes; a guard behind "is in X Stance" → `requiresEffect`; Spinning Shield → AC and Reflex until its next turn; AC reactions whose words move it keep those words as a note.
 - **Live:** no new live code: the effects and the AC offers (with their notes) as before. Not run in pftest.
 - **Simulator:** a self-effect with `requiresEffect` is planned only while its own effect of that name is on it (B158).
+
+## A deadly mark (2026-10-12, batch 164)
+
+- **Compiled:** Mark for Death → `hunt-prey` with `edge: "deadly"`, `die`, `strike` (or the executioners' precision edge).
+- **Live:** the mark's note names it and says which Strikes gain deadly against it. Not run in pftest: a note line.
+- **Simulator:** its Strikes (or the named ones) against its prey gain deadly of that die (B164).
