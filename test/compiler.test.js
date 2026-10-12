@@ -2347,3 +2347,10 @@ test("a thrown rock at a random enemy when hurt by its damage types; a flat chec
     const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test ogre takes cold or sonic damage</p><hr /><p><strong>Effect</strong> The test ogre uses Throw Boulder targeting a random enemy within its first range increment. If the test ogre has persistent cold damage, it attempts a @Check[flat|dc:15] to remove it.</p>" } } }, { basicActions: {} });
     assert.deepEqual(plan, { builtin: "reaction-strike", triggers: ["damaged-by"], damageTypes: ["cold", "sonic"], strike: "boulder", penalty: 0, disrupts: false, random: true, ranged: true, persistentType: "cold" });
 });
+
+test("a reaction that uses another of its abilities: that ability's results with this trigger (2026-10-12, batch 118)", () => {
+    const roar = { type: "action", name: "Test Bellow", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: ["auditory"] }, description: { value: "<p>The test ogre bellows. Each enemy in a @Template[emanation|distance:30] must succeed at a @Check[will|dc:20] save or become Frightened 1 (Frightened 2 on a critical failure).</p>" } } };
+    const fury = { type: "action", name: "Test Fury", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test ogre takes cold or fire damage</p><hr /><p><strong>Effect</strong> The test ogre uses its Test Bellow and, if it's aware of the damage's source, can Stride toward it. If the test ogre has persistent fire damage, it attempts a @Check[flat|dc:15] to remove it.</p>" } } };
+    const plan = compileMonsterAbility(fury, { basicActions: {}, actor: { name: "Test", items: [fury, roar] } });
+    assert.deepEqual([plan?.source?.name, plan?.trigger?.event, plan?.trigger?.damageTypes, plan?.targeting?.area?.value, plan?.notes?.length], ["Test Fury", "damaged", ["cold", "fire"], 30, 2]);
+});

@@ -1906,6 +1906,48 @@ function exposureReaction(item, actor) {
     };
 }
 
+// A reaction that uses another of its abilities (2026-10-12, batch 118): "Trigger The grauladon takes damage from an adjacent creature. Effect
+// The grauladon uses Noxious Breath, including the triggering creature in the area." (Reactive Breath), "Trigger The troll warleader takes
+// electricity or fire damage Effect The warleader uses their Primordial Roar and, if they're aware of the damage's source, can Stride toward
+// it. If the warleader has persistent fire damage, they attempt a DC 15 flat check to remove it." (Furious Roar), "… uses Spice Mix against
+// the attacker." (Dash of Spice) → that ability's plan (its save, area and results) with this reaction's trigger, as the module reads it,
+// and name; what it adds in words (a Stride toward the source, the flat check), notes for the GM.
+function reactionUsesAbility(item, actor, options) {
+    if (!["reaction", "free"].includes(item.system?.actionType?.value)) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Check\[flat\|dc:(\d+)[^\]]*\](?:\{[^}]*\})?/gi, "DC $1 flat check")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (!trigger) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const uses = /^(?:The )?[\w' -]+? uses (?:its |their |his |her )?([A-Z][\w'-]*(?: [A-Z][\w'-]*)*)(, including the triggering creature in the area| against the (?:attacker|triggering creature)| and, if (?:it's|they're|he's|she's) aware of the damage's source, can Stride toward it)?\.$/.exec(said[0] ?? "");
+    if (!uses) return null;
+    const notes = [];
+    if (uses[2] && /Stride toward/i.test(uses[2])) notes.push("If it's aware of the damage's source, it can Stride toward it.");
+    if (uses[2] && /including the triggering creature/i.test(uses[2])) notes.push("Its area includes the triggering creature.");
+    for (const sentence of said.slice(1)) {
+        if (/^If (?:the [\w' -]+?|it|they) (?:has|have) persistent \w+ damage, (?:it|they|he|she) attempts? (?:a|an) DC 15 flat check to remove it\.$/i.test(sentence)) notes.push(sentence.replace(/^If (?:the [\w' -]+?|it|they) (?:has|have) persistent/i, "If it has persistent").replace(/(?:they|he|she) attempts?/i, "it attempts"));
+        else return null;
+    }
+    const owner = actor ?? item.actor ?? item.parent;
+    const other = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && String(entry.name ?? "").toLowerCase() === uses[1].toLowerCase());
+    if (!other) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(other, { ...options, actor: owner });
+    } catch {
+        plan = null;
+    }
+    if (!plan?.resolution) return null;
+    return {
+        ...plan,
+        source: base(item).source,
+        activation: { time: item.system?.actionType?.value === "free" ? "free" : "reaction", traits: plan.activation?.traits ?? [] },
+        targeting: /against the (?:attacker|triggering creature)/i.test(uses[2] ?? "") && !plan.targeting?.area ? { target: "the attacker", range: "touch", area: null } : plan.targeting,
+        trigger: { ...trigger, reaction: true, ...(item.system?.actionType?.value === "free" ? { free: true } : {}) },
+        ...(notes.length || plan.notes?.length ? { notes: [...(plan.notes ?? []), ...notes] } : {})
+    };
+}
+
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
 function ownAffliction(item, actor, phrase) {
     const owner = actor ?? item.actor ?? item.parent;
@@ -2662,7 +2704,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 

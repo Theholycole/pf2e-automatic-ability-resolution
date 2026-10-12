@@ -856,6 +856,11 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
     });
     if (open) return;
+    // (Batch 118: a reaction card's own notes — Furious Roar's Stride toward the source and its flat check — for the GM, on the offer.)
+    if (kind === "card") {
+        const extra = (compile(item)?.notes ?? []).filter((line) => !String(note ?? "").includes(line));
+        if (extra.length) note = [note, ...extra].filter(Boolean).join(" ");
+    }
     const state = {
         kind,
         ability: { name: item.name, uuid: item.uuid },
