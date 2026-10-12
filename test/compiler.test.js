@@ -3585,3 +3585,15 @@ test("Demoralize with Deception, in a cone, on one check; a Feint at range; a th
     assert.deepEqual([smear.noDamage, smear.onHit.conditions.map((entry) => entry.slug)], [true, ["dazzled"]]);
     assert.deepEqual(plan("<strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test spirit steps out of time, vanishing and reappearing in an open space within 20 feet. This movement doesn't trigger reactions."), { builtin: "safe-move", actions: 1 });
 });
+
+test("Quickened for a minute with the extra action for one thing; a save bonus and temporary HP with penalties; its next Strike sharpened; a little AC and poison around it (2026-10-12, batch 223)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html) => compileMonsterAbility(item(html), {});
+    const quick = plan("<p>The test drummer speeds up. It gains the @UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened} condition for 1 minute and can use the extra action each turn only to Stride.</p>");
+    assert.deepEqual([quick.targeting.target, quick.resolution.outcomes.success?.effects?.[0]?.slug ?? quick.resolution.outcomes.criticalSuccess?.effects?.[0]?.slug], ["self", "quickened"]);
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test lizard gains a +1 item bonus to Reflex saves and 4 temporary Hit Points, but takes a –1 penalty to Will saves and perception checks for 1 minute.</p>"), { builtin: "self-effect", actions: 1, model: { name: "Test", rounds: 10, modifiers: [{ on: "reflex", type: "item", value: 1 }, { on: "will", type: "untyped", value: -1 }], tempHp: 4 }, uses: 1, notes: ["Also –1 to its perception checks."] });
+    const aim = plan("<p>The test archer marks its quarry. It gains a +2 circumstance bonus to the attack roll of its next bow Strike at that creature this turn. On a hit, that Strike deals an additional 1d6 precision damage.</p>");
+    assert.deepEqual([aim.builtin, aim.damage, aim.strike, aim.nextStrike, aim.model.modifiers], ["self-effect", ["1d6[precision]"], "bow", true, [{ on: "attack", type: "circumstance", value: 2 }]]);
+    const spores = plan("<p>The test moss puffs spores. For 1 round, the test moss gains a +1 circumstance bonus to AC, and each creature that ends its turn within 5 feet of the test moss takes [[/r 1d4[poison]]] damage.</p>");
+    assert.deepEqual([spores.model.rounds, spores.model.modifiers, spores.notes], [1, [{ on: "ac", type: "circumstance", value: 1 }], ["For that round, a creature that ends its turn within 5 feet of it takes 1d4 poison damage."]]);
+});

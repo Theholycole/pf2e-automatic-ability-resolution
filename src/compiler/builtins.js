@@ -3285,7 +3285,8 @@ export function readSelfGuard(item) {
     if (item?.system?.actionType?.value !== "action") return null;
     const text = htmlToPlainText(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\s+/g, " ").trim();
     // (Not one that links PF2e's own effect, which its effect reading uses.)
-    if (/\bTrigger\b/.test(text) || /@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item?.system?.description?.value ?? "")) return null;
+    // (Batch 223: a module's own effect, a Battlezoo one, isn't read by that — this reading stays.)
+    if (/\bTrigger\b/.test(text) || /@UUID\[Compendium\.pf2e\.[\w-]*effects?\.Item\./i.test(item?.system?.description?.value ?? "")) return null;
     // (Batch 158, Mountain Stance: "Requirements Evora is unarmored and touching the ground Effect Evora enters the stance of an implacable mountain
     // until she is knocked out or the encounter ends. She gains a +4 status bonus to AC and a +2 circumstance bonus to any defenses against being
     // Shoved or Tripped. Her Speed is reduced by 5 feet." — a stance for the fight; the rest notes.)
@@ -3298,6 +3299,21 @@ export function readSelfGuard(item) {
     const body = text.replace(/^Requirements? .+? Effect /, "").replace(/^Frequency [^.]*? Effect /, "")
         // (Batch 138, Defender of the Seas: "The triton Interacts to raise their trident, gaining a +1 circumstance bonus to AC until …".)
         .replace(/^((?:The )?[\w' -]+?) Interacts to [^,.]+, gaining (?=an? \+\d+ (?:circumstance|status) bonus to AC\b)/, "$1 gains ");
+    // (Batch 223, Battlezoo self-buffs: a bonus to one save and some temporary Hit Points for a minute, with penalties to others (once a day; the
+    // Perception and initiative penalties a note); a bonus to its attack and extra precision damage on its next named Strike this turn; a small AC bonus
+    // for a round with poison for those who end their turns beside it (a note).)
+    const STAT = { "fortitude saves": "fortitude", "reflex saves": "reflex", "will saves": "will", "ac": "ac", "attack rolls": "attack", "damage rolls": "damage" };
+    const mutation = /^(?:Frequency once per (?:day|hour) Effect )?(?:The )?[^.]+? gains an? \+(\d+) (item|status|circumstance) bonus to (Fortitude saves|Reflex saves|Will saves|AC) and (\d+) temporary Hit Points, but (?:suffers|takes) an? [-–−](\d+) penalty to ((?:[\w ]+?, )*[\w ]+?,? and [\w ]+?) for (\d+|one) minutes?\.$/i.exec(body.trim());
+    if (mutation) {
+        const penalties = mutation[6].split(/,\s*(?:and\s+)?|\s+and\s+/).map((part) => part.trim().toLowerCase()).filter(Boolean);
+        const read = penalties.filter((part) => STAT[part]).map((part) => ({ on: STAT[part], type: "untyped", value: -Number(mutation[5]) }));
+        const told = penalties.filter((part) => !STAT[part]);
+        return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 10 * (Number(mutation[7]) || 1), modifiers: [{ on: STAT[mutation[3].toLowerCase()], type: mutation[2].toLowerCase(), value: Number(mutation[1]) }, ...read], tempHp: Number(mutation[4]) }, ...(/\bFrequency once per (?:day|hour)\b/i.test(text) ? { uses: 1 } : {}), ...(told.length ? { notes: [`Also –${mutation[5]} to its ${told.join(" and ")}.`] } : {}) };
+    }
+    const aimed = /^(?:[^.]+\. )?(?:The )?[^.]+? gains an? \+(\d+) circumstance bonus to (?:its attack roll on (?:the|its) next|the attack roll of its next) ([\w' -]+?) Strike (?:against the creature made before the end of its turn|at that creature this turn)\. (?:If the Strike hits,? it|On a hit, that Strike) deals an additional (\d+d\d+) (precision|[a-z]+) damage\.$/i.exec(body.trim());
+    if (aimed) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 0, modifiers: [{ on: "attack", type: "circumstance", value: Number(aimed[1]) }], tempHp: 0 }, damage: [`${aimed[3]}[${aimed[4].toLowerCase()}]`], strike: aimed[2].toLowerCase(), melee: false, duration: { value: 0, unit: "rounds", expiry: "turn-end" }, nextStrike: true, notes: ["Only its next Strike this turn, at that creature."] };
+    const spores = /^(?:[^.]+\. )?For 1 round, (?:the [\w' -]+?|it) gains an? \+(\d+) circumstance bonus to AC,? and (?:any|each) creature that ends its turn within (\d+) feet of (?:the [\w' -]+?|it) takes (\d+d\d+) (\w+) damage\.$/i.exec(body.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br) (\d+d\d+)\[(\w+)\]\]\](?:\{[^}]*\})?/g, "$1 $2").replace(/@Damage\[(\d+d\d+)\[(\w+)\]\](?:\{[^}]*\})?/g, "$1 $2"));
+    if (spores) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(spores[1]) }], tempHp: 0 }, notes: [`For that round, a creature that ends its turn within ${spores[2]} feet of it takes ${spores[3]} ${spores[4].toLowerCase()} damage.`] };
     // (Batch 221, Shielded Charge: "The dwarf warrior Raises a Shield and Strides twice." — its shield's bonus until its next turn (2 when there's none to
     // read), the Strides a note.)
     if (/^(?:The )?[^.]+? Raises a Shield and Strides twice\.$/i.test(body.trim())) {

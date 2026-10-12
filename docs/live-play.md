@@ -2101,3 +2101,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** cards as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Battlezoo self-buffs (2026-10-12, batch 223)
+
+- **Compiled** (4 Battlezoo abilities; their own words stay out of this repository):
+  - **Quickened for a minute**, its extra action each round or turn for one thing only → the self-condition reading (its extra action's use widened).
+  - **A bonus to one save and some temporary HP for a minute, with penalties to others**, once a day → `self-effect`. The save modifiers are read; Perception and initiative penalties are a note.
+  - **Its next named Strike this turn, at that creature**: a circumstance bonus to the attack and extra precision damage on a hit → `self-effect` with `nextStrike`.
+  - **A circumstance AC bonus for a round, and poison for those who end their turns beside it** → `self-effect`; the poison is a note.
+  - The self-guard reading now skips only abilities that link PF2e's own effects; a module's linked effect (a Battlezoo one) no longer stops it.
+- **Live:** effects as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+
