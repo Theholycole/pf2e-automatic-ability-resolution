@@ -2454,6 +2454,11 @@ export function compileBuiltin(item, slug) {
     // turn." → { builtin: "grant-aoo", within, trait, uuid } — PF2e's own ability granted to those allies for that time.)
     const directed = /^Each ([a-z]+ )?ally in an? @Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})? gains the (@UUID\[([^\]]+)\]\{Attack of Opportunity\}|Attack of Opportunity) reaction until the end of their next turn\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, "").trim());
     if (directed) return { builtin: "grant-aoo", actions, within: Number(directed[2]), ...(directed[1] ? { trait: directed[1].trim().toLowerCase() } : {}), ...(directed[4] ? { uuid: directed[4] } : {}) };
+    // (Batch 176, Call to Arms: "Each caligni within a 30-foot emanation of the vanguard gains the Reactive Strike reaction until the end of the
+    // vanguard's next turn. Once a caligni has used this Reactive Strike, that caligni is temporarily immune to the same vanguard's Call to Arms for 10
+    // minutes." → until its own next turn ends (until: "source"), and once a fight for each ally that uses it.)
+    const called = /^Each ([a-z]+) within (?:an? )?@Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})? of (?:the [\w' -]+?|it) gains the (?:@UUID\[([^\]]+)\]\{Reactive Strike\}|Reactive Strike) reaction until the end of (?:the [\w' -]+?['’]s|its) next turn\. Once an? \1 has used this Reactive Strike, that \1 is temporarily immune to the same [\w' -]+?['’]s [\w' -]+? for 10 minutes\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, "").trim());
+    if (called) return { builtin: "grant-aoo", actions, within: Number(called[2]), trait: called[1].toLowerCase(), ...(called[3] ? { uuid: called[3] } : {}), reaction: "Reactive Strike", until: "source", usedOnce: true };
     // (Batch 156, Strafing Strike: "makes a jaws Strike against a creature within range. The mirror wolf can then Stride and make a second jaws
     // Strike against the same creature." — two at one creature; the Stride between the GM's.)
     const strafing = /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against a creature within range\. (?:The [\w' -]+?|It|They|He|She) can then Stride and make a second \1 Strike against the same creature\.$/i.exec(text.trim());

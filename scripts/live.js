@@ -246,15 +246,18 @@ async function cardForAbility(message) {
         for (const token of allies) {
             if (reactive(token.actor)) continue;
             await token.actor.createEmbeddedDocuments("Item", [{
-                name: `${item.name}: Attack of Opportunity`,
+                name: `${item.name}: ${plan.reaction ?? "Attack of Opportunity"}`,
                 type: "effect",
                 img: item.img ?? "icons/svg/sword.svg",
                 flags: { [MODULE_ID]: { grantedAoo: { sourceActorUuid: item.actor.uuid } } },
-                system: { description: { value: `<p>Attack of Opportunity from <strong>${item.name}</strong> (${sourceToken.name}), until the end of its next turn.</p>` }, duration: { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
+                system: { description: { value: `<p>${plan.reaction ?? "Attack of Opportunity"} from <strong>${item.name}</strong> (${sourceToken.name}), until the end of ${plan.until === "source" ? `${sourceToken.name}'s` : "its"} next turn.</p>` }, duration: { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
             }]);
             granted.push(token.name);
         }
-        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} Attack of Opportunity until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks Attack of Opportunity.`.replace(/ {2,}/g, " ")}`]);
+        // (Batch 176, Call to Arms: Reactive Strike until the end of its own next turn — the effect's own round; an ally that uses it immune after.)
+        const reaction = plan.reaction ?? "Attack of Opportunity";
+        const until = plan.until === "source" ? `until the end of ${sourceToken.name}'s next turn.` : `until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).`;
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} ${reaction} ${until}` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks ${reaction}.`.replace(/ {2,}/g, " ")}`, ...(plan.usedOnce ? [`One that uses this ${reaction} is immune to ${item.name} from ${sourceToken.name} for 10 minutes.`] : [])]);
         return;
     }
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".

@@ -1567,3 +1567,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Dancing Blade and Guardbreaker ("makes a Strike against a creature, then Strides. … another Strike against it. If both Strikes succeed, …") → two Strikes at one creature, the same penalty, off-guard for a round after both hit, the Stride between a note; Hunter's Wound ("Prerequisites", "a reload of 0", "two ranged Strikes against their prey") → its two Strikes, the bleed after both, a prey note (Spirit Shot gains that note too); Fast Sweep → two Strikes at different creatures with its +1 (a note, a negative `penalty`). A both-hit condition "until the start of Rayhnne's next turn" (a name) now lasts a round.
 - **Live:** no new live code. Not run in pftest.
 - **Simulator:** nothing new.
+
+## Reactive Strike until its own next turn (2026-10-12, batch 176)
+
+- **Compiled:** Call to Arms → `grant-aoo` with `reaction: "Reactive Strike"`, `until: "source"`, `usedOnce`.
+- **Live:** the grant-aoo effect as in batch 167, named for Reactive Strike. PF2e times it a round from this turn, which is exactly "until the end of its next turn". The GM note says so and that an ally that uses it is immune to it for 10 minutes. Not run in pftest: only names and note text differ from batch 167's run.
+- **Simulator:** the grant ends at the end of the granter's next turn. An ally that makes the Attack of Opportunity is never granted it by that creature again (B176).

@@ -3047,3 +3047,8 @@ test("two Strikes with a Stride between, at its prey, a fast sweep (2026-10-12, 
     const sweep = compile(1, "<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test marlin makes two snout Strikes against two adjacent targets, with a +2 circumstance bonus to its attack rolls.</p>");
     assert.deepEqual([sweep.strikes, sweep.each, sweep.penalty], [["snout", "snout"], true, -2]);
 });
+
+test("Reactive Strike for its allies of a trait until its own next turn ends, once for each (2026-10-12, batch 176)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Rally", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p>Each kobold within @Template[emanation|distance:20]{20 feet} of the test chief gains the Reactive Strike reaction until the end of the test chief's next turn. Once a kobold has used this Reactive Strike, that kobold is temporarily immune to the same test chief's Test Rally for 10 minutes.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.within, plan.trait, plan.reaction, plan.until, plan.usedOnce], ["grant-aoo", 20, "kobold", "Reactive Strike", "source", true]);
+});
