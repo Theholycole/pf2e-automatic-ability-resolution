@@ -3098,3 +3098,8 @@ test("a shield for itself or an ally within some feet (2026-10-12, batch 182)", 
     const plan = compileMonsterAbility({ type: "action", name: "Test Wing", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature attacks the test drake or its ally within 10 feet of it</p><hr /><p><strong>Effect</strong> The test drake lifts a wing, using the Raise a Shield action. If it protects the ally, that ally keeps that bonus until the start of its next turn.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.value, plan.within, plan.self], ["ally-ac-reaction", 2, 10, true]);
 });
+
+test("an ally's Stride and Strike with extra damage on a hit (2026-10-12, batch 183)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Counsel", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test sage barks an order. An ally within 30 feet of the test sage can Stride once and Strike once, in any order. If it hits, the Strike deals an additional 1d6 cold damage.</p>" } } }, { basicActions: {} });
+    assert.deepEqual(plan, { builtin: "ally-advance", actions: 1, within: 30, extraDamage: ["1d6[cold]"], oncePerTurn: true });
+});

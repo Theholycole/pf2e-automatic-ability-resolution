@@ -1609,3 +1609,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** a Battlezoo dragon line's shielding reaction → `ally-ac-reaction` with `self`, `within` (its feet), `value` (its own shield's AC bonus, 2 when there's none to read) and a note.
 - **Live:** batch 66's ally-guard offer now also comes when it is itself the target, carrying the plan's note. Not run in pftest: the self case on that offer.
 - **Simulator:** the guard's +AC once a hit would land now covers itself as well (B182).
+
+## An ally's Stride and Strike (2026-10-12, batch 183)
+
+- **Compiled:** Word of Advice → `ally-advance` with `within`, `extraDamage`, the linked effect's `uuid` and `oncePerTurn`.
+- **Live:** the linked PF2e effect goes on each ally of its disposition that the GM targets within that distance, and a GM note says the ally can Stride once and Strike once, adding the damage. With no target, the note says to target one. Run in pftest: a young vizier dragon's goblin student got "Effect: Word of Advice" (PF2e's damage dice), and the note named it.
+- **Simulator:** once a turn, its best ally's best Strike at a foe in its reach or one Stride away, with the extra dice. It isn't that ally's turn, so there's no multiple attack penalty. It's worth the damage it does, as Strike Hard! is (B183).

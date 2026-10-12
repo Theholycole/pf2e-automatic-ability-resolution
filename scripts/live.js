@@ -236,6 +236,18 @@ async function cardForAbility(message) {
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.poison.name} on its weapon. Its card comes with the next weapon Strike that hits (apply it if the Strike deals damage; a critical miss wastes it).${plan.own ? "" : " Take a dose from its inventory."}`]);
         return;
     }
+    // (Batch 183, Word of Advice: its effect on the ally the GM targets — PF2e's extra damage on that ally's Strike — and a note that the ally can Stride
+    // once and Strike once.)
+    if (plan?.builtin === "ally-advance") {
+        const scene = sourceToken?.parent ?? canvas.scene;
+        const grid = gridOf(scene);
+        const allies = sourceToken ? [...game.user.targets].map((token) => token.document ?? token).filter((token) => token.id !== sourceToken.id && token.actor && token.disposition === sourceToken.disposition && distanceFeet(box(sourceToken, grid.size), box(token, grid.size), grid) <= plan.within) : [];
+        const effect = plan.uuid ? await fromUuid(plan.uuid).catch(() => null) : null;
+        if (effect) for (const token of allies) await token.actor.createEmbeddedDocuments("Item", [{ ...effect.toObject(), flags: { ...(effect.toObject().flags ?? {}), [MODULE_ID]: { allyAdvance: { sourceActorUuid: item.actor.uuid } } } }]);
+        const extra = (plan.extraDamage ?? []).map((formula) => formula.replace(/\[(\w+)\]/, " $1")).join(" + ");
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${allies.length ? `${allies.map((token) => token.name).join(", ")} can Stride once and Strike once, in any order; ${effect ? "its effect adds" : "add"} ${extra} damage on a hit.` : `target an ally within ${plan.within} feet first: it can Stride once and Strike once, in any order, adding ${extra} damage on a hit.`}`]);
+        return;
+    }
     // (Batch 167, Tactical Direction: PF2e's own Attack of Opportunity granted to its allies of that trait in the emanation, until the end of their
     // next turn — an effect on each, its GrantItem the glossary's ability; PF2e times it a round from this turn, so the GM ends it early by hand.)
     if (plan?.builtin === "grant-aoo") {

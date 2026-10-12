@@ -2495,6 +2495,16 @@ export function compileBuiltin(item, slug) {
     // played (a Strike at each, one attack), the single target the GM's other choice, a note.)
     const storm = /^(?:The )?[\w' -]+? [^.]+?, either spreading them out among multiple foes or directing them at one target\. When this effect is spread out among multiple foes, (?:the [\w' -]+?|it) makes an? ([\w' -]+?) Strike at an? [-\u2013\u2212](\d+) penalty against each creature within (?:@Template\[[^\]]*\]\{(\d+) feet\}|(\d+) feet)\. These count as one attack for [^.]*multiple attack penalty, and the penalty (?:doesn't|does not) increase until after all the attacks\. When this effect has only one target, (?:the [\w' -]+?|it) makes an? \1 Strike against the target, and the damage increases to (\d+d\d+(?:\s*\+\s*\d+)?)\. It deals (?:@Damage\[(\d+d\d+)\[\w+\][^\]]*\](?:\{[^}]*\})?|(\d+d\d+)) damage on a failure, and no damage on a critical failure\.$/i.exec(text.trim());
     if (storm) return { builtin: "multi-strike", actions, strikes: [storm[1].toLowerCase()], each: true, max: 8, sameMap: true, countsAs: 1, penalty: Number(storm[2]), notes: [`A Strike at each creature within ${storm[3] ?? storm[4]} feet (allies too), –${storm[2]} each, counted as one attack.`, `Or one Strike at a single target: its damage is ${storm[5]}, and ${storm[6] ?? storm[7]} on a failure.`] };
+    // (Batch 183, Word of Advice: "Frequency once per round Effect The dragon is a skilled mentor, and commands its students like a general. An ally within
+    // 60 feet of the dragon can Stride once and Strike once, in any order. If it hits, the Strike deals an additional 2d6 fire damage." with its
+    // effect linked → { builtin: "ally-advance", within, extraDamage, uuid, oncePerTurn } — the ally's Stride and Strike, the effect's damage on it.)
+    const advising = String(item.system?.description?.value ?? "");
+    const advance = /An ally within (\d+) feet of (?:the [\w' -]+?|it) can Stride once and Strike once, in any order\. If it hits, the Strike deals an additional @?(?:Damage\[)?(\d+d\d+)(?:\[(\w+)\]\])? ?(\w+)? damage\./i.exec(advising.replace(/<[^>]+>/g, " ").replace(/\s+/g, " "));
+    if (advance && /^(?:<p>)?\s*(?:<strong>Frequency<\/strong> once per (?:round|turn)\s*(?:<\/p>)?\s*(?:<hr \/>)?\s*(?:<p>)?\s*<strong>Effect<\/strong>)?/i.test(advising)) {
+        const type = (advance[3] ?? advance[4] ?? "").toLowerCase();
+        const uuid = /@UUID\[(Compendium\.[^\]]+)\]\{Effect: [^}]+\}/.exec(advising)?.[1] ?? null;
+        return { builtin: "ally-advance", actions, within: Number(advance[1]), extraDamage: [`${advance[2]}${type ? `[${type}]` : ""}`], ...(uuid ? { uuid } : {}), ...(/\bFrequency<\/strong> once per (?:round|turn)\b/i.test(advising) ? { oncePerTurn: true } : {}) };
+    }
     // (Batch 167, Tactical Direction: "Each wight ally in a 30-foot emanation gains the Attack of Opportunity reaction until the end of their next
     // turn." → { builtin: "grant-aoo", within, trait, uuid } — PF2e's own ability granted to those allies for that time.)
     const directed = /^Each ([a-z]+ )?ally in an? @Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})? gains the (@UUID\[([^\]]+)\]\{Attack of Opportunity\}|Attack of Opportunity) reaction until the end of their next turn\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, "").trim());
