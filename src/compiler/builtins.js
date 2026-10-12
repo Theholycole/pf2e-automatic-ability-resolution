@@ -276,10 +276,19 @@ export function readMultiStrikes(text) {
             earlyNotes.push(`The two creatures within ${feet} feet of each other.`, ...rest.replace(/\[\[\/act [^\]]*\]\]\{([^}]*)\}/g, "$1").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
             return `${who} makes two spike Strikes, each against a different target. This counts as one attack when calculating its multiple attack penalty.`;
         });
+    let chain = false;
+    // (Batch 224, Prudent Asterism: "It makes a starknife Strike against a target within 60 feet. If the Strike hits, it can make another Strike at a
+    // different target within 60 feet of the first target, and so on, until it misses with a Strike or runs out of targets … The star archon can attack a
+    // given target only once per use of this ability. These attacks don't apply any range increment penalty, and the star archon resolves all the attacks
+    // before increasing the multiple attack penalty." — up to six Strikes at different creatures, the next only after a hit (chain), one penalty.)
+    body = body.replace(/^(?:[^.]+\. )?(?:It|The [\w' -]+?) makes an? ([\w' -]+?) Strike against a target within (\d+) feet\. If the Strike hits, (?:it|they) can make another Strike at a different target within \2 feet of the first target, and so on, until (?:it|they) miss(?:es)? with a Strike or runs? out of targets (?:it|they) (?:hasn't|haven't) attacked within range of the most recent target\. (?:The [\w' -]+?|It|They) can attack a given target only once per use of this ability\. These attacks don't apply any range increment penalty, and (?:the [\w' -]+?|it|they) resolves? all the attacks before increasing the multiple attack penalty\.$/i, (_all, name, feet) => {
+        chain = true;
+        earlyNotes.push(`Each Strike at a creature within ${feet} feet of the last one, with no range penalty; the next only after a hit.`);
+        return `It makes up to six ${name} Strikes, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
+    });
     // (Batch 220, Cleanse the Forest: "The aso berang Strides adjacent to an enemy and attempts a melee Strike. If successful, the aso berang can Stride and
     // attempt to Strike a different enemy. If this second attack is successful, they can Stride and attempt to Strike a third enemy." — three Strikes at
     // different enemies, the next only after a hit (chain), a Stride before each.)
-    let chain = false;
     body = body.replace(/^(?:[^.]+\. )?((?:The )?[^.]+?) Strides adjacent to an enemy and attempts a melee Strike\. If successful, (?:the [\w' -]+?|it|they) can Stride and attempt to Strike a different enemy\. If this second attack is successful, (?:the [\w' -]+?|it|they) can Stride and attempt to Strike a third enemy\.( Once (?:it|they) fails? a Strike \(or upon succeeding at (?:its|their) third Strike\), (?:the [\w' -]+?|it|they) Strides back to the space where (?:it|they) began\.)?$/i, (_all, who, back) => {
         chain = true;
         movesFirst = 1;
@@ -1044,6 +1053,13 @@ export function readSweep(text) {
             notes.push("One attack roll for all of them.");
             return "";
         })
+        // (Batch 224, Furious Fusillade: "fires one arrow at any number of creatures in a @Template[cone|distance:30]. Each attack is rolled separately." — a
+        // ranged Strike at each in the cone.)
+        .replace(/\bfires one arrow at any number of creatures in an? @Template\[(?:type:)?(cone|line|emanation|burst)\|distance:(\d+)\](?:\{[^}]*\})?\./i, (_all, shape, feet) => {
+            notes.push(`Each creature in a ${feet}-foot ${shape.toLowerCase()}, each attack rolled separately.`);
+            return "makes a ranged Strike against each creature within reach.";
+        })
+        .replace(/(?<=\.\s{1,3})Each attack is rolled separately\./i, "")
         .replace(/(?<=\.\s{1,3})This Strike deals an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|\d+d\d+ [a-z]+) damage and counts as one attack for (?:the [\w' -]+?['’]s|its|their) multiple attack penalty\.?$/i, (_all, more) => `Any creature hit takes ${/^@/.test(more) ? more : `@Damage[${more.replace(/^(\d+d\d+) ([a-z]+)$/i, "$1[$2]")}]`}. This counts as one attack for its multiple attack penalty.`).split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
     // (Batch 102: "makes three jaws Strikes, each against a different target", "makes up to six longsword Strikes, each against a different
     // target" → that many, each at a different creature in its reach.)
@@ -1131,7 +1147,8 @@ export function readSweep(text) {
     }
     // (Batch 83: "a single claw Strike": the claw's.)
     const said = counted ? counted[2] : match[1];
-    const name = said && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(said.trim()) ? said.trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
+    // (Batch 224: "a ranged Strike" — its best ranged one.)
+    const name = said && /^ranged$/i.test(said.trim()) ? "ranged" : said && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(said.trim()) ? said.trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
     const max = counted ? COUNTS[counted[1].toLowerCase()] ?? Number(counted[1]) : null;
     return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(countsAs ? { countsAs } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(missDamage.length ? { missDamage } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: raging ? "raging" : "requirement" } : {}), ...(strides ? { strides } : {}), ...(noMomentum ? { noMomentum } : {}), ...(notes.length ? { notes } : {}) };
 }
@@ -3314,6 +3331,8 @@ export function readSelfGuard(item) {
     if (aimed) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 0, modifiers: [{ on: "attack", type: "circumstance", value: Number(aimed[1]) }], tempHp: 0 }, damage: [`${aimed[3]}[${aimed[4].toLowerCase()}]`], strike: aimed[2].toLowerCase(), melee: false, duration: { value: 0, unit: "rounds", expiry: "turn-end" }, nextStrike: true, notes: ["Only its next Strike this turn, at that creature."] };
     const spores = /^(?:[^.]+\. )?For 1 round, (?:the [\w' -]+?|it) gains an? \+(\d+) circumstance bonus to AC,? and (?:any|each) creature that ends its turn within (\d+) feet of (?:the [\w' -]+?|it) takes (\d+d\d+) (\w+) damage\.$/i.exec(body.trim().replace(/\s*Effect: [\w' -]+$/, "").replace(/\[\[\/(?:r|gmr|br) (\d+d\d+)\[(\w+)\]\]\](?:\{[^}]*\})?/g, "$1 $2").replace(/@Damage\[(\d+d\d+)\[(\w+)\]\](?:\{[^}]*\})?/g, "$1 $2"));
     if (spores) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(spores[1]) }], tempHp: 0 }, notes: [`For that round, a creature that ends its turn within ${spores[2]} feet of it takes ${spores[3]} ${spores[4].toLowerCase()} damage.`] };
+    // (Batch 224, Raise Shields: "The troop raises steel shields, with the effects of Raise a Shield." — +2 AC until its next turn.)
+    if (/^(?:The )?[^.]+? raises? (?:steel |its |their )?shields, with the effects of Raise a Shield\.$/i.test(body.trim())) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0 } };
     // (Batch 221, Shielded Charge: "The dwarf warrior Raises a Shield and Strides twice." — its shield's bonus until its next turn (2 when there's none to
     // read), the Strides a note.)
     if (/^(?:The )?[^.]+? Raises a Shield and Strides twice\.$/i.test(body.trim())) {
@@ -3647,12 +3666,16 @@ function readNoCombatEffect(text) {
     // (Batch 213: only its reach or a Speed for a while — Coil's "increasing its reach with its fangs from 5 to 10 feet. After the goblin snake Strikes
     // with its fangs, it becomes uncoiled.", Pull Arm, Extend Vines, Mobile Morph's "they gain a climb, fly, or swim Speed of 40 feet", Jump Jets — the
     // simulation's Melee already reaches; not with a reaction, a bonus, damage or a condition.)
-    if ((/\b(?:increasing|increases?|gaining|gains?) (?:its|their|his|her) reach\b[^.]*\bfrom \d+ to \d+ feet\b|\bgaining \d+-foot reach\b|\bhas an? \d+-foot reach\b|\bgains? an? (?:(?:climb|fly|swim|burrow),? (?:or )?)+[Ss]peed of \d+ feet\b/i.test(said))
+    // (Batch 224: Extend Limb's "granting themself a reach of 20 feet …", Extend Neck's "increasing the reach of their jaws Strike from 10 feet to 20 feet",
+    // Reassemble's "increasing its reach to 25 feet and reducing its Speed to 15 feet".)
+    if ((/\b(?:increasing|increases?|gaining|gains?) (?:its|their|his|her) reach\b[^.]*\bfrom \d+ to \d+ feet\b|\bgaining \d+-foot reach\b|\bhas an? \d+-foot reach\b|\bgranting (?:itself|themself|themselves) a reach of \d+ feet\b|\bincreasing the reach of (?:its|their) [\w' -]+? Strike from \d+ feet to \d+ feet\b|\bincreasing (?:its|their) reach to \d+ feet\b|\bgains? an? (?:(?:climb|fly|swim|burrow),? (?:or )?)+[Ss]peed of \d+ feet\b/i.test(said))
         && !/@|\b(?:damage|saves?|DC|bonus|penalty|Off-Guard|Reactive Strike|reactions?|Strikes? (?:against|at)|makes? an? [\w' -]+? Strike|Grabbed|Prone|Frightened|Stunned|Immobilized|Restrained|Clumsy|Enfeebled|Slowed|Quickened|Hidden|Invisible|Concealed)\b/i.test(said)) return true;
     // (Batch 55: gliding; moving a creature it holds closer; a troop's Change Formation; a Stride in dim light; befouling water; adamantine
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 224, Grab and Go: a Stride or Climb taking an unattended item on the way — a move.)
+    if (/^(?:The )?[^.]+? Strides or Climbs up to (?:its|their) Speed\. At any point during this movement, (?:it|they) can Interact to take a single unattended item of light Bulk or less [^.]+\.(?: Alternatively, if not in combat, [^.]+\.)?$/i.test(said)) return true;
     // (Batch 221: Deep Plunge's dive, Wriggling Rush's Stride and Swim, Swim Together's swim beside an animal, Mask Stench's suppressed aura, Quick Stow's
     // pouch — moves and nothing for the fight's numbers.)
     if (/^(?:The )?[^.]+? dives straight down into the water, moving up to twice its swim Speed in a straight vertical line\.(?: It can use this ability while grabbing a creature\.)?$/i.test(said)) return true;

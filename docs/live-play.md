@@ -2112,3 +2112,15 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** effects as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Bestiary reach, shields, volleys and slams (2026-10-12, batch 224)
+
+- **Compiled:**
+  - **No-effect** (reach only): Extend Limb, Extend Neck, Reassemble. Grab and Go is a move.
+  - **Raise Shields** (a troop) → +2 circumstance AC until its next turn.
+  - **Furious Fusillade** → its best ranged Strike at each creature in a 30-foot cone, each rolled separately, counted as one attack. "A ranged Strike" in a sweep now names its best ranged Strike.
+  - **Prudent Asterism** → up to six starknife Strikes at different creatures, the next only after a hit (`chain`), on one penalty. Each within 60 feet of the last is a note.
+  - **Impaling Barb** → its barb Strike, with 2d8 piercing and Immobilized on a hit. The half-Speed Stride after and the Escape DC are notes.
+  - **Focused Slam** → its fist Strike: +3d8 on a hit, the Strike's damage on a failure, counted as four attacks, Off-Guard on itself until its next turn. Being able to Rend is a note.
+- **Live:** cards as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+

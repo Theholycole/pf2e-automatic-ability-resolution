@@ -938,6 +938,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 222, a Battlezoo thief's stomp: Immobilized and Off-Guard on a hit until its next turn starts — or until the target is no longer beside it, a
         // note.)
         .replace(/\bIf (?:the Strike|it) hits, (?:(?:the [\w' -]+?|it) stomps on the target['’]s shadow\. The target is|it pins the target['’]s shadow, leaving it) (?:(?:@\w+\[[^\]]*\]\{)?Immobilized\}? and (?:@\w+\[[^\]]*\]\{)?Off-Guard\}?|Off-Guard and Immobilized) until the start of (?:the [\w' -]+?['’]s|its) next turn,? or until (?:they are|it's|it is) no longer (?:adjacent to|beside) (?:the [\w' -]+?|it)(?:, whichever comes first)?\./i, "If it hits, the target is Immobilized and Off-Guard until the start of its next turn. [while adjacent]")
+        // (Batch 224, Impaling Barb: "makes a barb Strike, then Strides up to half its Speed without triggering reactions. If the Strike hits, the hamatula
+        // impales the target with one of its barbs and snaps the barb free as it moves away from the target. This deals an additional 2d8 piercing damage to
+        // the target and pins it to an adjacent surface, rendering it Immobilized (Escape DC 29)." — the extra damage and Immobilized on a hit; the move after
+        // and the Escape DC notes.)
+        .replace(/\b((?:The )?[\w' -]+?) makes an? ([\w' -]+?) Strike, then Strides up to half (?:its|their) Speed without triggering reactions\. If the Strike hits, (?:the [\w' -]+?|it) impales the target with one of (?:its|their) [\w' -]+? and snaps the [\w' -]+? free as (?:it|they) moves? away from the target\. This deals an additional (\d+d\d+) (\w+) damage to the target and pins it to an adjacent surface, rendering it (?:@\w+\[[^\]]*\]\{)?Immobilized\}? \((?:\[\[\/act escape dc=(\d+)\]\](?:\{[^}]*\})?|Escape DC (\d+))\)\./i, (_all, who, name, dice, type, dc, plain) => `${who} makes a ${name} Strike. The Strike deals an additional @Damage[${dice}[${type.toLowerCase()}]] damage. If it hits, the target is Immobilized. [barb escape ${dc ?? plain}]`)
         // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
         .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -1643,6 +1648,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
             (activity.notes ??= []).push(`It Leaps up to ${match[1]} feet up and ${match[2]} feet across, Striking at any point in the jump; a creature it Grabs comes along to the end of the jump.`);
             continue;
         }
+        if ((match = /^\[barb escape (\d+)\]$/.exec(text))) {
+            (activity.notes ??= []).push(`After the Strike it Strides up to half its Speed, triggering no reactions. Escape DC ${match[1]}.`);
+            continue;
+        }
         if (text === "[while adjacent]") {
             (activity.notes ??= []).push("It ends early once the target is no longer beside it.");
             continue;
@@ -2213,6 +2222,42 @@ function withHeads(item, actor) {
 // stalks", "typically 5d8 slashing damage") or the creature's heads. null otherwise.
 function focusedAssault(item, actor) {
     const text = readableText(item.system?.description?.value ?? "");
+    // (Batch 224, Focused Slam: "… makes a fist Strike. On a successful attack, they deal fist damage to the target plus an additional 3d8 damage, and they
+    // meet the requirements to Rend the target this turn, even if they didn't hit on two consecutive Strikes. Even on a failed attack, … deals the damage
+    // from one fist Strike … This ability counts as four attacks toward an angazhani's multiple attack penalty. After using this ability, the angazhani is
+    // Off-Guard until the beginning of their next turn." — the extra dice on a hit, the Strike's damage on a failure, that many attacks, Off-Guard after;
+    // Rend a note.)
+    const slam = /\bOn a successful attack, (?:it|they|he|she) deals? [\w' -]+? damage to the target plus an additional (\d+d\d+) damage, and (?:it|they|he|she) meets? the requirements to Rend the target this turn, even if (?:it|they|he|she) didn't hit on two consecutive Strikes\./i.exec(text);
+    if (slam) {
+        let strike = null;
+        let failure = false;
+        let counted = null;
+        let offGuard = false;
+        for (const [index, sentence] of text.split(/(?<=\.)\s+(?=[A-Z])/).entries()) {
+            let match;
+            if (sentence.includes(slam[0].trim())) continue;
+            if ((match = /^(?:The )?[^.]+? makes (?:a|an|one) ([\w' -]+?) Strike\.$/i.exec(sentence))) {
+                strike = match[1].toLowerCase();
+                continue;
+            }
+            if (/^Even on a failed attack,? (?:the [\w' -]+?|it|they|he|she) deals? the damage from one [\w' -]+? Strike to the target, though (?:it|they|he|she) still miss(?:es)? completely on a critical failure\.$/i.test(sentence)) {
+                failure = true;
+                continue;
+            }
+            if ((match = /^This (?:ability|Strike) counts as (two|three|four|five|six) attacks toward [^.]*multiple attack penalty\.$/i.exec(sentence))) {
+                counted = countWord(match[1]);
+                continue;
+            }
+            if (/^After using this ability, (?:the [\w' -]+?|it|they) (?:is|are) Off-Guard until the (?:beginning|start) of (?:its|their) next turn\.$/i.test(sentence)) {
+                offGuard = true;
+                continue;
+            }
+            if (index === 0 && !/\d|@|\b(?:damage|Strikes?|save|bonus|penalty)\b/i.test(sentence)) continue;
+            return null;
+        }
+        if (!strike || !failure || !counted) return null;
+        return { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 2, strides: 0, strike, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, countsAs: counted, failureDamage: true, onHit: { conditions: [], critical: null, push: null, damage: [`${slam[1]}[strike]`], save: null, size: null }, ...(offGuard ? { selfAfter: [{ slug: "off-guard", until: "own-turn-start" }] } : {}), notes: ["On a hit it can Rend the target this turn, as if it had hit with two Strikes in a row.", ...(offGuard ? ["It's Off-Guard until the start of its next turn."] : [])] };
+    }
     const extra = /\bplus an additional (\d+)d(\d+) (?:([a-z]+) )?damage for every (\w+)(?: (?:it|they|he|she) (?:has|wields?))? beyond the first(?: \(typically (\d+)d\d+ [a-z ]*?damage\))?\./i.exec(text);
     if (!extra) return null;
     const things = String.raw`(?:heads|leaves|stalks|longswords|weapons|arms|tentacles)`;
