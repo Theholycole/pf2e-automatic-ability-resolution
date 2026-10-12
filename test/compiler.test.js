@@ -2719,3 +2719,15 @@ test("a maneuver, then a Strike at the same creature (2026-10-12, batch 146)", {
     const swing = action("<p>The test ogre attempts to Demoralize a foe within its melee reach, then makes a melee Strike against that foe. If the creature is Frightened and takes damage, it takes an additional 2d8 damage and is knocked Prone. This counts as two attacks toward the test ogre's multiple attack penalty.</p>", 2);
     assert.deepEqual([swing.resolution.check.statistic, swing.then], ["intimidation", { strike: null, sameMap: true, ifFrightened: { damage: "2d8", prone: true } }]);
 });
+
+test("a Strike that shoves or knocks down, Strikes and buffs straight after a spell (2026-10-12, batch 147)", () => {
+    const ability = (description, type = "action", actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const shove = ability("<p>The test thug makes a single Strike with a two-handed melee weapon. If the test thug hits a target that is their size or smaller, that creature is Off-Guard until the end of the test thug's turn, and the test thug can automatically Shove it with the same benefits as the Shove action (including the critical success effect, if the Strike was a critical hit). If the test thug moves to follow the target, that movement doesn't trigger reactions.</p>");
+    assert.deepEqual([shove.builtin, shove.onHit.push, shove.onHit.criticalPush, shove.onHit.conditions[0].slug], ["strike-activity", 5, 10, "off-guard"]);
+    const knock = ability("<p>A test watchman can dash their foe to the ground with a single blow. They attempt a single melee Strike. If this Strike hits, they also apply the critical success effect of a Trip.</p>", "action", 2);
+    assert.deepEqual([knock.onHit.conditions[0].slug, knock.onHit.damage], ["prone", ["1d6[bludgeoning]"]]);
+    const residual = ability("<p><strong>Requirements</strong> The test fiend's most recent action was to cast a spell</p><hr /><p><strong>Effect</strong> Glowing sigils trail its claws. The test fiend makes a claw Strike that has a reach of 15 feet and deals 1d6 additional fire damage.</p>");
+    assert.deepEqual([residual.requires, residual.strike, residual.onHit.damage], ["after-cast", "claw", ["1d6[fire]"]]);
+    const weapon = ability("<p><strong>Frequency</strong> once per turn</p><p><strong>Requirements</strong> the test druid's most recent action was to cast a non-cantrip spell</p><hr /><p><strong>Effect</strong> Until the end of the test druid's next turn, the test druid deals an extra @Damage[1d4[piercing]] damage with her melee Strikes.</p>", "free");
+    assert.deepEqual([weapon.builtin, weapon.actions, weapon.damage, weapon.requires, weapon.nonCantrip], ["self-effect", 0, ["1d4[piercing]"], "after-cast", true]);
+});

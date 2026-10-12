@@ -1446,3 +1446,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** PF2e's Feint, Shove, Trip or Demoralize with `then` (the Strike after it) and notes; Slippery Fighter with `approach: { strides: 1 }`.
 - **Live:** the maneuver's card, with "Then it Strikes at the same creature if this succeeds." (and the rest: the precision dice, the fatal trait, the Frightened bonus) as its note line; the GM rolls the Strike from the sheet. Checked in pftest (a noble's Noble's Ruse).
 - **Simulator:** after the maneuver resolves, the Strike at the same creature (only on a success when it says so), at the same multiple attack penalty when it says so, the bully's Stride after a Shove that succeeds, the extra dice; the planner counts the Strike's expected damage (half of it when the maneuver must succeed) (B146).
+
+## A Strike that shoves or knocks down; Strikes and buffs straight after a spell (2026-10-12, batch 147)
+
+- **Compiled:** Brutish Shove and Improved Knockdown → Strike activities (push 5 / 10 and Off-Guard; Prone and 1d6 bludgeoning); Residual Force and Addling Strike → Strike activities with `requires: "after-cast"`; Primal Weapon → a free Strike buff with `requires: "after-cast"`, `nonCantrip`.
+- **Live:** no new live code: the activities' riders and notes and the buff's effect (Primal Weapon turns on PF2e's own toggle) as before; the GM uses them when their requirement is met.
+- **Simulator:** the engine records a spell it just cast; what needs it is planned only as its next action (not after a cantrip when it says non-cantrip) (B147).

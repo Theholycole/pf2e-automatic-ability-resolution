@@ -859,6 +859,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 130, Hammerhead: "makes a bone crest Strike; on a hit, the mjolgat deals an extra die of damage. This counts as two attacks when
         // calculating the mjolgat's multiple attack penalty" — its own sentence, and the last one's period.)
         .replace(/(Strike); on a hit, (?:the [\w' -]+?|it|he|she|they) deals an extra die of damage\./i, "$1. If it hits, it deals an extra die of weapon damage.")
+        // (Batch 147: Residual Force's "makes a tentacle Strike that has a reach of 20 feet and deals 2d4 additional force damage", Addling Strike's
+        // "This Strike gains the occult trait and deals an additional 1d4 mental damage.")
+        .replace(/\bmakes an? ([\w' -]+?) Strike that has a reach of (\d+) feet and deals (\d+d\d+) additional (\w+) damage\./i, "makes a $1 Strike with its reach increased to $2 feet. If it hits, it deals an additional $3 $4 damage.")
+        .replace(/\bThis Strike gains the (\w+) trait and deals an additional (\d+d\d+) (\w+) damage\./i, "If it hits, it deals an additional $2 $3 damage.")
         // (Batch 140, Punishing Strike: "He Strikes; if he hits, he increases the number of damage dice by one and adds Push to the effect.")
         .replace(/\b(He|She|It|They) Strikes?; if (?:he|she|it|they) hits?, (?:he|she|it|they) increases? the number of damage dice by one and adds? (?:@UUID\[[^\]]*\]\{Push\}|Push) to the effect\./i, "$1 makes a Strike. If it hits, it deals an extra die of weapon damage. If it hits, the target is pushed 5 feet.")
         .replace(/(multiple attack penalty)(\s*(?:<\/p>)?\s*)$/i, "$1.$2")
@@ -995,6 +999,25 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 (activity.notes ??= []).push("It's Off-Guard until the start of its next turn.");
                 return "[told]";
             })
+            // (Batch 147, Brutish Shove: "makes a single Strike with a two-handed melee weapon. If he hits a target that is their size or smaller,
+            // that creature is Off-Guard until the end of the brute's turn, and he can automatically Shove it with the same benefits as the Shove
+            // action (including the critical success effect, if the Strike was a critical hit)." — 5 feet, 10 on a critical hit, the size and its
+            // failure effect the GM's; Improved Knockdown: "They attempt a single melee Strike. If this Strike hits, they also apply the critical
+            // success effect of a Trip." — Prone and 1d6 bludgeoning, the bigger die with a two-handed weapon the GM's.)
+            .replace(/^((?:The )?[^.]+?) makes a single Strike with a two-handed melee weapon(?=\.$)/i, (_all, who) => {
+                (activity.notes ??= []).push("With a two-handed melee weapon.");
+                return `${who} makes a melee Strike`;
+            })
+            .replace(/^If (?:he|she|it|they|the [\w' -]+?|[A-Z][\w'-]+) hits a target that is (?:their|its|his|her) size or smaller, that creature is Off-Guard until the end of (the [\w' -]+?['’]s) turn, and (?:he|she|it|they|the [\w' -]+?|[A-Z][\w'-]+) can automatically Shove(?:: Athletics)? it with the same benefits as the Shove action \(including the critical success effect, if the Strike was a critical hit\)(?=\.$)/i, (_all, whose) => {
+                activity.onHit.push = 5;
+                activity.onHit.criticalPush = 10;
+                (activity.notes ??= []).push("Only a creature its size or smaller.");
+                return `If it hits, the target is Off-Guard until the end of ${whose} turn`;
+            })
+            .replace(/^If (?:he|she|it|they|the [\w' -]+?|[A-Z][\w'-]+) moves to follow the target, that movement (?:doesn't|does not) trigger reactions\.$|^Failure The target becomes off-guard until the end of [^.]+?['’]s current turn\.$|^If (?:they|he|she|it) used a two- ?handed melee weapon \(such as a maul\) for the Strike, [^.]+\.$/i, "[gm]")
+            .replace(/^This Strike has the following failure effect\.$|^An? [\w' -]+? can dash (?:their|its|his|her) foe to the ground with a single blow\.$/i, "[told]")
+            .replace(/^(?:They|He|She|It) attempts? a single melee Strike(?=\.$)/i, "It makes a melee Strike")
+            .replace(/^If this Strike hits, (?:they|he|she|it) also appl(?:y|ies) the critical success effect of a Trip(?=\.$)/i, "If it hits, the target is knocked Prone and takes @Damage[1d6[bludgeoning]] damage")
             // (Batch 142, Create Boulder: "… molds a boulder from primal earth and throws it as a rock Strike. A creature hit by the Strike must
             // succeed at a … save or be knocked Prone.")
             .replace(/^((?:The )?[^.]+?) (?:[a-z]+s [^.]*? and )?throws it as an? ([\w' -]+?) Strike(?=\.$)/i, "$1 makes a $2 Strike")
@@ -1108,6 +1131,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
             else if (/(?:doesn't|does not) have a creature impaled on (?:its|their|his|her) horn/i.test(match[1])) activity.requires = "free-hand";
             // (Batch 81, Stunning Strike: "hit a foe earlier this turn with a weapon Strike": at a foe it hit this turn.)
             else if (/^(?:The )?[^,]*? hit an? (?:foe|creature|enemy|target) earlier this turn(?: with an? (?:weapon |melee )?Strike)?$/i.test(match[1])) activity.requires = "hit-earlier";
+            // (Batch 147: Residual Force's "The venedaemon's most recent action was to cast a spell", Addling Strike's "… to Cast a Spell" — straight
+            // after a spell.)
+            else if (/most recent action (?:this turn )?was to (?:cast|Cast) an? (?:non-cantrip )?spell\.?$/i.test(match[1])) {
+                activity.requires = "after-cast";
+                if (/non-cantrip/i.test(match[1])) activity.nonCantrip = true;
+            }
             // (Batch 82, Berserk Slam: "The flesh golem is berserk": only then; the simulator doesn't play a golem's berserk state.)
             else if (/^(?:The )?[^,]*? is berserk\.?$/i.test(match[1])) activity.requires = "berserk";
             // (Batch 109, Startled Charge: "It's the first round of combat".)

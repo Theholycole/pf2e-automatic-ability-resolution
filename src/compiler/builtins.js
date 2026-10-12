@@ -1827,7 +1827,9 @@ export function readRage(item, actor = null) {
 const BUFF_OWNER = String.raw`(?:all )?(?:its|their|his|her|(?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)(?:'s|’s|')) `;
 const BUFF_PART = String.raw`(?:\u0001(\d+)\u0001|(\d+d\d+(?:\s*[+-]\s*\d+)?) (persistent |precision )?((?!damage\b)[a-z]+)?|(\d+) (?:points? of )?(persistent |precision )?((?!damage\b)[a-z]+)?|(die) of damage)`;
 export function readStrikeBuff(item) {
-    if (item?.system?.actionType?.value !== "action") return null;
+    // (Batch 147: a free action too, Primal Weapon's after a spell.)
+    if (!["action", "free"].includes(item?.system?.actionType?.value)) return null;
+    if (item.system.actionType.value === "free" && !/\bmost recent action (?:this turn )?was to (?:cast|Cast) an? (?:non-cantrip )?spell\b/i.test(String(item.system?.description?.value ?? ""))) return null;
     const html = String(item?.system?.description?.value ?? "");
     const formulas = [];
     // ("@Damage[2d8[sonic]]" and "[[/r 1d4[slashing]]]" as numbered marks; links as their labels.)
@@ -1839,9 +1841,15 @@ export function readStrikeBuff(item) {
     // turn: read as its melee Strikes, the rune a note.)
     const text = htmlToPlainText(marked).replace(/\s+/g, " ").trim()
         .replace(/\bUntil the beginning of /g, "Until the start of ")
+        // (Batch 147, Primal Weapon: "…, the priestess deals an extra 1d6 slashing damage with her melee Strikes.")
+        .replace(/, (?:the [\w' -]+?|it|they|he|she) deals? an? (extra|additional) (\u0001\d+\u0001) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./i, ", its $3Strikes deal an $1 $2 damage.")
         .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
-    if (/^(?:Trigger|Requirements?)\b|\b(?:Trigger|Requirements?) [A-Z]/.test(text)) return null;
-    const body = text.replace(/^Frequency [^.]*?(?=\s+Effect\b)\s+Effect\s+/, "").replace(/^Effect\s+/, "");
+    // (Batch 147, Primal Weapon: "Frequency once per turn Requirements the false priestess' most recent action was to cast a non-cantrip spell
+    // Effect …" — straight after a spell: requires "after-cast".)
+    const castFirst = /\bRequirements? (?:the |The )?[\w' -]+?['’]s? most recent action (?:this turn )?was to (?:cast an?|Cast an?) (non-cantrip )?spell\.? (?=Effect\b)/i.exec(text);
+    const unrequired = castFirst ? text.replace(castFirst[0], "") : text;
+    if (/^(?:Trigger|Requirements?)\b|\b(?:Trigger|Requirements?) [A-Z]/.test(unrequired)) return null;
+    const body = unrequired.replace(/^Frequency [^.]*?(?=\s+Effect\b)\s+Effect\s+/, "").replace(/^Effect\s+/, "");
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/).map((sentence) => sentence.trim()).filter(Boolean);
     const lead = String.raw`(Until the (start|end) of ${BUFF_OWNER.replace("(?:all )?", "")}(next )?turn|For the next minute|For (\d+|one) minutes?|While in this stance|While in (?:its|their|his|her) [\w' -]+? form)`;
     const key = new RegExp(String.raw`^(?:${lead},? )?${BUFF_OWNER}(?:(melee|ranged) )?(?:([\w' -]+?) )??Strikes? deals? an? (?:additional|extra) ${BUFF_PART}(?: damage)?(?:,? (?:and|plus) (?:an? (?:additional|extra) )?${BUFF_PART}(?: damage)?)?((?: on a successful attack, or [^.]+? on a critical (?:hit|success))?(?:,? and gains? the [a-z]+ trait)?(?:, and [^.]+)?)\.$`, "i");
@@ -1908,13 +1916,14 @@ export function readStrikeBuff(item) {
     const name = found[6] && !/^(?:weapon|unarmed)$/i.test(found[6]) ? found[6].toLowerCase() : null;
     return {
         builtin: "self-effect",
-        actions: Number(item.system?.actions?.value) || 1,
+        actions: Number(item.system?.actions?.value) || (item.system?.actionType?.value === "free" ? 0 : 1),
         model: { name: item.name, rounds, modifiers: [], tempHp: 0 },
         damage,
         strike: name,
         melee: /^melee$/i.test(found[5] ?? ""),
         duration,
         ...(stance ? { stance: true } : {}),
+        ...(castFirst ? { requires: "after-cast", ...(castFirst[1] ? { nonCantrip: true } : {}) } : {}),
         ...(notes.length ? { notes } : {})
     };
 }
