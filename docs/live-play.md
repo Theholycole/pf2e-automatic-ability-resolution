@@ -1666,3 +1666,14 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Hop-Dodge → `redirect-attack` with `when: "targeted"`, `melee` and a note for its Stride. Skittering Reposition → `withdraw` as a creature comes into its reach ("moves 10 feet. This does not trigger reactions."). Bark Orders and Encircling Command → `no-effect`, only allies' Steps. Shadow Chain → its Strike, with notes for its 60-foot reach and the teleport on a failed save. Lunging Strike → a plain Strike (its reach and Capturing Grab after are the GM's).
 - **Live:** for `when: "targeted"`, batch 171's redirect offer comes on any melee Strike at it, while a creature in the encounter is beside it. It says the Strike goes to that creature instead, so the attacker rolls it against that one and its first result doesn't count. Not run in pftest: a second wording on batch 171's offer.
 - **Simulator:** before the roll, its reaction sends the melee Strike at another of the attacker's side in both their melees, at the same penalty (B191).
+
+## A Strike after a teleport; Hit Points with no type (2026-10-12, batch 192)
+
+- **Compiled:**
+  - Dimensional Ambush → a melee Strike with three additional weapon damage dice, counting as two attacks, with a note for its Translocate first.
+  - Extend Mandibles → its mandibles Strike, with a note for the 10-foot reach without agile.
+  - Exemplar of Violence → a Strike with `onHit.allyStrike`, with a note for its allies' Step or Stride.
+  - Draw Bugs → healing on itself, from "regain @Damage[10] HP" with no type; its "At the GM's discretion" sentence is a note.
+  - Aquatic Drag → `no-effect`: it only moves, carrying what it holds.
+- **Live:** no new live code. Not run in pftest.
+- **Simulator:** nothing new.

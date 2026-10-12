@@ -997,6 +997,26 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 (activity.notes ??= []).push("It Steps before or after its Strike.");
                 return `${who} makes a Strike`;
             })
+            // (Batch 192: Dimensional Ambush's "casts Translocate, then makes a melee Strike that deals three extra dice of damage."; Extend Mandibles'
+            // "… with a reach of 10 feet, but the mandibles lose the agile trait for this Strike."; Exemplar of Violence's "After the Strike, allies who can
+            // see the graveknight can use a reaction to Step or Stride, … One ally of the graveknight's choice can instead use a reaction to Strike.")
+            .replace(/^((?:The )?[^.]+?) casts Translocate, then makes a melee Strike that deals (one|two|three) extra dice of damage\.$/i, (_all, who, count) => {
+                (activity.notes ??= []).push("It casts Translocate first (teleporting next to its target).");
+                return `${who} makes a melee Strike that deals ${count.toLowerCase()} additional weapon damage dice.`;
+            })
+            .replace(/\b((?:makes|attempts|making) an? [\w' -]+? Strike) with a reach of (\d+) feet, but the [\w' -]+? lose the agile trait for this Strike(?=\.$)/i, (_all, made, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike, without the agile trait.`);
+                return made;
+            })
+            .replace(/^After the Strike, allies who can see (?:the [\w' -]+?|it) can use a reaction to Step or Stride, but they must end this movement in a space adjacent to an enemy\.$/i, () => {
+                (activity.notes ??= []).push("After the Strike, hit or miss, its allies who see it can Step or Stride next to an enemy as a reaction, or one ally it picks can Strike instead.");
+                return "[told]";
+            })
+            .replace(/^One ally of (?:the [\w' -]+?['’]s|its) choice can instead use a reaction to Strike\.$/i, () => {
+                activity.onHit.allyStrike = true;
+                return "[told]";
+            })
+            .replace(/^((?:The )?[^.]+?) attempts a Strike as (?:its|their) armor flashes with [^.]+\.$/i, "$1 makes a Strike.")
             // (Batch 173, Hunter's Aim: "makes a ranged weapon Strike against her hunted prey" — only at its prey; Dmiri's "When Dmiri focuses on aiming,
             // her attack becomes particularly accurate. Make a ranged weapon Strike against her hunted prey.")
             .replace(/^When [^,.]+? focuses on aiming, (?:her|his|its|their) attack becomes particularly accurate\.$/i, "[told]")
@@ -1035,8 +1055,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 return made;
             })
             .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) (?:against (?:an? adjacent (?:creature|target|enemy|foe)|the adjacent (?:creature|target)|an? (?:target|creature|foe) within (?:its |their |his |her )?reach|an? target)|at the target)(?=\.$)/i, "$1")
-            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) that deals (one|two) additional weapon (?:damage )?(?:die|dice)(?: of damage)?(?=\.$)/i, (_all, made, count) => {
-                activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + (count.toLowerCase() === "two" ? 2 : 1);
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) that deals (one|two|three) additional weapon (?:damage )?(?:die|dice)(?: of damage)?(?=\.$)/i, (_all, made, count) => {
+                activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + ({ one: 1, two: 2, three: 3 }[count.toLowerCase()]);
                 return made;
             })
             .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) and deals an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|\d+d\d+ \w+) damage on a hit(?=\.$)/i, (_all, made, damage) => {
@@ -1493,7 +1513,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // "This Strike ignores their multiple attack penalty and doesn't count toward that penalty."
         else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
-        else if ((match = /^This counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the(?: [\w' -]+?'s)?) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
+        // (Batch 192, Dimensional Ambush: "This Strike counts as two attacks when calculating the katpaskir's multiple attack penalty.")
+        else if ((match = /^This (?:Strike )?counts as (two|three) attacks (?:when calculating|for) (?:its|his|her|their|the(?: [\w' -]+?'s)?) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
         // (Batch 60, Savage Jaws: "If the attack hits, it deals @Damage[(4d12+16)[piercing]] damage (versatile S)." — its damage in place
         // of the Strike's; Bully's Bludgeon: "This attack is nonlethal.")
         else if (new RegExp(`${hit}(?:it|he|she|they) deals? @Damage\\[[^\\]]*(?:\\[[^\\]]*\\])?[^\\]]*\\] damage(?: \\(versatile [BPS]\\))?\\.$`, "i").test(htmlToPlainText(sentence).replace(/\s+/g, " ").trim()) && inlineTags(sentence, "Damage").length === 1) activity.damage = readDamage(inlineTags(sentence, "Damage")[0]);
@@ -4099,7 +4120,8 @@ function selfHeal(item) {
     if (!["action", "free"].includes(item.system?.actionType?.value) || /<strong>\s*Trigger\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return null;
     const html = String(item.system?.description?.value ?? "");
     const tags = inlineTags(html, "Damage");
-    if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0])) return null;
+    // (Batch 192, Draw Bugs: "They regain @Damage[10] HP." — a number of Hit Points with no type.)
+    if (tags.length !== 1 || !(/\bhealing\b/i.test(tags[0]) || (/^\d+(?:d\d+)?(?:[+-]\d+)?$/.test(tags[0]) && /\bregains? @Damage\[[^\]]*\] (?:HP|Hit Points)\b/i.test(html)))) return null;
     const plain = htmlToPlainText(html.replace(/@Damage\[[^\]]*\]\]?(?:\{[^}]*\})?/g, "\u0000").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
     // (Requirements with no "Effect" label: "Requirements The ravenile's regeneration is currently active The ravenile regains …".)
     // (The labels are capitalised, so a "fear effect" in the requirement doesn't end it — batch 56.)
@@ -4124,6 +4146,13 @@ function selfHeal(item) {
         }
         // (Batch 154, Change Characters: its masks and what comes with them — the GM's.)
         if ((/\bmasks?\b/i.test(sentence) && !/@|\u0000|\d/.test(sentence)) || /^When [^.]+? Changes Characters, (?:it|they|he|she) gains? access to the listed abilities\.$/i.test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
+        // (Batch 192, Draw Bugs: "… draws more arthropods from the environment around them to reconstitute some of their damaged body." — what it tells;
+        // "At the GM's discretion, the swarm strider doesn't recover HP in areas where there aren't enough arthropods …" — the GM's.)
+        if (/\bto reconstitute (?:some of )?(?:its|their) damaged body\.$/i.test(sentence) && !/@|\u0000|\d/.test(sentence)) continue;
+        if (/^At the GM's discretion, /i.test(sentence) && !/@|\u0000|\d/.test(sentence)) {
             notes.push(sentence);
             continue;
         }

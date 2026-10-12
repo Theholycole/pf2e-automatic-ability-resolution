@@ -3180,3 +3180,16 @@ test("a redirect as it's targeted; a move as a creature closes; allies' Steps; a
     const chain = compileMonsterAbility(item("action", "<p>Shadows extend the test giant's whip as they make a whip Strike, increasing their reach to 40 feet for that Strike. If this hits, the target must succeed at a @Check[will|dc:25] save or be teleported to an empty space within the test giant's normal reach.</p>", 2), {});
     assert.deepEqual([chain.strike, chain.notes.length], ["whip", 2]);
 });
+
+test("a Strike after a teleport; a longer reach; allies' moves after a Strike; Hit Points with no type; a move holding a creature (2026-10-12, batch 192)", () => {
+    const item = (type, html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const ambush = compileMonsterAbility(item("action", "<p>The test cat casts Translocate, then makes a melee Strike that deals three extra dice of damage. This Strike counts as two attacks when calculating the test cat's multiple attack penalty.</p>", 2), {});
+    assert.deepEqual([ambush.builtin, ambush.extraWeaponDice, ambush.countsAs, ambush.notes.length], ["strike-activity", 3, 2, 1]);
+    const reach = compileMonsterAbility(item("action", "<p>The test larva makes a jaws Strike with a reach of 15 feet, but the jaws lose the agile trait for this Strike.</p>"), {});
+    assert.deepEqual([reach.strike, reach.notes], ["jaws", ["Its reach is 15 feet for this Strike, without the agile trait."]]);
+    const exemplar = compileMonsterAbility(item("action", "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test knight attempts a Strike as its armor flashes with a cold light. After the Strike, allies who can see the test knight can use a reaction to Step or Stride, but they must end this movement in a space adjacent to an enemy. One ally of the test knight's choice can instead use a reaction to Strike.</p>", 2), {});
+    assert.deepEqual([exemplar.builtin, exemplar.onHit.allyStrike, exemplar.notes.length], ["strike-activity", true, 1]);
+    const bugs = compileMonsterAbility(item("action", "<p>The test strider pulls in beetles to reconstitute some of their damaged body. They regain @Damage[12] HP. At the GM's discretion, the test strider doesn't recover HP where there aren't any beetles.</p>"), {});
+    assert.deepEqual([bugs.resolution.kind, bugs.notes.length], ["healing", 1]);
+    assert.deepEqual(compileMonsterAbility(item("action", "<p><strong>Requirements</strong> The test lizard has a creature Grabbed</p><hr /><p><strong>Effect</strong> The test lizard Swims up to half its Speed, carrying the grabbed creature with it.</p>"), {}), { builtin: "no-effect" });
+});

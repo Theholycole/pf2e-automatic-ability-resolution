@@ -2998,6 +2998,9 @@ function readNoCombatEffect(text) {
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    // (Batch 192, Aquatic Drag: "Requirements The platecarpus has a creature Grabbed Effect The platecarpus Swims up to half its Speed, carrying the
+    // grabbed creature with it." — a move, the creature it holds along.)
+    if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed\.? Effect (?:The )?[^.]+? (?:Swims|Strides|Flies|Burrows) up to half (?:its|their) Speed, carrying the grabbed creature with (?:it|them)\.$/i.test(said)) return true;
     // (Batch 191: allies' Steps only — Bark Orders' "Any allies who hear and understand this order can use a reaction to Step.", Encircling Command's
     // "Each caligni skulker within 30 feet of the skulker can Step. Each skulker can benefit from Encircling Command only once per round." — no change
     // to a fight's numbers.)
