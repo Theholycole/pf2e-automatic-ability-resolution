@@ -1555,3 +1555,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Hunting Throw ("within 60 feet without ranged penalties", a note; Prone on a hit; on a critical hit Prone and Immobilized), Guerrilla Tactics (its Strike, the draw after a note), Bounce Cruuk (its Strike, the return a note), Deadly Aim (its circumstance bonus to damage; "hasn't attempted a Strike during his turn yet" as `requires: "first-attack"`), Hunter's Aim (at its prey, a note, in either telling).
 - **Live:** no new live code. Their Strike cards are as before. Not run in pftest.
 - **Simulator:** nothing new: the Strike activities as before, Deadly Aim only as its first attack of a turn.
+
+## Multi-Strikes and swipes in more words (2026-10-12, batch 174)
+
+- **Compiled:** Ferocious Bites ("makes three Strikes with its jaws attack. Each Strike must be against a different opponent"), Branch Whip (its longer reach the GM's), the pirate skeleton's Focused Assault (a note: only with one creature in its reach), a skeletal giant's Broad Swipe (the horns' penalty left out) → multi-Strikes. Axe Swipe ("compares the roll to the AC of up to two foes that are in reach and adjacent", its +1 a note and a negative `penalty`), Double Chomp ("targeting two creatures adjacent to each other"), Ricochet (once a round; its 60 feet a note) → one roll against up to two foes. Heavy Swing → a Strike activity with its own damage and the bleed on a hit. The diabolic messenger's Hidden Blade (its full stop missing) also compiles. A "Frequency once per round" before a swipe is now kept, so the cyclops's Swipe is once a round.
+- **Live:** no new live code. Their notes go to the GM as before. Not run in pftest.
+- **Simulator:** nothing new. Axe Swipe's bonus plays as a negative penalty.

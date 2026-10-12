@@ -889,6 +889,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 140, Punishing Strike: "He Strikes; if he hits, he increases the number of damage dice by one and adds Push to the effect.")
         .replace(/\b(He|She|It|They) Strikes?; if (?:he|she|it|they) hits?, (?:he|she|it|they) increases? the number of damage dice by one and adds? (?:@UUID\[[^\]]*\]\{Push\}|Push) to the effect\./i, "$1 makes a Strike. If it hits, it deals an extra die of weapon damage. If it hits, the target is pushed 5 feet.")
         .replace(/(multiple attack penalty)(\s*(?:<\/p>)?\s*)$/i, "$1.$2")
+        // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
+        .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
     let opened = false;
@@ -929,6 +931,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^(?:He|She|It|They) gains? a \+(\d+) circumstance bonus to damage on that Strike\.$/i, (_all, value) => {
                 activity.damageBonus += Number(value);
                 return "[told]";
+            })
+            // (Batch 174, Heavy Swing: "Strikes with their greatsword, dealing 4d12+22 slashing damage plus 1d6 persistent bleed." — its damage, and the
+            // bleed on a hit.)
+            .replace(/^((?:The )?[^.]+?) Strikes with (?:its|their|his|her) ([\w' -]+?), dealing (\d+d\d+(?:\s*\+\s*\d+)?) (\w+) damage plus (\d+d\d+) persistent (\w+)(?: damage)?(?=\.$)/i, (_all, who, weapon, dice, type, persistent, kind) => {
+                activity.damage = `(${dice.replace(/\s+/g, "")})[${type.toLowerCase()}]`;
+                activity.onHit.damage.push(`${persistent}[persistent,${kind.toLowerCase()}]`);
+                return `${who} makes a ${weapon} Strike`;
             })
             // (Batch 173, Hunter's Aim: "makes a ranged weapon Strike against her hunted prey" — only at its prey; Dmiri's "When Dmiri focuses on aiming,
             // her attack becomes particularly accurate. Make a ranged weapon Strike against her hunted prey.")

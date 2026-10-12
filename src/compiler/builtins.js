@@ -141,6 +141,15 @@ export function readMultiStrikes(text) {
     body = body.replace(/^((?:The )?[^.]+?) can Step, attempt an? (?:melee|ranged) ([\w' -]+?) Strike, and attempt an? (?:melee|ranged) ([\w' -]+?) Strike, taking the actions in any order\./i, "$1 makes a $2 Strike and a $3 Strike.");
     // (Batch 113, Bloody Flurry: "Strikes, Steps, then Strikes again" — two Strikes, the Step between the GM's.)
     body = body.replace(/^((?:The )?[^.]+?) Strikes, Steps, then Strikes again\./i, "$1 makes two Strikes.");
+    // (Batch 174: Ferocious Bites' "makes three Strikes with its jaws attack. Each Strike must be against a different opponent within its reach.";
+    // the pirate skeleton's Focused Assault, "makes two Strikes with its claw against one foe"; Branch Whip's ", increasing its reach to 20 feet for
+    // these Strikes"; Broad Swipe's "makes two Strikes with its greataxe against two adjacent foes, both of whom are within its reach" and "(or a -8
+    // multiple attack penalty for its horns)".)
+    body = body.replace(/^((?:The )?[^.]+?) makes (two|three|four) Strikes with (?:its|their|his|her) ([\w' -]+?) attack\. Each Strike must be against a different (?:opponent|creature|target|foe|enemy)(?: within (?:its|their|his|her) reach)?\./i, "$1 makes $2 $3 Strikes, each against a different target.")
+        .replace(/^((?:The )?[^.]+?) makes (two|three) Strikes with (?:its|their|his|her) ([\w' -]+?) against (one foe|the same (?:creature|target|foe))\./i, "$1 makes $2 $3 Strikes against $4.")
+        .replace(/^((?:The )?[^.]+?) makes two Strikes with (?:its|their|his|her) ([\w' -]+?) against two adjacent foes, both of whom are within (?:its|their|his|her) reach\./i, "$1 makes two $2 Strikes, each against a different target.")
+        .replace(/ \(or an? [-–−]\d+ multiple attack penalty for (?:its|their|his|her) [\w' -]+?\)(?=\.)/i, "")
+        .replace(/, increasing (?:its|their|his|her) reach to (\d+) feet for these Strikes\./i, ". Its reach increases to $1 feet for these Strikes.");
     const sentences = body.replace(/,? which (?:it|they) can make in any order\./i, ".").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 42: a first sentence that only tells what it does, "The test slayer swiftly attacks their prey with both weapons,
     // potentially combining their damage into a single devastating attack.")
@@ -540,6 +549,12 @@ export function readMultiStrikes(text) {
         // (Batch 91: Extend Limbs' "… reach increases to 20 feet for these Strikes" — the GM's; Paired Strike's "This counts as one attack when
         // calculating the maftet's multiple attack penalty".)
         if (/^(?:The [\w' -]+?['’]s|Its|Their|His|Her) reach increases to \d+ feet for these Strikes\.$|^These Strikes have a reach of \d+ feet\.$/i.test(sentence)) continue;
+        // (Batch 174, the pirate skeleton's Focused Assault: "… doesn't use this ability if there is more than one creature within its reach that it
+        // can see." — the GM's.)
+        if (/^(?:The [\w' -]+?|It|They|He|She) (?:doesn't|does not) use this ability if there is more than one creature within (?:its|their|his|her) reach that (?:it|they|he|she) can see\.$/i.test(sentence)) {
+            notes.push("Only while it can see no more than one creature in its reach.");
+            continue;
+        }
         if ((match = /^This counts as (one|two) attacks? when calculating [^.]*multiple attack penalty\.$/i.exec(sentence))) {
             sameMap = true;
             countsAs = /one/i.test(match[1]) ? 1 : 2;
@@ -635,8 +650,30 @@ export function readMultiStrikes(text) {
 // attack roll result to the AC of up to two foes, each of whom must be within their melee reach and adjacent to each other. Roll
 // damage only once and apply it to each creature hit. A Swipe counts as two attacks for the veteran's multiple attack penalty."
 // → { strike, max }, or null.
+// (Batch 174: Axe Swipe's "makes a melee Strike with a +1 circumstance bonus to the attack roll and compares the roll to the AC of up to two foes
+// that are in reach and adjacent to each other. The champion rolls damage only once …"; Double Chomp's "makes a jaws Strike targeting two creatures
+// adjacent to each other. Roll the attack and damage once, and apply it to each creature separately."; Ricochet's "Frequency once per round …,
+// each of whom must be within 60 feet of Vewslog" → { …, bonus, oncePerTurn, notes }.)
 export function readSwipe(text) {
-    const sentences = text.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    let bonus = 0;
+    let oncePerTurn = false;
+    const notes = [];
+    const sentences = text.trim()
+        .replace(/^Frequency once per (?:turn|round)\.? Effect /i, () => {
+            oncePerTurn = true;
+            return "";
+        })
+        .replace(/\b(makes an? (?:[\w' -]+? )?Strike) with an? \+(\d+) circumstance bonus to the attack roll and compares the roll to\b/i, (_all, made, value) => {
+            bonus = Number(value);
+            return `${made} and compares the attack roll result to`;
+        })
+        .replace(/\b(of up to two (?:foes|creatures)) that are in reach and adjacent to each other\./i, "$1, each of whom must be within its reach and adjacent to each other.")
+        .replace(/\b(makes an? [\w' -]+? Strike) targeting two creatures adjacent to each other\./i, "$1 and compares the attack roll result to the AC of up to two creatures, each of whom must be within its reach and adjacent to each other.")
+        .replace(/\b(of up to two (?:foes|creatures)), each of whom must be within (\d+) feet of (?:the [\w' -]+?|it|him|her|them|[A-Z][\w'-]+)\./i, (_all, lead, feet) => {
+            notes.push(`Each within ${feet} feet of it.`);
+            return `${lead}.`;
+        })
+        .split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 42: a first sentence that only tells what it does, "The test draugr lashes out at every foe it can reach.")
     if (sentences.length > 1 && !/\bStrikes?\b|\d|@/.test(sentences[0]) && /\bcompares the attack roll\b/i.test(sentences[1])) sentences.shift();
     // (Batch 38, Wide Swing: "makes a single greataxe Strike and compares the attack roll result to the ACs of up to two foes within
@@ -648,14 +685,14 @@ export function readSwipe(text) {
     const match = /^(?:The )?[^.]+? makes (?:a single |an? )(?:([\w' -]+?) )??Strike and compares the attack roll(?: result)? to the (?:AC|ACs|Armor Class) of up to (two|three) (?:foes|enemies|creatures|targets)(?:, each of whom must be within (?:its|their|his|her|the Strike's|the [\w' -]+?'s) (?:melee )?reach(?: and adjacent to (?:each other|the other))?| within (?:its|their|his|her) reach)?\.$/i.exec(sentences.shift() ?? "");
     if (!match) return null;
     for (const sentence of sentences) {
-        if (/^(?:Roll|(?:It|They|He|She) rolls?) (?:the )?damage (?:only )?once(?:,)? and appl(?:y|ies) it to each creature (?:hit|(?:it|they|he|she|the [\w' -]+?) hits?)\.$/i.test(sentence)) continue;
+        if (/^(?:Roll|(?:The [\w' -]+?|It|They|He|She) rolls?) (?:the )?damage (?:only )?once(?:,)? and appl(?:y|ies) it to each creature (?:hit|(?:it|they|he|she|the [\w' -]+?) hits?)\.$|^Roll the attack and damage once, and apply it to each creature separately\.$/i.test(sentence)) continue;
         if (/^(?:(?:An?|The|This) )?(?:[\w' -]+? )?counts as (?:two|three) attacks (?:for|when calculating|toward) [^.]*multiple attack penalty(?:, (?:but|though) the penalty (?:does not|doesn't) increase until after (?:both|all) attacks are resolved)?\.$/i.test(sentence)) continue;
         // (The sweep trait's +1 on the second: the simulation's numbers leave it out.)
         if (/^The (?:modifier of a weapon with a sweep trait|sweep bonus of (?:the [\w' -]+?'s|its|their|his|her) [\w' -]+?) applies to (?:all|these|both) attacks\.$/i.test(sentence)) continue;
         return null;
     }
     const strike = match[1] && !/^(?:melee|weapon|unarmed)$/i.test(match[1]) ? match[1].replace(/^(?:melee|ranged)\s+|\s+(?:melee|ranged)$/gi, "").toLowerCase() : null;
-    return { strike, max: NUMBERS[match[2].toLowerCase()] };
+    return { strike, max: NUMBERS[match[2].toLowerCase()], ...(bonus ? { bonus } : {}), ...(oncePerTurn ? { oncePerTurn: true } : {}), ...(notes.length ? { notes } : {}) };
 }
 
 // "The guard Strides twice. If it ends its movement within melee reach of at least one enemy, it makes a melee Strike against
@@ -2404,7 +2441,7 @@ export function compileBuiltin(item, slug) {
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
     const swipe = readSwipe(text);
-    if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };
+    if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true, ...(swipe.bonus ? { penalty: -swipe.bonus } : {}), ...(swipe.oncePerTurn ? { oncePerTurn: true } : {}), ...(swipe.bonus || swipe.notes ? { notes: [...(swipe.bonus ? [`A +${swipe.bonus} circumstance bonus to the attack roll.`] : []), ...(swipe.notes ?? [])] } : {}) };
     const charge = readCharge(text);
     // (Its moves and Strike in its actions, or more: Swoop's 2 actions for one Fly and a Strike, batch 25.)
     // (Batch 93: or fewer, as its text says — the knight's once-a-turn 1-action Sudden Charge, Eagle Dive's 1-action dive.)

@@ -3019,3 +3019,21 @@ test("ranged Strike activities: a throw that knocks down, a draw after, a bounce
     const aimed = compile(1, "<p><strong>Requirements</strong> Test Archer hasn't attempted a Strike during his turn yet</p><hr /><p><strong>Effect</strong> Test Archer makes a ranged Strike against his target at a –1 penalty. He gains a +3 circumstance bonus to damage on that Strike.</p>");
     assert.deepEqual([aimed.attackBonus, aimed.damageBonus, aimed.requires], [-1, 3, "first-attack"]);
 });
+
+test("multi-Strikes and one-roll swipes in more words; a heavy swing; a missing stop (2026-10-12, batch 174)", () => {
+    const compile = (actions, html) => compileMonsterAbility({ type: "action", name: "Test Flurry", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    const bites = compile(2, "<p>The test hound makes three Strikes with its fangs attack. Each Strike must be against a different opponent within its reach. Each attack counts toward the test hound's multiple attack penalty, but does not increase its penalty until it has made all the attacks.</p>");
+    assert.deepEqual([bites.strikes, bites.each, bites.max, bites.sameMap], [["fangs", "fangs", "fangs"], true, 3, true]);
+    const whip = compile(2, "<p>The test tree makes three vine Strikes against different targets, increasing its reach to 15 feet for these Strikes. These attacks count toward its multiple attack penalty, but this penalty doesn't increase until after all three attacks.</p>");
+    assert.deepEqual([whip.strikes.length, whip.each, whip.sameMap], [3, true, true]);
+    const focus = compile(2, "<p>The test brute makes two Strikes with its fist against one foe. The multiple attack penalty doesn't increase until after both attacks are resolved. The test brute doesn't use this ability if there is more than one creature within its reach that it can see.</p>");
+    assert.deepEqual([focus.strikes, focus.sameTarget, focus.notes], [["fist", "fist"], true, ["Only while it can see no more than one creature in its reach."]]);
+    const swing = compile(2, "<p>The test knight makes a melee Strike with a +2 circumstance bonus to the attack roll and compares the roll to the AC of up to two foes that are in reach and adjacent to each other. The test knight rolls damage only once and applies it to each creature they hit. This counts as two attacks toward their multiple attack penalty.</p>");
+    assert.deepEqual([swing.max, swing.penalty, swing.notes], [2, -2, ["A +2 circumstance bonus to the attack roll."]]);
+    const chomp = compile(1, "<p>The test croc makes a jaws Strike targeting two creatures adjacent to each other. Roll the attack and damage once, and apply it to each creature separately. A Test Chomp counts as two attacks for the multiple attack penalty.</p>");
+    assert.deepEqual([chomp.strikes, chomp.max], [["jaws"], 2]);
+    const heavy = compile(2, "<p>The test brute Strikes with their maul, dealing 2d12+10 bludgeoning damage plus 1d4 persistent bleed. This counts as two attacks when calculating their multiple attack penalty.</p>");
+    assert.deepEqual([heavy.builtin, heavy.strike, heavy.damage, heavy.onHit.damage, heavy.countsAs], ["strike-activity", "maul", "(2d12+10)[bludgeoning]", ["1d4[persistent,bleed]"], 2]);
+    const blade = compile(1, "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test thief draws a weapon and then Strikes with it The target of the Strike is Off-Guard against the attack.</p>");
+    assert.deepEqual([blade.builtin, blade.offGuard], ["strike-activity", true]);
+});
