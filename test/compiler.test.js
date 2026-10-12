@@ -3648,3 +3648,35 @@ test("fear shrugged off with a rush; an ally's critical failure softened; a rero
     assert.deepEqual(plan("The test speaker takes damage", "The animal takes the damage instead.", "The test speaker has cover from an animal ally"), gm);
     assert.deepEqual(plan("The test mole is hit by a Strike", "The test mole immediately Burrows to a burrow hole if there is one within 20 feet."), gm);
 });
+
+test("Strikes at a concentrate action or at Standing up, a save to keep the action; a stomp used at a mover; splashed and puffed afflictions; a last howl; a scare at an archer (2026-10-12, batch 227)", () => {
+    const item = (html, type = "reaction", name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const react = (trigger, effect, name = "Test") => item(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction", name);
+    const plan = (trigger, effect, options = {}) => compileMonsterAbility(react(trigger, effect), { basicActions: {}, ...options });
+    assert.deepEqual(plan("A creature within the test owl's reach uses a concentrate action", "The test owl makes a talon Strike against the creature. On a hit, it disrupts the action. This Strike doesn't take or add to its multiple attack penalty."), { builtin: "reaction-strike", triggers: ["concentrate"], strike: "talon", penalty: 0, disrupts: true });
+    assert.deepEqual(plan("A creature within 5 feet of the test horn uses a concentrate action", "The test horn attempts a melee Strike against the triggering creature; on a hit, the triggering action is lost unless it passes a DC 20 Will save."), { builtin: "reaction-strike", triggers: ["concentrate"], strike: "melee", penalty: 0, disrupts: true, disruptSave: { statistic: "will", dc: 20 }, within: 5 });
+    assert.deepEqual(plan("A creature within the test otter's reach uses the Stand action", "The test otter makes a tail Strike against the triggering creature. If the attack is a critical hit, the triggering action is disrupted."), { builtin: "reaction-strike", triggers: ["stand"], strike: "tail", penalty: 0, disrupts: "critical" });
+    const pin = item("<p>The test thief makes a heel Strike. If the Strike hits, the target is @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized} until the start of the test thief's next turn.</p>", "action", "Test Pin");
+    const kick = react("A creature adjacent to the test thief tries to use a move action", "The test thief uses Test Pin against the triggering creature. This attack doesn't take or add to its multiple attack penalty.", "Test Kick");
+    const kicked = compileMonsterAbility(kick, { basicActions: {}, actor: { name: "Test Thief", items: [pin, kick] } });
+    assert.deepEqual([kicked.builtin, kicked.triggers, kicked.strike, kicked.within, kicked.onHit.conditions.map((entry) => [entry.slug, entry.duration?.expiry])], ["reaction-strike", ["move"], "heel", 5, [["immobilized", "turn-start"]]]);
+    const venom = (name) => item("<p><strong>Saving Throw</strong> @Check[fortitude|dc:19]</p><hr /><p><strong>Maximum Duration</strong> 4 rounds</p><p><strong>Stage 1</strong> @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (1 round)</p>", "passive", name);
+    const slime = react("An adjacent creature deals piercing damage to the test toad", "The test toad's slime sprays over the triggering creature, exposing it to test toad venom.", "Test Slime");
+    const slimed = compileMonsterAbility(slime, { basicActions: {}, actor: { name: "Test Toad", items: [slime, venom("Test Toad Venom")] } });
+    assert.deepEqual([slimed.trigger.event, slimed.targeting.target, slimed.resolution.outcomes.failure.affliction?.name], ["hit-by", "the attacker", "Test Toad Venom"]);
+    const puff = react("The test puffball is critically hit by a Strike", "Spores burst out. Each creature within 10 feet of the test puffball is exposed to test sneezes, and must roll a Fortitude save against that affliction.", "Test Puff");
+    const puffed = compileMonsterAbility(puff, { basicActions: {}, actor: { name: "Test Puffball", items: [puff, venom("Test Sneezes")] } });
+    assert.deepEqual([puffed.trigger.critical, puffed.targeting.area, puffed.resolution.outcomes.failure.affliction?.name], [true, { type: "emanation", value: 10 }, "Test Sneezes"]);
+    const wail = item("<p>The test jackal wails. Each creature in a @Template[emanation|distance:30] must attempt a @Check[will|dc:20] save.</p><p><strong>Failure</strong> The creature is @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}.</p>", "action", "Test Wail");
+    const last = react("The test jackal is reduced to 0 HP", "The test jackal uses Test Wail. The origin point for this effect is its kennel. It is then destroyed.", "Test Last");
+    const howl = compileMonsterAbility(last, { basicActions: {}, actor: { name: "Test Jackal", items: [wail, last] } });
+    assert.deepEqual([howl.trigger.event, howl.resolution.check.statistic, howl.notes], ["death", "will", ["Its area starts from its kennel.", "Then it's destroyed."]]);
+    assert.deepEqual(plan("The test skull is the target of a ranged attack", "The test skull Demoralizes the attacking creature. Immunity to its Demoralize neither stops it nor follows from it."), { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, rangedAttack: true, note: "Temporary immunity to its Demoralize neither stops this nor follows from it." });
+});
+
+test("a Trip at a creature moving away nearby (2026-10-12, batch 227)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const roots = { type: "action", name: "Test Roots", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> A creature tries to use an action with the move trait to leave a space within 15 feet of the test willow</p><hr /><p><strong>Effect</strong> This attempt doesn't take or add to its multiple attack penalty. Roots heave under its feet, attempting to Trip the creature.</p>" } } };
+    const plan = compileMonsterAbility(roots, { basicActions });
+    assert.deepEqual([plan.trigger, plan.resolution.check.statistic, plan.targeting.target], [{ event: "provoke", reaction: true, triggers: ["leave"], within: 15 }, "athletics", "the attacker"]);
+});

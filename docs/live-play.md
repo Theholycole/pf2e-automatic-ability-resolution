@@ -2156,3 +2156,24 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **Checked in pftest (2026-10-12):** a Karkadann given Frightened 2 got the offer, beside the simulator's morale card. Using it left Frightened 1.
 - **Simulator:** see B226 in its ability decisions.
 
+## Battlezoo reaction Strikes, splashes and last acts (2026-10-12, batch 227)
+
+- **Compiled** (Battlezoo; wordings paraphrased here):
+  - **Reaction Strikes at a concentrate action** → `reaction-strike` with the trigger `concentrate`. One disrupts the action on a hit. The other disrupts it unless the creature passes a Will save (`disruptSave`). "Outside its multiple attack penalty" sentences are read.
+  - **A reaction Strike at Standing up** → the trigger `stand`. A critical hit disrupts it.
+  - **A Strike activity used as a reaction** at a creature trying to move beside it → `reaction-strike` with that activity's Strike and its hit conditions (`onHit`, with their durations), and a note. A name with small words ("… on …") is read.
+  - **A Trip at a creature leaving a square within 15 feet** → PF2e's Trip with a `provoke` trigger (`leave`, within 15).
+  - **Its poison splashed onto the attacker**, or **puffed over the creatures within 10 feet** after a critical hit → its own affliction's save on them.
+  - **Another ability used as it dies** → that ability with the death trigger. Where its area starts, and its destruction, are notes.
+  - **A Demoralize back at a ranged attacker** → `reaction-strike` with `skill: "demoralize"` and `rangedAttack`. The immunity rule is a note.
+- **Live:**
+  - A concentrate action (a spell or a check with the trait) offers the reaction Strikes that name it, never Reactive Strike.
+  - Prone ending on a creature's own turn counts as its Stand.
+  - The offer says when a save keeps the action, and carries the plan's note on the move path too.
+  - A ranged Strike at it offers the Demoralize within 30 feet.
+  - **Checked in pftest (2026-10-12):**
+    - Valeros's Demoralize at a Staccarix offered its beak Strike, with "If the Strike hits, the triggering action is disrupted."
+    - Merisiel losing Prone on her own turn beside a Reaver Beaver offered its tail Strike ("stood up"), with the critical-hit note.
+    - Valeros's shortbow Strike at a Braincase 20 feet away offered "Use it: Demoralize" with the immunity note. His ammunition was assigned for the test and restored after.
+- **Simulator:** see B227 in its ability decisions.
+

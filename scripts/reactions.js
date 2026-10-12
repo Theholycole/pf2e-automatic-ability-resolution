@@ -234,7 +234,7 @@ async function onMove(token, movement) {
             await offer({
                 kind: "strike", item, monster, actor, target: token, strikes, penalty: plan.penalty ?? 0,
                 trigger: leaves ? "left a square in its reach" : "moved in its reach",
-                note: [plan.only ? `Only at ${plan.only}.` : null, squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null, plan.builtin === "reactive-strike" ? plan.note ?? null : null].filter(Boolean).join(" ") || null
+                note: [plan.only ? `Only at ${plan.only}.` : null, squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null, plan.note ?? null].filter(Boolean).join(" ") || null
             });
             break;
         }
@@ -310,6 +310,8 @@ async function onMessage(message) {
     // A concentrate action: a spell with the trait, or a check with it (Demoralize; batch 22).
     if (castTraits?.includes("concentrate") || (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("concentrate"))) {
         await provokeTrigger(scene, combat, token, "concentrate", castTraits ? "cast a concentrate spell" : "used a concentrate action");
+        // (Batch 227: the reaction Strikes that name a concentrate action, never Reactive Strike.)
+        await reachTrigger(scene, combat, token, castTraits ? "cast a concentrate spell" : "used a concentrate action", "concentrate", { own: true });
     }
     // (Batch 225: an auditory action — a spell with the trait, or a check with it, Demoralize — and a healing one, a spell or Battle Medicine: the
     // reaction Strikes that say so (Auditory Swipe, Disruptive Screech, Clinch Victory), not Reactive Strike.)
@@ -341,7 +343,8 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
                 : !skill && triggers.includes("hit") && onIt && ["success", "criticalSuccess"].includes(context.outcome) && !(context.options ?? []).includes("item:ranged") ? "hit it with a melee Strike"
                 // (Batch 57: Cutting Rebuke, Bite Back; Opportune Bite, Gnawing Retort.)
                 // (Batch 104, Knowing Glance: a melee Strike only.)
-                : !skill && triggers.includes("attacked") && onIt && !(plan.melee && (context.options ?? []).includes("item:ranged")) ? "made a Strike against it"
+                // (Batch 227: a ranged attack only.)
+                : !skill && triggers.includes("attacked") && onIt && !(plan.melee && (context.options ?? []).includes("item:ranged")) && !(plan.rangedAttack && !(context.options ?? []).includes("item:ranged")) ? "made a Strike against it"
                 : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it"
                 // (Batch 63: a failed or critically failed one.)
                 : !skill && triggers.includes("missed") && onIt && ["failure", "criticalFailure"].includes(context.outcome) ? `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it`
@@ -351,8 +354,9 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             const distance = distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid);
             // (Batch 88: a basic maneuver in place of the Strike, at a creature in its reach.)
             if (plan.skill) {
-                if (distance > provokeRadius(actor)) continue;
-                await offer({ kind: "skill", item, monster, actor, target: attacker, trigger: why, skill: { slug: plan.skill, shift: (plan.bonus ?? 0) - (plan.penalty ?? 0) }, note: plan.release ? "If the Strike was with a melee weapon, the attacker can let go of it to make the Grapple fail." : null });
+                // (Batch 227: a Demoralize reaches 30 feet.)
+                if (distance > (plan.skill === "demoralize" ? 30 : provokeRadius(actor))) continue;
+                await offer({ kind: "skill", item, monster, actor, target: attacker, trigger: why, skill: { slug: plan.skill, shift: (plan.bonus ?? 0) - (plan.penalty ?? 0) }, note: plan.release ? "If the Strike was with a melee weapon, the attacker can let go of it to make the Grapple fail." : plan.note ?? null });
                 break;
             }
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
@@ -520,8 +524,10 @@ async function reachTrigger(scene, combat, token, trigger, kind = null, { own = 
         const strikes = (entry.plan.within && entry.plan.builtin === "reaction-strike"
             ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(entry.plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: entry.plan.within }))
             : meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name)).filter((strike) => distance <= strike.reach);
-        const disrupts = own && entry.plan.disrupts ? (entry.plan.disrupts === "critical" ? "On a critical hit, the triggering action is disrupted." : "If the Strike hits, the triggering action is disrupted.") : null;
-        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: [entry.plan.criticalTrip ? CRITICAL_TRIP : null, entry.plan.builtin === "reactive-strike" ? entry.plan.note ?? null : null, disrupts].filter(Boolean).join(" ") || null });
+        // (Batch 227: a save that keeps the action; the hit's conditions, a note.)
+        const keeps = entry.plan.disruptSave ? ` unless the creature succeeds at a DC ${entry.plan.disruptSave.dc} ${entry.plan.disruptSave.statistic[0].toUpperCase()}${entry.plan.disruptSave.statistic.slice(1)} save` : "";
+        const disrupts = own && entry.plan.disrupts ? (entry.plan.disrupts === "critical" ? "On a critical hit, the triggering action is disrupted." : `If the Strike hits, the triggering action is disrupted${keeps}.`) : null;
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: [entry.plan.criticalTrip ? CRITICAL_TRIP : null, entry.plan.note ?? null, disrupts].filter(Boolean).join(" ") || null });
     }
 }
 
@@ -842,6 +848,9 @@ async function onConditionLost(item) {
     const scene = token?.parent;
     if (!slug || !scene) return;
     const grid = gridOf(scene);
+    // (Batch 227, Tail Sweep: Prone ending on the creature's own turn is its Stand — the reaction Strikes that name it.)
+    const combat = game.combat;
+    if (slug === "prone" && combat?.started && combat.combatant?.tokenId === token.id) await reachTrigger(scene, combat, token, "stood up", "stand", { own: true });
     for (const { token: monster, actor, reactions } of reactors(scene, game.combat)) {
         if (monster.id === token.id) continue;
         const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "condition-lost" && plan.trigger.condition === slug);

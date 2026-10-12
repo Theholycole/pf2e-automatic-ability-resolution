@@ -2744,9 +2744,10 @@ function exposureReaction(item, actor) {
     const trigger = split ? readReactionTrigger(split[1].trim()) : null;
     if (!trigger) return null;
     const effect = split[2].trim();
-    const attacker = /^The (?:triggering )?creature is exposed to ([^.]+?)\.$/i.exec(effect);
+    // (Batch 227, Battlezoo: its blood splashed onto the attacker, exposing it; the creatures around it exposed, a save against the poison named after.)
+    const attacker = /^The (?:triggering )?creature is exposed to ([^.]+?)\.$/i.exec(effect) ?? /^(?:The )?[^.]+? (?:onto|over|on) the triggering creature, exposing (?:them|it|him|her) to ([^.]+?)\.$/i.exec(effect);
     const beside = /^(?:The )?[^.]+? onto an adjacent creature\. That creature is exposed to ([^.]+?)\.$/i.exec(effect);
-    const around = /^(?:All|Each|Every) creatures? within (\d+) feet of (?:the [\w' -]+?|it|them) (?:is|are) exposed to ([^.]+?)\.$/i.exec(effect);
+    const around = /^(?:(?:The )?[^.]+?\. )?(?:All|Each|Every) creatures? within (\d+) feet of (?:the [\w' -]+?|it|them) (?:is|are) exposed to ([^.]+?)(?:,? and must (?:attempt|roll) an? (?:Fortitude|Reflex|Will) save against (?:the|that) (?:poison|disease|affliction))?\.$/i.exec(effect);
     const phrase = (attacker?.[1] ?? beside?.[1] ?? around?.[2])?.toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, "");
     if (!phrase || (attacker && trigger.event !== "hit-by")) return null;
     const poison = ownAffliction(item, actor, phrase);
@@ -2773,12 +2774,19 @@ function reactionUsesAbility(item, actor, options) {
     const trigger = split ? readReactionTrigger(split[1].trim()) : null;
     if (!trigger) return null;
     const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
-    const uses = /^(?:The )?[\w' -]+? uses (?:its |their |his |her )?([A-Z][\w'-]*(?: [A-Z][\w'-]*)*)(, including the triggering creature in the area| against the (?:attacker|triggering creature)| and, if (?:it's|they're|he's|she's) aware of the damage's source, can Stride toward it)?\.$/.exec(said[0] ?? "");
+    // (Batch 227: a name with small words in it, "Stomp on Shadow".)
+    const uses = /^(?:The )?[\w' -]+? uses (?:its |their |his |her )?([A-Z][\w'-]*(?: (?:(?:of|on|the|in|to|from|at|with|and|a) )*[A-Z][\w'-]*)*)(, including the triggering creature in the area| against the (?:attacker|triggering creature)| and, if (?:it's|they're|he's|she's) aware of the damage's source, can Stride toward it)?\.$/.exec(said[0] ?? "");
     if (!uses) return null;
     const notes = [];
     if (uses[2] && /Stride toward/i.test(uses[2])) notes.push("If it's aware of the damage's source, it can Stride toward it.");
     if (uses[2] && /including the triggering creature/i.test(uses[2])) notes.push("Its area includes the triggering creature.");
     for (const sentence of said.slice(1)) {
+        // (Batch 227, Battlezoo: outside its multiple attack penalty; where the effect starts from, and its end after, notes.)
+        if (/^This (?:Strike|attack|attempt) (?:neither applies nor counts toward|doesn't take or add to) (?:the [\w' -]+?['’]s|its|their) multiple attack penalty\.$/i.test(sentence)) continue;
+        if (/^The (?:point of origin|origin point) for this effect is (?:the [\w' -]+?['’]s|its|their) [\w' -]+?\.$|^(?:The [\w' -]+?|It|They) (?:is|are) then destroyed\.$/i.test(sentence)) {
+            notes.push(sentence.replace(/^The (?:point of origin|origin point) for this effect is (?:the [\w' -]+?['’]s|its|their) /i, "Its area starts from its ").replace(/^(?:The [\w' -]+?|It|They) (?:is|are) then destroyed\.$/i, "Then it's destroyed."));
+            continue;
+        }
         if (/^If (?:the [\w' -]+?|it|they) (?:has|have) persistent \w+ damage, (?:it|they|he|she) attempts? (?:a|an) DC 15 flat check to remove it\.$/i.test(sentence)) notes.push(sentence.replace(/^If (?:the [\w' -]+?|it|they) (?:has|have) persistent/i, "If it has persistent").replace(/(?:they|he|she) attempts?/i, "it attempts"));
         else return null;
     }
@@ -2790,6 +2798,16 @@ function reactionUsesAbility(item, actor, options) {
         plan = compileMonsterAbility(other, { ...options, actor: owner });
     } catch {
         plan = null;
+    }
+    // (Batch 227, Battlezoo: a Strike activity of one Strike whose hit only gives conditions, used at a creature moving beside it — a reaction Strike
+    // with those conditions on a hit.)
+    const hit = plan?.builtin === "strike-activity" ? plan.onHit : null;
+    if (hit && trigger.event === "provoke" && !plan.strides && !plan.requires && !plan.attackBonus && !plan.damageBonus && hit.conditions?.length && !hit.damage?.length && !hit.push && !hit.save && !hit.size && !notes.length) {
+        const words = (entry) => `${entry.slug.replace(/(^|-)(\w)/g, (_all, dash, letter) => (dash ? "-" : "") + letter.toUpperCase())}${Number.isFinite(entry.value) ? ` ${entry.value}` : ""}`;
+        const until = hit.conditions.every((entry) => entry.duration?.expiry === "turn-start" && entry.duration?.value === 1) ? " until the start of its next turn" : "";
+        const kinds = { leave: "move", enter: "approach" };
+        return { builtin: "reaction-strike", triggers: [...new Set(trigger.triggers.map((kind) => kinds[kind] ?? kind))], strike: plan.strike, penalty: 0, disrupts: false, onHit: { conditions: structuredClone(hit.conditions), critical: structuredClone(hit.critical ?? []) },
+            ...(typeof trigger.within === "number" ? { within: trigger.within } : {}), note: [`On a hit, the creature is ${hit.conditions.map(words).join(" and ")}${until}.`, ...(plan.notes ?? [])].join(" ") };
     }
     if (!plan?.resolution) return null;
     return {
@@ -3423,9 +3441,11 @@ function provokedSkill(item, basicActions, actor = null) {
         return { ...plan, ...base(item, { traits: (plan.traits ?? []).filter((trait) => trait !== "attack") }), targeting: { ...plan.targeting, target: "the attacker" }, trigger };
     }
     const effect = (kept.length > 1 && !/\b(?:Trip|Shove|Grapple|Strike)\b/.test(kept[0]) && !/\b(?:check|damage|save)\b/i.test(kept[0]) ? kept.slice(1) : kept)
-        .filter((sentence) => !/^(?:This (?:check|attempt) (?:neither applies nor counts|doesn't count|does not count) toward (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.|On a success, the triggering (?:action|movement) is disrupted(?: and the creature is Tripped as normal)?\.)$/i.test(sentence)).join(" ");
+        .filter((sentence) => !/^(?:This (?:check|attempt) (?:neither applies nor counts toward|doesn't count toward|does not count toward|doesn't take or add to) (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.|On a success, the triggering (?:action|movement) is disrupted(?: and the creature is Tripped as normal)?\.)$/i.test(sentence)).join(" ");
     const match = /^(?:The )?[^.]+? attempts an Athletics check to (Trip|Shove|Grapple) the triggering creature\.(?: This check (?:doesn't|does not) count toward (?:the [\w' -]+?'s|its|their) multiple attack penalty, and (?:its|their) multiple attack penalty (?:doesn't|does not) apply to this check\.)?$/i.exec(effect)
-        ?? /^(?:The )?[^.]+? (?:attempts|makes) an Athletics check to (Trip|Shove|Grapple) the (?:triggering creature|target|creature)\.$|^(?:The )?[^.]+? (?:attempts to|uses (?:its|their|his|her) [\w' -]+? to attempt to|extends an? [\w' -]+? and attempts to) (Trip|Grapple) the (?:triggering )?creature\.$/i.exec(effect);
+        ?? /^(?:The )?[^.]+? (?:attempts|makes) an Athletics check to (Trip|Shove|Grapple) the (?:triggering creature|target|creature)\.$|^(?:The )?[^.]+? (?:attempts to|uses (?:its|their|his|her) [\w' -]+? to attempt to|extends an? [\w' -]+? and attempts to) (Trip|Grapple) the (?:triggering )?creature\.$/i.exec(effect)
+        // (Batch 227, Battlezoo: "…, attempting to Trip the creature.")
+        ?? /^(?:The )?[^.]+?, attempting to (Trip|Shove|Grapple) the (?:triggering )?creature\.$/i.exec(effect);
     if (match && !match[1]) match[1] = match[2];
     const basic = match ? basicActions[match[1].toLowerCase()] : null;
     if (!basic?.resolution) return null;
@@ -3858,12 +3878,18 @@ function provokedStrike(item) {
     const parts = /^(?:Requirements? .+? )?Trigger (.+?)\.? (?:Requirements? .+? )?Effect (.+)$/.exec(plain);
     const trigger = parts ? readReactionTrigger(parts[1]) : null;
     if (trigger?.event !== "provoke") return null;
-    const told = parts[2].split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 227, Battlezoo: on a hit the action is lost unless the creature passes a save — disruptSave.)
+    let disruptSave = null;
+    const effect = parts[2].replace(/; on a hit, (?:the target loses the triggering action|the triggering action is lost) unless (?:it|they) (?:succeeds? at|pass(?:es)?) an? (?:@Check\[(?:type:)?(fortitude|reflex|will)\|dc:(\d+)[^\]]*\](?:\{[^}]*\})?|DC (\d+) (Fortitude|Reflex|Will)) sav(?:e|ing throw)\./i, (_all, save, dc, dc2, save2) => {
+        disruptSave = { statistic: (save ?? save2).toLowerCase(), dc: Number(dc ?? dc2) };
+        return ".";
+    });
+    const told = effect.split(/(?<=\.)\s+(?=[A-Z])/);
     // (Its capitalised words: "strikes out when the foe tries to flee" only tells it.)
     const sentences = told.length > 1 && !/\b(?:Strikes?|Trip|Grapple)\b/.test(told[0]) && !/\b(?:check|damage|save|disrupt\w*)\b/i.test(told[0]) ? told.slice(1) : told;
     const who = String.raw`(?:the (?:triggering )?creature|the target|the attacker|it|that creature)`;
     const first = sentences[0] ?? "";
-    const struck = new RegExp(String.raw`^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) ${who}(?: with an? [–-](\d+) penalty)?\.$`, "i").exec(first)
+    const struck = new RegExp(String.raw`^(?:The )?[^.]+? (?:makes?|attempts?) an? ([\w' -]+?) Strike (?:at|against) ${who}(?: with an? [–-](\d+) penalty)?\.$`, "i").exec(first)
         ?? new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who} with (?:its|their|his|her) ([\w' -]+?)\.$`, "i").exec(first)
         ?? (new RegExp(String.raw`^(?:The )?[^.]+? Strikes ${who}\.$`, "i").test(first) ? [first, "melee"] : null);
     if (!struck) return null;
@@ -3872,6 +3898,10 @@ function provokedStrike(item) {
         if (/^If (?:it|the Strike|the attack|this attack|the Strike) hits, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts (?:the (?:creature's|triggering) action|that action|the action)\.$|^On a success the target's action is interrupted;/i.test(sentence)) disrupts = true;
         else if (/^If (?:the attack|this attack|the Strike|it) is a critical hit(?: and the trigger was a move action)?, (?:she|he|it|they|the [\w' -]+?|[A-Z][\w'-]+) disrupts? (?:that|the triggering|the) action\.$/i.test(sentence)) disrupts ||= "critical";
         else if (/^This Strike (?:doesn't|does not) contribute to (?:his|her|its|their) multiple attack penalty, and (?:his|her|its|their) multiple attack penalty (?:doesn't|does not) apply to this Strike\.$/i.test(sentence)) continue;
+        // (Batch 227, Battlezoo: a hit disrupts it; a critical hit does; the Strike outside its multiple attack penalty.)
+        else if (/^On a hit, (?:they|it|he|she|the [\w' -]+?) disrupts? the (?:triggering )?action\.$/i.test(sentence)) disrupts = true;
+        else if (/^If the attack is a critical hit, the (?:triggering )?action is disrupted\.$/i.test(sentence)) disrupts ||= "critical";
+        else if (/^This (?:Strike|attack|attempt) (?:neither applies nor counts toward|doesn't take or add to) (?:the [\w' -]+?['’]s|its|their) multiple attack penalty\.$/i.test(sentence)) continue;
         // (Batch 225: Disruptive Screech's "This disrupts a triggering concentrate action if the Strike is a critical hit.", Clinch Victory's "On a
         // critical success, this Strike also disrupts the triggering action.")
         else if (/^This disrupts (?:a|the) triggering (?:concentrate )?action if the Strike is a critical hit\.$|^On a critical (?:success|hit), this Strike also disrupts the triggering action\.$/i.test(sentence)) disrupts ||= "critical";
@@ -3883,7 +3913,7 @@ function provokedStrike(item) {
     const triggers = [...new Set((trigger.triggers ?? []).map((kind) => kinds[kind] ?? kind))];
     if (!triggers.length) return null;
     // (A distance in feet, Snap Shot's "within 30 feet": live play's, for a ranged Strike.)
-    return { builtin: "reaction-strike", triggers, strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts, ...(typeof trigger.within === "number" ? { within: trigger.within } : {}) };
+    return { builtin: "reaction-strike", triggers, strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: disruptSave ? true : disrupts, ...(disruptSave ? { disruptSave } : {}), ...(typeof trigger.within === "number" ? { within: trigger.within } : {}) };
 }
 
 // You're Next (2026-10-11, batch 52): "Trigger The prisoner reduces a creature to 0 hit points. Effect The prisoner attempts an
@@ -4744,7 +4774,7 @@ function provokeTrigger(text) {
     const sized = /^An? (Tiny|Small|Medium|Large|Huge|Gargantuan) creature\b/.exec(trigger);
     if (sized) trigger = trigger.replace(sized[0], "A creature");
     // (Batch 68: "in the grick's reach", "within a clockwork sentry's reach", "within reach of Racharak's tail".)
-    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: (?:within|in) (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|(?:${SELF}|an? [\w' -]+?)'s? reach|reach|(${SELF}))(?: of ${SELF}(?:['’]s [\w' -]+?)?)?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves)\b.*)$`).exec(trigger);
+    const subject = new RegExp(String.raw`^(?:An?|Any) (adjacent )?(?:creature|enemy|foe)(?: (?:that )?${SELF} (?:observes|can see))?(?: (?:within|in) (?:(\d+) feet|a @Template\[[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?|(?:${SELF}|an? [\w' -]+?)'s? reach|reach|(${SELF}))(?: of ${SELF}(?:['’]s [\w' -]+?)?)?| (adjacent) to ${SELF})?(?: (?:that )?${SELF} (?:observes|can see))? ((?:uses?|makes?|leaves?|Strides|enters|moves|attempts|tries)\b.*)$`).exec(trigger);
     if (!subject) return null;
     const rest = subject[6];
     const triggers = new Set();
@@ -4772,6 +4802,13 @@ function provokeTrigger(text) {
         // (Batch 225: "uses an auditory action", Auditory Swipe's and Disruptive Screech's; "uses an action that would restore Hit Points", Clinch
         // Victory's — a healing action.)
         else if (/^uses? an? auditory action$/i.test(part)) triggers.add("auditory");
+        // (Batch 227, Battlezoo: Standing up in its reach; an attempt at a move action beside it, or at one that leaves a square near it — moves.)
+        else if (/^uses? the Stand action$/i.test(part)) triggers.add("stand");
+        else if (/^(?:attempts|tries) to use a move action$/i.test(part)) triggers.add("move");
+        else if (new RegExp(String.raw`^(?:attempts|tries) to uses? an action with the move trait to (?:exit|leave) a (?:square|space) within (\d+) feet of ${SELF}$`).test(part)) {
+            triggers.add("leave");
+            within = Number(/within (\d+) feet/.exec(part)[1]);
+        }
         else if (/^uses? an action that would restore Hit Points$/i.test(part)) triggers.add("healing");
         else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during (?:a|its|their) move action)?$/i.test(part)) triggers.add("leave");
         else if (/^Strides$/.test(part)) triggers.add("move");

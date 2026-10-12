@@ -2347,6 +2347,14 @@ export function readReaction(item, text) {
         const rest = said.slice(1).every((sentence) => /^Demoralize loses the auditory trait and gains the visual trait\b[^.]*\.$|^If the Intimidation check critically succeeds, [^.]*disrupts? the triggering action\.$/i.test(sentence));
         if (glance && rest) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, melee: true };
     }
+    // (Batch 227, Battlezoo: a ranged attack at it answered with a Demoralize at the attacker; that Demoralize's immunity neither stops it nor follows
+    // from it, a note — rangedAttack: only a ranged attack.)
+    if (/^(?:The )?[^.]+? is the target of a ranged attack$/i.test(trigger.trim().replace(/\.$/, ""))) {
+        const said = effect.trim().replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug).split(/(?<=\.)\s+(?=[A-Z])/);
+        const scare = /^(?:The )?[^.]+? (?:attempts to Demoralize|Demoralizes) the (?:attacking|triggering) creature\.$/i.test(said[0] ?? "");
+        const immune = said.slice(1).every((sentence) => /^This ignores any temporary immunity [^.]+ and (?:doesn't|does not) make (?:them|it) temporarily immune to Demoralize\.$|^Immunity to (?:its|this) Demoralize neither stops it nor follows from it\.$/i.test(sentence));
+        if (scare && immune) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, rangedAttack: true, ...(said.length > 1 ? { note: "Temporary immunity to its Demoralize neither stops this nor follows from it." } : {}) };
+    }
     const more = readMoreReactionStrikes(trigger.trim().replace(/\.$/, ""), effect.trim());
     if (more) return more;
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
