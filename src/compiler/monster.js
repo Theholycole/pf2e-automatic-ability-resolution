@@ -2069,7 +2069,7 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     // One of several modes picked by the monster's state ("its attack depends on its current form").
     if (/\bdepending on (?:its|their|the [\w' -]+?'s) (?:[\w-]+ )?(?:attunement|form|stance|mode|aspect)\b/i.test(htmlToPlainText(html))) return null;
     // Damage by the number of actions spent ("The damage depends on the number of actions"): not one plan.
-    if (/\bdepends? on the number of actions\b|\bfor each additional action\b/i.test(htmlToPlainText(html))) return null;
+    if (/\b(?:depends? on|depending on) the number of actions\b|\bfor each additional action\b/i.test(htmlToPlainText(html))) return null;
     // An effect picked from a roll on a list ("Roll on the alchemical chambers list to determine which one shatters"): the GM's.
     if (/\broll on (?:the|a|an|its) [^.]*?\b(?:list|table)\b|\broll [^.]*? to determine which\b/i.test(htmlToPlainText(html))) return null;
     // A save its terrain sets off later ("The first time each round a creature takes piercing damage from these splintered bones, it
@@ -2531,11 +2531,15 @@ function wickedBite(item) {
 function actionCountSave(item, actor) {
     const html = item.system?.description?.value ?? "";
     // (Batch 241: also "The damage and additional effects depend on the number of actions".)
-    const phrase = /\bdepends? on the number of actions\b/i.exec(html);
+    // (Batch 244, Striking Koa: "… for their choice of bludgeoning, piercing, or slashing damage depending on the number of actions" — untyped damage
+    // of the first, its type the monster's pick: PF2e's caster choice, as batch 142's.)
+    const phrase = /\b(?:depends? on|depending on) the number of actions\b/i.exec(html);
     if (!phrase) return null;
     const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry.save && entry.dc);
     if (!check?.basic) return null;
     // From the phrase on: a count, then its damage, up to the next count.
+    const choice = /\bfor (?:their|its) choice of (\w+), (\w+),? or (\w+) damage\b/i.exec(htmlToPlainText(html));
+    const picks = choice ? choice.slice(1, 4).map((type) => type.toLowerCase()) : null;
     const { masked, tags } = maskDamage(html.slice(phrase.index));
     // (Batch 234, Battlezoo: the count in a "pf2-icon" span.)
     const markers = [...masked.matchAll(/<span class="(?:action-glyph|pf2-icon)">([123])<\/span>|(?<![\w\u0000])([123])(?=\s*\u0000)/g)];
@@ -2544,7 +2548,7 @@ function actionCountSave(item, actor) {
     markers.forEach((marker, index) => {
         const segment = masked.slice(marker.index + marker[0].length, markers[index + 1]?.index ?? masked.length);
         const found = [...segment.matchAll(/\u0000(\d+)\u0000/g)].map((match) => tags[Number(match[1])]).filter((raw) => !/\bhealing\b/i.test(raw));
-        if (found.length) variants[marker[1] ?? marker[2]] = found.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null }));
+        if (found.length) variants[marker[1] ?? marker[2]] = found.map((raw, id) => ({ id: String(id), formula: picks ? readDamage(raw).replace(/\[untyped\]$/, `[${picks[0]}]`) : readDamage(raw), type: null, category: null }));
         const extra = countConditions(segment.replace(/\u0000\d+\u0000/g, ""));
         if (extra) extras[marker[1] ?? marker[2]] = extra;
     });
@@ -2559,7 +2563,10 @@ function actionCountSave(item, actor) {
     const around = /\beach (?:adjacent )?enem(?:y|ies) within (\d+) feet\b/i.exec(plain)?.[1] ?? (/\beach adjacent enem(?:y|ies)\b/i.test(plain) ? "5" : null)
         ?? /\b(?:each|all) enem(?:y|ies) in (?:(?:its|their) squares|the squares (?:it|they) occup(?:y|ies)) (?:and|or) within (\d+) feet\b/i.exec(plain)?.[1] ?? null;
     // (Batch 234: its enemies only, as it says — area.foes.)
-    const template = inlineTags(before, "Template").map(readTemplate).find(Boolean) ?? (around ? { type: "emanation", value: Number(around), foes: true } : undefined);
+    // (Batch 244: "each enemy in a @Template[…]", "against enemies within @Template[…]" — its enemies only too.)
+    const drawn = inlineTags(before, "Template").map(readTemplate).find(Boolean);
+    const enemiesOnly = /\benem(?:y|ies)\s+(?:in|within)\s+(?:an?\s+)?@Template\[/i.test(before);
+    const template = (drawn && enemiesOnly ? { ...drawn, foes: true } : drawn) ?? (around ? { type: "emanation", value: Number(around), foes: true } : undefined);
     const range = readRange(plain);
     const recharge = readRecharge(html);
     const outcomes = withRiders(basicRows(components.map((component) => component.id)), before, components);
@@ -2585,6 +2592,7 @@ function actionCountSave(item, actor) {
             check: { roll: "save", statistic: check.statistic, basic: true, against: { dc: "fixed", value: check.dc } },
             sharedDamage: { rollOnce: true, components },
             outcomes: rowsFor(counts[0]),
+            ...(picks ? { casterChoice: { kind: "damage-type", label: "Damage type", values: picks } } : {}),
             native: { byActions: Object.fromEntries(counts.map((count) => [count, { sharedDamage: { components: variants[count] }, ...(extras[count] ? { rows: rowsFor(count) } : {}) }])) }
         }
     };
@@ -3274,6 +3282,35 @@ function escapeBite(item, actor) {
         trigger: { ...trigger, reaction: true },
         notes: [...(poison.notes ?? []), `It deals ${formula.replace(/\[(\w+)\]/g, " $1").replace(/[()]/g, "")} damage whatever the save.`]
     };
+}
+
+// Cling (2026-10-12, batch 244): "Trigger A creature leaves the swarm's space Effect The swarm takes 1d6 untyped damage as ticks cling to the creature
+// and continue biting, dealing 3d6 persistent piercing damage. High winds or immersion in water reduces the DC of the flat check to end this persistent
+// damage to 5. Any area damage dealt to the creature destroys these clinging ants." → the persistent damage on the creature leaving its space, as it
+// leaves; the swarm's own damage and what ends the bleeding early, notes. null otherwise.
+function clingBite(item, actor) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const tags = inlineTags(html, "Damage");
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (trigger?.event !== "provoke" || trigger.within !== 0 || tags.length !== 2) return null;
+    const sentences = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    if (!/^(?:The )?[\w' -]+? takes @D damage as (?:the )?[\w' -]+? cling to the creature and continue biting, dealing @D(?: damage)?\.$/i.test(sentences[0] ?? "")) return null;
+    const notes = [`The swarm takes ${readDamage(tags[0]).replace(/\[(\w+)\]/g, " $1").replace(/[()]/g, "")} damage itself.`];
+    for (const sentence of sentences.slice(1)) {
+        // (The tick swarm's: "Immersion in water reduces … to 5, and any area damage dealt to the creature destroys these clinging ticks.")
+        const lower = /^(High winds or )?immersion in water reduces the DC of the flat check to end this persistent damage to (\d+)(, and any area damage dealt to the creature destroys these clinging [\w' -]+?)?\.$/i.exec(sentence);
+        if (lower) notes.push(`${lower[1] ? "High winds or water lower" : "Water lowers"} the flat check to end it to DC ${lower[2]}.`, ...(lower[3] ? ["Area damage on the creature ends it."] : []));
+        else if (/^Any area damage dealt to the creature destroys these clinging [\w' -]+?\.$/i.test(sentence)) notes.push("Area damage on the creature ends it.");
+        else return null;
+    }
+    // (Bleed is persistent: "3d6[bleed]" as "3d6[persistent,bleed]".)
+    const rewritten = withDescription(item, `<p><strong>Trigger</strong> ${split[1].trim()}</p><hr /><p><strong>Effect</strong> It deals @Damage[${tags[1].replace(/\[bleed\]/i, "[persistent,bleed]")}] damage to the triggering creature.</p>`);
+    const plan = automaticEffect(rewritten, actor);
+    const triggered = plan ? reactionTrigger(rewritten, plan, actor) : null;
+    return triggered ? { ...triggered, notes: [...(triggered.notes ?? []), ...notes] } : null;
 }
 
 function areaExposure(item, actor) {
@@ -4575,7 +4612,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -5062,6 +5099,11 @@ function provokeTrigger(text) {
         else if (/^uses? an action that would restore Hit Points$/i.test(part)) triggers.add("healing");
         else if (/^leaves? (?:a|an adjacent) (?:square|space)(?: in the area)?(?: during (?:a|its|their) move action)?$/i.test(part)) triggers.add("leave");
         else if (/^Strides$/.test(part)) triggers.add("move");
+        // (Batch 244, Cling: "A creature leaves the swarm's space" — one in its space leaving it.)
+        else if (new RegExp(String.raw`^leaves ${SELF}['’]s? space$`).test(part)) {
+            triggers.add("leave");
+            within = 0;
+        }
         else if (new RegExp(String.raw`^enters ${SELF}'s? reach$`).test(part)) {
             triggers.add("enter");
             within ??= "reach";

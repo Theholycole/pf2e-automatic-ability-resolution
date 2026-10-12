@@ -234,7 +234,8 @@ async function onMove(token, movement) {
             if (!triggered) continue;
             await offer({
                 kind: "strike", item, monster, actor, target: token, strikes, penalty: plan.penalty ?? 0,
-                trigger: leaves ? "left a square in its reach" : "moved in its reach",
+                // (Batch 244: a teleport first, Lurking Death's — within its distance, not its reach.)
+                trigger: leaves ? "left a square in its reach" : plan.teleport ? `moved within ${plan.within} feet of it` : "moved in its reach",
                 note: [plan.only ? `Only at ${plan.only}.` : null, squares === 1 ? "If this was a Step, it doesn't trigger." : null, plan.disrupts === "critical" ? "If the Strike is a critical hit, the move is disrupted." : plan.disrupts ? "If the Strike hits, the action is disrupted." : null, plan.criticalTrip ? CRITICAL_TRIP : null, plan.note ?? null].filter(Boolean).join(" ") || null
             });
             break;

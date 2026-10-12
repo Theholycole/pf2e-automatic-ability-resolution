@@ -2362,3 +2362,17 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the withdraw and multi-Strike offers and notes as before; the charged Strikes' extra damage as a DamageDice and a FlatModifier rule.
 - **Simulator:** see B243 in its ability decisions.
 
+## Bestiary troops, growths and clinging swarms (2026-10-12, batch 244)
+
+- **Compiled** (5 new in PF2e, plus 2 adventure copies that were the GM's):
+  - **A troop's damage of its chosen type by actions** (Striking Koa): "depending on the number of actions" is read too. "For their choice of bludgeoning, piercing, or slashing damage" turns the untyped damage into the first type, with PF2e's caster choice (`casterChoice` damage-type) for the others.
+  - **A troop's area at its enemies**: "each enemy in a @Template[…]" or "enemies within @Template[…]" marks the area `foes: true` (111 troop plans).
+  - **A growth when hurt** (Enraged Growth) → `self-effect` set off by any damage (`trigger.kind: "damaged"`): its Hit Points back, and +2 status to attack and damage until the end of its next turn. Its size, reach, extension and fatigue are notes.
+  - **A swarm clinging to a creature that leaves it** (Cling) → the trigger "A creature leaves the swarm's space" (`provoke`, `leave`, within 0 feet), with the persistent damage (bleed as persistent bleed) on that creature. The swarm's own damage and what ends the bleeding early are notes.
+- **Live:**
+  - Cling's card comes when a creature in the swarm's space moves out of it;
+  - Enraged Growth applies its effect and healing when the GM uses it;
+  - the troop card asks the GM for the damage type;
+  - Lurking Death's offer reads "moved within 60 feet of it".
+- **Simulator:** see B244 in its ability decisions.
+
