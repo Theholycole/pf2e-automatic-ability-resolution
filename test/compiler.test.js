@@ -2316,3 +2316,11 @@ test("multi-Strikes: a Step between, more damage when both hit the same enemy, a
     assert.deepEqual(compile("<p>The test rogue can Step, attempt a melee knife Strike, and attempt a ranged knife Strike, taking the actions in any order. Both Strikes count toward the test rogue's multiple attack penalty, but it doesn't increase until after both attacks.</p>"), { builtin: "multi-strike", actions: 2, strikes: ["knife", "knife"], sameMap: true });
     assert.deepEqual(compile("<p><strong>Requirements</strong> The test brawler is raging</p><hr /><p><strong>Effect</strong> The test brawler attempts two fist Strikes, each against a different creature.</p>", 1), { builtin: "multi-strike", actions: 1, strikes: ["fist", "fist"], each: true, max: 2, requires: "requirement" });
 });
+
+test("a poison gas breathed over an area: its own poison's stages there, the recharge (2026-10-12, batch 114)", () => {
+    const poison = { type: "action", name: "Test Statue Poison", system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: ["poison"] }, description: { value: "<p><strong>Saving Throw</strong> @Check[fortitude|dc:25]</p><hr /><p><strong>Maximum Duration</strong> 4 rounds</p><p><strong>Stage 1</strong> @Damage[1d6[poison]] damage (1 round)</p><p><strong>Stage 2</strong> @Damage[2d6[poison]] damage (1 round)</p>" } } };
+    const breath = { type: "action", name: "Test Gas", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p>The test statue exhales poisonous gas in a @Template[burst|distance:10]{10-foot radius} centered on the corner of one of the test statue's squares.</p><p>The gas persists for 1 round. Any creature in the area (or that later enters the area) is exposed to the test statue's poison.</p><p>The test statue can't use its Test Gas again for [[/gmr 1d4 #Recharge Test Gas]]{1d4 rounds}.</p>" } } };
+    const actor = { name: "Test Statue", items: [breath, poison] };
+    const plan = compileMonsterAbility(breath, { basicActions: {}, actor });
+    assert.deepEqual([plan?.targeting?.area, plan?.trigger?.recharge?.formula, plan?.resolution?.check?.against?.value, plan?.resolution?.outcomes?.failure?.affliction?.stage], [{ type: "burst", value: 10 }, "1d4", 25, 1]);
+});

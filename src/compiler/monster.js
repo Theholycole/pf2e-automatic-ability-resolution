@@ -1870,6 +1870,39 @@ function ownVenom(item, actor, name) {
     return plan?.resolution ? { builtin: "poison-weapon", actions: Number(item.system?.actions?.value) || 1, poison: { name: source.name, uuid: source.uuid ?? null, plan }, doses: 99, own: true } : null;
 }
 
+// A poison breathed or sprayed over an area (2026-10-12, batch 114, the iron golem's Breath Weapon): "The iron golem exhales poisonous gas in a
+// @Template[burst|distance:10] centered on the corner of one of the iron golem's squares. The gas persists for 1 round. Any creature in the
+// area (or that later enters the area) is exposed to the iron golem's poison. The golem can't use its Breath Weapon again for 1d4 rounds." →
+// its poison's plan (the affliction with that name among its abilities: its save and stages) over that area, with the recharge; the gas
+// that lingers a note for the GM.
+function areaExposure(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const template = /@Template\[(?:type:)?(burst|cone|emanation|line)\|distance:(\d+)[^\]]*\]/i.exec(html);
+    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[^.]+? (?:exhales|emits|breathes out|sprays) (?:a cloud of )?(?:poisonous|toxic|noxious) gas in an? @T(?: centered on (?:the corner of )?one of (?:the [\w' -]+?['’]s|its|their) squares)?\. The gas persists for 1 round\. Any creature in the area \(or that later enters the area\) is exposed to (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?)\.(?: (?:The )?[^.]+? can(?:'t|not) use (?:its |their )?[\w' -]+? again for (\d+d\d+|\d+) rounds?\.)?$/i.exec(plain);
+    if (!template || !match) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const wanted = match[1].toLowerCase();
+    const source = (owner?.items?.contents ?? owner?.items ?? []).find((other) => other !== item && /<strong>\s*Stage\s+1\s*<\/strong>/i.test(other.system?.description?.value ?? "") && (String(other.name ?? "").toLowerCase() === wanted || String(other.name ?? "").toLowerCase().endsWith(` ${wanted}`)));
+    if (!source) return null;
+    let poison = null;
+    try {
+        poison = compileAffliction(source, base(source));
+    } catch {
+        poison = null;
+    }
+    if (!poison?.resolution) return null;
+    return {
+        ...poison,
+        source: base(item).source,
+        activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] },
+        targeting: { target: null, range: null, area: { type: template[1].toLowerCase(), value: Number(template[2]) } },
+        trigger: { event: "use", ...(match[2] ? { recharge: { formula: match[2], unit: "rounds" } } : {}) },
+        notes: [...(poison.notes ?? []), "The gas persists for 1 round: a creature that enters the area then is exposed too."]
+    };
+}
+
 function poisonWeapon(item, actor) {
     if (item.system?.actionType?.value !== "action") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
@@ -2564,7 +2597,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
