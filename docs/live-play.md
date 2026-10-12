@@ -1908,3 +1908,28 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the GM's card, as for every `no-effect`. Not run in pftest.
 - **Simulator:** nothing new; these abilities play no part.
 
+## Sweeps, Strides with Strikes, disguises (2026-10-12, batch 212)
+
+- **Compiled** (21 Battlezoo abilities; their own words stay out of this repository):
+  - **A Strike at every creature in reach:** attacks (not "Strikes") at every creature it can reach; a penalty that rises only once all are made, in two more wordings.
+  - **That many Strikes, each at a different creature:**
+    - never the same creature twice;
+    - one Strike aimed at up to three separate creatures;
+    - each shot at its own target;
+    - three tongue Strikes at separate targets, counted as one attack.
+  - **A move with Strikes along it (`strides`, a note):**
+    - a Fly Striking creatures beside its path;
+    - a charge in a straight line Striking each foe it passes;
+    - a Stride with up to two Strikes during it, each at a different creature (a critical miss ends it, a note);
+    - a Stride up to its Speed, with up to three Strikes on the way.
+    - Two PF2e Strides with two Strikes during them now count the Stride.
+  - **Three Strikes split among up to three creatures:** three Strikes at whichever it likes.
+  - **Strikes, then a Step:** a note.
+  - **Two or more of three bites hitting the same creature:** it's Frightened 1 (`bothHit: { …, atLeast: 2 }`).
+  - **Disguises:**
+    - a lead-in sentence before the disguise;
+    - the automatic Deception result in the disguise's own sentence: while flattened, while prone, or until it next acts;
+    - a Bulk of goods it can slip into.
+    - Not when it also lets go of a creature it holds.
+- **Live:** cards as for multi-Strikes. The GM's whisper now says "if 2 or more of its Strikes hit the same creature" for `atLeast`. Not run in pftest.
+- **Simulator:** `bothHit.atLeast` gives the rider once at least that many Strikes hit the creature (B212). It's logged as "2 Strikes hit …".

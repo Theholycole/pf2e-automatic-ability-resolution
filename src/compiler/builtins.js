@@ -276,6 +276,14 @@ export function readMultiStrikes(text) {
             earlyNotes.push(`The two creatures within ${feet} feet of each other.`, ...rest.replace(/\[\[\/act [^\]]*\]\]\{([^}]*)\}/g, "$1").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
             return `${who} makes two spike Strikes, each against a different target. This counts as one attack when calculating its multiple attack penalty.`;
         });
+    // (Batch 212, Battlezoo: a Stride up to its Speed, then up to so many Strikes on the way, in a sentence of their own; so many Strikes "times"
+    // with one weapon, each at its own creature.)
+    body = body.replace(/^((?:The )?[^.]+?) Strides up to (?:its|their|his|her) Speed\. (?:It|They|He|She) can make up to (two|three|four) ([\w' -]+?) Strikes at any point during (?:its|their|his|her|the|that) movement\./i, (_all, who, number, name) => {
+        movesFirst = 1;
+        earlyNotes.push("It Strides up to its Speed, making the Strikes at any point along the way.");
+        return `${who} makes up to ${number.toLowerCase()} ${name} Strikes.`;
+    })
+        .replace(/\b(It|They|He|She|The [\w' -]+?) Strikes (two|three|four) times with (?:its|their|his|her) ([\w' -]+?), each against a different (target|creature)\./i, "$1 makes $2 $3 Strikes, each against a different $4.");
     body = body.replace(/^((?:The )?[^.]+?) Flies and Strikes twice with (?:its|their|his|her) ([\w' -]+?) at any points? during (?:its|their|his|her) movement\./i, (_all, who, weapon) => `${who} Strides once and makes two ${weapon.replace(/s$/i, "")} Strikes at any point along its movement.`)
         .replace(/^(?:The )?([^.,]+?) [^.,]+?, Striding and making two Strikes against different targets during the movement\./i, (_all, who) => {
             strideFirst = true;
@@ -362,6 +370,18 @@ export function readMultiStrikes(text) {
             notes.push(`It Strides ${times.toLowerCase()}, making the Strikes at any point along the way.`);
             return `${who} makes ${number} ${name} Strikes`;
         })
+        // (Batch 212, Battlezoo: a Stride (up to its Speed) with two Strikes somewhere along it, in one sentence; the penalty as normal in brackets,
+        // then a Step — the Step a note.)
+        .replace(/^((?:The )?[^.]+?) Strides(?: up to (?:its|their|his|her) Speed)? and (?:can )?makes? (up to )?(two|three) ([\w' -]+?) Strikes,?(?: each)? at any points? during (?:that|its|their|his|her|the) (?:movement|Stride)(?=\.$)/i, (_all, who, upTo, number, name) => {
+            strides = 1;
+            notes.push("It Strides, making the Strikes at any point along the way.");
+            return `${who} makes ${upTo ?? ""}${number.toLowerCase()} ${name} Strikes`;
+        })
+        .replace(/ \(applying (?:its|their|his|her) multiple attack penalty (?:normally|as normal)\)/i, "")
+        .replace(/, then Steps(?=\.$)/i, () => {
+            notes.push("Then it Steps.");
+            return "";
+        })
         .replace(/, each with a range of (\d+) feet(?=\.$)/i, (_all, feet) => {
             notes.push(`Each Strike has a range of ${feet} feet.`);
             return "";
@@ -434,7 +454,7 @@ export function readMultiStrikes(text) {
         // (Batch 42: "two fist Strikes, applying her multiple attack penalty as normal", "two Strikes, each of which must be an unarmed
         // Strike or temple bell Strike", "two unarmed Strikes, or one unarmed Strike and a dueling pistol Strike": its best melee
         // Strikes; "thrashes wildly with its wings, making wing Strikes against up to three adjacent foes".)
-        .replace(/, applying (?:its|their|his|her) multiple attack penalty as normal(?=\.$)/i, "")
+        .replace(/, applying (?:its|their|his|her|the [\w' -]+?['’]s) multiple attack penalty (?:as normal|normally)(?=\.$)/i, "")
         // (Batch 80: "They make two hoof Strikes against the same target", "… two claw Strikes at the same target, each using her current
         // multiple attack penalty".)
         .replace(/^(They|You) make (?=(?:up to )?(?:a|an|one|two|three|four|five|six) )/, "$1 makes ")
@@ -478,6 +498,8 @@ export function readMultiStrikes(text) {
         .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
         .replace(/(Strikes), or one [\w' -]+? Strike and an? [\w' -]+? Strike(?=\.$)/i, "$1")
         .replace(/, making ([\w' -]+? Strikes against )/i, " and makes $1")
+        // (Batch 212, a Battlezoo flurry: so many Strikes at no more than that many creatures — at whichever it likes.)
+        .replace(/(\bmakes|, making) (two|three|four) ([\w' -]+?) Strikes (?:against|at) up to \2 creatures within (?:(?:its|their|his|her) )?(?:reach|range)(?=\.$)/i, (_all, verb, number, name) => `${verb.startsWith(",") ? " and makes" : "makes"} ${number} ${name} Strikes`)
         // (Batch 90, the minotaur's Axe Swipe: "… making greataxe Strikes against any two foes who are adjacent to each other and within the
         // minotaur's reach".)
         .replace(/\bmakes ([\w' -]+?) Strikes against any two foes who are adjacent to each other and within (?:the [\w' -]+?['’]s|its|their|his|her) reach(?=\.$)/i, "makes two $1 Strikes, each against a different creature")
@@ -606,6 +628,22 @@ export function readMultiStrikes(text) {
             notes.push("One attack roll for both Strikes.");
             continue;
         }
+        // (Batch 212, Battlezoo: each Strike at its own creature with the penalty held until all are made, in one sentence; the activity ending on a
+        // critical miss, a note; the Strikes counted as one attack.)
+        if (/^(?:It|They) must make each attack against a different creature, but (?:it|they) (?:doesn't|don't|does not|do not) apply (?:its|their) multiple attack penalty until after making (?:both|all(?: (?:its|their|two|three|four))?) Strikes\.$/i.test(sentence) && !sameTarget) {
+            each = true;
+            sameMap = true;
+            continue;
+        }
+        if (/^If (?:either|any) (?:of the )?Strikes? (?:is|are|results? in) a critical (?:miss|failure), [A-Z][\w' -]+? ends\.$/i.test(sentence)) {
+            notes.push("A critical miss ends it.");
+            continue;
+        }
+        if (/^(?:These|They|These Strikes|These attacks) counts? as only one attack for [^.]*multiple attack penalty\.$/i.test(sentence)) {
+            sameMap = true;
+            countsAs = 1;
+            continue;
+        }
         // (Batch 139, Team Attack: "Each must target a different creature.")
         if (/^Each must target a different (?:creature|target|foe|enemy)\.$/i.test(sentence) && !sameTarget) {
             each = true;
@@ -690,6 +728,12 @@ export function readMultiStrikes(text) {
             // (Batch 138, Sanguine Mauling: "If it hits with both claws, the target takes 1d6 bleed.")
             .replace(/^If (?:the [\w' -]+?|it|they|he|she) hits? (?:the same (?:creature|target) )?with both [\w' -]+?, the (?:target|creature) /i, "If both Strikes hit the same target, the target ");
         // (Batch 198, Gory Rend: "If both hit, the creature takes @Damage[2d10[bleed]] and is exposed to piscovenom." — its affliction too, by name.)
+        // (Batch 212, a Battlezoo creature's bites: a condition for a creature at least two of the three hit, not only when all hit.)
+        let atLeast = null;
+        sentence = sentence.replace(/^If two or more (?:attacks|Strikes) hits? the same (target|creature), (?:it|that (?:target|creature)) (becomes|is|takes) /i, (_all, who, verb) => {
+            atLeast = 2;
+            return `If both Strikes hit the same ${who}, the ${who} ${verb} `;
+        });
         let exposed = null;
         if (/^If (?:they )?both (?:Strikes |attacks )?hit\b/i.test(sentence)) sentence = sentence.replace(/,? and is exposed to ([a-z][\w' -]+?)(?=\.$)/i, (_all, name) => {
             exposed = name.trim();
@@ -707,7 +751,7 @@ export function readMultiStrikes(text) {
             // (Nothing else in it: not an exposure to a poison, a Disarm, temporary Hit Points.)
             const left = rest.replace(new RegExp(String.raw`\b(?:${BOTH_CONDITIONS})(?: \d+)?(?: for \d+ rounds?)?\b`, "gi"), "").replace(/\b(?:and|also|knocked|is|the target|becomes|dealt|takes|an additional|an extra)\b|[,\s]/gi, "");
             if ((conditions.length || damage.length) && !left) {
-                bothHit = { conditions, damage, ...(exposed ? { affliction: exposed.toLowerCase() } : {}) };
+                bothHit = { conditions, damage, ...(exposed ? { affliction: exposed.toLowerCase() } : {}), ...(atLeast ? { atLeast } : {}) };
                 continue;
             }
         }
@@ -942,6 +986,22 @@ export function readSweep(text) {
             return "";
         })
         .replace(/^((?:The )?[^.]+?) unleashes [^,.]+, making (a single (?:melee )?Strike) with (?:its|their|his|her) [\w' -]+?(?: or [\w' -]+?)? against each opponent within reach\./i, "$1 makes $2 against each enemy within reach.")
+        // (Batch 212, Battlezoo: "attacks" for Strikes at all in its reach; a Fly that Strikes any creatures beside its path; a straight-line charge
+        // that Strikes each foe it passes — the move first, a note.)
+        .replace(/^((?:The )?[^.]+?) makes ([\w' -]+?) attacks against (all creatures|each creature|each enemy|all enemies) within (?:its|their|his|her) reach\./i, "$1 makes a $2 Strike against $3 within reach.")
+        .replace(/^((?:The )?[^.]+?) Flies, making ([\w' -]+?) Strikes (?:against|at) any number of creatures (?:that are adjacent to|beside) (?:its|their|his|her) path\./i, (_all, who, name) => {
+            strides = 1;
+            notes.push("It Flies, Striking any creatures beside its path.");
+            return `${who} makes a ${name} Strike against each creature within reach.`;
+        })
+        .replace(/^((?:The )?[^.]+?) Strides up to twice (?:its|their|his|her) Speed in a straight line (?:and can make|and makes) a Strike against each (foe|enemy|creature) (?:within (?:its|their|his|her) reach throughout the movement|it passes within reach)\./i, (_all, who, whom) => {
+            strides = 2;
+            notes.push(`It Strides up to twice its Speed in a straight line, Striking each ${whom.toLowerCase()} it passes within reach.`);
+            return `${who} makes a Strike against each ${whom.toLowerCase()} within reach.`;
+        })
+        // (So many Strikes, never twice at one creature; one Strike at up to so many different creatures; so many Strikes, each at its own target.)
+        .replace(/^((?:The )?[^.]+?) makes (up to )?(two|three|four|five|six) ([\w' -]+?) Strikes, (?:attacking a given creature no more than once|never the same creature twice|each (?:of which must be )?aimed at a (?:different|separate) target)\./i, "$1 makes $2$3 $4 Strikes, each against a different target.")
+        .replace(/^((?:The )?[^.]+?) makes an? ([\w' -]+?) Strike against up to (two|three|four|five|six) different creatures\./i, "$1 makes up to $3 $2 Strikes, each against a different target.")
         // (Batch 156, Slagblade Storm: "Temperbrand Strikes all creatures within her reach with a slagblade Strike.")
         .replace(/^((?:The )?[^.]+?) Strikes all creatures within (?:its|their|his|her) reach with an? ([\w' -]+?) Strike\./i, "$1 makes a $2 Strike against all creatures within reach.")
         // (Batch 150, Whirlwind Strike: "Ordulf Strikes each enemy within his reach.")
@@ -981,11 +1041,13 @@ export function readSweep(text) {
             continue;
         }
         // (Batch 129: "… but don't increase the amalgam's penalty until it has made all its attacks", "… they don't increase their penalty until …".)
-        if (/\b(?:multiple attack )?penalty\b[^.]*\b(?:doesn't|does not|don't|do not) increase(?: (?:the [\w' -]+?['’]s|its|their|his|her) penalty)? until\b|\b(?:multiple attack )?penalty increases only after\b/i.test(sentence)) {
+        // (Batch 212, Battlezoo: the penalty not "suffered" until after, "only increases after", held back with the creature as the subject, or held
+        // until the activity, named, is done.)
+        if (/\b(?:multiple attack )?penalty\b[^.]*\b(?:doesn't|does not|don't|do not) increase(?: (?:the [\w' -]+?['’]s|its|their|his|her) penalty)? until\b|\b(?:multiple attack )?penalty increases only after\b|\b(?:doesn't|does not) suffer the penalty until\b|\bpenalty only increases after\b|\b(?:doesn't|does not|don't|do not) (?:increase|raise) (?:its|their|his|her|the [\w' -]+?['’]s) multiple attack penalty until\b|\bmultiple attack penalty, but only (?:after|once) (?:the )?[A-Z][\w' -]+? (?:is complete|ends)\b/i.test(sentence)) {
             sameMap = true;
             continue;
         }
-        if (/^(?:Each attack|These attacks) counts? toward [^.]*multiple attack penalty(?: as normal)?\.$/i.test(sentence)) continue;
+        if (/^(?:Each attack|These attacks) counts? toward [^.]*multiple attack penalty(?: as normal)?\.$|^(?:Its|Their) multiple attack penalty applies (?:to these Strikes normally|as normal)\.$|^(?:Its|Their) penalty rises as normal\.$/i.test(sentence)) continue;
         // (Batch 89, Scimitar Storm: "The first enemy they damage is subject to Matriarch's Caress." — its other ability, the GM's.)
         if (/^The first (?:enemy|creature) (?:it|they|he|she) damages? is subject to [A-Z][\w' -]+\.$/.test(sentence)) continue;
         // "It can Strike up to once with its jaws and any number of times with its body": its Strikes, the best one played.
@@ -3373,13 +3435,19 @@ function readNoCombatEffect(text) {
     // (Batch 83: any such object — "appears to be a door", "resembles an ordinary scarecrow", "appears as a sprawling mass of bones", "Until
     // it next acts", "an automatic result of 41 (44 in forests or swamps) on Deception and Stealth checks and DCs to pass as …". Not one
     // that also turns its aura off, gives it fast healing, Engulfs or Strikes.)
-    const disguise = sentences.findIndex((sentence) => /^Until (?:the next time (?:it|they|he|she|the [\w' -]+?) (?:acts?|uses? an action)|(?:it|they|he|she|the [\w' -]+?) (?:next )?acts?), (?:the )?[^.]+? (?:appears? to be|appears? as|resembles?) [^.]+\.$/i.test(sentence));
+    // (Batch 212: the automatic result in the disguise's own sentence — until it next acts, while flattened, while prone; a sentence before it
+    // saying how it settles or flattens; a Bulk of coins or goods it can hide among after.)
+    const until = "Until (?:the next time (?:it|they|he|she|the [\\w' -]+?) (?:acts?|uses? an action)|(?:it|they|he|she|the [\\w' -]+?) (?:next )?acts?)";
+    const automatic = /\b(?:has|have|gets?) an automatic result of \d+(?: \([^)]*\))? on (?:(?:their|its) )?(?:Deception|@Check\[deception\])(?: and Stealth)? checks and DCs to (?:convincingly )?(?:pass as|appear as|appear to be) [^.]+\.$/i;
+    const quiet = (sentence) => !/@|\d|\b(?:fast healing|regeneration|damage|Hit Points|HP|bonus|penalty|Strikes?|saves?|DC|conditions?|aura|Engulf\w*|Grabbed)\b/i.test(sentence.replace(/\b\d+ Bulk\b/g, "Bulk"));
+    const disguise = sentences.findIndex((sentence) => new RegExp(`^${until}, (?:the )?[^.]+? (?:appears? to be|appears? as|resembles?) [^.]+\\.$`, "i").test(sentence)
+        || (automatic.test(sentence) && new RegExp(`^(?:${until}|While [\\w-]+|As long as (?:it|they) (?:remains?|stays?|is) [\\w-]+), (?:the )?[^.,]+? (?:has|have|gets?) an automatic result\\b`, "i").test(sentence)));
     if (disguise >= 0) {
         return sentences.every((sentence, index) => index === disguise
-            || /\b(?:has|have) an automatic result of \d+(?: \([^)]*\))? on (?:Deception|@Check\[deception\])(?: and Stealth)? checks and DCs to (?:convincingly )?(?:pass|appear) as [^.]+\.$/i.test(sentence)
+            || automatic.test(sentence)
             || /^A creature must succeed at a @Check\[perception[^\]]*\] check to figure out that the statue is really a creature\.$/i.test(sentence)
-            || (index < disguise && /, falls Prone, and lies completely still\.$/i.test(sentence))
-            || (index > disguise && !/@|\d|\b(?:fast healing|regeneration|damage|Hit Points|HP|bonus|penalty|Strikes?|saves?|DC|conditions?|aura|Engulf\w*)\b/i.test(sentence)));
+            || (index < disguise && (/, falls Prone, and lies completely still\.$/i.test(sentence) || /^(?:The )?[^.]+? drops (?:@\w+\[[^\]]*\]\{Prone\}|Prone) and (?:goes limp|lies still)\.$/i.test(sentence) || quiet(sentence)))
+            || (index > disguise && quiet(sentence)));
     }
     if (/^(?:The )?[^.]+? moves straight down up to \d+ feet, suspended by a web line\. (?:It|They) can hang from the web or drop off\. The distance (?:it|they) Descends? on a Web (?:doesn't|does not) count (?:when calculating|for) falling damage\./i.test(said)) return true;
     if (/^(?:The )?[^.]+? Strides?, Steps,? or Sneaks,? (?:and )?then Interacts to reload(?: (?:its|his|her|their) [\w' -]+)?\.?$/i.test(said)) return true;

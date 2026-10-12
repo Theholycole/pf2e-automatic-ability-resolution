@@ -297,7 +297,7 @@ async function cardForAbility(message) {
     }
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
     // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round" — for the GM to apply.)
-    if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if both Strikes hit the same creature, ${bothHitText(plan.bothHit)}.`]);
+    if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if ${plan.bothHit.atLeast ? `${plan.bothHit.atLeast} or more of its Strikes` : "both Strikes"} hit the same creature, ${bothHitText(plan.bothHit)}.`]);
     // (Batch 89, Claw Rake: both Strikes at its highest attack bonus.)
     if (plan?.builtin === "multi-strike" && plan.noMap) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: each Strike at its highest attack bonus (no multiple attack penalty).`]);
     // (Batch 83, Eviscerate: each Strike's own penalty.)

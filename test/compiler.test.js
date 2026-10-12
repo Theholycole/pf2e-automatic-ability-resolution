@@ -3398,3 +3398,39 @@ test("more states the simulator can't see: what it holds or stores, a mode of it
     // Not a state it can't show: a Grabbed creature is the simulator's to see.
     assert.equal(compileMonsterAbility(item(`<p><strong>Requirements</strong> The test owl has a creature Grabbed</p>${odd}`), {}), null);
 });
+
+test("disguises in more words: a sentence before, the automatic result in the same sentence, while flattened or prone (2026-10-12, batch 211)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: html } } });
+    for (const html of [
+        "<p>The test rug lies flat on the floor. Until the next time it acts, the test rug appears to be an ordinary rug. It has an automatic result of 20 on Deception checks and DCs to pass as a rug.</p>",
+        "<p>The test lizard presses itself onto a nearby wall. While flattened, the test lizard has an automatic result of 22 on Deception checks and DCs to appear as part of the stone. If it moves off the wall, this effect ends.</p>",
+        "<p>Until they next act, the test bushes get an automatic result of 33 on Deception and Stealth checks and DCs to pass as plain bushes.</p>",
+        "<p>The test doll drops Prone and lies still. As long as it stays prone, the test puppet has an automatic result of 19 on Deception checks and DCs to pass as a rag.</p>",
+        "<p>Until the next time it acts, the test swarm appears to be a heap of buttons. In the same action it can slip into an open chest holding 5 Bulk. It has an automatic result of 26 on Deception checks and DCs to pass as buttons.</p>"
+    ]) assert.deepEqual(compileMonsterAbility(item(html), {}), { builtin: "no-effect" }, html);
+    // Not when it also lets go of a creature it holds.
+    assert.equal(compileMonsterAbility(item("<p>Until the next time it acts, the test slime spreads into a puddle. It has an automatic result of 20 on Deception checks and DCs to pass as water. Any creature it has Grabbed is released.</p>"), {}), null);
+});
+
+test("Strikes at many in more words; a Stride with Strikes along it; two or more hits on one creature (2026-10-12, batch 212)", () => {
+    const item = (html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${html}</p>` } } });
+    const plan = (html, actions) => compileMonsterAbility(item(html, actions), {});
+    const pick = (result, ...keys) => Object.fromEntries(keys.map((key) => [key, result?.[key]]));
+    // At each creature in reach.
+    assert.deepEqual(pick(plan("The test hydra makes bite attacks against each creature within its reach. All of them count toward its multiple attack penalty, yet it does not suffer the penalty until all its attacks are done."), "strikes", "each", "sameMap"), { strikes: ["bite"], each: true, sameMap: true });
+    assert.deepEqual(pick(plan("The test clock makes a gear Strike against every creature in its reach. Its penalty only increases after all of them."), "strikes", "each", "sameMap"), { strikes: ["gear"], each: true, sameMap: true });
+    // At that many, each a different creature.
+    assert.deepEqual(pick(plan("The test bear makes up to four paw Strikes, never the same creature twice. It does not raise its multiple attack penalty until it has made them all."), "strikes", "each", "max", "sameMap"), { strikes: ["paw"], each: true, max: 4, sameMap: true });
+    assert.deepEqual(pick(plan("The test crab makes a pincer Strike against up to two different creatures. Its multiple attack penalty doesn't increase until after all the attacks."), "strikes", "each", "max"), { strikes: ["pincer"], each: true, max: 2 });
+    assert.deepEqual(pick(plan("The test cannon makes two shot Strikes, each aimed at a separate target. The penalty doesn't increase until after both attacks."), "strikes", "each", "max"), { strikes: ["shot"], each: true, max: 2 });
+    assert.deepEqual(pick(plan("The test cat hisses and lashes out. It Strikes two times with its tail, each against a different creature. These Strikes count as only one attack for the test cat's multiple attack penalty."), "strikes", "each", "countsAs"), { strikes: ["tail", "tail"], each: true, countsAs: 1 });
+    // A move first.
+    assert.deepEqual(pick(plan("The test bat Flies, making wing Strikes at any number of creatures beside its path. Its penalty rises as normal.", 3), "strikes", "each", "strides", "sameMap"), { strikes: ["wing"], each: true, strides: 1, sameMap: undefined });
+    assert.deepEqual(pick(plan("The test rider Strides up to twice its Speed in a straight line and makes a Strike against each enemy it passes within reach. These attacks raise the multiple attack penalty, but only once the Test Rush ends.", 3), "strikes", "each", "strides", "sameMap"), { strikes: [null], each: true, strides: 2, sameMap: true });
+    assert.deepEqual(pick(plan("The test boar Strides up to its Speed and makes up to two tusk Strikes at any point during that movement. If any of the Strikes result in a critical failure, Test Rush ends. It must make each attack against a different creature, but it doesn't apply its multiple attack penalty until after making all its Strikes."), "strikes", "each", "strides", "sameMap"), { strikes: ["tusk", "tusk"], each: true, strides: 1, sameMap: true });
+    assert.deepEqual(pick(plan("The test giant Strides up to its Speed. It can make up to two club Strikes at any point during its movement. The multiple attack penalty applies as normal."), "strikes", "strides"), { strikes: ["club", "club"], strides: 1 });
+    assert.deepEqual(pick(plan("The test imp makes two claw Strikes (applying his multiple attack penalty as normal), then Steps."), "strikes", "notes"), { strikes: ["claw", "claw"], notes: ["Then it Steps."] });
+    assert.deepEqual(pick(plan("The test mantis slashes wildly, making two blade Strikes at up to two creatures within reach. Its multiple attack penalty doesn't increase until after both attacks."), "strikes", "each", "sameMap"), { strikes: ["blade", "blade"], each: undefined, sameMap: true });
+    // Two or more hits on one creature.
+    assert.deepEqual(plan("The test wolf makes three jaws Strikes, applying her multiple attack penalty as normal. If two or more Strikes hit the same creature, that creature becomes @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}.").bothHit, { conditions: [{ slug: "frightened", value: 1, rounds: null }], damage: [], atLeast: 2 });
+});
