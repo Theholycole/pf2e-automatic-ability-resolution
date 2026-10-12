@@ -2082,3 +2082,22 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** cards as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Battlezoo Demoralizes, Feints, curls and Strikes (2026-10-12, batch 222)
+
+- **Compiled** (11 Battlezoo abilities and PF2e's Mocking Cry; the Battlezoo words stay out of this repository):
+  - **Demoralize** (PF2e's own action):
+    - rolled with Deception (Mocking Cry; a Battlezoo mimic);
+    - at all who hear it in a cone, with no language penalty (the cone a note);
+    - "a single Intimidation check" for all within some feet or a template.
+    - A critical success's counteracting of good emotion effects is a note; immunity of an hour or a day is read.
+    - The maneuver reader now reads @Compendium links as their labels too.
+  - **A Feint at a creature some feet away**: its longer Off-Guard on a success is a note.
+  - **Strike-only:** an object picked up and thrown as its ranged Strike.
+  - **A curl** → +2 circumstance AC until it uncurls; its Speed and the limbs it can't use are a note.
+  - **No-effect:** a Leap any way, upward included.
+  - **A pinning Strike** → Immobilized and Off-Guard until its next turn starts; ending early once the target isn't beside it is a note.
+  - **A Strike "that deals no damage"** → `noDamage`, Dazzled for a round on a hit (Blinded and Dazzled on a critical).
+  - **A step through time** (gone and back in a free space nearby, with no reactions) → `safe-move`.
+- **Live:** cards as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+

@@ -935,6 +935,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // move after a note.)
         .replace(/\b((?:The )?[\w' -]+?) Leaps up to (\d+) feet vertically and (\d+) feet horizontally\. At any point during the jump, (?:it|they|he|she) can make an? ([\w' -]+?) Strike\. If (?:it|they|he|she) hits, (?:it|they|he|she) automatically (?:@UUID\[[^\]]*\]\{)?Grabs\}? the target, bringing the creature along until the end of the jump\./i, "$1 Strides and makes a $4 Strike. If it hits, the target is Grabbed. [leap $2 $3]")
         .replace(/\b((?:The )?[\w' -]+?) (Swims|Strides|Flies) up to half (?:its|their|his|her) (?:swim |fly )?Speed, makes an? ([\w' -]+?) Strike, and then (?:Swims|Strides|Flies) up to half (?:its|their|his|her) (?:swim |fly )?Speed further\./i, "$1 $2 and makes a $3 Strike. [half before and after]")
+        // (Batch 222, a Battlezoo thief's stomp: Immobilized and Off-Guard on a hit until its next turn starts — or until the target is no longer beside it, a
+        // note.)
+        .replace(/\bIf (?:the Strike|it) hits, (?:(?:the [\w' -]+?|it) stomps on the target['’]s shadow\. The target is|it pins the target['’]s shadow, leaving it) (?:(?:@\w+\[[^\]]*\]\{)?Immobilized\}? and (?:@\w+\[[^\]]*\]\{)?Off-Guard\}?|Off-Guard and Immobilized) until the start of (?:the [\w' -]+?['’]s|its) next turn,? or until (?:they are|it's|it is) no longer (?:adjacent to|beside) (?:the [\w' -]+?|it)(?:, whichever comes first)?\./i, "If it hits, the target is Immobilized and Off-Guard until the start of its next turn. [while adjacent]")
         // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
         .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -1337,6 +1340,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 activity.noDamage = true;
                 return made;
             })
+            // (Batch 222, a Battlezoo shade's smear: a Strike with no damage, a condition on a hit instead.)
+            .replace(/^((?:The )?[^.]+? makes an? [\w' -]+? Strike) that (?:deals|does) no damage(?=\.$)/i, (_all, made) => {
+                activity.noDamage = true;
+                return made;
+            })
+            .replace(/^Instead, on a hit, the target is /i, (all) => (activity.noDamage ? "On a hit, the target is " : all))
             .replace(/^Instead, the target (?:is|becomes) (?:@UUID\[[^\]]*\]\{Drained (\d)\}|Drained (\d))(?: for 1 day)?,? and (?:the [\w' -]+?|[A-Z][\w'-]+|it|he|she|they) regains? @Damage\[(\d+|\(max\(1,floor\(@actor\.level\/2\)\)\))\[healing\]\](?:\{[^}]*\})?(?: (?:Hit Points|HP))?\.?$/i, (all, linked, plain, heal) => {
                 const value = linked ?? plain;
                 const level = Number(actor?.system?.details?.level?.value);
@@ -1632,6 +1641,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 221: Leaping Grab's jump; Strafing Chomp's move after.)
         if ((match = /^\[leap (\d+) (\d+)\]$/.exec(text))) {
             (activity.notes ??= []).push(`It Leaps up to ${match[1]} feet up and ${match[2]} feet across, Striking at any point in the jump; a creature it Grabs comes along to the end of the jump.`);
+            continue;
+        }
+        if (text === "[while adjacent]") {
+            (activity.notes ??= []).push("It ends early once the target is no longer beside it.");
             continue;
         }
         if (text === "[half before and after]") {
@@ -3440,7 +3453,7 @@ function variedManeuver(item, basicActions = {}) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
     // (Batch 126: an emanation's template as its distance, "each creature within @Template[emanation|distance:30]{30 feet}".)
-    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/(?:an? )?@Template\[[^\]]*?(?:emanation|burst)[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "$1 feet")).replace(/\s+/g, " ").trim();
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/(?:an? )?@Template\[[^\]]*?(?:emanation|burst)[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "$1 feet")).replace(/\s+/g, " ").trim();
     // (Deadly Display's "Requirements Ordulf is wielding a melee weapon": always so; any other requirement or a frequency isn't read.)
     // (Batch 141: Strangle's "Requirements The dero must have two free hands or be wielding a spiked chain" — what it holds; "… to Grapple with a +2
     // circumstance bonus." and Condemn's "The grand inquisitor Demoralizes." — at a creature; Stampeding Shove's "…, gaining a +2 circumstance
@@ -3484,6 +3497,29 @@ function variedManeuver(item, basicActions = {}) {
         .replace(/, gaining a \+(\d) circumstance bonus to (?:its|their|his|her) Athletics check if the target is Prone\./i, (_all, value) => {
             extra.push(`+${value} circumstance bonus to the check if the target is Prone.`);
             return ".";
+        })
+        // (Batch 222: a Demoralize with Deception — Mocking Cry's "… mocks a creature within 30 feet. They attempt a Deception check to Demoralize the
+        // creature.", a Battlezoo mimic's in other words; a cone of those who hear it, its language penalty waived (the cone a note); one check for all;
+        // a Battlezoo creature's Feint at range, its longer Off-Guard a note.)
+        .replace(/^((?:The )?[^.]+?) mimics a voice and mocks a creature within (\d+) feet\. (?:They|It) attempts? a Deception check to Demoralize the creature\./i, (_all, who, feet) => {
+            statistic = "deception";
+            extra.push("It rolls Deception for the check.");
+            return `${who} attempts to Demoralize a creature within ${feet} feet.`;
+        })
+        .replace(/\b(?:They|It|He|She) Demoralizes? a creature, (?:using Deception instead of Intimidation(?: to do so)?|rolling Deception rather than Intimidation)\./i, () => {
+            statistic = "deception";
+            extra.push("It rolls Deception for the check.");
+            return "It Demoralizes a creature.";
+        })
+        .replace(/\battempts to Demoralize (?:all creatures|everyone) in a (\d+)[ -]foot cone who can hear (?:the howl|it|them), (?:without taking any penalties|with no penalty) for not sharing a language\./i, (_all, feet) => {
+            extra.push(`Only those in a ${feet}-foot cone who can hear it; no penalty for not sharing a language.`);
+            return `attempts to Demoralize each creature within ${feet} feet.`;
+        })
+        .replace(/\b(?:makes|rolls) (?:a single|one) Intimidation check to Demoralize\b/i, "makes an Intimidation check to Demoralize")
+        .replace(/\bto Demoralize everyone within (\d+) feet\b/i, "to Demoralize all creatures within $1 feet")
+        .replace(/^((?:The )?[^.]+?) (?:makes a Feint against|Feints) a creature within (\d+) feet\. On a success,? the (?:creature|target) is Off-Guard (?:against|to) all attacks until the end of (?:the [\w' -]+?['’]s|its|their) next turn\./i, (_all, who, feet) => {
+            extra.push("On a success, it's Off-Guard to every attack until its next turn ends.");
+            return `${who} Feints a creature within ${feet} feet.`;
         })
         // (Batch 144, Right This Way: "Frequency once per round Effect …", "… to Reposition a Large or smaller creature within reach" — the size a note.)
         .replace(/^Frequency once per (?:round|turn) Effect /i, "")
@@ -3531,7 +3567,9 @@ function variedManeuver(item, basicActions = {}) {
             bonus += Number(gains[1]);
             continue;
         }
-        if (/^Regardless of the result, each creature is temporarily immune to [\w' -]+? for (?:1|one) minute\.$|^These creatures are then immune to [\w' -]+? for (?:1|one) minute\.$|^Each creature is then temporarily immune for (?:1|one) minute\.$/i.test(sentence)) {
+        // (Batch 222: "Regardless of whether the check succeeds, the target creature is temporarily immune to … for 1 hour", "The creatures are then
+        // temporarily immune for 1 day".)
+        if (/^Regardless of the result, each creature is temporarily immune to [\w' -]+? for (?:1|one) minute\.$|^These creatures are then immune to [\w' -]+? for (?:1|one) minute\.$|^Each creature is then temporarily immune for (?:1|one) minute\.$|^Regardless of whether the check succeeds, the target creature is temporarily immune to [^.]+? for (?:1|one) (?:hour|minute|day)\.$|^The creatures are then temporarily immune for (?:1|one) (?:hour|minute|day)\.$|^Each creature is then temporarily immune for (?:1|one) (?:hour|day)\.$/i.test(sentence)) {
             immune = true;
             continue;
         }
@@ -3546,6 +3584,11 @@ function variedManeuver(item, basicActions = {}) {
         const worse = /^On a success, the target is also (Clumsy|Enfeebled|Stupefied|Frightened|Sickened) (\d) \(\1 (\d) on a critical success\)(?: as [^.]+)?\.$/i.exec(sentence);
         if (worse) {
             added.push(["success", { kind: "condition", slug: worse[1].toLowerCase(), value: Number(worse[2]), duration: null }], ["criticalSuccess", { kind: "condition", slug: worse[1].toLowerCase(), value: Number(worse[3]), duration: null }]);
+            continue;
+        }
+        // (Batch 222: Sow Despair's counteracting of good emotion effects on a critical success — the GM's.)
+        if (/^In addition to the usual effects of Demoralize, on a critical success, (?:the [\w' -]+?|it) counteracts any beneficial emotion effects affecting the target\.$/i.test(sentence)) {
+            extra.push(sentence);
             continue;
         }
         if (/^The target can remove this condition by taking an Interact action\.$/i.test(sentence)) {

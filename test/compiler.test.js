@@ -3563,3 +3563,25 @@ test("a half-damage Strike between two half moves; a leap with a Strike that Gra
     assert.deepEqual(plan("The test dwarf Raises a Shield and Strides twice."), { builtin: "self-effect", actions: 2, model: { name: "Test", rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0 }, notes: ["It Strides twice as well."] });
     assert.deepEqual(plan("The test eel dives straight down into the water, moving up to twice its swim Speed in a straight vertical line.", 1), { builtin: "no-effect" });
 });
+
+test("Demoralize with Deception, in a cone, on one check; a Feint at range; a thrown object; a curl until it uncurls; a leap; a pinning Strike; a Strike that only dazzles; a step out of time (2026-10-12, batch 222)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const item = (html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${html}</p>` } } });
+    const plan = (html, actions) => compileMonsterAbility(item(html, actions), {});
+    const basics = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const act = (html, actions) => compileMonsterAbility(item(html, actions), { basicActions: basics });
+    assert.equal(act("The test parrot squawks. It Demoralizes a creature, rolling Deception rather than Intimidation.").resolution.check.statistic, "deception");
+    const cone = act("The test wolf attempts to Demoralize everyone in a 30-foot cone who can hear it, with no penalty for not sharing a language. Each creature is then temporarily immune for 1 day.");
+    assert.deepEqual([cone.targeting.area, cone.notes], [{ type: "emanation", value: 30 }, ["Only those in a 30-foot cone who can hear it; no penalty for not sharing a language."]]);
+    assert.deepEqual(act("The test husk rolls one Intimidation check to Demoralize everyone within 20 feet.").targeting.area, { type: "emanation", value: 20 });
+    const feint = act("The test fox Feints a creature within 20 feet. On a success, the target is Off-Guard to all attacks until the end of its next turn.");
+    assert.deepEqual([feint.targeting.range, feint.notes], ["20 feet", ["On a success, it's Off-Guard to every attack until its next turn ends."]]);
+    assert.deepEqual(plan("The test crown grabs a loose object nearby and hurls it as a ranged rubble Strike."), { builtin: "no-effect", strikeOnly: true });
+    const curl = plan("The test armadillo rolls up. It gains a +3 circumstance bonus to AC. Its Speed drops to 5 feet while it is curled. It can uncurl as an action, ending it.");
+    assert.deepEqual([curl.builtin, curl.model.modifiers, curl.endsOnMove], ["self-effect", [{ on: "ac", type: "circumstance", value: 3 }], true]);
+    assert.deepEqual(plan("The test bird Leaps up to 25 feet in any direction, including vertically."), { builtin: "no-effect", actions: 1 });
+    const pin = plan("The test thief makes a foot Strike. If it hits, it pins the target's shadow, leaving it Off-Guard and Immobilized until the start of its next turn, or until it's no longer beside the test thief.");
+    assert.deepEqual([pin.onHit.conditions.map((entry) => entry.slug).sort(), pin.notes], [["immobilized", "off-guard"], ["It ends early once the target is no longer beside it."]]);
+    const smear = plan("The test shade makes a gloom Strike that does no damage. On a hit, the target is Dazzled for 1 round.");
+    assert.deepEqual([smear.noDamage, smear.onHit.conditions.map((entry) => entry.slug)], [true, ["dazzled"]]);
+    assert.deepEqual(plan("<strong>Frequency</strong> once per round</p><p><strong>Effect</strong> The test spirit steps out of time, vanishing and reappearing in an open space within 20 feet. This movement doesn't trigger reactions."), { builtin: "safe-move", actions: 1 });
+});

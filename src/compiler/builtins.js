@@ -3154,6 +3154,8 @@ export function compileBuiltin(item, slug) {
     if (readSafeMove(text) || readRetreat(text)) return { builtin: "safe-move", actions };
     // (Batch 60, Elf Step: "The elementalist Steps twice.")
     if (/^(?:The )?[^.]+? Steps twice\.$/i.test(text.trim())) return { builtin: "safe-move", actions };
+    // (Batch 222, a Battlezoo manifestation's step through time: gone from its space and back in a free one nearby, no reactions — a safe move.)
+    if (/^(?:Frequency once per (?:turn|round);? Effect )?(?:The )?[^.]+?, (?:disappearing from its current space and reappearing|vanishing and reappearing) in an? (?:free|open|unoccupied) space within \d+ feet\. This movement (?:does not|doesn't) trigger reactions\.$/i.test(text.trim())) return { builtin: "safe-move", actions };
     // (Batch 156: Hasty Reposition's "Frequency once per round Effect The wereant sentinel Steps, moving up to 15 feet.", Shifting Scuttle's free
     // "Steps up to 10 feet".)
     if (/^(?:Frequency once per (?:turn|round) Effect )?(?:The )?[^.]+? Steps,? (?:moving )?up to \d+ feet\.$/i.test(text.trim())) return { builtin: "safe-move", actions: item.system?.actionType?.value === "free" ? 0 : actions, ...(/\bFrequency once per (?:turn|round)\b/i.test(text) ? { oncePerTurn: true } : {}) };
@@ -3389,6 +3391,16 @@ function readHeldGuard(item, body) {
             notes.push("It can't move while it lasts; unfurling (an action) ends it.");
             continue;
         }
+        // (Batch 222, a Battlezoo armadillo's curl: it lasts until an action of its own ends it; its Speed and the
+        // limbs it can't use, a note.)
+        if (new RegExp(String.raw`^(?:It|They|${subject}) can unfurl as a single action(?: with the manipulate trait)?, ending the effects of [A-Z][\w' -]+?\.$|^(?:It|They) can uncurl as an action, ending it\.$`, "i").test(sentence)) {
+            ends = true;
+            continue;
+        }
+        if (new RegExp(String.raw`^(?:The [\w' -]+?['’]s|Its|Their) [Ss]peed is reduced to \d+ feet, and (?:it|they) can(?:'t|not) use (?:its|their) [\w' -]+? or take other actions that require (?:it|them) to use (?:its|their) limbs while in (?:its|their) [A-Z][\w' -]+?\.$|^(?:Its|Their) Speed drops to \d+ feet while (?:it is|it's|they are) curled\.$`, "i").test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
         if (new RegExp(String.raw`^Any creatures? who makes? unarmed attacks against ${subject} while (?:it's|it is|they're) in (?:its|their) [A-Z][\w' -]+? (?:are|is) exposed to [^.]+\.$`, "i").test(sentence)) {
             notes.push(sentence);
             continue;
@@ -3549,7 +3561,7 @@ function readPlainMove(text) {
     const verb = String.raw`(?:Strides|Steps|Flies|Swims|Climbs|Burrows|Leaps|moves|jumps)`;
     const far = String.raw`(?: (?:up to )?(?:\d+ feet|(?:half |twice |double |three times |four times |five times )?(?:its|their|his|her) (?:\w+ )?Speed|once|twice|three times))?`;
     // (Batch 144, Slither: "Strides, Climbs, or Swims up to half its Speed, pulling any creatures it has grabbed with it.")
-    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically)?))*(?:,? (?:ignoring (?:any )?difficult terrain(?: during (?:this|its|their|his|her) movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?|pulling any creatures (?:it|they|he|she) (?:has|have) [Gg]rabbed with (?:it|them|him|her)))?(?: and fitting through tight spaces as though (?:it|they|he|she) were a Tiny creature)?`;
+    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically|, even straight up)?))*(?:,? (?:ignoring (?:any )?difficult terrain(?: during (?:this|its|their|his|her) movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?|pulling any creatures (?:it|they|he|she) (?:has|have) [Gg]rabbed with (?:it|them|him|her)))?(?: and fitting through tight spaces as though (?:it|they|he|she) were a Tiny creature)?`;
     const move = new RegExp(String.raw`^(?:The |An? )?(?:(?!\b(?:and|then|uses?|Interacts?|Raises?|Hides?|Feints?)\b)[^.;])+? ${verb}(?:, ${verb})*(?:(?:,? or|,? and then| then) ${verb})*(?:,? or Steps and then Strides|,? or Strides and then Steps)?${far}${how}\.$`, "i");
     // (Batch 145, Shadow Step: "…, but the svartalfar killer must begin and end in an area of dim light or darkness" — the GM's.)
     const safe = /^(?:This|The|Its|Their) movement (?:doesn't|does not) (?:trigger|provoke) (?:any )?reactions(?: based on movement)?(?:, but (?:the [\w' -]+?|it|they|he|she) must begin and end in an area of dim light or darkness)?\.$/i;
@@ -3759,6 +3771,8 @@ function readStrikeOnly(text) {
     // (Batch 204, Hurl Weapon: "The purrodaemon causes a weapon that has steeped in their flesh (see Steep Weapon) to telekinetically launch from their
     // flesh. The purrodaemon makes a hurled weapon Strike without using their hands." — its Strike.)
     if (/^(?:The )?[^.]+? causes a weapon [^.]+? to telekinetically launch from (?:its|their) flesh\. (?:The )?[^.]+? makes a hurled weapon Strike without using (?:its|their) hands\.$/i.test(String(text).trim())) return true;
+    // (Batch 222, a Battlezoo crown's thrown junk: an object it picks up, thrown as its ranged Strike.)
+    if (/^(?:The )?[^.]+? (?:picks up an object within reach|grabs a loose object nearby)(?: \([^)]*\))? and (?:throws it, making|hurls it as) a ranged [\w' -]+? Strike\.$/i.test(String(text).trim())) return true;
     // (Batch 151, Shadow Swipe: "makes a melee Strike. If the attack hits, the enforcer Strides. If the enforcer ends this movement in dim light or
     // darkness, they can attempt to Hide." — the move and the Hide the GM's.)
     if (/^(?:Effect )?(?:The )?[\w' -]+? makes a melee Strike\. If the attack hits, (?:the [\w' -]+?|it|they|he|she) Strides\. If (?:the [\w' -]+?|it|they|he|she) ends this movement in dim light or darkness, (?:it|they|he|she) can attempt to Hide(?:: Stealth)?\.$/i.test(String(text).trim())) return true;
