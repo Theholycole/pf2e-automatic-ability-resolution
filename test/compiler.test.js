@@ -2335,3 +2335,10 @@ test("its own affliction at one creature in a state, or over an emanation (2026-
     const all = compileMonsterAbility(wings, { basicActions: {}, actor });
     assert.deepEqual(all?.targeting?.area, { type: "emanation", value: 10 });
 });
+
+test("a reaction that exposes a creature to its own affliction (2026-10-12, batch 116)", () => {
+    const venom = { type: "action", name: "Test Thorn Venom", system: { slug: null, actionType: { value: "passive" }, actions: { value: null }, traits: { value: ["poison"] }, description: { value: "<p><strong>Saving Throw</strong> @Check[fortitude|dc:18]</p><hr /><p><strong>Stage 1</strong> @Damage[1d6[poison]] damage and Sickened 1 (2 rounds)</p>" } } };
+    const spill = { type: "action", name: "Test Spill", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test bramble takes piercing or slashing damage</p><hr /><p><strong>Effect</strong> The test bramble sprays its sap onto an adjacent creature. That creature is exposed to test thorn venom.</p>" } } };
+    const plan = compileMonsterAbility(spill, { basicActions: {}, actor: { name: "Test", items: [spill, venom] } });
+    assert.deepEqual([plan?.trigger?.event, plan?.trigger?.damageTypes, plan?.targeting?.target, plan?.resolution?.check?.against?.value], ["damaged", ["piercing", "slashing"], "1 creature", 18]);
+});

@@ -1880,7 +1880,51 @@ function ownVenom(item, actor, name) {
 // - one creature: "The giant wasp lays eggs in an adjacent creature that is Paralyzed or Unconscious, exposing it to the wasp larva
 //   disease." (only at such a creature: requiresFoe), "The virulak locks its gaze on a single creature within 30 feet. The target is exposed
 //   to the virulak's undead virulence."
+// - a reaction (batch 116): "Trigger An adjacent creature Strikes Reginald with a melee weapon or unarmed attack and deals damage Effect The
+//   creature is exposed to Reginald's poison ink." (the attacker), "… takes piercing or slashing damage Effect … ejects its venom onto an
+//   adjacent creature. That creature is exposed to skrik nettle venom." (a creature beside it), "… Effect All creatures within 10 feet of
+//   the mold patch are exposed to phantom mold spores." (an emanation).
+function exposureReaction(item, actor) {
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (!trigger) return null;
+    const effect = split[2].trim();
+    const attacker = /^The (?:triggering )?creature is exposed to ([^.]+?)\.$/i.exec(effect);
+    const beside = /^(?:The )?[^.]+? onto an adjacent creature\. That creature is exposed to ([^.]+?)\.$/i.exec(effect);
+    const around = /^(?:All|Each|Every) creatures? within (\d+) feet of (?:the [\w' -]+?|it|them) (?:is|are) exposed to ([^.]+?)\.$/i.exec(effect);
+    const phrase = (attacker?.[1] ?? beside?.[1] ?? around?.[2])?.toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, "");
+    if (!phrase || (attacker && trigger.event !== "hit-by")) return null;
+    const poison = ownAffliction(item, actor, phrase);
+    if (!poison) return null;
+    return {
+        ...poison,
+        source: base(item).source,
+        activation: { time: "reaction", traits: poison.activation?.traits ?? [] },
+        targeting: attacker ? { target: "the attacker", range: "touch", area: null } : beside ? { target: "1 creature", range: "touch", area: null } : { target: null, range: null, area: { type: "emanation", value: Number(around[1]) } },
+        trigger: { ...trigger, reaction: true }
+    };
+}
+
+// The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
+function ownAffliction(item, actor, phrase) {
+    const owner = actor ?? item.actor ?? item.parent;
+    const source = (owner?.items?.contents ?? owner?.items ?? []).find((other) => {
+        if (other === item || !/<strong>\s*Stage\s+1\s*<\/strong>/i.test(other.system?.description?.value ?? "")) return false;
+        const name = String(other.name ?? "").toLowerCase();
+        return name === phrase || phrase.includes(name) || name.endsWith(` ${phrase}`);
+    });
+    if (!source) return null;
+    try {
+        const plan = compileAffliction(source, base(source));
+        return plan?.resolution ? plan : null;
+    } catch {
+        return null;
+    }
+}
+
 function areaExposure(item, actor) {
+    if (item.system?.actionType?.value === "reaction") return exposureReaction(item, actor);
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
     const template = /@Template\[(?:type:)?(burst|cone|emanation|line)\|distance:(\d+)[^\]]*\]/i.exec(html);
