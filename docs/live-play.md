@@ -2414,3 +2414,17 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - the flick's offer comes on a melee attack, with its note.
 - **Simulator:** see B247 in its ability decisions.
 
+## Battlezoo dragons' regrowth, wall-walking, flux and reflection; minute-long passives (2026-10-12, batch 248)
+
+- **Compiled** (21 new in Battlezoo, 11 in PF2e; wordings paraphrased here):
+  - **Regeneration after a fresh save** → `self-effect` with `model.regeneration { value, deactivatedBy }` and `model.fastHealing` for its minute. The new save itself is a note.
+  - **A Stride through thin walls and doors** → a plain move (`no-effect`); the walls are the GM's.
+  - **A failed save against a spell rolled again** → `save-reroll` against spells, keeping the new result. Its wild magic table is the GM's (a note).
+  - **AC against a ranged spell attack** → `ac-reaction` with `spellOnly`. Turning the missed spell back on its caster is a note.
+  - **A spell turned back as Spell Turning would** → `no-effect`, the GM's, as Counterspell's kin.
+  - **Passives that take a minute or more to do** (Conjure Disguise, Medical Wisdom, Quick Repair, a Battlezoo ooze's room coating) → `gm: "out-of-combat"`. Not one about cover or being targeted.
+- **Live:**
+  - the regrowth effect carries PF2e's FastHealing rule of the regeneration kind, which its damage type switches off;
+  - the spell-only AC offer comes only for a spell attack roll (`item:type:spell`).
+- **Simulator:** see B248 in its ability decisions.
+

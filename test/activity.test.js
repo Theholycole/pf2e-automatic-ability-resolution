@@ -232,3 +232,9 @@ test("a Strike buff against creatures of one trait only: its DamageDice predicat
     assert.deepEqual(effect.system.rules, [{ key: "DamageDice", selector: "strike-damage", diceNumber: 1, dieSize: "d6", damageType: "spirit", label: "Test Bless", predicate: ["target:trait:unholy"] }]);
     assert.match(effect.system.description.value, /against unholy creatures/);
 });
+
+test("regeneration on itself: a FastHealing rule of the regeneration kind, switched off by its damage type (2026-10-12, batch 248)", () => {
+    const plan = { builtin: "self-effect", actions: 2, model: { name: "Test Regrow", rounds: 10, modifiers: [], tempHp: 0, fastHealing: 10, regeneration: { value: 10, deactivatedBy: ["void"] } }, duration: { value: 1, unit: "minutes", expiry: null } };
+    const effect = strikeBuffEffect(plan, { name: "Test Regrow", strikes: [] });
+    assert.deepEqual(effect.system.rules, [{ key: "FastHealing", type: "regeneration", value: 10, deactivatedBy: ["void"] }]);
+});

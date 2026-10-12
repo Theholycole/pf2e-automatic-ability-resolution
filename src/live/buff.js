@@ -50,14 +50,16 @@ export function selfEffectDuration(plan) {
 
 export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null, toggles = [] } = {}) {
     // (Batch 196: resistance and temporary Hit Points on itself too — Reef Armor, Shifting Form, Harden Chitin.)
-    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp)) return null;
+    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration)) return null;
     const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
     if (plan.damage?.length && !toggles.length && !selector) return null;
     const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
         // (Batch 241, Imbue Righteousness: damage only against unholy creatures — the target's trait as its predicate.)
         : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)).map((rule) => (rule && plan.vsTrait ? { ...rule, predicate: [`target:trait:${plan.vsTrait}`] } : rule)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name)),
             ...(plan.model?.resistances ?? []).map((entry) => ({ key: "Resistance", type: entry.type, value: Number(entry.value), ...(entry.exceptions?.length ? { exceptions: [...entry.exceptions] } : {}) })),
-            ...(plan.model?.tempHp ? [{ key: "TempHP", value: Number(plan.model.tempHp) }] : [])];
+            ...(plan.model?.tempHp ? [{ key: "TempHP", value: Number(plan.model.tempHp) }] : []),
+            // (Batch 248: regeneration, and the damage that switches it off.)
+            ...(plan.model?.regeneration ? [{ key: "FastHealing", type: "regeneration", value: Number(plan.model.regeneration.value), ...(plan.model.regeneration.deactivatedBy?.length ? { deactivatedBy: [...plan.model.regeneration.deactivatedBy] } : {}) }] : [])];
     if (rules.some((rule) => !rule)) return null;
     const duration = selfEffectDuration(plan);
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -65,7 +67,8 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
     const notes = (plan.notes ?? []).map((note) => `<p>${escape(note)}</p>`).join("");
     const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage${plan.vsTrait ? ` against ${plan.vsTrait} creatures` : ""}.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " ")),
         ...(plan.model?.resistances ?? []).map((entry) => `Resistance ${entry.value} to ${entry.type.replace(/-/g, " ")}${entry.exceptions?.length ? ` (except ${entry.exceptions.join(", ").replace(/-/g, " ")})` : ""}.`),
-        plan.model?.tempHp ? `${plan.model.tempHp} temporary Hit Points.` : null].filter(Boolean).join(" ");
+        plan.model?.tempHp ? `${plan.model.tempHp} temporary Hit Points.` : null,
+        plan.model?.regeneration ? `Regeneration ${plan.model.regeneration.value}${plan.model.regeneration.deactivatedBy?.length ? ` (deactivated by ${plan.model.regeneration.deactivatedBy.join(", ")})` : ""}.` : null].filter(Boolean).join(" ");
     return {
         name,
         type: "effect",

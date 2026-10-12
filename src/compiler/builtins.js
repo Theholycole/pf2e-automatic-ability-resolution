@@ -2663,6 +2663,15 @@ export function readReaction(item, text) {
     // (Batch 196, Dying Wish: "The dragon wishes to survive by any means necessary. The dragon is instead reduced to 1 Hit Point and teleports up to 10
     // miles away." — out of the fight as well, at 1 HP.)
     if (/^(?:The )?[^.]+? is reduced to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:[^.]+\. )?(?:The )?[^.]+? is instead reduced to 1 (?:HP|Hit Point) and teleports up to \d+ miles away\.$/i.test(effect.trim().replace(/\s*Effect: [^.]+$/i, ""))) return { builtin: "no-effect" };
+    // (Batch 248, a Battlezoo crystal dragon's wing: a ranged spell attack at it — a higher AC for that one attack; a miss turns the spell back on its
+    // caster (a second spell attack roll against the caster's own AC), a note. Spell attacks only: spellOnly.)
+    const reflect = /^(?:The )?[^.]+? is targeted by a ranged spell attack roll\.?$|^(?:The )?[^.]+? is the target of a spell attack from range\.?$/i.test(trigger.trim()) ? /\bgains an? \+(\d+) circumstance bonus to AC against the triggering attack\b/i.exec(effect) : null;
+    if (reflect && /\bIf the attack misses, the spell is reflected back at the caster\b|\bA miss turns the spell back on its caster\b/i.test(effect)) return { builtin: "ac-reaction", value: Number(reflect[1]), when: "targeted", against: "ranged", spellOnly: true, notes: ["If the spell attack misses, it's turned back on its caster: a second ranged spell attack roll against the caster's own AC."] };
+    // (Batch 248, a Battlezoo silver dragon's scales: a spell turned back on its caster with another spell's effect — the GM's, as Counterspell's kin.)
+    if (/\breflect the spell back upon the spellcaster, with the effect of an? @UUID\[[^\]]*\](?:\{[^}]*\})? spell\b|\bturns the spell back on its caster as Spell Turning would\b/i.test(effect)) return { builtin: "no-effect" };
+    // (Batch 248, a Battlezoo wellspring dragon's flux: its failed save against a spell rolled again (the new result), and a wild magic effect on itself
+    // from its table — the GM's, a note.)
+    if (/^(?:The )?[^.]+? fails or critically fails a saving throw against a spell\.?$|^(?:The )?[^.]+? fails a save against a spell\.?$/i.test(trigger.trim()) && /\brerolls the triggering saving throw\b|\brolls that save again and keeps the new result\b/i.test(effect) && /\bwild magic\b/i.test(effect)) return { builtin: "save-reroll", save: null, against: "spell", keep: "new", notes: ["It also rolls a wild magic effect on itself (its table), at the spell's rank, DC and counteract modifier: the GM's."] };
     const ac = (item?.system?.rules ?? []).find((rule) => rule?.key === "FlatModifier" && [].concat(rule.selector).includes("ac") && Number.isFinite(Number(rule.value)));
     // (Batch 122: "a +2 circumstance bonus to their Armor Class against the triggering attack" too.)
     if (ac && /\b(?:AC|Armor Class) against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
@@ -3490,6 +3499,25 @@ function readSelfResistance(item, body) {
 // perform are Emit Musk and Stand, and it also becomes Blinded and gains resistance 10 to physical damage. An adjacent creature that hits a rolled-up
 // giant pangolin with a melee Strike takes 1d6 slashing damage. These effects end once the giant pangolin Stands." (Roll Up) → a self-effect stance with
 // its AC and resistances, the rest notes; shell: the simulator doesn't play a creature shut in (it would only wait).
+// A surge of regrowth (2026-10-12, batch 248, a Battlezoo duel dragon's): a new save with a status bonus against one condition or effect it got from a
+// failed save, ending it on a success; then regeneration for a minute that a damage type switches off → { builtin: "self-effect", model: { fastHealing,
+// regeneration: { value, deactivatedBy } } } for that minute (the simulator's fast healing); the save a note. null otherwise.
+export function readRegrowth(item) {
+    if (item?.system?.actionType?.value !== "action") return null;
+    const text = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\s+/g, " ").trim();
+    const match = /^(?:[^.]+\. )?(?:The )?[^.]+? immediately attempts a new saving throw with a \+(\d+) status bonus against a condition or effect (?:they|it) gained from a failed saving throw, ending the condition or effect on a successful saving throw\. (?:The )?[^.]+? then gains regeneration (\d+) for (\d+) minutes?\. This regeneration can be deactivated by (\w+) damage\.$/i.exec(text)
+        ?? /^(?:The )?[^.]+? retries one failed save at \+(\d+), a success ending what it imposed\. It then has regeneration (\d+) for (\d+) minutes?, which (\w+) damage stops\.$/i.exec(text);
+    if (!match) return null;
+    const [, bonus, value, minutes, type] = match;
+    return {
+        builtin: "self-effect",
+        actions: Number(item.system?.actions?.value) || 1,
+        model: { name: item.name, rounds: 10 * Number(minutes), modifiers: [], tempHp: 0, fastHealing: Number(value), regeneration: { value: Number(value), deactivatedBy: [type.toLowerCase()] } },
+        duration: { value: Number(minutes), unit: "minutes", expiry: null },
+        notes: [`First, a new save at +${bonus} (status) against one condition or effect it got from a failed save; a success ends it.`]
+    };
+}
+
 export function readShell(item, actor = null) {
     if (item?.system?.actionType?.value !== "action") return null;
     const text = htmlToPlainText(String(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[\(?([^\[\]()]+?)\)?\[(\w+)\]\](?:\{[^}]*\})?/g, "$1 $2")).replace(/\s+/g, " ").trim();
@@ -3866,9 +3894,11 @@ function readPlainMove(text) {
     const safe = /^(?:This|The|Its|Their) movement (?:doesn't|does not) (?:trigger|provoke) (?:any )?reactions(?: based on movement)?(?:, but (?:the [\w' -]+?|it|they|he|she) must begin and end in an area of dim light or darkness)?\.$/i;
     const through = /^(?:It|They|He|She) can (?:pass|move) through (?:other )?creatures' spaces during this movement(?:, though (?:it|they|he|she) must end (?:its|their|his|her) movement in an unoccupied space)?\.$/i;
     const longer = /^(?:It|They|He|She) can increase the number of actions for this activity to \d in order to (?:Stride|move) up to [^.]+? instead\.$|^At the end of its movement, the [\w' -]+? takes @Damage\[\d+d\d+\[bludgeoning\]\] damage for each square of difficult terrain it entered while [A-Z][\w' -]+?\.$|^(?:It|They|He|She) can(?:'t|not) use any actions other than [A-Z][\w' -]+? until (?:it|they|he|she) occupies an area large enough for (?:its|their|his|her) normal form\.$/i;
+    // (Batch 248, a Battlezoo phase dragon's Stride through thin walls and doors, not dense or warded ones, their squares difficult terrain — the GM's.)
+    const walls = /^During this movement (?:it|they) can move through a wall up to \d+ feet thick, [^.]+\.$|^(?:The )?[\w' -]+? can(?:'t|not) pass through dense materials like [^.]+?(?: \([^)]*\))?\.$|^The square of the object it passes through is treated as difficult terrain, and it can(?:'t|not) end its movement within the object\.$|^(?:It|They) can pass through thin walls and doors as (?:it|they) moves?\.$/i;
     if (!sentences.length || !move.test(sentences[0])) return null;
     const rest = sentences.slice(1);
-    if (!rest.every((sentence) => safe.test(sentence) || through.test(sentence) || longer.test(sentence))) return null;
+    if (!rest.every((sentence) => safe.test(sentence) || through.test(sentence) || longer.test(sentence) || walls.test(sentence))) return null;
     return rest.some((sentence) => safe.test(sentence)) ? "safe-move" : "no-effect";
 }
 

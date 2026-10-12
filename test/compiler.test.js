@@ -3971,3 +3971,17 @@ test("Battlezoo dragons: a save whose failures apply its linked effects, conceal
     const pits = plan("<p><strong>Requirements</strong> Its Breath Weapon is still recharging</p><hr /><p><strong>Effect</strong> The test drake gulps a fruit, regaining @Damage[2d8[healing]] Hit Points, and spits pits in a @Template[type:line|distance:30] (@Check[reflex|dc:20] save), dealing @Damage[4d6[bludgeoning]] damage. Its Breath Weapon recharges that many rounds later.</p>", "action", 2);
     assert.deepEqual([pits?.requires, pits?.targeting?.area, pits?.resolution?.check?.basic, pits?.notes?.length], ["breath-recharging", { type: "line", value: 30 }, true, 2]);
 });
+
+test("Battlezoo dragons: regeneration after a fresh save, a Stride through thin walls, a passive that takes a minute, a save rerolled against a spell, spell attacks turned back (2026-10-12, batch 248)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const react = (trigger, effect) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction");
+    const regrow = plan("<p>The test drake retries one failed save at +2, a success ending what it imposed. It then has regeneration 10 for 1 minute, which void damage stops.</p>", "action", 2);
+    assert.deepEqual([regrow?.builtin, regrow?.model?.fastHealing, regrow?.model?.regeneration, regrow?.duration?.unit], ["self-effect", 10, { value: 10, deactivatedBy: ["void"] }, "minutes"]);
+    assert.deepEqual(plan("<p>The test drake Strides up to its Speed. It can pass through thin walls and doors as it moves.</p>", "action", 3), { builtin: "no-effect", actions: 3 });
+    assert.deepEqual(plan("<p>Slipping through a thin wall takes 1 minute for the test drake.</p>", "passive"), { builtin: "no-effect", gm: "out-of-combat" });
+    assert.deepEqual(react("The test wyrm fails a save against a spell", "It rolls that save again and keeps the new result, then rolls on its wild magic table.")?.builtin, "save-reroll");
+    const wing = react("The test wyrm is the target of a spell attack from range", "It gains a +4 circumstance bonus to AC against the triggering attack. A miss turns the spell back on its caster.");
+    assert.deepEqual([wing?.builtin, wing?.value, wing?.spellOnly, wing?.against], ["ac-reaction", 4, true, "ranged"]);
+    assert.deepEqual(react("The test wyrm critically succeeds at a save against a spell", "It turns the spell back on its caster as Spell Turning would."), { builtin: "no-effect" });
+});

@@ -183,7 +183,9 @@ async function onMove(token, movement) {
             return (trigger.triggers.includes("leave") && leftReach(insides)) || (trigger.triggers.includes("move") && insides.some(Boolean)) || (trigger.triggers.includes("enter") && !insides[0] && insides.some(Boolean));
         });
         if (own) {
-            await offer({ kind: "card", item: own.item, monster, actor, target: token, trigger: `moved within ${typeof own.plan.trigger.within === "number" ? `${own.plan.trigger.within} feet` : "its reach"}`, free: !!own.plan.trigger.free, note: squares === 1 ? "If this was a Step, it doesn't trigger." : null });
+            // (Batch 248, Cling: within 0 feet — its own space, left.)
+            const said = own.plan.trigger.within === 0 ? "left its space" : `moved within ${typeof own.plan.trigger.within === "number" ? `${own.plan.trigger.within} feet` : "its reach"}`;
+            await offer({ kind: "card", item: own.item, monster, actor, target: token, trigger: said, free: !!own.plan.trigger.free, note: squares === 1 ? "If this was a Step, it doesn't trigger." : null });
             continue;
         }
         // Telekinetic Defense, Wing Rebuff (batch 54): a creature coming within its distance (or its Strike's reach), a Strike at it.
@@ -640,7 +642,9 @@ async function defend(message, context, scene, combat, attacker) {
         }
         // Only a hit it could undo (turning a miss into a critical miss rarely matters).
         // (Only melee or only ranged attacks when the trigger says so; what else it does, a note: "then Strides up to half its Speed".)
-        if (plan.builtin === "ac-reaction" && Number.isFinite(dc) && hit && (!plan.against || (plan.against === "ranged") === ranged)) {
+        // (Batch 248: a spell attack only, spellOnly — PF2e 8.5 types it "attack-roll" with "item:type:spell".)
+        const spellAttack = context.type === "spell-attack-roll" || options.includes("item:type:spell");
+        if (plan.builtin === "ac-reaction" && Number.isFinite(dc) && hit && (!plan.against || (plan.against === "ranged") === ranged) && (!plan.spellOnly || spellAttack)) {
             const change = higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, plan.value);
             if (change) return offer({ kind: "ac", item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(change.before)} against it`, note: plan.notes?.join(" ") || null, attack: { messageId: message.id, value: plan.value, ...change } });
         }

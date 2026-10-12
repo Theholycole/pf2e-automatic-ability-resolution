@@ -73,6 +73,11 @@ const COMBAT = /\bCasts? (?:a|the) Spell\b|\bcasts\b|@Check|@Damage|\bStrikes?\b
 const OUT_OF_COMBAT = /\b(?:out of combat|outside of combat|not in combat|in exploration mode|during exploration|downtime)\b|\b\d+ miles?\b|\b(?:within|across|up to) (?:a|1|one) mile\b|\bfor (?:\d+|one|two|several) (?:hours?|days?|weeks?|months?|years?)\b|\b(?:learns?|knows?|communicates?|telepathically|speaks? with|understands?|Recall Knowledge|Gather Information|Make an Impression|Request|Coerce|Thievery|Crafting|unattended|weather|ritual|merchant|purchase|sells?|buys?|gold pieces|reveals? (?:a|the) (?:location|secret|answer))\b/i;
 
 export function gmFallback(item, options = {}) {
+    // (Batch 248, a passive that takes a full minute to do — moving through a wall over a minute: out of combat.)
+    if (item?.type === "action" && item.system?.actionType?.value === "passive") {
+        const said = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\s+/g, " ");
+        return /\b(?:In a process that )?takes (?:an entire|a full|1|one|10|ten) minutes?\b/i.test(said) && !/@Damage|@Check|\bStrikes?\b|\b(?:bonus|penalty|cover|targeted)\b/i.test(said) ? { builtin: "no-effect", gm: "out-of-combat" } : null;
+    }
     if (item?.type !== "action" || !["action", "reaction", "free"].includes(item.system?.actionType?.value)) return null;
     const text = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
     const requirement = /\bRequirements? (.+?)(?= (?:Effect|Trigger|Frequency) |$)/.exec(text)?.[1] ?? null;
