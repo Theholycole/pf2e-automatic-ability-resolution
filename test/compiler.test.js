@@ -2389,3 +2389,18 @@ test("a special attack with a fixed modifier of its own: manacles, a thrown net,
     // (Its results all the GM's: not this plan.)
     assert.equal(compile("<p>The test hatter throws a hat with a @Check[test-hat|against:ac]{+20} modifier. On a hit, the target must succeed at a @Check[will|dc:30] save or suffer the listed effect.</p>"), null);
 });
+
+test("reaction Strikes back in more words: an ally's hit, a melee Strike from close by, typed damage, a cast, a getaway (2026-10-12, batch 122)", () => {
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const react = (trigger, effect) => compile(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`);
+    assert.deepEqual(react("A creature within the test hound's reach is hit by an ally's melee attack", "The test hound makes a jaws Strike against the triggering creature."), { builtin: "reaction-strike", triggers: ["ally-hit"], strike: "jaws", penalty: 0, disrupts: false });
+    assert.deepEqual(react("A creature within 10 feet makes a melee Strike against the test giant", "The test giant makes a fist Strike against the triggering creature. This Strike doesn't count toward the test giant's multiple attack penalty."), { builtin: "reaction-strike", triggers: ["attacked"], melee: true, strike: "fist", penalty: 0, disrupts: false });
+    assert.deepEqual(react("An adjacent creature deals the test blob slashing damage.", "The test blob's cut opens wide. It makes a gullet Strike against the triggering creature.")?.damageTypes, ["slashing"]);
+    assert.deepEqual(react("An adjacent creature hits the test shrub with an attack that deals slashing or piercing damage", "Sap flies. The test shrub makes a thorn Strike against the creature.")?.damageTypes, ["slashing", "piercing"]);
+    assert.deepEqual(react("A creature within reach of the test drake's tail Casts a Spell", "The test drake makes a tail Strike at the creature with a –2 penalty. If the Strike hits, the test drake disrupts the creature's action."), { builtin: "reaction-strike", triggers: ["cast"], strike: "tail", penalty: 2, disrupts: true });
+    assert.deepEqual(react("A creature damages the test duelist with a melee Strike", "The test duelist makes a melee Strike against the triggering creature. She suffers a -2 penalty on the attack roll but gains a +2 bonus on the damage roll if the Strike hits."), { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: null, penalty: 2, disrupts: false, damageBonus: 2 });
+    assert.deepEqual(react("A creature the test crab had Grabbed or Restrained successfully Escapes", "The test crab makes a pincer Strike against the triggering creature.")?.triggers, ["escaped"]);
+    assert.deepEqual(react("A creature ends a move action within reach of the test beast's horn Strike", "The test beast makes a horn Strike against the triggering creature.")?.triggers, ["approach"]);
+    // (Not with a sentence it can't play after the Strike.)
+    assert.equal(react("A creature within 10 feet makes a melee Strike against the test giant", "The test giant makes a fist Strike against the triggering creature. The creature is pushed 10 feet.")?.builtin === "reaction-strike", false);
+});

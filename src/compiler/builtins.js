@@ -855,7 +855,56 @@ function readMoreReactionStrikes(trigger, effect) {
         const again = new RegExp(String.raw`^(?:The )?[^.]+? makes another ${name} Strike against a different creature, using the same multiple attack penalty as the ${name} Strike that triggered this reaction\.$`, "i").test(sentences[0] ?? "");
         if (again && sentences.slice(1).every((sentence) => /^This counts toward (?:its|their|his|her) multiple attack penalty(?: as normal)?\.$/i.test(sentence))) return { builtin: "reaction-strike", triggers: ["downs"], strike: name, penalty: 0, disrupts: false, sameMap: true };
     }
+    // (Batch 122.) Strikes back in other words: an ally's melee hit on a creature in its reach ("… is hit by an ally's melee attack", "… is
+    // hit by a melee attack by one of the hold sergeant's allies") → "ally-hit"; a melee Strike at it from within N feet → "attacked", melee;
+    // a melee critical hit on it → "critical-hit"; damage of a type from beside it ("An adjacent creature deals the gibbering mouther
+    // slashing damage") → "damaged-adjacent", damageTypes; a hit on it by an adjacent creature's attack of some damage types, or by a melee
+    // attack within N feet → "hit"; its melee damage ("A creature damages Satinder Morne with a melee Strike") → "damaged-adjacent"; a spell
+    // cast in its tail's reach → "cast"; a creature it held escaping → "escaped"; a creature ending a move in its reach → "approach".
+    const reachOf = String.raw`(?:the [\w' -]+?['’]s|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*['’]s|its|their|his|her)`;
+    const types = (words) => words.split(/,\s*(?:or\s+)?|\s+or\s+/).map((word) => word.trim().toLowerCase()).filter(Boolean);
+    const kinds = [
+        [new RegExp(String.raw`^A creature within ${reachOf} (?:melee )?reach is hit by (?:an ally's melee attack|a melee attack by one of ${reachOf} allies)$`, "i"), () => ({ triggers: ["ally-hit"] })],
+        [new RegExp(String.raw`^A creature within (\d+) feet (?:makes|attempts) a melee Strike against ${it}$`, "i"), () => ({ triggers: ["attacked"], melee: true })],
+        [new RegExp(String.raw`^A creature critically hits ${it} with a melee unarmed Strike or a non-reach melee Strike$`, "i"), () => ({ triggers: ["critical-hit"] })],
+        [new RegExp(String.raw`^An adjacent creature deals ${it} (bludgeoning|piercing|slashing|acid|cold|electricity|fire|sonic) damage$`, "i"), (match) => ({ triggers: ["damaged-adjacent"], damageTypes: [match[1].toLowerCase()] })],
+        [new RegExp(String.raw`^An adjacent creature hits ${it} with an attack that deals ((?:bludgeoning|piercing|slashing)(?:,? (?:or )?(?:bludgeoning|piercing|slashing))*) damage$`, "i"), (match) => ({ triggers: ["hit"], damageTypes: types(match[1]) })],
+        [new RegExp(String.raw`^${it} is hit by a melee weapon or melee unarmed attack by a creature within \d+ feet;?$`, "i"), () => ({ triggers: ["hit"] })],
+        [new RegExp(String.raw`^A creature damages ${it} with a melee Strike$`, "i"), () => ({ triggers: ["damaged-adjacent"] })],
+        [new RegExp(String.raw`^A creature within reach of ${reachOf} [\w' -]+? Casts a Spell$`, "i"), () => ({ triggers: ["cast"] })],
+        [new RegExp(String.raw`^A creature ${it} had Grabbed or Restrained successfully Escapes$`, "i"), () => ({ triggers: ["escaped"] })],
+        [new RegExp(String.raw`^A creature ends a move action within reach of ${reachOf} [\w' -]+? Strike$`, "i"), () => ({ triggers: ["approach"] })]
+    ];
+    for (const [pattern, read] of kinds) {
+        const match = pattern.exec(trigger.replace(/;$/, ""));
+        const answer = match ? strikeBack(sentences) : null;
+        if (answer) return { builtin: "reaction-strike", ...read(match), ...answer };
+    }
     return null;
+}
+
+// A reaction's Strike back and what it says of it (batch 122): "makes a claw Strike against the triggering creature", "shifts their position
+// and makes a quill Strike against the attacking creature", "makes a tail Strike at the creature with a –2 penalty"; a flavour sentence
+// before it; after it, no multiple attack penalty (the reaction isn't on its turn), "If the Strike hits, Athervox disrupts the creature's
+// action", "She suffers a -2 penalty on the attack roll but gains a +2 bonus on the damage roll if the Strike hits". null for anything else.
+function strikeBack(sentences) {
+    const at = sentences.findIndex((sentence) => /\bStrike (?:against|at) the (?:triggering|attacking) creature\b|\bStrike (?:against|at) the creature\b/i.test(sentence));
+    if (at < 0 || sentences.slice(0, at).some((sentence) => /\d|@|\b(?:damage|save|check|bonus|penalty|Strikes?|Grab\w*|Prone|Hit Points|condition|Step\w*|Stride\w*)\b/i.test(sentence))) return null;
+    const struck = /^(?:The )?(?:[^.]+? (?:shifts (?:its|their|his|her) position and )?makes|It makes) an? (?:([\w' -]+?) )?Strike (?:against|at) the (?:triggering |attacking )?creature(?: with an? [–-](\d+) penalty)?\.$/i.exec(sentences[at]);
+    if (!struck) return null;
+    const answer = { strike: !struck[1] || /^melee$/i.test(struck[1]) ? null : struck[1].toLowerCase(), penalty: Number(struck[2]) || 0, disrupts: false };
+    for (const sentence of sentences.slice(at + 1)) {
+        if (/^This Strike (?:doesn't|does not|neither applies nor) counts? toward (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty(?:,? and (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty (?:doesn't|does not) apply to this Strike)?\.$/i.test(sentence)) continue;
+        if (/^If the Strike hits, (?:the [\w' -]+?|[A-Z][\w'-]+|it|they) disrupts? the (?:creature's|triggering) action\.$/i.test(sentence)) {
+            answer.disrupts = true;
+            continue;
+        }
+        const both = /^(?:It|They|He|She) suffers? an? [-–](\d+) penalty on the attack roll but gains? an? \+(\d+) bonus on the damage roll if the Strike hits\.$/i.exec(sentence);
+        if (!both) return null;
+        answer.penalty = Number(both[1]);
+        answer.damageBonus = Number(both[2]);
+    }
+    return answer;
 }
 
 // A reaction that takes an ally's damage, or keeps an ally from dropping (2026-10-11, batch 106):
@@ -1259,7 +1308,8 @@ export function readReaction(item, text) {
     // Mist Escape (batch 40): at 0 Hit Points it goes to its coffin as mist: out of the fight, as the simulation already has it.
     if (/^(?:The )?[^.]+? is reduced to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? uses Turn to Mist\. [^.]*\bcoffin\b/i.test(effect.trim())) return { builtin: "no-effect" };
     const ac = (item?.system?.rules ?? []).find((rule) => rule?.key === "FlatModifier" && [].concat(rule.selector).includes("ac") && Number.isFinite(Number(rule.value)));
-    if (ac && /\bAC against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
+    // (Batch 122: "a +2 circumstance bonus to their Armor Class against the triggering attack" too.)
+    if (ac && /\b(?:AC|Armor Class) against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
         return { builtin: "ac-reaction", value: Number(ac.value), when: /\bis hit\b|\bcritically hit\b/i.test(trigger) ? "hit" : "targeted" };
     }
     // Distracting Whisper (batch 58): "Trigger The dragon is targeted with an attack Effect A mysterious voice whispers something

@@ -318,7 +318,9 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             }
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
             if (!strikes.length) continue;
-            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.grab ? "If it hits, the creature is Grabbed." : plan.disrupts === "critical" ? "On a critical hit, the triggering action is disrupted." : plan.ward ? "Only if the creature attacked is the one it guards." : plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
+            // (Batch 122, Reactive Splash: only an attack of the damage types it names.)
+            const typed = plan.damageTypes?.length ? `Only if the attack deals ${plan.damageTypes.join(", ")} damage.` : null;
+            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: [typed, plan.grab ? "If it hits, the creature is Grabbed." : plan.disrupts === "critical" ? "On a critical hit, the triggering action is disrupted." : plan.ward ? "Only if the creature attacked is the one it guards." : plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null].filter(Boolean).join(" ") || null });
             break;
         }
     }
@@ -382,6 +384,14 @@ async function escapeAnswers(message, context, scene, combat, escaper) {
             const change = entry ? higherAC({ total: roll?.total, dc, natural: roll?.dice?.[0]?.total ?? null, outcome: context.outcome }, entry.plan.value) : null;
             if (change) return offer({ kind: "ac", item: entry.item, monster, actor, target: escaper, trigger: `rolled ${degreeWords(change.before, true)} to Escape`, attack: { messageId: message.id, value: entry.plan.value, what: "Escape DC", ...change } });
         }
+        // (Batch 122, Snagging Spines: a creature it held getting free, its Strike at it.)
+        for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+            if (!isFoe(monster, escaper) || (holder && holder.id !== monster.id)) continue;
+            if (!holder && distanceFeet(box(monster, grid.size), box(escaper, grid.size), grid) > provokeRadius(actor)) continue;
+            const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("escaped"));
+            const strikes = entry ? meleeStrikes(actor, `(${entry.plan.strike} only)`) : [];
+            if (strikes.length) return offer({ kind: "strike", item: entry.item, monster, actor, target: escaper, strikes, trigger: "escaped its hold" });
+        }
         return;
     }
     if (!["failure", "criticalFailure"].includes(context.outcome)) return;
@@ -442,7 +452,8 @@ async function castInterception(scene, combat, caster) {
         if (!entry) continue;
         const distance = distanceFeet(box(monster, grid.size), box(caster, grid.size), grid);
         const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`).filter((strike) => distance <= Math.max(10, strike.reach));
-        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: caster, strikes, trigger: "cast a spell near it", note: entry.plan.disrupts ? "If the Strike hits, the spell is disrupted." : null });
+        // (Batch 122, Thrusting Tail: at a penalty.)
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: caster, strikes, penalty: entry.plan.penalty ?? 0, trigger: "cast a spell near it", note: entry.plan.disrupts === "critical" ? "On a critical hit, the spell is disrupted." : entry.plan.disrupts ? "If the Strike hits, the spell is disrupted." : null });
     }
 }
 
@@ -807,7 +818,8 @@ async function onDamaged(actor, amount) {
         if (thrash && isFoe(token, attacker) && thrashFrom <= Math.max(5, ...meleeStrikes(actor, `(${thrash.plan.strike} only)`).map((strike) => strike.reach))) {
             const strikes = meleeStrikes(actor, `(${thrash.plan.strike} only)`).filter((strike) => thrashFrom <= Math.max(5, strike.reach));
             // (Batch 103, Retaliatory Strike: its extra dice on a hit.)
-            if (strikes.length) await offer({ kind: "strike", item: thrash.item, monster: token, actor, target: attacker, strikes, penalty: thrash.plan.penalty ?? 0, trigger: `damaged it (${amount})`, note: [thrash.plan.second ? "It can make a second Strike at another adjacent creature." : null, thrash.plan.extraDamage ? `If the Strike hits, add ${thrash.plan.extraDamage} damage.` : null].filter(Boolean).join(" ") || null });
+            // (Batch 122: Reactive Gnaw's damage type; Vengeful Sting's +2 damage.)
+            if (strikes.length) await offer({ kind: "strike", item: thrash.item, monster: token, actor, target: attacker, strikes, penalty: thrash.plan.penalty ?? 0, trigger: `damaged it (${amount})`, note: [thrash.plan.damageTypes?.length ? `Only if it was ${thrash.plan.damageTypes.join(" or ")} damage.` : null, thrash.plan.second ? "It can make a second Strike at another adjacent creature." : null, thrash.plan.extraDamage ? `If the Strike hits, add ${thrash.plan.extraDamage} damage.` : null, thrash.plan.damageBonus ? `If the Strike hits, add ${thrash.plan.damageBonus} to its damage.` : null].filter(Boolean).join(" ") || null });
         }
         // Vengeful Throw (batch 103): damage from a creature at least that far away, a ranged Strike back.
         const throwBack = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("damaged-far"));
