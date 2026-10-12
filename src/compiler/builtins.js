@@ -3383,7 +3383,7 @@ export function readShell(item, actor = null) {
     const modifiers = [];
     const resistances = [];
     const notes = [];
-    if (/\bends (?:its|their) turn\b/i.test(said[0])) notes.push("Its turn ends.");
+    if (/\bends (?:its|their) turn\b|\b(?:its|their) turn ends\b/i.test(said[0])) notes.push("Its turn ends.");
     if (/\bfalls Prone\b/i.test(said[0])) notes.push("It falls Prone.");
     for (const sentence of said.slice(1)) {
         let match = /^This gives (?:it|them) a \+(\d+) circumstance bonus to AC, removes (?:its|their) weakness to (\w+) damage, and grants (?:it|them) resistance (\d+) to ([a-z ,]+?) damage\.$/i.exec(sentence);
@@ -3399,6 +3399,22 @@ export function readShell(item, actor = null) {
             if (Number.isFinite(ac) && Number(match[1]) > ac) modifiers.push({ on: "ac", type: "untyped", value: Number(match[1]) - ac });
             else notes.push(`Its AC is ${match[1]}.`);
             notes.push("It can't act except to come out, a single action.");
+            continue;
+        }
+        // (Batch 234, Battlezoo: a bonus to AC with its AC named after, and to its saves against areas — a note; only a few actions while in its shell; no
+        // bonus while Prone in it.)
+        match = /^(?:It|They) gains? an? \+(\d+) circumstance bonus to AC, (?:increasing|raising) (?:its|their) AC to \d+, (as well as to [^.]+|and the same bonus to [^.]+)\.$/i.exec(sentence);
+        if (match) {
+            modifiers.push({ on: "ac", type: "circumstance", value: Number(match[1]) });
+            notes.push(`The bonus applies ${match[2].replace(/^as well as /i, "").replace(/^and the same bonus /i, "")} too.`);
+            continue;
+        }
+        if ((match = /^However, while in (?:its|their) shell, (?:it|they) can(?:'t|not) act except to ([^.]+)\.$|^Until (?:it|they) comes? out, (?:it|they) can only ([^.]+)\.$/i.exec(sentence))) {
+            notes.push(`Meanwhile it can only ${(match[1] ?? match[2]).replace(/\bre- emerge\b/, "re-emerge")}.`);
+            continue;
+        }
+        if (/^If (?:the [\w' -]+?|it|they) (?:is|are) (?:@UUID\[[^\]]*\]\{Prone\}|Prone) while in (?:its|their) shell, (?:it|they) (?:doesn't|don't) gain the circumstance bonus to AC\b[^.]*\.$/i.test(sentence)) {
+            notes.push(sentence.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
             continue;
         }
         match = /^While rolled up, the only actions (?:the [\w' -]+?|it|they) can perform are ([^.]+?), and (?:it|they) also becomes? Blinded and gains? resistance (\d+) to ([a-z ,]+?) damage\.$/i.exec(sentence);
@@ -3894,7 +3910,9 @@ function readNoCombatEffect(text) {
     const automatic = /\b(?:has|have|gets?) an automatic result of \d+(?: \([^)]*\))? on (?:(?:their|its) )?(?:Deception|@Check\[deception\])(?: and Stealth)? checks and DCs to (?:convincingly )?(?:pass as|appear as|appear to be) [^.]+\.$/i;
     const quiet = (sentence) => !/@|\d|\b(?:fast healing|regeneration|damage|Hit Points|HP|bonus|penalty|Strikes?|saves?|DC|conditions?|aura|Engulf\w*|Grabbed)\b/i.test(sentence.replace(/\b\d+ Bulk\b/g, "Bulk"));
     const disguise = sentences.findIndex((sentence) => new RegExp(`^${until}, (?:the )?[^.]+? (?:appears? to be|appears? as|resembles?) [^.]+\\.$`, "i").test(sentence)
-        || (automatic.test(sentence) && new RegExp(`^(?:${until}|While [\\w-]+|As long as (?:it|they) (?:remains?|stays?|is) [\\w-]+), (?:the )?[^.,]+? (?:has|have|gets?) an automatic result\\b`, "i").test(sentence)));
+        || (automatic.test(sentence) && new RegExp(`^(?:${until}|While [\\w-]+|As long as (?:it|they) (?:remains?|stays?|is) [\\w-]+), (?:the )?[^.,]+? (?:has|have|gets?) an automatic result\\b`, "i").test(sentence))
+        // (Batch 234, Battlezoo: "It has an automatic result of … until it acts again." — the time after it.)
+        || (automatic.test(sentence) && /^(?:It|They|The [\w' -]+?) (?:has|have|gets?) an automatic result\b[^.]*\buntil (?:it|they) (?:acts? again|next acts?)\.$/i.test(sentence)));
     if (disguise >= 0) {
         return sentences.every((sentence, index) => index === disguise
             || automatic.test(sentence)

@@ -2456,7 +2456,8 @@ function actionCountSave(item, actor) {
     if (!check?.basic) return null;
     // From the phrase on: a count, then its damage, up to the next count.
     const { masked, tags } = maskDamage(html.slice(phrase.index));
-    const markers = [...masked.matchAll(/<span class="action-glyph">([123])<\/span>|(?<![\w\u0000])([123])(?=\s*\u0000)/g)];
+    // (Batch 234, Battlezoo: the count in a "pf2-icon" span.)
+    const markers = [...masked.matchAll(/<span class="(?:action-glyph|pf2-icon)">([123])<\/span>|(?<![\w\u0000])([123])(?=\s*\u0000)/g)];
     const variants = {};
     markers.forEach((marker, index) => {
         const segment = masked.slice(marker.index + marker[0].length, markers[index + 1]?.index ?? masked.length);
@@ -2470,8 +2471,11 @@ function actionCountSave(item, actor) {
     const before = html.slice(0, phrase.index);
     const plain = htmlToPlainText(before);
     // No template: "each enemy within 10 feet", "each adjacent enemy" around the troop.
-    const around = /\beach (?:adjacent )?enem(?:y|ies) within (\d+) feet\b/i.exec(plain)?.[1] ?? (/\beach adjacent enem(?:y|ies)\b/i.test(plain) ? "5" : null);
-    const template = inlineTags(before, "Template").map(readTemplate).find(Boolean) ?? (around ? { type: "emanation", value: Number(around) } : undefined);
+    // (Batch 234, Battlezoo: the enemies in or beside its squares.)
+    const around = /\beach (?:adjacent )?enem(?:y|ies) within (\d+) feet\b/i.exec(plain)?.[1] ?? (/\beach adjacent enem(?:y|ies)\b/i.test(plain) ? "5" : null)
+        ?? /\b(?:each|all) enem(?:y|ies) in (?:(?:its|their) squares|the squares (?:it|they) occup(?:y|ies)) (?:and|or) within (\d+) feet\b/i.exec(plain)?.[1] ?? null;
+    // (Batch 234: its enemies only, as it says — area.foes.)
+    const template = inlineTags(before, "Template").map(readTemplate).find(Boolean) ?? (around ? { type: "emanation", value: Number(around), foes: true } : undefined);
     const range = readRange(plain);
     const recharge = readRecharge(html);
     return {
@@ -4638,8 +4642,15 @@ function selfHeal(item) {
     // reignites." — the first sentence only tells it, the glow is the GM's.)
     // (Batch 213, Mend Soul: "restores 25 HP to itself or an incorporeal creature it has Grabbed" — itself, the creature it holds a note.)
     let orHeld = null;
+    // (Batch 234, Battlezoo: healing with an item bonus to some saves after it — the healing; the bonus a note.)
+    let gaining = null;
     // (Batch 230, Shed Armor: "They immediately heal 60 Hit Points in a surge of regeneration as they grow …" — the healing; what grows, words.)
-    const sentences = effect.replace(/,? and (?:if (?:it has|they've|they have) Gone Dark, (?:its|their) glow reignites|its Glow reignites if it had been extinguished)\./i, ". If it has Gone Dark, its glow reignites.").replace(/^They regains\b/, "They regain")
+    const sentences = effect
+        .replace(/,? (?:healing|restoring) \u0000( (?:Hit Points|HP))? and (?:gaining|granting itself) ([^.]+)\./i, (_all, unit, rest) => {
+            gaining = `It also gains ${rest}.`;
+            return `. It regains \u0000${unit ?? ""}.`;
+        })
+        .replace(/\s*Effect: [A-Z][\w' -]+$/, "").replace(/,? and (?:if (?:it has|they've|they have) Gone Dark, (?:its|their) glow reignites|its Glow reignites if it had been extinguished)\./i, ". If it has Gone Dark, its glow reignites.").replace(/^They regains\b/, "They regain")
         .replace(/\b(It|They|He|She) immediately (heals?|regains?) \u0000( (?:Hit Points|HP))? in a surge of [^.]+\./, "$1 $2 \u0000$3.")
         .replace(/ (HP|Hit Points) to itself or (an? [\w' -]+? creature) it has Grabbed\./i, (_all, unit, whom) => {
             orHeld = `Or it heals ${whom.toLowerCase()} it has Grabbed instead.`;
@@ -4675,6 +4686,7 @@ function selfHeal(item) {
         notes.push(sentence);
     }
     if (orHeld) notes.push(orHeld);
+    if (gaining) notes.push(gaining);
     const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
     const recharge = elsewhere ? null : readRecharge(html);
     // (Feed on Fear's requirement, for the simulator: "An enemy is under a fear effect or Dying within 15 feet of the will-o'-wisp".)

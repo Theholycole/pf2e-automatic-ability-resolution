@@ -466,10 +466,10 @@ test("ways and action counts (2026-10-10, batch 3): modes, troops, results only 
     const [muddle, beam] = burble.modes.map((mode) => mode.plan);
     assert.deepEqual([muddle.resolution.check.statistic, outcomes(muddle).failure.effects[0].slug, muddle.resolution.sharedDamage, muddle.trigger.recharge.formula], ["will", "confused", null, "1d4"]);
     assert.deepEqual([beam.resolution.check.statistic, beam.resolution.check.basic, beam.targeting.area, beam.trigger.recharge.formula], ["reflex", true, { type: "line", value: 60 }, "1d4"]);
-    // A troop's damage by the number of actions; "each enemy within 10 feet" is a 10-foot emanation.
+    // A troop's damage by the number of actions; "each enemy within 10 feet" is a 10-foot emanation, on its foes only (batch 234).
     const glyph = (n) => `<span class="action-glyph">${n}</span>`;
     const clash = compileMonsterAbility(action("Test Clash", `<p>The troop attacks each enemy within 10 feet (@Check[reflex|dc:20|basic] save). The damage depends on the number of actions.</p><p>${glyph(1)} @Damage[1d8[slashing]] damage</p><p>${glyph(2)} @Damage[(2d8+5)[slashing]] damage</p><p>${glyph(3)} @Damage[(3d8+5)[slashing]] damage</p>`, { actions: 1 }));
-    assert.deepEqual([clash.targeting.area, clash.targeting.range, clash.resolution.sharedDamage.components[0].formula, clash.resolution.native.byActions[3].sharedDamage.components[0].formula], [{ type: "emanation", value: 10 }, null, "1d8[slashing]", "(3d8+5)[slashing]"]);
+    assert.deepEqual([clash.targeting.area, clash.targeting.range, clash.resolution.sharedDamage.components[0].formula, clash.resolution.native.byActions[3].sharedDamage.components[0].formula], [{ type: "emanation", value: 10, foes: true }, null, "1d8[slashing]", "(3d8+5)[slashing]"]);
     // Damage "if" something happens is the GM's, told on the card; "As failure, except … pushed 70 feet" pushes 70 feet;
     // a result's own damage beside "full damage" is kept; a pull toward the monster is played.
     const wall = compileMonsterAbility(action("Test Wall", `<p>Creatures in a @Template[cone|distance:30] take @Damage[4d6[force]] damage and must attempt a @Check[fortitude|dc:20] save.</p><p><strong>Critical Success</strong> The creature is unaffected.</p><p><strong>Success</strong> The creature takes half damage and is pushed 5 feet away.</p><p><strong>Failure</strong> The creature takes full damage and @Damage[1d6[persistent,bleed]] damage, and is pushed 20 feet away. If this would push it into a wall, it takes @Damage[2d6[bludgeoning]] damage.</p><p><strong>Critical Failure</strong> As failure, except the creature is pushed 40 feet away.</p>`));
@@ -3782,4 +3782,17 @@ test("spell energy in its Strikes after a spell; a once-a-round charge on its ne
     assert.deepEqual([charge.damage, charge.strike, charge.nextStrike, charge.notes.at(-1)], [["2d6[void]"], "chain", true, "Or, instead of the damage, that Strike can have 60-foot reach."]);
     assert.deepEqual(plan("<p>The test golem forms a new stone club or stone shield in a free hand</p>", "free"), { builtin: "no-effect" });
     assert.deepEqual(plan("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test thief Interacts to draw an item of light Bulk concealed in one of their secret pockets. The pockets hold up to three such items.</p>", "free"), { builtin: "no-effect" });
+});
+
+test("a troop's attack by actions with icon counts, on the enemies in its squares and beside it; a shell with its AC named; healing with a bonus after; a still disguise until it acts (2026-10-12, batch 234)", () => {
+    const item = (html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, actions) => compileMonsterAbility(item(html, actions), { basicActions: {} });
+    const icon = (n) => `<span class="pf2-icon">${n}</span>`;
+    const brawl = plan(`<p><strong>Effect</strong> The test mob swarms each enemy in its squares or within 5 feet (@Check[type:reflex|dc:20|basic:true] save). The damage depends on the number of actions.</p><p>${icon(1)} @Damage[1d6[bludgeoning]] damage</p><p>${icon(2)} @Damage[(1d6+4)[bludgeoning]] damage</p><p>${icon(3)} @Damage[(1d6+8)[bludgeoning]] damage</p>`);
+    assert.deepEqual([brawl.targeting.area, Object.keys(brawl.resolution.native.byActions)], [{ type: "emanation", value: 5, foes: true }, ["1", "2", "3"]]);
+    const shell = plan("<p>The test tortoise tucks itself into its shell, and its turn ends. It gains a +3 circumstance bonus to AC, raising its AC to 30, and the same bonus to its saves against areas. Until it comes out, it can only Stand or come out.</p>");
+    assert.deepEqual([shell.shell, shell.model.modifiers, shell.notes.length], [true, [{ on: "ac", type: "circumstance", value: 3 }], 3]);
+    const tonic = plan("<p>The test chemist downs a tonic, restoring @Damage[(2d6+4)[healing]] Hit Points and granting itself a +1 item bonus on saves against poison for 1 minute.</p>");
+    assert.deepEqual([tonic.resolution.native.healing.components[0].formula, tonic.notes.at(-1)], ["2d6+4", "It also gains a +1 item bonus on saves against poison for 1 minute."]);
+    assert.deepEqual(plan("<p>The test kite folds flat and lies still. It gets an automatic result of 27 on Deception checks and DCs to pass as plain paper until it next acts.</p>"), { builtin: "no-effect" });
 });

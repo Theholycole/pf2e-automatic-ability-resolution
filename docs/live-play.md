@@ -2243,3 +2243,13 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** as for these kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Battlezoo troop attacks, a shell, a tonic and a still disguise (2026-10-12, batch 234)
+
+- **Compiled** (Battlezoo; wordings paraphrased here):
+  - **A troop's attack whose damage depends on the actions**, its counts written as icon spans, on the enemies in its squares or within 5 feet → the action-count save, an emanation on its foes (`area.foes`). That is now so for every troop's "each enemy within N feet" (8 in PF2e).
+  - **A shell stance** whose AC bonus also names the AC it reaches and covers its saves against areas → `shell` with the AC bonus. The saves, what it can do meanwhile, and Prone in the shell are notes.
+  - **Healing with a save bonus after it** (an item bonus to some saves for a minute) → its healing, the bonus a note.
+  - **A still disguise** with its automatic Deception result "until it acts again" → no-effect.
+- **Live:** as for these kinds. Not run in pftest.
+- **Simulator:** nothing new (`area.foes` as in batch 229).
+
