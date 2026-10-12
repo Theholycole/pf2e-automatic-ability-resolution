@@ -32,6 +32,8 @@ const UNSEEN = [
     /\bmust be outdoors\b|\bunderwater\b|\bwithin \d+ feet of (?:its|their|his|her) hoard\b|\bwithin reach of any kind of stone\b|\bcasting a shadow\b|\bwithin (?:\d+ feet|a mile|1 mile) of (?:a|its|their) [\w' -]*(?:water|lair|tree|stone|statue|altar|shrine|hoard)\b|\bin the shadow of\b/i,
     /\bis (?:in|using) (?:its|their|his|her) [\w' -]+? (?:form|shape|mode)\b|\bis in (?:its|their) (?:swarm|ectoplasmic|true|natural|normal|humanoid|hybrid|animal|bipedal|quadrupedal) (?:form|stance)\b/i,
     /\bis (?:attached|mounted|riding|burrowed|Wheels Up|piloting|driving)\b|\bmust be mounted\b|\bis controlling (?:a body|a corpse)\b|\bis in torpor\b|\bis riding\b/i,
+    // (Batch 209: a daily story it has spun, a fresh corpse it killed beside it.)
+    /\bhas Weaved a Narrative\b|\bis adjacent to the corpse of a creature\b/i,
     /\bhas (?:a|one|at least one) (?:free )?hand(?: free)?\b|\bhas (?:a|one|at least one) hand free\b|\bhas (?:both|two) hands free\b|\bInitiative has not (?:yet )?been rolled\b|\bcan hear (?:the|it|him|her|them)\b|\bhas at least one [\w' -]+? spell remaining\b|\bprotected by the ancestors\b|\bhas (?:detected|sensed)\b|\bis attuned to\b|\b(?:aura|shell|barrier) is (?:active|frozen|raised|up)\b|\bhasn't been killed\b|\bis within its bonded location\b/i
 ];
 

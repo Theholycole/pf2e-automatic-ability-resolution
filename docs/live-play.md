@@ -1874,3 +1874,17 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** offers and buffs as for their kinds. Not run in pftest.
 - **Simulator:** nothing new.
 
+## Battlezoo guards, a healing split, and two states (2026-10-12, batch 209)
+
+Four Battlezoo dragon abilities, eight copies each; their own words stay out of this repository.
+
+- **Compiled:**
+  - A guard of whoever it's sworn to protect → `reaction-strike` with `ally-attacked`, `ward` and `melee`. Its note says it can give that creature +2 AC against the Strike instead.
+  - A share of a vitality healing aimed at a creature near it → `heal-siphon` with `share: 0.5` and `tempRounds: 10`.
+  - Two abilities whose requirement the simulator can't see → `{ builtin: "no-effect", gm: "state" }`: a story it spun that day, and standing beside the corpse of a creature it killed. The second wording also moves two PF2e corpse-eaters to the GM's state category.
+- **Live:**
+  - The siphon offer for the split says the creature gets half and the monster the rest as temporary Hit Points, gone after a minute, for the GM to apply.
+  - Its button reads "Use it: split the healing", and Use rolls nothing.
+  - Not run in pftest.
+- **Simulator:** see B209 in its ability decisions.
+

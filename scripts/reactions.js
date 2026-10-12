@@ -569,7 +569,10 @@ async function healSiphonAnswers(scene, combat, caster) {
     for (const { token, actor, reactions } of reactors(scene, combat)) {
         const entry = reactions.find(({ plan }) => plan.builtin === "heal-siphon");
         if (!entry || token.id === caster.id || !isFoe(token, caster) || distanceFeet(box(token, grid.size), box(caster, grid.size), grid) > (entry.plan.within ?? 60)) continue;
-        await offer({ kind: "siphon", item: entry.item, monster: token, actor, target: caster, trigger: "cast a healing spell near it", note: `Its healing is at its least: each die rolls 1 and flat values are halved. Apply it that way.${entry.plan.tempHp ? ` ${token.name} then gains ${entry.plan.tempHp} temporary Hit Points for ${entry.plan.tempRounds ?? 1} round.` : ""}` });
+        // (Batch 209: a share of it instead — the creature gets that share, the monster the rest as temporary Hit Points for a minute.)
+        const note = entry.plan.share ? `The healing is split: the creature gets ${entry.plan.share === 0.5 ? "half" : `${Math.round(entry.plan.share * 100)}%`}, and ${token.name} gets the rest as temporary Hit Points (gone after 1 minute). Apply that by hand.`
+            : `Its healing is at its least: each die rolls 1 and flat values are halved. Apply it that way.${entry.plan.tempHp ? ` ${token.name} then gains ${entry.plan.tempHp} temporary Hit Points for ${entry.plan.tempRounds ?? 1} round.` : ""}`;
+        await offer({ kind: "siphon", item: entry.item, monster: token, actor, target: caster, trigger: "cast a healing spell near it", note });
         return;
     }
 }
@@ -1177,7 +1180,7 @@ async function use(message, action, slug) {
             gained = roll.total;
             if (gained > (Number(actor.system?.attributes?.hp?.temp) || 0)) await actor.update({ "system.attributes.hp.temp": gained });
         }
-        result = `The healing is at its least: each die 1, flat values halved.${gained ? ` ${state.monster.name} gains ${gained} temporary Hit Points.` : ""}`;
+        result = plan?.share ? `The healing is split: give ${state.monster.name} the rest as temporary Hit Points.` : `The healing is at its least: each die 1, flat values halved.${gained ? ` ${state.monster.name} gains ${gained} temporary Hit Points.` : ""}`;
     } else if (state.kind === "rescue") {
         // (Batch 106: the ally back up — 1 HP or the Hit Points it restores — its unconscious and dying gone; doomed where it says so.)
         const ally = state.target ? (await fromUuid(state.target.tokenUuid))?.actor : null;

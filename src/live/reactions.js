@@ -133,7 +133,7 @@ export function offerHTML(state) {
         // (Batch 195, Reawaken!: a creature that died, brought back.)
         if (state.kind === "rescue") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${state.survive?.back ? "bring it back" : "keep it up"}</button>`);
         // (Batch 195, Siphon Life: a foe's healing at its least, and temporary Hit Points.)
-        if (state.kind === "siphon") buttons.push(`<button type="button" data-aar-reaction="use">Use it: the healing at its least</button>`);
+        if (state.kind === "siphon") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${/\bsplit\b/.test(state.note ?? "") ? "split the healing" : "the healing at its least"}</button>`);
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);

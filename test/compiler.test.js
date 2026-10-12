@@ -3372,3 +3372,12 @@ test("Lost Omens: resistance to physical attacks, a pursuit with a Strike, a tai
     const luck = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test lion, or an ally within 20 feet, is about to attempt a saving throw but hasn't rolled yet</p><p><strong>Frequency</strong> once per hour</p><hr /><p><strong>Effect</strong> That creature rolls the triggering saving throw twice and takes the better result.</p>"), {});
     assert.deepEqual([luck.builtin, luck.self, luck.within, luck.uses], ["save-reroll", true, 20, 1]);
 });
+
+test("a guard for one it's sworn to protect; a healing split with it; states it can't show the simulator (2026-10-12, batch 209)", () => {
+    const item = (type, html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const guard = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature within 20 feet Strikes a creature the test sellsword is sworn to protect</p><hr /><p><strong>Effect</strong> The test sellsword either makes an unarmed melee Strike at the attacker or gives that creature a +2 circumstance bonus to AC against the Strike.</p>"), {});
+    assert.deepEqual([guard.builtin, guard.triggers, guard.ward, guard.melee], ["reaction-strike", ["ally-attacked"], true, true]);
+    const split = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature the test dryad can see within 20 feet is targeted by a healing spell with the vitality trait</p><hr /><p><strong>Effect</strong> The test dryad pulls at the magic. That creature regains only half, and the test dryad gains the rest as temporary Hit Points for 1 minute.</p>"), {});
+    assert.deepEqual(split, { builtin: "heal-siphon", within: 20, share: 0.5, tempRounds: 10 });
+    assert.deepEqual(compileMonsterAbility(item("action", "<p><strong>Requirements</strong> The test bard has Weaved a Narrative today</p><hr /><p><strong>Effect</strong> The test bard tells a tale and attacks with flair.</p>"), {}), { builtin: "no-effect", gm: "state" });
+});

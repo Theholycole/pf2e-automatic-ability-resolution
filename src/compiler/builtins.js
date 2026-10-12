@@ -1745,6 +1745,10 @@ export function readInitiativeWarning(text, item = null) {
 // Points (such as the additional Hit Points for a two-action Heal spell), are cut in half. The dragon then gains 4d8 temporary Hit Points that
 // last for 1 round." → { builtin: "heal-siphon", within, tempHp, tempRounds }.
 export function readHealSiphon(text) {
+    // (Batch 209, a Battlezoo dragon's: a vitality healing aimed at a creature near it that it can see — the creature gets half, the dragon the other
+    // half as temporary Hit Points for a minute → { within, share: 0.5, tempRounds: 10 }.)
+    const halved = /^Trigger an? creature (?:the [\w' -]+?|it) can see within (\d+) feet is targeted by (?:a spell or effect with the vitality trait(?:, and the spell would recover that creature['’]s Hit Point damage| that heals Hit Point damage)|a healing spell with the vitality trait)\.? Effect [^.]+\. (?:The triggering spell or effect heals half the amount of Hit Points to the triggering creature, and the (?:[\w' -]+?) receives the other half in temporary Hit Points, losing any remaining temporary Hit Points after 1 minute\.(?: This reaction doesn't affect the amount of healing to any other creatures, if any\.)?|That creature regains only half, and (?:the [\w' -]+?|it) gains the rest as temporary Hit Points for 1 minute\.)$/i.exec(String(text).trim());
+    if (halved) return { builtin: "heal-siphon", within: Number(halved[1]), share: 0.5, tempRounds: 10 };
     const split = /^Trigger An? creature within (\d+) feet uses a healing effect that restores Hit Points\.? Effect (.+)$/i.exec(String(text).trim().replace(/\s*Effect: [^.]+$/i, ""));
     if (!split) return null;
     const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
@@ -2047,6 +2051,10 @@ export function readReaction(item, text) {
     // (Batch 104: Bodyguard's Reprisal — "Trigger A creature attacks the subject of bodyguard's defense Effect The bodyguard makes a Strike
     // against the triggering creature." → triggers ["ally-attacked"], its charge only (the GM's: a note), its best melee Strike.)
     if (/^A creature attacks the subject of (?:the )?[\w' -]+?['’]s? defense$/i.test(trigger.trim().replace(/\.$/, "")) && /^(?:The )?[^.]+? makes a Strike against the triggering creature\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, ward: true };
+    // (Batch 209, a Battlezoo dragon's guard of whoever it's sworn to protect: as a creature within its distance Strikes that one, its own unarmed melee
+    // Strike at the attacker, or +2 AC for the one it guards instead — the Strike (the simulator's pick), the AC a note.)
+    const contract = /^A creature within (\d+) feet Strikes a creature (?:the [\w' -]+?|it) (?:has made a contract|is sworn) to protect$/i.exec(trigger.trim().replace(/\.$/, ""));
+    if (contract && /^(?:The )?[^.]+? (?:can choose to either make a melee Strike with an unarmed attack that can reach the triggering attacker, or interpose to protect the contractee, granting a \+2 circumstance (?:bonus )?to AC against the triggering Strike|either makes an unarmed melee Strike at the attacker or gives that creature a \+2 circumstance bonus to AC against the Strike)\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, ward: true, melee: true, note: `Only for one it's sworn to protect, at an attacker within ${contract[1]} feet; or, instead, +2 circumstance bonus to that one's AC against the Strike.` };
     // (Batch 207: Repartee Riposte's "Trigger A creature within the cadaverous rake's reach critically fails at a melee Strike against the rake Effect …
     // attempts a Strike against the creature, firing back a witty retort. If this Strike succeeds, the creature is Frightened 1, or Frightened 2 on a
     // critical success." — the Strike, Frightened on a hit; Divine Guardian's "Trigger An ally within the hollow serpent's reach is attacked Effect … The
