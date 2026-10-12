@@ -2440,3 +2440,17 @@ test("a basic maneuver in its own words, and at each creature around it (2026-10
     assert.deepEqual(compile("The test dancer spins. The test dancer attempts an Athletics check to Disarm against each enemy within melee reach. Each attempt counts toward the test dancer's multiple attack penalty, but the penalty doesn't increase until they have made all the attempts.", 2), { builtin: "skill-sweep", actions: 2, action: "disarm", sameMap: true });
     assert.deepEqual(compile("The test engine attempts to Grab all adjacent creatures.", 3), { builtin: "skill-sweep", actions: 3, action: "grapple" });
 });
+
+test("Demoralize at every foe around it, in more words (2026-10-12, batch 126)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test Howl", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions });
+    const howl = compile("The test wolf throws back its head, attempting to [[/act demoralize options=area-effect]] each creature within @Template[emanation|distance:20]{20 feet}. These creatures are then immune to Test Howl for 1 minute.");
+    assert.deepEqual([howl?.targeting?.area, howl?.trigger?.immunity?.duration], [{ type: "emanation", value: 20 }, { value: 1, unit: "minutes" }]);
+    const display = compile("<strong>Requirements</strong> The test knight is wielding a melee weapon</p><hr /><p><strong>Effect</strong> The test knight waves the blade about. It [[/act demoralize]]{Demoralizes} all enemies within 20 feet, rolling once and comparing the result to each target's Will DC.", 2);
+    assert.deepEqual(display?.targeting?.area, { type: "emanation", value: 20 });
+    const lurk = compile("The test beast growls from the dark. The test beast makes an Intimidation check to Demoralize all living creatures within 40 feet that can hear the test beast but not see them. Roll once and apply the result to all creatures. Each target is temporarily immune for 1 minute.");
+    assert.deepEqual(lurk?.notes, ["Only creatures that can hear it but not see it."]);
+    assert.equal(compile("The test gang attempts to [[/act demoralize]] up to 3 creatures.")?.targeting?.target, "up to 3 creatures");
+    // (Not a choice after a move.)
+    assert.equal(compile("The test marshal Strides and then either Interacts to reload a crossbow or makes an Intimidation check to Demoralize a foe."), null);
+});

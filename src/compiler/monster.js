@@ -2344,39 +2344,61 @@ function otherSkillManeuver(item, basicActions = {}) {
 function variedManeuver(item, basicActions = {}) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
-    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
-    const told = plain.split(/(?<=\.)\s+(?=[A-Z])/);
-    const sentences = told.length > 1 && !/\d|@|\b(?:Demoraliz\w*|Disarm\w*|Trip\w*|Shove\w*|Grappl\w*|checks?|damage|save|bonus|penalty)\b/i.test(told[0]) ? told.slice(1) : told;
+    // (Batch 126: an emanation's template as its distance, "each creature within @Template[emanation|distance:30]{30 feet}".)
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/(?:an? )?@Template\[[^\]]*?(?:emanation|burst)[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "$1 feet")).replace(/\s+/g, " ").trim();
+    // (Deadly Display's "Requirements Ordulf is wielding a melee weapon": always so; any other requirement or a frequency isn't read.)
+    const told = plain.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    const sentences = told.length > 1 && !/^(?:Requirements?|Frequency|Trigger|Cost)\b/.test(told[0]) && !/\d|@|\b(?:Demoraliz\w*|Disarm\w*|Trip\w*|Shove\w*|Grappl\w*|checks?|damage|save|bonus|penalty)\b/i.test(told[0]) ? told.slice(1) : told;
     const action = String.raw`(Demoralize|Disarm|Trip|Shove|Grapple)`;
-    const whom = String.raw`(an? (?:creature|foe|enemy|target)(?: within (\d+) feet)?|the nearest creature|each (?:enemy|foe|creature) within (\d+) feet|all non-allied creatures within (\d+) feet)`;
+    // (Batch 126: "all living creatures within 60 feet that can hear the durnolith", "all enemies within 30 feet", "… and applies the result to
+    // every opponent within 30 feet".)
+    // (Batch 126: "all living creatures within 60 feet that can hear the minotaur but not see them" — those it can't see, a note; "up to 4 creatures".)
+    const whom = String.raw`(an? (?:creature|foe|enemy|target)(?: within (\d+) feet)?|the nearest creature|(?:each|all|every) (?:enem(?:y|ies)|foes?|(?:living )?creatures?|opponents?) (?:within|in) (\d+) feet(?: (?:that|who) can hear (?:the [\w' -]+?|it|them|him|her)( but not (?:clearly )?see (?:it|them|him|her)(?: \([^)]*\))?)?)?|all non-allied creatures within (\d+) feet|up to (\d|two|three|four) creatures)`;
     // (Shove and Run: "… and then Strides with a +20-foot circumstance bonus to Speed" — the Stride the GM's, a note.)
-    const first = new RegExp(String.raw`^(?:The )?[^.]+?(?:,? as (?:it|they|he|she))? attempts (?:to ${action}|an? (?:Intimidation|Athletics) check to ${action}) ${whom}(?: with a mere glance)?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
+    // (Batch 126: "attempt to" (a troop's), "makes an Intimidation check to Demoralize", "He Demoralizes all enemies within 30 feet, rolling once and
+    // comparing the result to each target's Will DC", "…; these Demoralize attempts don't take any penalty for not sharing a language".)
+    // (Its subject only: not "Strides and then either Interacts to reload her gun or makes …", a choice after a move.)
+    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language)?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
     if (!first) return null;
-    const slug = (first[1] ?? first[2]).toLowerCase();
+    const slug = (first[1] ?? first[2] ?? first[3] ?? first[4] ?? first[5]).toLowerCase();
     const basic = basicActions[slug];
     if (!basic?.resolution?.check) return null;
-    let bonus = Number(first[7]) || 0;
+    let bonus = Number(first[12]) || 0;
     let immune = false;
+    const extra = [];
     for (const sentence of sentences.slice(1)) {
+        // (Batch 126: a bonus in some case, a penalty more on those frightened — the GM's, notes; PF2e's effect link.)
+        if (/^If the targets [^.]+?, (?:the [\w' -]+?|it|they|he|she) gains? a \+\d circumstance bonus to this check\.$|^Creatures that become frightened as a result also take an? [–-]\d circumstance penalty to [^.]+\.$/i.test(sentence)) {
+            extra.push(sentence);
+            continue;
+        }
+        if (/^Effect: [\w' -]+$/.test(sentence)) continue;
+        if (/^Each target is temporarily immune for (?:1|one|10|ten) minutes?\.$/i.test(sentence)) {
+            immune = true;
+            continue;
+        }
         if (/^(?:The [\w' -]+?|[A-Z][\w'-]+|It|They|He|She) (?:doesn't|does not|don't|do not) take a penalty (?:to (?:its|their|his|her) Intimidation check )?(?:if the target doesn't (?:speak the same language|understand (?:its|their|his|her) language)|against targets who don't understand (?:its|their|his|her) language)\.$/i.test(sentence)) continue;
         const gains = /^(?:It|They|He|She) gains? a \+(\d) circumstance bonus to this (?:Intimidation |Athletics )?check(?:, and the attempt is not penalized if the target can't understand [^.]+)?\.$/i.exec(sentence);
         if (gains) {
             bonus += Number(gains[1]);
             continue;
         }
-        if (/^Regardless of the result, each creature is temporarily immune to [\w' -]+? for (?:1|one) minute\.$/i.test(sentence)) {
+        if (/^Regardless of the result, each creature is temporarily immune to [\w' -]+? for (?:1|one) minute\.$|^These creatures are then immune to [\w' -]+? for (?:1|one) minute\.$|^Each creature is then temporarily immune for (?:1|one) minute\.$/i.test(sentence)) {
             immune = true;
             continue;
         }
+        // (Batch 126: no penalty for an unshared language, however it's said; Demoralize's own immunity said again; one roll for all.)
+        if (/^These checks take no penalty for not sharing a language\.$|^This Intimidation check (?:doesn't|does not) take the [–-]4 circumstance penalty for [^.]+? not speaking a language\.$|^As usual for Demoralize, affected (?:enemies|creatures) are then temporarily immune for 10 minutes\.$|^Roll once and apply the results? to all (?:creatures|targets)\.$/i.test(sentence)) continue;
         return null;
     }
     const plan = structuredClone(basic);
     if (bonus) plan.resolution.check = { ...plan.resolution.check, bonus: { value: (Number(plan.resolution.check.bonus?.value) || 0) + bonus, type: "circumstance" } };
-    const radius = Number(first[5] ?? first[6]) || 0;
-    const reach = Number(first[4]) || null;
-    const targeting = radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius } } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
-    const immunity = immune ? readImmunity(html) : null;
-    const notes = first[8] ? [`Then it${first[8].replace(/^ and then/, "")}.`] : [];
+    const radius = Number(first[8] ?? first[10]) || 0;
+    const reach = Number(first[7]) || null;
+    const many = first[11] ? { one: 1, two: 2, three: 3, four: 4 }[String(first[11]).toLowerCase()] ?? Number(first[11]) : null;
+    const targeting = radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius } } : many ? { ...plan.targeting, target: `up to ${many} creatures` } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
+    const immunity = immune ? readImmunity(html, [item.name]) : null;
+    const notes = [...(first[9] ? ["Only creatures that can hear it but not see it."] : []), ...extra, ...(first[13] ? [`Then it${first[13].replace(/^ and then/, "")}.`] : [])];
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}) };
 }
 
