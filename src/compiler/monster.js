@@ -859,6 +859,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 130, Hammerhead: "makes a bone crest Strike; on a hit, the mjolgat deals an extra die of damage. This counts as two attacks when
         // calculating the mjolgat's multiple attack penalty" — its own sentence, and the last one's period.)
         .replace(/(Strike); on a hit, (?:the [\w' -]+?|it|he|she|they) deals an extra die of damage\./i, "$1. If it hits, it deals an extra die of weapon damage.")
+        // (Batch 151, Rolling Charge: "Strides twice, and can then make a Strike with its jaws. This jaws Strike gains Knockdown." — a Trip after a hit.)
+        .replace(/\b(Strides twice), and can then make a Strike with (?:its|their|his|her) ([\w' -]+?)\. This \2 Strike gains (?:@UUID\[[^\]]*\]\{Knockdown\}|Knockdown)\./i, "$1 and makes a $2 Strike. If it hits, it can attempt to Trip the target.")
         // (Batch 147: Residual Force's "makes a tentacle Strike that has a reach of 20 feet and deals 2d4 additional force damage", Addling Strike's
         // "This Strike gains the occult trait and deals an additional 1d4 mental damage.")
         .replace(/\bmakes an? ([\w' -]+?) Strike that has a reach of (\d+) feet and deals (\d+d\d+) additional (\w+) damage\./i, "makes a $1 Strike with its reach increased to $2 feet. If it hits, it deals an additional $3 $4 damage.")
@@ -1034,6 +1036,15 @@ function strikeActivity(item, actor, { after = null } = {}) {
             })
             .replace(/^If (?:he|she|it|they|the [\w' -]+?|[A-Z][\w'-]+) moves to follow the target, that movement (?:doesn't|does not) trigger reactions\.$|^Failure The target becomes off-guard until the end of [^.]+?['’]s current turn\.$|^If (?:they|he|she|it) used a two- ?handed melee weapon \(such as a maul\) for the Strike, [^.]+\.$/i, "[gm]")
             .replace(/^This Strike has the following failure effect\.$|^An? [\w' -]+? can dash (?:their|its|his|her) foe to the ground with a single blow\.$/i, "[told]")
+            // (Batch 151, Shatter Defenses: "makes a melee Strike against the frightened creature. If they hit and deal damage, the target becomes
+            // Off-Guard as long as it's frightened. If the target is already off-guard, …" — at a frightened creature (its requirement), Off-Guard
+            // for a round, how long it lasts and the rest the GM's.)
+            .replace(/^((?:The )?[\w' -]+?) makes a melee Strike against the frightened creature(?=\.$)/i, "$1 makes a melee Strike")
+            .replace(/^If (?:they|it|he|she) hit and deal damage, the target becomes Off-Guard as long as it's frightened(?=\.$)/i, () => {
+                (activity.notes ??= []).push("The Off-Guard lasts as long as the target is frightened.");
+                return "If it hits and deals damage, the target is Off-Guard for 1 round";
+            })
+            .replace(/^If the target is already off-guard, it can(?:'t|not) reduce its frightened value below 1 until the start of [^.]+?['’]s next turn\.$/i, "[gm]")
             // (Batch 150, Break Legs!: "As long as this clumsy condition lasts, the creature also takes a –5-foot penalty to its Speeds and has weakness
             // 5 to the legbreaker's Strikes. Effect: Break Legs!" — PF2e's effect has them: notes.)
             .replace(/^As long as this clumsy condition lasts, [^.]+\.$|^Effect: [\w' -]+!?$/i, "[gm]")
@@ -1152,6 +1163,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             else if (/(?:doesn't|does not) have a creature impaled on (?:its|their|his|her) horn/i.test(match[1])) activity.requires = "free-hand";
             // (Batch 81, Stunning Strike: "hit a foe earlier this turn with a weapon Strike": at a foe it hit this turn.)
             else if (/^(?:The )?[^,]*? hit an? (?:foe|creature|enemy|target) earlier this turn(?: with an? (?:weapon |melee )?Strike)?$/i.test(match[1])) activity.requires = "hit-earlier";
+            // (Batch 151, Shatter Defenses: "A Frightened creature is within melee reach of the Black Whale guard" — at a frightened creature.)
+            else if (/^An? Frightened creature is within (?:melee )?reach of [^.]+?\.?$/i.test(match[1])) activity.requires = "frightened";
             // (Batch 147: Residual Force's "The venedaemon's most recent action was to cast a spell", Addling Strike's "… to Cast a Spell" — straight
             // after a spell.)
             else if (/most recent action (?:this turn )?was to (?:cast|Cast) an? (?:non-cantrip )?spell\.?$/i.test(match[1])) {
@@ -1312,7 +1325,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     // GM's: nothing more than its Strike.)
     if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };
     if (!opened || bare) return null;
-    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length) return null;
+    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length && !rider.follow) return null;
     return activity;
 }
 
@@ -2785,6 +2798,10 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
             return `${who} Strides up to half ${owner} Speed and then attempts to Demoralize a creature.`;
         })
         .replace(/^((?:The )?[\w' -]+? Strides twice) and then Demoralizes\./i, "$1 and then attempts to Demoralize a creature.")
+        // (Batch 151, Sudden Rush: "Frequency once per round Effect The blue-scarf heavy strides up to 10 feet and attempts an Athletics check to
+        // Grapple a creature.")
+        .replace(/^Frequency once per (?:round|turn) Effect /i, "")
+        .replace(/^((?:The )?[\w' -]+?) strides up to (\d+) feet and attempts an Athletics check to (Grapple|Trip|Shove) a creature\./, "$1 Strides up to $2 feet and attempts to $3 a creature.")
         // (Batch 141: Into the Fray's "Strides then Demoralizes an adjacent Medium or smaller creature" — one Stride, the size a note; Shielded
         // Advance's "Requirements … has their shield raised Effect … presses forward, using their shield to push back foes. The captain Strides
         // and Shoves, in either order." — the raised shield the GM's.)

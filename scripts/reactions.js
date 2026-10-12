@@ -188,7 +188,15 @@ async function onMove(token, movement) {
         }
         // Telekinetic Defense, Wing Rebuff (batch 54): a creature coming within its distance (or its Strike's reach), a Strike at it.
         const approach = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("approach"));
-        if (approach) {
+        // (Batch 151, Toss: its Shove at a creature coming into its reach.)
+        if (approach?.plan.skill) {
+            const radius = provokeRadius(actor);
+            const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= radius);
+            if (!insides[0] && insides.some(Boolean)) {
+                await offer({ kind: "skill", item: approach.item, monster, actor, target: token, trigger: `came within ${radius} feet`, skill: { slug: approach.plan.skill, shift: (approach.plan.bonus ?? 0) - (approach.plan.penalty ?? 0) }, note: approach.plan.note ?? null });
+                continue;
+            }
+        } else if (approach) {
             const strikes = (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(approach.plan.strike))
                 .map((action) => ({ slug: action.slug, label: action.label, reach: Number(actor.getReach?.({ action: "attack", weapon: action.item })) || 5 }));
             const radius = approach.plan.within ?? Math.max(5, ...strikes.map((strike) => strike.reach));

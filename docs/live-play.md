@@ -1452,3 +1452,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Brutish Shove and Improved Knockdown → Strike activities (push 5 / 10 and Off-Guard; Prone and 1d6 bludgeoning); Residual Force and Addling Strike → Strike activities with `requires: "after-cast"`; Primal Weapon → a free Strike buff with `requires: "after-cast"`, `nonCantrip`.
 - **Live:** no new live code: the activities' riders and notes and the buff's effect (Primal Weapon turns on PF2e's own toggle) as before; the GM uses them when their requirement is met.
 - **Simulator:** the engine records a spell it just cast; what needs it is planned only as its next action (not after a cantrip when it says non-cantrip) (B147).
+
+## A Shove at a creature coming into reach (2026-10-12, batch 151)
+
+- **Compiled:** Toss → `{ builtin: "reaction-strike", triggers: ["approach"], skill: "shove", note }`.
+- **Live:** a creature moving from outside its reach to inside it brings the offer "Use it: Shove" (its maneuver card at the creature) with "It can't Stride after the creature."; checked in pftest with a long-horned bison and a goblin.
+- **Simulator:** the approach reaction's basic action, as for its Strikes (B151); Shatter Defenses planned only at a frightened creature.

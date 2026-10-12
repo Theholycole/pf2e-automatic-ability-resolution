@@ -2761,3 +2761,15 @@ test("more wordings: a flurry with no Effect label, one roll for two picks, brok
     assert.deepEqual(ability("<p><strong>Trigger</strong> The test ooze is damaged by a bludgeoning attack</p><hr /><p><strong>Effect</strong> The test ooze hardens around the blow, reducing the damage taken by 3 (to a minimum of 0).</p>", "reaction"), { builtin: "resist-damage", value: 3, on: ["bludgeoning"], types: null, attack: true });
     assert.deepEqual(ability("<p>The test knight Strikes each enemy within his reach. Each attack counts toward his multiple attack penalty, but do not increase his penalty until he has made all his attacks.</p>", "action", 3), { builtin: "multi-strike", actions: 3, strikes: [null], each: true, sameMap: true });
 });
+
+test("a Shove at a creature coming into reach, a Stride then a Grapple, a Strike at a frightened creature, a rolling charge that knocks down (2026-10-12, batch 151)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const ability = (description, type = "action", actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    assert.deepEqual(ability("<p><strong>Trigger</strong> A creature ends its movement within reach of the test ox's horn Strike</p><hr /><p><strong>Effect</strong> The test ox attempts to Shove the triggering creature with its horns. The test ox can't Stride after the triggering creature on a success or critical success.</p>", "reaction"), { builtin: "reaction-strike", triggers: ["approach"], strike: null, skill: "shove", penalty: 0, disrupts: false, note: "It can't Stride after the creature." });
+    const rush = ability("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test tough strides up to 10 feet and attempts an Athletics check to Grapple a creature.</p>");
+    assert.deepEqual([rush.resolution.check.statistic, rush.approach], ["athletics", { strides: 1, feet: 10 }]);
+    const shatter = ability("<p><strong>Requirements</strong> A Frightened creature is within melee reach of the test guard</p><hr /><p><strong>Effect</strong> The test guard makes a melee Strike against the frightened creature. If they hit and deal damage, the target becomes Off-Guard as long as it's frightened.</p>");
+    assert.deepEqual([shatter.requires, shatter.onHit.conditions[0].slug], ["frightened", "off-guard"]);
+    const roll = ability("<p>The test stone Strides twice, and can then make a Strike with its jaws. This jaws Strike gains Knockdown.</p>", "action", 2);
+    assert.deepEqual([roll.builtin, roll.strides, roll.onHit.follow], ["strike-activity", 2, "trip"]);
+});

@@ -701,6 +701,8 @@ export function readCharge(text) {
     // (Batch 70: what only tells the move — "…, ignoring difficult terrain caused by rubble", "…, during which it attempts a High Jump or a
     // Long Jump" — and "Strides twice, Leaps twice, or Strides once and Leaps once. It then makes a jaws Strike at the end of the movement".)
     // (Batch 73: "Requirements The namorrodor has nothing in its hands Effect …" — its natural attacks need no hands.)
+    // (Batch 151, Sidle-Stab!-Scamper: "Ogthup takes a Stride action, and at any point during her move can take a Strike action.")
+    if (/^(?:The )?[\w' -]+? takes a Stride action, and at any point during (?:her|his|its|their) move can take a Strike action\.$/i.test(String(text).trim())) return { strides: 1, strike: null };
     // (Batch 145, Implacable Advance: "…; they can ignore difficult terrain during these Strides if they advance toward their murderer. If they
     // Strike and Grab their murderer this turn, they can Constrict as a free action immediately after the Grab." — the GM's.)
     text = String(text).replace(/(Strike); (?:they|it|he|she) can ignore difficult terrain during these Strides if (?:they|it|he|she) advances? toward (?:their|its|his|her) murderer\./i, "$1.").replace(/\s*If (?:they|it|he|she) Strikes? and Grabs? (?:their|its|his|her) murderer this turn, (?:they|it|he|she) can Constrict as a free action immediately after the Grab\.$/i, "");
@@ -1069,6 +1071,14 @@ function readMoreReactionStrikes(trigger, effect) {
         [new RegExp(String.raw`^A creature attempts to Escape from ${it}$`, "i"), () => ({ triggers: ["escape"] })],
         [new RegExp(String.raw`^A creature ends a move action within reach of ${reachOf} [\w' -]+? Strike$`, "i"), () => ({ triggers: ["approach"] })]
     ];
+    // (Batch 151, Toss: "A creature ends its movement within reach of the bison's horn Strike Effect The bison attempts to Shove the triggering
+    // creature with its horns. The bison can't Stride after the triggering creature on a success or critical success." — PF2e's Shove at a
+    // creature coming into its reach.)
+    const tossed = /^A creature ends its movement within reach of (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?) Strike$/i.exec(trigger.replace(/;$/, ""));
+    if (tossed && /^(?:The )?[^.]+? attempts to (Shove|Trip|Grapple) the triggering creature(?: with (?:its|their|his|her) [\w' -]+?)?\.(?: (?:The )?[^.]+? can(?:'t|not) Stride after the triggering creature on a success or critical success\.)?$/i.test(sentences.join(" "))) {
+        const act = /attempts to (Shove|Trip|Grapple)/i.exec(sentences[0])[1].toLowerCase();
+        return { builtin: "reaction-strike", triggers: ["approach"], strike: null, skill: act, penalty: 0, disrupts: false, ...(/can(?:'t|not) Stride after/i.test(sentences.join(" ")) ? { note: "It can't Stride after the creature." } : {}) };
+    }
     // (Batch 137, Sweeping Hook: "The ogre boss successfully Trips a creature using an ogre hook" — its Strike at the creature it tripped,
     // the weapon a note for the GM.)
     const tripped = new RegExp(String.raw`^${it} successfully Trips a creature(?: using (?:an? |its |their |his |her )?([\w' -]+?))?$`, "i").exec(trigger.replace(/;$/, ""));
@@ -2488,6 +2498,9 @@ function readSkillSweep(text) {
 // Strike, after which the boomerang returns to its hand", "makes a Strike with his fist and increases his reach by 5 feet for this
 // Strike". Live play: the Strike from the sheet; nothing more to apply. true or false.
 function readStrikeOnly(text) {
+    // (Batch 151, Shadow Swipe: "makes a melee Strike. If the attack hits, the enforcer Strides. If the enforcer ends this movement in dim light or
+    // darkness, they can attempt to Hide." — the move and the Hide the GM's.)
+    if (/^(?:Effect )?(?:The )?[\w' -]+? makes a melee Strike\. If the attack hits, (?:the [\w' -]+?|it|they|he|she) Strides\. If (?:the [\w' -]+?|it|they|he|she) ends this movement in dim light or darkness, (?:it|they|he|she) can attempt to Hide(?:: Stealth)?\.$/i.test(String(text).trim())) return true;
     // (Batch 47: no final period, "Iloise can use Interact to draw a bomb, then Strike with it"; Lunge's other choices, "They can choose to
     // Trip their opponent instead of making a Strike", "If the weapon has the disarm, shove, or trip trait, the guard can use the
     // corresponding action instead of a Strike": the GM's.)
