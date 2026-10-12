@@ -2985,3 +2985,9 @@ test("a circumstance bonus to its allies' initiative as it rolls Perception (202
     const passive = compile("passive", "<p>When Test Lookout is about to roll a Perception check for initiative, she can alert her allies as a free action. Test Lookout visually or audibly warns allies, granting them a +1 circumstance bonus to their initiative rolls.</p>");
     assert.deepEqual([passive.builtin, passive.value, passive.free], ["initiative-warning", 1, true]);
 });
+
+test("a Strike that misses it sent at a creature beside it (2026-10-12, batch 171)", () => {
+    const compile = (effect) => compileMonsterAbility({ type: "action", name: "Test Sidestep", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> A Strike targeting the test duelist fails or critically fails</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    assert.deepEqual(compile("The duelist twirls aside. The duelist redirects the attack to a creature of her choice that is adjacent to her and within reach of the triggering attack. The attacker rerolls the Strike's attack roll against the new target."), { builtin: "redirect-attack" });
+    assert.deepEqual(compile("The duelist can choose to either Step or redirect the attack to a creature that is adjacent to her and within the reach of the triggering attack. The attacker rerolls the Strike's attack roll against the new target."), { builtin: "redirect-attack", step: true });
+});

@@ -1537,3 +1537,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Guide's Warning, Scout's Warning, Sentry's Warning, Warning Hoot → `initiative-warning` with `value`, `skills` and `free`, and a note for the guide's +2 after Scouting. Vare's version, written as a passive with no labels, compiles too.
 - **Live:** as the encounter starts, its offer says to use it only if it rolled initiative with those skills, and only for the allies that can hear or see it. "Use it: +1 to its allies' initiative" adds the bonus to each rolled initiative of its disposition, since they have rolled by then; the turn order follows. Run in pftest: the guide's offer came up at the start, its two allies went from 15 to 16 and from 9 to 10, its reaction was marked used, and the turn stayed on the first creature.
 - **Simulator:** unless it rolls Stealth for an ambush, its allies' initiative rolls get the bonus, which doesn't stack with another circumstance bonus. Its reaction is spent until its turn (B170).
+
+## A missed Strike sent elsewhere (2026-10-12, batch 171)
+
+- **Compiled:** Sidestep, Glide Aside, Deflective Dodge → `redirect-attack`, with `step` for Deflective Dodge's choice of a Step.
+- **Live:** a Strike on it that fails or critically fails brings an offer, "Use it: redirect the attack", while another creature in the encounter is beside it. The note names those creatures and says the attacker rerolls the Strike's attack roll against the one it picks; Deflective Dodge's note adds the Step. Run in pftest: a missed Strike from one of two heroes beside the assassin brought the offer naming the other hero, and using it marked the reaction used. Tokens beside it but not in the encounter aren't named.
+- **Simulator:** its reaction on that miss, while another of the attacker's side is in its melee. The attacker rerolls that Strike against that creature at the same multiple attack penalty (B171).

@@ -1441,6 +1441,22 @@ export function readInitiativeWarning(text, item = null) {
     return { builtin: "initiative-warning", value, skills: trigger[1].toLowerCase().split(/\s+or\s+/), ...(free ? { free: true } : {}), ...(notes.length ? { notes } : {}) };
 }
 
+// (Batch 171, Sidestep: "Trigger The attack roll for a Strike targeting the assassin fails or critically fails Effect … If there's another
+// creature adjacent to the assassin and within reach of the triggering attack, the assassin redirects the attack to that adjacent creature. The
+// attacker then rerolls the Strike's attack roll against the new target."; Glide Aside's "dodges and redirects the attack to a creature adjacent
+// to him …"; Deflective Dodge's "can choose to either Step or redirect the attack …" → { builtin: "redirect-attack", step }.)
+export function readRedirect(text) {
+    const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
+    if (!split || !/^(?:The attack roll for a Strike targeting|A Strike targeting|An attack roll to Strike) [\w' -]+? fails or critically fails$/i.test(split[1])) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    if (!/^The attacker (?:then )?rerolls the Strike['’]s attack roll against the new target\.$/i.test(said.at(-1) ?? "")) return null;
+    const redirect = said.slice(0, -1);
+    const step = redirect.length === 1 && /\bcan choose to either Step or redirect the attack to a creature\b/i.test(redirect[0]);
+    const sends = (sentence) => /^(?:(?:The )?[\w' -]+? (?:can choose to either Step or redirect|(?:dodges and )?redirects) the attack to a creature(?: of (?:his|her|its|their) choice)? (?:that is )?adjacent to (?:him|her|it|them) and within (?:the )?reach of the triggering (?:attack|Strike)|If there['’]s another creature adjacent to (?:the [\w' -]+?|it|him|her|them) and within reach of the triggering attack, (?:the [\w' -]+?|it|he|she|they) redirects? the attack to that adjacent creature)\.$/i.test(sentence);
+    if (!redirect.length || !sends(redirect.at(-1)) || redirect.slice(0, -1).some((sentence) => /\d|@|\b(?:damage|bonus|penalty|Strikes?)\b/i.test(sentence))) return null;
+    return { builtin: "redirect-attack", ...(step ? { step: true } : {}) };
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -1464,7 +1480,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a

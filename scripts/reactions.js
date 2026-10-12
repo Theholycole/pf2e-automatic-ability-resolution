@@ -39,7 +39,7 @@ const FLAG = "reaction";
 export const NO_GRAB = "pf2e-automatic-ability-resolution:no-grab";
 // PF2e's actor sizes in the words a trigger uses ("A Medium creature").
 const SIZE_WORDS = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill", "redirect-attack"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -276,6 +276,7 @@ async function onMessage(message) {
         await strikeAnswers(context, scene, combat, token);
         await allyHitAnswers(context, scene, combat, token);
         await withdrawAnswers(context, scene, combat, token);
+        await redirectAnswers(context, scene, combat, token);
         await critAnswers(context, scene, combat, token);
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
@@ -371,6 +372,22 @@ async function withdrawAnswers(context, scene, combat, attacker) {
     if (!entry) return;
     const move = withdrawMove(entry.plan);
     await offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: entry.plan.on === "missed" ? "missed it with a melee Strike" : hit ? "hit it with a melee Strike" : "made a melee Strike against it", note: move.note, move: { label: move.label } });
+}
+
+// A Strike on it that fails or critically fails (batch 171: Sidestep, Glide Aside, Deflective Dodge): its offer to send the attack at another
+// creature beside it in the encounter, the attacker rerolling against that one — while there is one.
+async function redirectAnswers(context, scene, combat, attacker) {
+    if (!["failure", "criticalFailure"].includes(context.outcome)) return;
+    const target = context.target?.token ? fromUuidSync(context.target.token) : null;
+    const mine = target ? reactors(scene, combat).find((entry) => entry.token.id === target.id) : null;
+    if (!mine || !isFoe(mine.token, attacker)) return;
+    const entry = mine.reactions.find(({ plan }) => plan.builtin === "redirect-attack");
+    if (!entry) return;
+    const grid = gridOf(scene);
+    const taking = inEncounter(combat);
+    const beside = scene.tokens.filter((token) => token.id !== mine.token.id && token.id !== attacker.id && taking.has(token.id) && !token.hidden && token.actor && distanceFeet(box(mine.token, grid.size), box(token, grid.size), grid) <= 5);
+    if (!beside.length) return;
+    await offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it`, move: { label: entry.plan.step ? "redirect the attack (or Step)" : "redirect the attack" }, note: [`It sends the attack at a creature beside it within the attack's reach (${beside.map((token) => token.name).join(", ")}): ${attacker.name} rerolls the Strike's attack roll against that one.`, entry.plan.step ? "Or it Steps instead: move its token." : null].filter(Boolean).join(" ") });
 }
 
 // A critical hit on it (batch 100: Hellish Revenge, Spitting Rage), its breath recharged; its own hit (Flash of Brutality), made a critical one.
