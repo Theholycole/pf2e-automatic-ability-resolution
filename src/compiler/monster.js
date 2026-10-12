@@ -14,7 +14,7 @@ import { gmFallback } from "./gm-fallback.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
-import { chargeSentences, compileBuiltin, countWord, moveThenStrike, readRage, readSelfGuard, readStrikeBuff } from "./builtins.js";
+import { chargeSentences, compileBuiltin, countWord, moveThenStrike, readRage, readSelfGuard, readShell, readStrikeBuff } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
 import { castSpell } from "./casts.js";
@@ -2559,7 +2559,9 @@ function effectAbility(item) {
     const label = links.find((match) => match[1] === uuids[0])?.[2] ?? item.name;
     // The text without the effect's own link, an area kept as words ("within a 20-foot emanation").
     const text = html.replace(EFFECT_LINK, "").replace(/(?:\ban?\s+)?@Template\[(?:type:)?(\w+)\|distance:(\d+)[^\]]*\](?:\{[^}]*\})?/gi, "a $2-foot $1").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1");
-    const plain = htmlToPlainText(text).replace(/\bEffect:\s*$/i, "").trim();
+    // (Batch 230, Activate Defenses: "… to defend the soldier or an adjacent creature of the soldier's choice" — itself or a creature beside it, the GM's
+    // target.)
+    const plain = htmlToPlainText(text).replace(/\bEffect:\s*$/i, "").trim().replace(/\b(?:the [\w' -]+?|itself|themself) or an adjacent (creature|ally) of (?:its|their|the [\w' -]+?['’]s) choice\b/i, "itself or an adjacent $1");
     // Something else to do: a Strike, a check, a spell, a choice, movement, terrain, an area everyone's in.
     // (Batch 120: not the effect's own bonuses, "a +2 status bonus to attack rolls, Perception checks, saving throws, and skill checks" —
     // what it gives isn't what it does.)
@@ -3235,7 +3237,8 @@ function focusGaze(item, actor, basicActions) {
 // Strike"; "X damaged a creature with a jaws Strike on its last action", "hit a creature with a drill Strike with his previous
 // action", "made a successful Strike against a living creature with its touch on its previous action" (made-up names). Not with
 // more it needs (", and the target is adjacent to a wall", "or a Draconic Frenzy …", a size, the weapon's damage type).
-const LAST_ACTION = String.raw`(?:last|previous) (?:action|attack)(?: this turn)?`;
+// (Batch 230: "its most recent action this turn".)
+const LAST_ACTION = String.raw`(?:last|previous|most recent) (?:action|attack)(?: this turn)?`;
 const STRUCK_ONE = String.raw`(?:the|a|an|its|their|his|her) (?:living )?(?:target|creature|opponent|foe|enemy)(?: creature)?`;
 const HIT_DEGREES = ["success", "criticalSuccess"];
 export function followUpNeed(need) {
@@ -3286,6 +3289,12 @@ export function followUpResults(item, html) {
         if (!plain || /^Effect:/i.test(plain)) continue;
         // (A check, a Strike it makes: not this reading. "the Strike's target" is the creature hit. An Escape's DC, "([[/act escape
         // dc=42]])", goes with the grab.)
+        // (Batch 230, Poison Tooth: after its results, how to take out what it left in the wound — "Removing the tooth safely requires a successful
+        // Medicine check …" — the GM's.)
+        if (read && /(?:^|\.\s+)Removing (?:the|a|an) [\w' -]+? (?:safely )?requires a successful (?:@Check\[(?:type:)?medicine\b|DC \d+ Medicine\b)/i.test(plain) && !/@D/.test(plain)) {
+            reminders.push(readableText(sentence.replace(/@Check\[(?:type:)?(\w+)\|dc:(\d+)[^\]]*\](?:\{[^}]*\})?/i, (_all, skill, dc) => `DC ${dc} ${skill[0].toUpperCase()}${skill.slice(1)}`)));
+            continue;
+        }
         if (/@Check\[|\[\[\/act (?!escape\b)|\b(?:makes?|attempts?|making) (?:a|an|another|one|two|a second)\b[^.]*\bStrikes?\b|\bStrikes (?:the|a|an|it)\b|\b(?:save|saving throw|check)\b/i.test(plain)) return null;
         const choice = /\b(?:chooses?|choice|choosing|either)\b/i.test(plain);
         const tags = inlineTags(text, "Damage");
@@ -4349,7 +4358,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -4619,7 +4628,9 @@ function selfHeal(item) {
     // reignites." — the first sentence only tells it, the glow is the GM's.)
     // (Batch 213, Mend Soul: "restores 25 HP to itself or an incorporeal creature it has Grabbed" — itself, the creature it holds a note.)
     let orHeld = null;
+    // (Batch 230, Shed Armor: "They immediately heal 60 Hit Points in a surge of regeneration as they grow …" — the healing; what grows, words.)
     const sentences = effect.replace(/,? and (?:if (?:it has|they've|they have) Gone Dark, (?:its|their) glow reignites|its Glow reignites if it had been extinguished)\./i, ". If it has Gone Dark, its glow reignites.").replace(/^They regains\b/, "They regain")
+        .replace(/\b(It|They|He|She) immediately (heals?|regains?) \u0000( (?:Hit Points|HP))? in a surge of [^.]+\./, "$1 $2 \u0000$3.")
         .replace(/ (HP|Hit Points) to itself or (an? [\w' -]+? creature) it has Grabbed\./i, (_all, unit, whom) => {
             orHeld = `Or it heals ${whom.toLowerCase()} it has Grabbed instead.`;
             return ` ${unit} to itself.`;
@@ -4665,6 +4676,8 @@ function selfHeal(item) {
         trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
         resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } },
         ...(requires ? { requires } : {}),
+        // (Batch 230, Shed Armor: "this ability can't be used again until 1 hour has passed" — once a fight.)
+        ...(/\bcan(?:'t|not) be used again until (?:1|an?|one) (?:hour|day)\b/i.test(effect) ? { oncePerFight: true } : {}),
         ...(notes.length ? { notes } : {})
     };
 }

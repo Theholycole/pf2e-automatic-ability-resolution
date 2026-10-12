@@ -3353,6 +3353,64 @@ function readSelfResistance(item, body) {
     return null;
 }
 
+// Pulling into its shell (2026-10-12, batch 230): "The hermit crab curls fully into its shell to protect itself. This gives it a +4 circumstance bonus to
+// AC, removes its weakness to bludgeoning damage, and grants it resistance 5 to piercing and slashing damage. The only actions the hermit crab can use
+// while in this state are Protective Pinch and Interact to come out of its shell." (Retract), "The snapping turtle retracts its limbs and head into its
+// shell and ends its turn. This increases its AC to 18, but it can't act except to reemerge, which it can do as a single action." (Shell Defense, its AC
+// set: the difference from its own), "The giant pangolin falls Prone and rolls up into a ball. While rolled up, the only actions the giant pangolin can
+// perform are Emit Musk and Stand, and it also becomes Blinded and gains resistance 10 to physical damage. An adjacent creature that hits a rolled-up
+// giant pangolin with a melee Strike takes 1d6 slashing damage. These effects end once the giant pangolin Stands." (Roll Up) → a self-effect stance with
+// its AC and resistances, the rest notes; shell: the simulator doesn't play a creature shut in (it would only wait).
+export function readShell(item, actor = null) {
+    if (item?.system?.actionType?.value !== "action") return null;
+    const text = htmlToPlainText(String(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[\(?([^\[\]()]+?)\)?\[(\w+)\]\](?:\{[^}]*\})?/g, "$1 $2")).replace(/\s+/g, " ").trim();
+    const said = text.split(/(?<=\.)\s+(?=[A-Z])/);
+    if (!/\b(?:into (?:its|their) shell|rolls up into a ball)\b/i.test(said[0] ?? "")) return null;
+    const modifiers = [];
+    const resistances = [];
+    const notes = [];
+    if (/\bends (?:its|their) turn\b/i.test(said[0])) notes.push("Its turn ends.");
+    if (/\bfalls Prone\b/i.test(said[0])) notes.push("It falls Prone.");
+    for (const sentence of said.slice(1)) {
+        let match = /^This gives (?:it|them) a \+(\d+) circumstance bonus to AC, removes (?:its|their) weakness to (\w+) damage, and grants (?:it|them) resistance (\d+) to ([a-z ,]+?) damage\.$/i.exec(sentence);
+        if (match && resistanceTypes(match[4])) {
+            modifiers.push({ on: "ac", type: "circumstance", value: Number(match[1]) });
+            resistances.push(...resistanceTypes(match[4]).map((type) => ({ type, value: Number(match[3]), exceptions: [] })));
+            notes.push(`Its weakness to ${match[2]} is gone meanwhile.`);
+            continue;
+        }
+        match = /^This increases (?:its|their) AC to (\d+), but (?:it|they) can(?:'t|not) act except to reemerge, which (?:it|they) can do as a single action\.$/i.exec(sentence);
+        if (match) {
+            const ac = Number(actor?.system?.attributes?.ac?.value);
+            if (Number.isFinite(ac) && Number(match[1]) > ac) modifiers.push({ on: "ac", type: "untyped", value: Number(match[1]) - ac });
+            else notes.push(`Its AC is ${match[1]}.`);
+            notes.push("It can't act except to come out, a single action.");
+            continue;
+        }
+        match = /^While rolled up, the only actions (?:the [\w' -]+?|it|they) can perform are ([^.]+?), and (?:it|they) also becomes? Blinded and gains? resistance (\d+) to ([a-z ,]+?) damage\.$/i.exec(sentence);
+        if (match && resistanceTypes(match[3])) {
+            resistances.push(...resistanceTypes(match[3]).map((type) => ({ type, value: Number(match[2]), exceptions: [] })));
+            notes.push(`It's Blinded, and it can only use ${match[1]}.`);
+            continue;
+        }
+        if ((match = /^The only actions (?:the [\w' -]+?|it|they) can use while in this state are ([^.]+)\.$/i.exec(sentence))) {
+            notes.push(`Meanwhile it can only use ${match[1]}.`);
+            continue;
+        }
+        if ((match = /^An adjacent creature that hits an? [\w' -]+? with a melee Strike takes (\d+d\d+) (\w+) damage\.$/i.exec(sentence))) {
+            notes.push(`An adjacent creature that hits it with a melee Strike takes ${match[1]} ${match[2]} damage.`);
+            continue;
+        }
+        if (/^These effects end once (?:the [\w' -]+?|it|they) Stands?\.$/i.test(sentence)) {
+            notes.push("It ends when it Stands.");
+            continue;
+        }
+        return null;
+    }
+    if (!modifiers.length && !resistances.length) return null;
+    return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: null, modifiers, tempHp: 0, resistances }, duration: { value: -1, unit: "unlimited", expiry: null }, stance: true, shell: true, notes };
+}
+
 // A bonus to its own AC for a while (2026-10-10, batch 39): "He gains a +2 circumstance bonus to AC until the start of his next turn"
 // (Dueling Parry), "They gain a +1 circumstance bonus to AC until the start of their next turn" (Hydraulic Deflection), "Until the start
 // of its next turn, it gains a +2 circumstance bonus to AC, and when an adjacent creature touches it … takes 2d6 persistent fire
@@ -3735,6 +3793,9 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 230, Flight Commander of Dis: "… granting themself and evil allies with fly Speeds a +20-foot status bonus to their fly Speeds for 1 round." — a
+    // Speed only.)
+    if (/^(?:The )?[^.]+?, granting (?:itself|themself|themselves|herself|himself)(?: and (?:[\w-]+ )?allies(?: with fly Speeds)?)? an? \+\d+-foot (?:status|circumstance) bonus to (?:its|their) (?:fly |land |swim |climb )?Speeds? for \d+ rounds?\.$/i.test(said)) return true;
     // (Batch 224, Grab and Go: a Stride or Climb taking an unattended item on the way — a move.)
     if (/^(?:The )?[^.]+? Strides or Climbs up to (?:its|their) Speed\. At any point during this movement, (?:it|they) can Interact to take a single unattended item of light Bulk or less [^.]+\.(?: Alternatively, if not in combat, [^.]+\.)?$/i.test(said)) return true;
     // (Batch 221: Deep Plunge's dive, Wriggling Rush's Stride and Swim, Swim Together's swim beside an animal, Mask Stench's suppressed aura, Quick Stow's

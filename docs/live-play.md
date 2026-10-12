@@ -2203,3 +2203,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a reaction's or passive's emanation card takes only the foes around it when `area.foes` is set. A used action's emanation is still the GM's targets.
 - **Simulator:** see B229 in its ability decisions. Reactions whose plan was "1 creature" with a creature setting them off found no target there. As emanations they now play.
 
+## Shells, teeth, plates and shed armor (2026-10-12, batch 230)
+
+- **Compiled:**
+  - **Retract, Shell Defense, Roll Up** → a `self-effect` stance (`shell`) with its AC bonus and resistances. Shell Defense's "AC to 18" is the difference from its own AC; without one it's a note. What it can still do, being Prone or Blinded, and the damage to a creature hitting it are notes.
+  - **Broken Thorns, Poison Tooth** → follow-ups to "its most recent action this turn". Poison Tooth's tooth removal (a Medicine check) is a GM note.
+  - **Flight Commander of Dis** → no-effect (a fly-Speed bonus only).
+  - **Activate Defenses** → its PF2e effect, on itself or a creature beside it (the GM's target).
+  - **Shed Armor** → 60 HP on itself, `oncePerFight` ("can't be used again until 1 hour has passed"). The lower AC is a note.
+- **Live:** cards as for these kinds. Not run in pftest.
+- **Simulator:** see B230 in its ability decisions.
+
