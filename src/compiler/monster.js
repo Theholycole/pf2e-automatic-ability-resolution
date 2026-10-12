@@ -999,6 +999,24 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 (activity.notes ??= []).push("It's Off-Guard until the start of its next turn.");
                 return "[told]";
             })
+            // (Batch 148, two Battlezoo dragons' long-limbed attacks: a Strike whose reach grows by some feet (a younger one's figure in brackets),
+            // or one at a creature some way off, then on a hit a Grapple or a Trip (with a bonus) — the reach, the bonus, a first-sight
+            // Off-Guard, the pull afterwards and the penalty's timing for the GM, notes.)
+            .replace(/^(?:They|It|He|She|The [\w' -]+?) makes? an? ([\w' -]+?) Strike with reach increased by (\d+) feet(?: \([^)]*\))?(?=\.$)/i, (_all, name, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet longer for this Strike.`);
+                return `It makes a ${name} Strike`;
+            })
+            .replace(/^((?:The )?[\w' -]+?) makes? an? ([\w' -]+?) Strike against a creature within (\d+) feet; on a success, (?:they|it|he|she) can also (?:attempt|try) to (Trip|Shove|Grapple|Disarm) (?:the target|it) with a \+(\d) circumstance bonus(?=\.$)/i, (_all, who, name, feet, act, bonus) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike.`, `+${bonus} circumstance bonus to the ${act}.`);
+                activity.onHit.follow = act.toLowerCase();
+                return `${who} makes a ${name} Strike`;
+            })
+            .replace(/^On a successful hit, (?:the [\w' -]+?|it|they) can immediately attempt an Athletics check to (Grapple|Trip|Shove) the target(; apply the multiple attack penalty for both the Strike and the \1 only after resolving the \1 attempt)?(?=\.$)/i, (_all, act, later) => {
+                if (later) (activity.notes ??= []).push(`The Strike and the ${act} both take the multiple attack penalty from before them.`);
+                return `If it hits, it can attempt to ${act} the target`;
+            })
+            .replace(/^The target is Off-Guard if (?:they|it) (?:haven't|hasn't) seen an? [\w' -]+?['’]s [\w' -]+? before\.$|^On a successful (?:Grapple|Trip|Shove), (?:the [\w' -]+?|it|they) can choose to pull the Grabbed creature adjacent to (?:them|it)\.$/i, "[gm]")
+            .replace(/^Apply (?:the )?multiple attack penalty normally to both checks\.$|^(?:The )?[\w' -]+?['’]s [\w' -]+? extends? out to a great distance to [^.]+\.$/i, "[told]")
             // (Batch 147, Brutish Shove: "makes a single Strike with a two-handed melee weapon. If he hits a target that is their size or smaller,
             // that creature is Off-Guard until the end of the brute's turn, and he can automatically Shove it with the same benefits as the Shove
             // action (including the critical success effect, if the Strike was a critical hit)." — 5 feet, 10 on a critical hit, the size and its

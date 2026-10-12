@@ -2731,3 +2731,12 @@ test("a Strike that shoves or knocks down, Strikes and buffs straight after a sp
     const weapon = ability("<p><strong>Frequency</strong> once per turn</p><p><strong>Requirements</strong> the test druid's most recent action was to cast a non-cantrip spell</p><hr /><p><strong>Effect</strong> Until the end of the test druid's next turn, the test druid deals an extra @Damage[1d4[piercing]] damage with her melee Strikes.</p>", "free");
     assert.deepEqual([weapon.builtin, weapon.actions, weapon.damage, weapon.requires, weapon.nonCantrip], ["self-effect", 0, ["1d4[piercing]"], "after-cast", true]);
 });
+
+test("a long-limbed Strike that grabs or trips on a hit (2026-10-12, batch 148)", () => {
+    const ability = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    // (Made-up wordings; the Battlezoo dragons' own say more, read the same way.)
+    const reach = ability("<p>It makes a talon Strike with reach increased by 10 feet (5 feet for a hatchling). On a successful hit, the test drake can immediately attempt an Athletics check to Grapple the target.</p>");
+    assert.deepEqual([reach.builtin, reach.strike, reach.onHit.follow, reach.notes], ["strike-activity", "talon", "grapple", ["Its reach is 10 feet longer for this Strike."]]);
+    const lash = ability("<p>The test wyrm makes a lash Strike against a creature within 40 feet; on a success, it can also try to Trip it with a +1 circumstance bonus.</p>");
+    assert.deepEqual([lash.strike, lash.onHit.follow, lash.notes], ["lash", "trip", ["Its reach is 40 feet for this Strike.", "+1 circumstance bonus to the Trip."]]);
+});
