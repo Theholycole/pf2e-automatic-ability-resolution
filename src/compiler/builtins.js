@@ -726,7 +726,10 @@ export function readReaction(item, text) {
         const free = item?.system?.actionType?.value === "free" ? { free: true } : {};
         const wait = /\bcan(?:'t|not) (?:use )?[\w' -]+? (?:again )?for (\d+d\d+) rounds\.$/i.exec(plain)?.[1];
         if (/^(?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check)(?: and (?:takes|uses) the better result)\.$/i.test(plain) && ownSave[1].toLowerCase() !== "critically fails") return { builtin: "save-reroll", save: null, ...once, ...free };
-        if (/^(?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check)(?:,? but (?:it|they|he|she) must use the new result, even if it's worse|,? and must (?:use|take) the new result)\.$/i.test(plain)) return { builtin: "save-reroll", save: null, keep: "new", ...once, ...free };
+        // (Batch 84, Reroll: "Cost 1 Mythic Point Trigger The ancient one fails a check Effect The ancient one rerolls the check." — a plain
+        // reroll keeps the new result; its cost a Mythic Point.)
+        const mythic = /\bCost 1 Mythic Point\b/i.test(text) ? { mythic: true } : {};
+        if (/^(?:The )?[^.]+? rerolls (?:the|that|its) (?:saving throw|save|triggering check|check)(?:,? but (?:it|they|he|she) must use the new result, even if it's worse|,? and must (?:use|take) the new result)?\.$/i.test(plain)) return { builtin: "save-reroll", save: null, keep: "new", ...once, ...free, ...mythic };
         if (/^The result of the saving throw is improved (?:by )?one degree\.(?: (?:The )?[^.]+? can(?:'t|not) [\w' -]+? for \d+d\d+ rounds\.)?$|^(?:The )?[^.]+? treats a critical failure as a failure,? or a failure as a success\.$/i.test(plain)) return { builtin: "save-boost", ...(wait ? { recharge: wait } : {}), ...once, ...free };
         if (ownSave[1].toLowerCase() === "critically fails" && /^The critical failure becomes a (?:normal )?failure\.$/i.test(plain)) return { builtin: "save-boost", criticalOnly: true, ...free };
     }
@@ -1161,6 +1164,10 @@ export function compileBuiltin(item, slug) {
     // after the fist Strike." → the two Strikes, the second only after a hit, at the same penalty; the move instead the GM's choice.)
     const pike = /^(?:The )?[\w' -]+? (?:makes an? (?:melee )?Strike with (?:its|their|his|her) ([\w' -]+?)|Strikes with (?:its|their|his|her) ([\w' -]+?))\. If this Strike hits, (?:the )?[\w' -]+? can either (move the target 5 feet within the [\w' -]+?['’]s reach) or make an? ([\w' -]+?) Strike against the target without increasing (?:its|their|his|her) multiple attack penalty until after the (?:[\w' -]+? )?Strike\.$/i.exec(text.trim());
     if (pike) return { builtin: "multi-strike", actions, strikes: [(pike[1] ?? pike[2]).toLowerCase(), pike[4].toLowerCase()], sameTarget: true, sameMap: true, ifFirstHits: true, instead: pike[3] };
+    // (Batch 84, Chase Prey: "rushes forward on all fours, Striding and then making two claw Strikes"; Frumious Charge: "Strides, ignoring
+    // difficult terrain, then makes two claw Strikes at the end of its movement" → a Stride, then the Strikes at one creature.)
+    const rush = /^(?:The )?[\w' -]+? (?:[a-z]+ forward[^,.]*, Striding and then making|Strides(?:, ignoring difficult terrain)?,? (?:and )?then makes) (two|three) ([\w' -]+?) Strikes(?: at the end of (?:its|their|his|her) movement)?\.$/i.exec(text.trim());
+    if (rush) return { builtin: "multi-strike", actions, strikes: Array((rush[1].toLowerCase() === "two" ? 2 : 3)).fill(rush[2].toLowerCase()), sameTarget: true, strides: 1 };
     // (Batch 83, Eviscerate: "Requirements The rivka has not attacked yet this turn Effect … It makes four Strikes: the first at its highest
     // attack bonus, the next two with a -4 penalty to their attack rolls, and the last one with a -8 penalty. This ability counts as four
     // Strikes for the purpose of its multiple attack penalty." → four Strikes at those penalties, before any other attack this turn.)
@@ -1442,14 +1449,18 @@ function readNoCombatEffect(text) {
     // (Batch 42: a statue or a corpse until it acts — "Until the next time it acts, the gargoyle appears to be a statue. It has an
     // automatic result of 32 on Deception checks and DCs to pass as a statue." — not with more for it, such as fast healing while it
     // stays still; a web line it descends on; a move and a reload, which the simulation does with its own Interact.)
-    const sentences = said.split(/(?<=\.)\s+(?=[A-Z])/);
-    const disguise = sentences.findIndex((sentence) => /^Until the next time (?:it|they|he|she) (?:acts?|uses? an action), (?:the )?[^.]+? appears to be (?:a statue|an ordinary corpse)\.$/i.test(sentence));
+    // (A requirement first that only says where it is or which of its forms it's in, then the disguise.)
+    const sentences = said.replace(/^Requirements? (?:The )?[^.@]*? is in (?:an? |its |their )?[\w' -]+? Effect (?=Until\b)/i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 83: any such object — "appears to be a door", "resembles an ordinary scarecrow", "appears as a sprawling mass of bones", "Until
+    // it next acts", "an automatic result of 41 (44 in forests or swamps) on Deception and Stealth checks and DCs to pass as …". Not one
+    // that also turns its aura off, gives it fast healing, Engulfs or Strikes.)
+    const disguise = sentences.findIndex((sentence) => /^Until (?:the next time (?:it|they|he|she|the [\w' -]+?) (?:acts?|uses? an action)|(?:it|they|he|she|the [\w' -]+?) (?:next )?acts?), (?:the )?[^.]+? (?:appears? to be|appears? as|resembles?) [^.]+\.$/i.test(sentence));
     if (disguise >= 0) {
         return sentences.every((sentence, index) => index === disguise
-            || /\bhas an automatic result of \d+ on Deception checks and DCs to pass as (?:a statue|an ordinary corpse)\.$|\bhave an automatic result of \d+ on Deception checks and DCs to pass as (?:a statue|an ordinary corpse)\.$/i.test(sentence)
+            || /\b(?:has|have) an automatic result of \d+(?: \([^)]*\))? on (?:Deception|@Check\[deception\])(?: and Stealth)? checks and DCs to (?:convincingly )?(?:pass|appear) as [^.]+\.$/i.test(sentence)
             || /^A creature must succeed at a @Check\[perception[^\]]*\] check to figure out that the statue is really a creature\.$/i.test(sentence)
             || (index < disguise && /, falls Prone, and lies completely still\.$/i.test(sentence))
-            || (index > disguise && !/@|\d|\b(?:fast healing|regeneration|damage|Hit Points|HP|bonus|penalty|Strikes?|saves?|DC|conditions?)\b/i.test(sentence)));
+            || (index > disguise && !/@|\d|\b(?:fast healing|regeneration|damage|Hit Points|HP|bonus|penalty|Strikes?|saves?|DC|conditions?|aura|Engulf\w*)\b/i.test(sentence)));
     }
     if (/^(?:The )?[^.]+? moves straight down up to \d+ feet, suspended by a web line\. (?:It|They) can hang from the web or drop off\. The distance (?:it|they) Descends? on a Web (?:doesn't|does not) count (?:when calculating|for) falling damage\./i.test(said)) return true;
     if (/^(?:The )?[^.]+? Strides?, Steps,? or Sneaks,? (?:and )?then Interacts to reload(?: (?:its|his|her|their) [\w' -]+)?\.?$/i.test(said)) return true;

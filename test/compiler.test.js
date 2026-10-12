@@ -1985,3 +1985,21 @@ test("only a Strike; a Strike at every creature in reach; a distant Strike; dama
     assert.deepEqual(compile("<p><strong>Requirements</strong> The test rivka has not attacked yet this turn</p><hr /><p><strong>Effect</strong> The test rivka slashes with its claws. It makes four Strikes: the first at its highest attack bonus, the next two with a -4 penalty to their attack rolls, and the last one with a -8 penalty. This ability counts as four Strikes for the purpose of its multiple attack penalty.</p>", 2),
         { builtin: "multi-strike", actions: 2, strikes: [null, null, null, null], sameTarget: true, sameMap: true, penalties: [0, 4, 4, 8], countsAs: 4, requires: "first-attack" });
 });
+
+test("any object a creature disguises itself as; a mythic reroll; a Stride and then two Strikes (2026-10-11, batch 84)", () => {
+    const action = (description, actions = 1, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } });
+    const compile = (description, actions, type) => compileMonsterAbility(action(description, actions, type), { basicActions: {} });
+    const none = { builtin: "no-effect" };
+    assert.deepEqual(compile("<p>Until the next time it acts, the test warden appears to be a door. It has an automatic result of 30 on Deception checks and DCs to pass as a door.</p>"), none);
+    assert.deepEqual(compile("<p>Until it acts, the test effigy resembles an ordinary scarecrow. It has an automatic result of 30 on Deception checks and DCs to pass as an ordinary scarecrow.</p>"), none);
+    assert.deepEqual(compile("<p>Until the next time they act, the test vine appears to be a tangle of flowers. They have an automatic result of 32 (35 in forests) on Deception and Stealth checks and DCs to pass as a non-creature plant.</p>"), none);
+    assert.deepEqual(compile("<p><strong>Requirements</strong> The test chest is in its Lid Shape</p><hr /><p><strong>Effect</strong> Until the test chest acts, they resemble a plain wooden chest. They have an automatic result of 34 on Deception checks and DCs to pass as a chest.</p>"), none);
+    // Not with more: fast healing, an aura it turns off, an Engulf.
+    assert.notDeepEqual(compile("<p>Until the next time it acts, the test kadamel appears to be a statue. It has an automatic result of 40 on Deception checks and DCs to pass as a statue. While remaining motionless in this way, it has fast healing 10.</p>"), none);
+    assert.notDeepEqual(compile("<p>Until the next time it acts, the test outcrop appears to be a rock. It has an automatic result of 40 on Deception checks and DCs to pass as a rock. Its dust aura is deactivated while this is being used.</p>"), none);
+    // A mythic reroll, the new result kept.
+    assert.deepEqual(compile("<p><strong>Cost</strong> 1 Mythic Point</p>\n<p><strong>Trigger</strong> The test elder fails a check</p><hr /><p><strong>Effect</strong> The test elder rerolls the check.</p>", null, "free"), { builtin: "save-reroll", save: null, keep: "new", free: true, mythic: true });
+    // A Stride, then two Strikes.
+    assert.deepEqual(compile("<p>The test troll lopes forward, Striding and then making two claw Strikes.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: ["claw", "claw"], sameTarget: true, strides: 1 });
+    assert.deepEqual(compile("<p>The test beast Strides, ignoring difficult terrain, then makes two claw Strikes at the end of its movement.</p>", 2)?.strides, 1);
+});

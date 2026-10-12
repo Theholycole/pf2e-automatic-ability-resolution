@@ -496,7 +496,7 @@ async function saveAnswers(message, context, scene, combat, saver) {
             if (self && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
                 const left = Number(item.system?.frequency?.value);
                 if (Number.isFinite(left) && left <= 0) continue;
-                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free });
+                return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: plan.mythic ? "It costs a Mythic Point." : null });
             }
             if (plan.builtin !== "save-boost" || (self ? plan.ally : !plan.ally)) continue;
             if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
