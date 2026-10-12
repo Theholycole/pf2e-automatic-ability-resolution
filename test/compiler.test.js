@@ -2026,3 +2026,14 @@ test("a hazard that only rolls initiative; a form shift as the fight starts; cha
         { builtin: "multi-strike", actions: 3, strikes: ["claw"], each: true, max: 4, strides: 1, sameMap: true });
     assert.deepEqual(compile("<p>The test giant Strides up to their Speed, Striking once with each of their scimitars at any point during the movement.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: ["scimitar", "scimitar"], sameTarget: true, strides: 1 });
 });
+
+test("Counterspell's kin: a spell or effect that sets it off and an attempt to counteract it, the GM's (2026-10-11, batch 86)", () => {
+    const reaction = (trigger, effect) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    const none = { builtin: "no-effect" };
+    assert.deepEqual(reaction("The test warden is the target of a spell", "The test warden attempts to counteract the triggering spell, with a counteract modifier of [[/r 1d20+20 #Counteract]]{+20}."), none);
+    assert.deepEqual(reaction("A creature within 30 feet casts a divine spell", "The test acolyte attempts to counteract the triggering spell using their spell attack modifier and a counteract rank of 2."), none);
+    assert.deepEqual(reaction("The test dragon is targeted by a mental effect they're aware of", "The test dragon immediately attempts to counteract the triggering effect (counteract rank 8)."), none);
+    assert.deepEqual(reaction("A foe within 60 feet uses an auditory effect", "The test dragon makes a counteract check against the effect (counteract rank 3)."), none);
+    // Not a counteract set off by anything else.
+    assert.notDeepEqual(reaction("A living creature within 30 feet is reduced to 0 Hit Points", "The residual energy attempts to counteract any vitality effect on it."), none);
+});

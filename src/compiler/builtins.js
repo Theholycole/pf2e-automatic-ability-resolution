@@ -595,6 +595,12 @@ export function readReaction(item, text) {
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
+    // (Batch 86: Counterspell's kin — a spell or effect that sets it off, and an attempt to counteract it: "Trigger The nullifier is the target
+    // of a spell Effect The nullifier attempts to counteract the triggering spell …", "Trigger A creature within 30 feet casts a divine spell
+    // … attempts to counteract the triggering spell …". The GM's, as Counterspell is (the user's choice of 2026-10-11).)
+    // (Its own split, case-sensitive: "Trigger The dragon is targeted by a mental effect they're aware of Effect …".)
+    const countering = /Trigger (.+?)(?: Requirements? .+?)? Effect (.+)$/.exec(text);
+    if (countering && /\b(?:Casts? (?:a |an |the )?(?:[\w-]+ )?Spell|spells?|effects?|casting)\b/i.test(countering[1]) && /\b(?:attempts? to (?:counteract|unravel|unmake)|makes a counteract check|to counter the triggering creature's casting)\b/i.test(countering[2])) return { builtin: "no-effect" };
     // (Batch 72: one that only brings another into the fight — "The rocks of the area begin to crumble. The hazard rolls for initiative.",
     // "The augdunars roll initiative." — or Sustains a Spell as its turn begins: the GM's.)
     const joining = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
