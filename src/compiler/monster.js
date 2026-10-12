@@ -866,6 +866,25 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // deals an additional 1d6 persistent bleed damage"; Twist the Hook's "If it hits, it twists and yanks the gaff to create an awful
             // wound, dealing 3d6 persistent bleed damage to the creature" — the damage on a hit.)
             .replace(/\bmakes an? (melee|ranged) Strike with one hand(?=\.$)/i, "makes a $1 Strike")
+            // (Batch 111: "makes a jaws Strike against the grabbed creature" (or "the grabbed or restrained creature", "the grabbed target") —
+            // at the creature it holds; "against an adjacent creature", "against the adjacent target", "against a target within reach", "at
+            // the target", "against a target" — what any melee Strike is; "that deals one additional weapon damage die", "that deals two
+            // additional weapon dice of damage" — more of its own dice; "and deals an additional 2d8 piercing damage on a hit".)
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) against the grabbed(?: or restrained)? (?:creature|target)(?= with an? \+\d+ circumstance bonus|\.$)/i, (_all, made) => {
+                activity.requires = "grabbed";
+                return made;
+            })
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) (?:against (?:an? adjacent (?:creature|target|enemy|foe)|the adjacent (?:creature|target)|an? (?:target|creature|foe) within (?:its |their |his |her )?reach|an? target)|at the target)(?=\.$)/i, "$1")
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) that deals (one|two) additional weapon (?:damage )?(?:die|dice)(?: of damage)?(?=\.$)/i, (_all, made, count) => {
+                activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + (count.toLowerCase() === "two" ? 2 : 1);
+                return made;
+            })
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) and deals an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|\d+d\d+ \w+) damage on a hit(?=\.$)/i, (_all, made, damage) => {
+                const tags = inlineTags(damage, "Damage");
+                const formula = tags.length ? readDamage(tags[0]) : plainDice(damage.replace(/ (\w+)$/, "[$1]"));
+                if (formula) activity.onHit.damage.push(formula);
+                return made;
+            })
             .replace(/\bmakes an? (?:melee|ranged) Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, (all, weapon) => (/^(?:one|other|free) hand$/i.test(weapon) ? "makes a melee Strike" : `makes a ${weapon} Strike`))
             // (Batch 110: Combat Grab's "If the Strike hits, they grab the target using their free hand." as a Grab on a hit; "The creature
             // remains Grabbed until the end of the guard's next turn or until it Escapes, whichever comes first." — the Grab's own time.)

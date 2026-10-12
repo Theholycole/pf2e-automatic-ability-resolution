@@ -2285,3 +2285,15 @@ test("a Grab on a hit with its free hand; Prone and a bleed told as a wound (202
     const hook = compile("<p>The test ogre makes a melee Strike with its hook. If it hits, it twists and drags the hook to knock the target Prone and tear the flesh, dealing @Damage[1d6[persistent,bleed]] damage to the creature.</p>", 2);
     assert.deepEqual([hook?.strike, hook?.onHit?.conditions?.[0]?.slug, hook?.onHit?.damage], ["hook", "prone", ["1d6[persistent,bleed]"]]);
 });
+
+test("Strike activities' openings: at the creature it holds, at an adjacent creature or a target within reach, more of its own dice, more damage on a hit (2026-10-12, batch 111)", () => {
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const club = compile("<p>The test brute makes a club Strike that deals two additional weapon dice of damage.</p>");
+    assert.deepEqual([club?.strike, club?.extraWeaponDice], ["club", 2]);
+    const wing = compile("<p>The test roc makes a wing Strike against a target within reach. On a critical hit, the target is Blinded until the end of its next turn.</p>");
+    assert.deepEqual([wing?.strike, wing?.onHit?.critical?.[0]?.slug], ["wing", "blinded"]);
+    const held = compile("<p>The test hound makes a jaws Strike against the grabbed creature. If it hits, the target is Frightened 1.</p>");
+    assert.deepEqual([held?.requires, held?.onHit?.conditions?.[0]?.slug], ["grabbed", "frightened"]);
+    const shot = compile("<p>The test archer makes a ranged Strike and deals an additional @Damage[2d6[piercing]] damage on a hit.</p>");
+    assert.deepEqual(shot?.onHit?.damage, ["2d6[piercing]"]);
+});
