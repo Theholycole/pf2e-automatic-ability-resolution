@@ -2580,6 +2580,10 @@ function effectAbility(item) {
     if (!own) {
         // The sentence that grants it, and who it's about: what's given to ("grants an adjacent ally a +2 …", "gives
         // themself and all orc allies …"), or the last clause before the verb ("When the swarm gets into formation, it gains").
+        // (Batch 239, Battlezoo: a curse of misfortune on the creature that hit it — its attacks rolled twice, the worse kept — its effect on that
+        // creature.)
+        const misfortune = triggered ? plain.split(/(?<=[.!?])\s+(?=[A-Z])/).find((part) => /^(?:(?:Until|For) [^,]+, )?the (?:triggering creature|attacker) rolls? [^.]*\btwice and (?:uses|takes) the (?:worse|lower) result\.$/i.test(part)) : null;
+        if (misfortune) return { ...base(item), targeting: { target: "the attacker", range: "touch", area: null }, trigger: triggered, resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: uuids[0], label, recipients: "target" }] } };
         const sentence = plain.split(/(?<=[.!?])\s+(?=[A-Z])/).find((part) => GRANTS.test(part));
         if (!sentence) return null;
         const match = GRANTS.exec(sentence);

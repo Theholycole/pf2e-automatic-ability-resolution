@@ -3817,3 +3817,15 @@ test("more states the simulator can't see: a persona change, an aura moved away,
     assert.deepEqual(plan("<p>If the next action the test mage uses is to Cast a Spell, the spell ignores 5 resistance to fire damage.</p>"), gm);
     assert.deepEqual(plan("<p><strong>Trigger</strong> An ally within 30 feet that benefited from the test spark's glow in the last hour is targeted by an attack</p><hr /><p><strong>Effect</strong> The test spark bursts, granting temporary Hit Points to those allies.</p>", "reaction"), gm);
 });
+
+test("a curse of misfortune on the creature that hit it, as its effect; rage that allows concentrate actions, a snare it sets; a doubled ward and an aura's pull to the GM (2026-10-12, batch 239)", () => {
+    const item = (html, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type) => compileMonsterAbility(item(html, type), { basicActions: {}, pack: "battlezoo-bestiary-pf2e" });
+    const curse = plan("<p><strong>Trigger</strong> A creature within the test imp's reach damages the test imp with a Strike</p><hr /><p><strong>Effect</strong> The test imp hisses a curse. For a round, the attacker rolls each of its attack rolls twice and takes the lower result.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.ya8r3IdzQ7QGNH8N]{Effect: Test Curse}</p>", "reaction");
+    assert.deepEqual([curse.targeting.target, curse.trigger.event, curse.resolution.applications[0].recipients], ["the attacker", "hit-by", "target"]);
+    assert.deepEqual(plan("<p><strong>Requirements</strong> The test drake is raging</p><hr /><p><strong>Effect</strong> Until the end of its turn, the test drake can use actions with the concentrate trait while raging.</p>"), { builtin: "no-effect" });
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test gremlin sets a snare of its level or lower in an adjacent square.</p>", "action"), { builtin: "no-effect" });
+    const gm = { builtin: "no-effect", gm: "state" };
+    assert.deepEqual(plan("<p><strong>Trigger</strong> A creature within 10 feet deals damage to the test drake</p><hr /><p><strong>Effect</strong> The test drake flickers and doubles its resistance from its ward against the triggering damage.</p>", "reaction"), gm);
+    assert.deepEqual(plan("<p>The test siren sings at one creature within 30 feet, which must attempt a @Check[will|dc:30] save. If it fails, it is affected by the test siren's charm aura.</p>"), gm);
+});

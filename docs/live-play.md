@@ -2284,3 +2284,13 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - A blessing only some allies carry ("benefited from … in the last hour", Accord Essence).
 - **Live / simulator:** the GM's, as before.
 
+## Battlezoo dragons' curses, snares and rage control (2026-10-12, batch 239)
+
+- **Compiled** (Battlezoo; wordings paraphrased here):
+  - **A curse of misfortune on the creature that hit it** → its linked effect on the attacker (`recipients: "target"`, the `hit-by` trigger). Before, the effect reading needed a "gains a bonus…" sentence.
+  - **A snare it makes** (and PF2e's Gremlin Snare) → no-effect, as summons are the GM's.
+  - **Concentrate actions allowed while it rages this turn** → no-effect.
+  - **The GM's** (`gm: "state"`): resistance doubled from a spell active on it, and a creature drawn into its aura's effects.
+- **Live:** the misfortune curse posts its effect card on the attacker when the reaction is used.
+- **Simulator:** nothing new.
+

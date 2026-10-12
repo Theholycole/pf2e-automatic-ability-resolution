@@ -3838,6 +3838,9 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 239, Battlezoo: concentrate actions allowed while it rages, for this turn; a snare it makes (a hazard of its own, as summons are the GM's).)
+    if (/^Requirements? (?:The )?[^.]+? is (?:enraged|raging)\.? Effect (?:[^.]+\. )?Until the end of (?:its|their) turn, (?:the [\w' -]+?|it|they) can use (?:any )?actions with the concentrate trait,? (?:despite being (?:enraged|raging)|while (?:enraged|raging))\.$/i.test(said)) return true;
+    if (/^(?:Frequency [^.]*? Effect )?(?:The )?[^.]+? (?:creates|sets) an? snare of (?:its|their) level or lower\b/i.test(said) && !/@|\b(?:damage|Strikes?|saves?)\b/i.test(said)) return true;
     // (Batch 233: Re-Arm's "forms a new stone axe or stone shield in a free hand", Hidden Pockets' Interact to draw an item from its pockets — items in hand,
     // nothing for the fight's numbers.)
     if (/^(?:The )?[^.]+? forms a new [\w' -]+?(?: or [\w' -]+?)? in a free hand\.?$/i.test(said)) return true;
