@@ -3263,6 +3263,27 @@ function healTouch(item) {
     };
 }
 
+// Another of its multi-Strike abilities during a flight (2026-10-12, batch 252, a Battlezoo dragon's fly-by): a flight with that ability's attacks made
+// along the way, each at a different creature → that ability's multi-Strike (compiled from its own item), with one move first and each at its own
+// target. null otherwise.
+function flightFrenzy(item, actor, options = {}) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[^.]+? Flies, performing an? ([A-Z][\w' -]+?) with attacks made at any point during the flight\. Each attack must be against a different creature\.$/i.exec(plain)
+        ?? /^(?:The )?[^.]+? Flies and uses (?:its|their) ([A-Z][\w' -]+?) along the way, each attack at a different creature\.$/i.exec(plain);
+    const owner = actor ?? item.actor ?? item.parent;
+    const other = match ? [...(owner?.items ?? [])].find((entry) => entry !== item && entry.type === "action" && String(entry.name ?? "").toLowerCase() === match[1].toLowerCase()) : null;
+    if (!other) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(other, { ...options, actor: owner });
+    } catch {
+        plan = null;
+    }
+    if (plan?.builtin !== "multi-strike") return null;
+    return { ...plan, actions: Number(item.system?.actions?.value) || plan.actions, strides: 1, each: true, max: plan.strikes.length, sameTarget: false, notes: [...(plan.notes ?? []), `It Flies, making its ${match[1]} attacks at any point along the way, each at a different creature.`] };
+}
+
 // A pull to it, then a Strike (2026-10-12, batch 250, Hungry Winds): one creature in range saves or is drawn in beside the harpy, which then bites it;
 // one drawn off the ground that can't fly falls → the save, a failure pulled up to that distance toward it; the Strike after and the fall, notes.
 // null otherwise.
@@ -3757,7 +3778,11 @@ export function followUpSkill(item, html, basicActions) {
         let match;
         // (Batch 69: "makes an Intimidate check to Demoralize the target creature", "attempts an Athletics check to Grapple the target",
         // "… the creature with a mere look".)
-        if (!slug && (match = /^(?:The )?[\w' -]+? (?:[a-z]+s [^.,]*? and )?(?:attempts to|(?:makes|attempts) an? (?:Intimidat(?:e|ion)|Athletics) check to) (Disarm|Reposition|Shove|Trip|Grapple|Demoralize) (?:the (?:target creature|creature|target|foe)(?: (?:they|it|he|she) hit)?(?: using (?:their|its|his|her) [\w' -]+?'s reach)?|it|an object the creature (?:they|it|he|she) hit is holding|the target of (?:their|its|his|her) (?:[\w' -]+? )?Strike(?: or Disarm)?|the creature (?:they|it|he|she) struck(?: or disarmed)?)(?: with a (?:sudden|mere) [a-z]+)?(?:,? even if (?:the [\w' -]+?|it|they) (?:doesn't|does not) have a free hand)?\.$/i.exec(sentence))) slug = match[1].toLowerCase();
+        if (!slug && (match = /^(?:The )?[\w' -]+? (?:[a-z]+s [^.,]*? and )?(?:attempts to|(?:makes|attempts) an? (?:Intimidat(?:e|ion)|Athletics) check to) (Disarm|Reposition|Shove|Trip|Grapple|Demoralize) (?:the (?:target creature|creature|target|foe)(?: (?:they|it|he|she) hit)?(?: using (?:their|its|his|her) [\w' -]+?'s reach)?|it|an object the creature (?:they|it|he|she) hit is holding|the target of (?:their|its|his|her) (?:[\w' -]+? )?Strike(?: or Disarm)?|the creature (?:they|it|he|she) struck(?: or disarmed)?)(?: with a (?:sudden|mere) [a-z]+)?(?:,? even if (?:the [\w' -]+?|it|they) (?:doesn't|does not) have a free hand)?(, using (?:their|its|his|her) spell attack modifier instead of Athletics|, with (?:their|its|his|her) spell attack modifier as the bonus)?\.$/i.exec(sentence))) {
+            slug = match[1].toLowerCase();
+            // (Batch 252, a Battlezoo ghost's Shove: its spell attack modifier in place of Athletics — a note for the GM's roll.)
+            if (match[2]) reminders.push("It uses its spell attack modifier for this check instead of Athletics.");
+        }
         else if (slug && (match = /^(?:They|It|He|She) gains? a \+(\d+) (status|circumstance) bonus (?:on|to) the (?:Athletics|Intimidation) check\.$/i.exec(sentence))) bonus = { value: Number(match[1]), type: match[2].toLowerCase() };
         else if (slug && /^This attempt (?:neither applies nor counts toward|doesn't (?:apply|count toward)|does not (?:apply|count toward)) (?:the [\w' -]+?'s|its|their|his|her) multiple attack penalty\.$/i.test(sentence)) noMap = true;
         // (What follows the move, "If the target ends its movement adjacent to an obstacle …": the GM's.)
@@ -4388,9 +4413,12 @@ function downsDemoralize(item, basicActions) {
         // (Batch 57, Jeer at Failure: "Effect The mocking dragon laughs dismissively at the foe, attempting an Intimidation check to
         // Demoralize the creature. They do not take a penalty if the creature doesn't understand their language." → PF2e's Demoralize
         // at the triggering creature.)
-        if (!/^(?:The )?[^.]+? laughs dismissively at the foe, attempting an Intimidation check to Demoralize the creature\.(?: (?:It|They|He|She) (?:does|do) not take a penalty if the creature doesn't understand (?:its|their|his|her) language\.)?$/i.test(parts[2])) return null;
+        // (Batch 252, a Battlezoo jester dragon's jeer: a Demoralize at the creature that critically missed it, and on a success its fear can't drop
+        // below 1 until it hits the dragon or loses track of it — a note.)
+        const jeer = /^(?:[^.]+\. )?(?:The )?[^.]+? attempts to Demoralize the triggering creature\. On a success, the triggering creature['’]s frightened condition can['’]t decrease to less than 1 at the end of its turn until it either successfully Strikes (?:the [\w' -]+?|it) or until it doesn['’]t observe or sense (?:the [\w' -]+?|it) for at least 1 round\.$|^(?:The )?[^.]+? tries to Demoralize the creature that missed, whose fear then stays at 1 or more until it lands a Strike on (?:it|the [\w' -]+?)\.$/i.test(parts[2]);
+        if (!jeer && !/^(?:The )?[^.]+? laughs dismissively at the foe, attempting an Intimidation check to Demoralize the creature\.(?: (?:It|They|He|She) (?:does|do) not take a penalty if the creature doesn't understand (?:its|their|his|her) language\.)?$/i.test(parts[2])) return null;
         const plan = structuredClone(basicActions.demoralize);
-        return { ...plan, ...base(item, { traits: plan.traits }), targeting: { ...plan.targeting, target: "the attacker" }, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } };
+        return { ...plan, ...base(item, { traits: plan.traits }), targeting: { ...plan.targeting, target: "the attacker" }, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) }, ...(jeer ? { notes: ["On a success, its Frightened can't drop below 1 at the end of its turn until it hits the dragon or loses track of it for a round."] } : {}) };
     }
     // (Batch 72: as the fight starts or its turn begins, "The brass dragon roars out a mighty challenge and attempts to Demoralize a creature it
     // can see", "The director general attempts to Demoralize a creature within 60 feet that they can see and that can see the director
@@ -4798,7 +4826,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -4859,6 +4887,8 @@ export function readReactionTrigger(text) {
     // A foe's mishap near it (batch 57, Jeer at Failure): "A foe within 90 feet becomes Prone or critically fails on a Strike".
     const mishap = /^An? (?:foe|enemy) within (\d+) feet becomes Prone or critically fails on a Strike$/i.exec(trigger);
     if (mishap) return { event: "foe-mishap", reaction: true, within: Number(mishap[1]) };
+    // (Batch 252, a Battlezoo jester dragon's jeer: a foe's critical miss on the monster itself — onSelf.)
+    if (new RegExp(String.raw`^An? (?:foe|enemy) critically fails a Strike against ${SELF}$|^An? (?:foe|enemy) rolls a critical failure on a Strike at ${SELF}$`).test(trigger)) return { event: "foe-mishap", reaction: true, within: 120, onSelf: true };
     // A creature near it losing a condition (batch 46, Consume Fear): "A creature within 60 feet loses the Frightened condition".
     const lost = /^(?:An?|Any) creature within (\d+) feet loses the (\w+) condition$/i.exec(trigger);
     if (lost) return { event: "condition-lost", reaction: true, condition: lost[2].toLowerCase(), within: Number(lost[1]) };

@@ -2457,3 +2457,12 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **The GM's** (`gm: "state"`): a requirement that it rusted a metal item this turn (Lick Rust).
 - **Live / simulator:** as their kinds.
 
+## Battlezoo jeers, telekinetic shoves, fly-bys (2026-10-12, batch 252)
+
+- **Compiled** (4 new in Battlezoo; wordings paraphrased here):
+  - **A Demoralize at a foe that critically misses it**: the trigger is a foe's critical miss on the monster itself → `foe-mishap` with `onSelf`. Its fear floor on a success is a note.
+  - **A follow-up Shove at its spell attack modifier**: the follow-up Shove, with the modifier as a reminder for the GM's roll.
+  - **Its Draconic Frenzy during a flight** → that ability's own `multi-strike` (compiled from its item), with one move first and each attack at a different creature. Not when the creature has no such ability.
+- **Live:** the jeer offer comes only for a critical miss at that monster (the attack's target).
+- **Simulator:** see B252 in its ability decisions.
+

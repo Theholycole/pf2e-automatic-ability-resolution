@@ -4023,3 +4023,17 @@ test("A follow-up save after a hit named only by its weapon, two Strikes with ex
     assert.deepEqual([thrash?.builtin, thrash?.strikes, thrash?.sameMap, thrash?.notes?.length], ["multi-strike", ["fist", "fist"], true, 1]);
     assert.deepEqual(plan("<p><strong>Requirements</strong> The test beast rusted a metal item with its tongue this turn</p><hr /><p><strong>Effect</strong> The test beast attempts a tongue Strike on the same target. If it hits, it heals @Damage[1d6[healing]] Hit Points.</p>"), { builtin: "no-effect", gm: "state" });
 });
+
+test("A Demoralize when a foe critically misses it, a Shove after a hit with its spell attack modifier, a multi-Strike of its own during a flight (2026-10-12, batch 252)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const item = (html, name = "Test", type = "action", actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, "Test", type, actions), { basicActions, ...(actor ? { actor } : {}) });
+    const jeer = plan("<p><strong>Trigger</strong> A foe rolls a critical failure on a Strike at the test jester</p><hr /><p><strong>Effect</strong> The test jester tries to Demoralize the creature that missed, whose fear then stays at 1 or more until it lands a Strike on it.</p>", "reaction");
+    assert.deepEqual([jeer?.resolution?.check?.statistic, jeer?.trigger?.event, jeer?.trigger?.onSelf, jeer?.notes?.length], ["intimidation", "foe-mishap", true, 1]);
+    const shove = plan("<p><strong>Requirements</strong> The test ghost's last action was a successful kick Strike</p><hr /><p><strong>Effect</strong> The test ghost attempts to @UUID[Compendium.pf2e.actionspf2e.Item.7blmbDrQFNfdT731]{Shove} the creature, with its spell attack modifier as the bonus. This attempt neither applies nor counts toward the test ghost's multiple attack penalty.</p>", "free");
+    assert.deepEqual([shove?.trigger?.followUp?.strike, shove?.resolution?.reminders?.length], ["kick", 1]);
+    const frenzy = item("<p>The test dragon makes two claw Strikes and one jaws Strike in any order.</p>", "Test Frenzy", "action", 2);
+    const flyBy = item("<p>The test dragon Flies and uses its Test Frenzy along the way, each attack at a different creature.</p>", "Test Fly-By", "action", 3);
+    const fly = compileMonsterAbility(flyBy, { basicActions, actor: { name: "Test Dragon", items: [frenzy, flyBy] } });
+    assert.deepEqual([fly?.builtin, fly?.strikes?.length, fly?.strides, fly?.each, fly?.actions], ["multi-strike", 3, 1, true, 3]);
+});

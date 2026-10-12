@@ -292,7 +292,7 @@ async function onMessage(message) {
         await withdrawAnswers(context, scene, combat, token);
         await redirectAnswers(context, scene, combat, token);
         await critAnswers(context, scene, combat, token);
-        if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
+        if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike", context.target?.token ? fromUuidSync(context.target.token)?.id ?? null : null);
         return;
     }
     // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
@@ -859,13 +859,14 @@ async function onDowned(actor) {
 
 // A foe's mishap within a monster's distance (Jeer at Failure, batch 57: "A foe within 90 feet becomes Prone or critically fails on a
 // Strike"): the monster's reaction, at that foe.
-async function mishapAnswers(scene, token, why) {
+// (Batch 252: targetId — the token the critically failed Strike was at, for a trigger on the monster itself only, onSelf.)
+async function mishapAnswers(scene, token, why, targetId = null) {
     const combat = runningCombat(scene);
     if (!combat || !inEncounter(combat).has(token.id)) return;
     const grid = gridOf(scene);
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
-        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "foe-mishap");
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "foe-mishap" && (!plan.trigger.onSelf || targetId === monster.id));
         if (!entry || (entry.plan.trigger.within && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > entry.plan.trigger.within)) continue;
         await offer({ kind: "card", item: entry.item, monster, actor, target: token, trigger: why, free: !!entry.plan.trigger.free });
     }
