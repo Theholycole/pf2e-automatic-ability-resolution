@@ -1346,3 +1346,8 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** the GM uses it when its requirement is met, and the card follows the Strike as before; a GM note names the creatures it may target ("only at an animal or a humanoid").
 - **Simulator:** a requirement it can't check isn't planned; the first-round one only in round 1; a Strike activity with target traits only at creatures with one of them.
 
+## A Grab with its free hand; Prone and a bleed told as a wound (2026-10-12, batch 110)
+
+- **Compiled:** "makes a melee Strike while keeping one hand free. If this Strike hits, the ruffian Grabs the target using their free hand. The creature remains Grabbed until the end of the ruffian's next turn or until it Escapes, whichever comes first." (and "makes a melee Strike with one hand. If it hits, they grab the target using their other hand.") → Grabbed on a hit, its requirement a free hand; "If it hits, it twists and yanks the gaff to knock the target Prone and create an awful wound, dealing 2d6 persistent bleed damage to the creature." → Prone and the bleed on a hit.
+- **Live:** the card after its Strike applies Grabbed (or Prone and the persistent bleed); checked in pftest with the ruffian, the marsh giant and the skinstitch (Flay's note "only at an animal or a humanoid").
+

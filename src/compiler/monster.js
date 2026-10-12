@@ -865,7 +865,19 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // only at those, targetTraits; "On a success, … slices a long strip of flesh from the target; if the skitterstitch dealt damage, it
             // deals an additional 1d6 persistent bleed damage"; Twist the Hook's "If it hits, it twists and yanks the gaff to create an awful
             // wound, dealing 3d6 persistent bleed damage to the creature" — the damage on a hit.)
-            .replace(/\bmakes an? (?:melee|ranged) Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike")
+            .replace(/\bmakes an? (melee|ranged) Strike with one hand(?=\.$)/i, "makes a $1 Strike")
+            .replace(/\bmakes an? (?:melee|ranged) Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, (all, weapon) => (/^(?:one|other|free) hand$/i.test(weapon) ? "makes a melee Strike" : `makes a ${weapon} Strike`))
+            // (Batch 110: Combat Grab's "If the Strike hits, they grab the target using their free hand." as a Grab on a hit; "The creature
+            // remains Grabbed until the end of the guard's next turn or until it Escapes, whichever comes first." — the Grab's own time.)
+            .replace(/^If (?:the|this) Strike hits, (?:they|it|he|she|the [\w' -]+?) grabs? the target using (?:their|its|his|her) (?:free|other) hand(?=\.$)/i, "If it hits, the target is Grabbed")
+            .replace(/^If it hits, (?:they|it|he|she) grabs? the target using (?:their|its|his|her) (?:free|other) hand(?=\.$)/i, "If it hits, the target is Grabbed")
+            .replace(/^The creature remains Grabbed until the end of (?:the [\w' -]+?['’]s|its|their|his|her) next turn or until it Escapes, whichever comes first(?=\.$)/i, "[grab time]")
+            // (Twist the Hook's other telling: "… to knock the target Prone and create an awful wound, dealing 2d6 persistent bleed damage to the
+            // creature" — Prone and the bleed on a hit.)
+            .replace(/^If it hits, (?:it|he|she|they) [a-z]+s(?: and [a-z]+s)? the [\w' -]+? to knock the target Prone and [^,]+?, dealing (?:@Damage\[\(?(\d+d\d+)\)?\[(persistent,)?(\w+)\]\]|(\d+d\d+) (persistent )?(\w+)) damage to the (?:creature|target)(?=\.$)/i, (_all, tagDice, tagPersistent, tagType, dice, persistent, type) => {
+                activity.onHit.conditions.push({ slug: "prone", value: null, duration: null });
+                return `If it hits, it deals an additional ${tagDice ?? dice} ${tagPersistent || persistent ? "persistent " : ""}${tagType ?? type} damage`;
+            })
             .replace(/\b(makes an? [\w' -]+? Strike) against an? (animal|humanoid|beast|undead|construct|fey|fiend|dragon|plant)(?: or (animal|humanoid|beast|undead|construct|fey|fiend|dragon|plant))?(?=\.$)/i, (_all, made, one, two) => {
                 activity.targetTraits = [one, two].filter(Boolean).map((trait) => trait.toLowerCase());
                 return made;
@@ -901,6 +913,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
             activity.damageBonus += lead?.damageBonus ?? 0;
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
+        if (/^\[grab time\]\.?$/.test(text)) continue;
+        // (Batch 110: Combat Grab's Grab on a hit.)
+        if (/^If it hits, the target is Grabbed\.$/i.test(text)) {
+            activity.onHit.conditions.push({ slug: "grabbed", value: null, duration: null });
+            continue;
+        }
         if (text === "[once]") activity.oncePerFight = true;
         else if (text === "[once a turn]") activity.oncePerTurn = true;
         else if ((match = /^\[requires (.+)\]$/.exec(text))) {

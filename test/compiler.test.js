@@ -2277,3 +2277,11 @@ test("a requirement the module doesn't play; the first round; a Strike at an ani
     assert.deepEqual([hook?.strike, hook?.onHit?.damage], ["harpoon", ["2d6[persistent,bleed]"]]);
     assert.deepEqual(compile("<p><strong>Requirements</strong> A creature is grabbed in the test demon's claw.</p><hr /><p><strong>Effect</strong> The test demon pulls the grabbed creature up to 5 feet closer, then makes two horn Strikes against it.</p>", 1), { builtin: "multi-strike", actions: 1, strikes: ["horn", "horn"], sameTarget: true, requires: "grabbed" });
 });
+
+test("a Grab on a hit with its free hand; Prone and a bleed told as a wound (2026-10-12, batch 110)", () => {
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const grab = compile("<p><strong>Requirements</strong> The test bouncer has one hand free</p><hr /><p><strong>Effect</strong> The test bouncer makes a melee Strike while keeping one hand free. If this Strike hits, the test bouncer grabs the target using their free hand. The creature remains Grabbed until the end of the test bouncer's next turn or until it Escapes, whichever comes first.</p>");
+    assert.deepEqual([grab?.builtin, grab?.requires, grab?.onHit?.conditions?.[0]?.slug], ["strike-activity", "free-hand", "grabbed"]);
+    const hook = compile("<p>The test ogre makes a melee Strike with its hook. If it hits, it twists and drags the hook to knock the target Prone and tear the flesh, dealing @Damage[1d6[persistent,bleed]] damage to the creature.</p>", 2);
+    assert.deepEqual([hook?.strike, hook?.onHit?.conditions?.[0]?.slug, hook?.onHit?.damage], ["hook", "prone", ["1d6[persistent,bleed]"]]);
+});
