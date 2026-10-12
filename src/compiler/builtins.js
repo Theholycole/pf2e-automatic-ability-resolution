@@ -78,7 +78,9 @@ const BOTH_CONDITIONS = "Prone|Grabbed|Slowed|Stunned|Off-Guard|Frightened|Sicke
 export function readMultiStrikes(text) {
     // "Frequency once per turn Effect The bruiser makes …": once a turn; a longer frequency or a requirement: not read.
     // (Links as their labels, batch 23: "can attempt to @UUID[…]{Grab} the target" read as "Grab".)
-    let body = String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").trim();
+    let body = String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").trim()
+        // (Batch 175, Hunter's Wound: "Prerequisites" for its requirement.)
+        .replace(/(^|Frequency once per (?:turn|round) )Prerequisites? (?=(?:The )?[^.]+? is wielding\b)/i, "$1Requirements ");
     let oncePerTurn = false;
     // (Batch 130, Twin Butchery: "Frequency once per round; Requirement the hill giant butcher is wielding …" — its semicolon.)
     body = body.replace(/^(Frequency once per (?:turn|round));\s*(Requirements?) (?:the|The) /i, "$1 $2 The ");
@@ -114,7 +116,7 @@ export function readMultiStrikes(text) {
     // (Batch 153, Double Shot: "Requirements The urdefhan hunter is wielding a ranged weapon with reload 0 Effect … makes two Strikes with the
     // required weapon at a single target" — its best ranged Strikes.)
     let rangedRequired = false;
-    body = body.replace(/^Requirements? (?:The )?[^.]+? is wielding a ranged weapon(?: with reload 0)?\.? Effect /i, () => {
+    body = body.replace(/^Requirements? (?:The )?[^.]+? is wielding a ranged weapon(?: with (?:a )?reload (?:of )?0)?\.? Effect /i, () => {
         rangedRequired = true;
         return "";
     });
@@ -150,6 +152,20 @@ export function readMultiStrikes(text) {
         .replace(/^((?:The )?[^.]+?) makes two Strikes with (?:its|their|his|her) ([\w' -]+?) against two adjacent foes, both of whom are within (?:its|their|his|her) reach\./i, "$1 makes two $2 Strikes, each against a different target.")
         .replace(/ \(or an? [-–−]\d+ multiple attack penalty for (?:its|their|his|her) [\w' -]+?\)(?=\.)/i, "")
         .replace(/, increasing (?:its|their|his|her) reach to (\d+) feet for these Strikes\./i, ". Its reach increases to $1 feet for these Strikes.");
+    // (Batch 175: Dancing Blade's "makes a Strike against a creature, then Strides. This Stride doesn't trigger reactions. If the guard ends this Stride
+    // in a different space adjacent to the same creature, they make another Strike against it. If both Strikes succeed, …" — two Strikes at it, the
+    // Stride between the GM's; Hunter's Wound's "Prerequisites … with a reload of 0 … two ranged Strikes against their prey".)
+    let strideBetween = false;
+    let preyOnly = false;
+    body = body.replace(/\b(makes two (?:ranged |melee )?Strikes) against (?:its|their|his|her) prey\./i, (_all, made) => {
+        preyOnly = true;
+        return `${made} against the same target.`;
+    });
+    body = body.replace(/^((?:The )?[^.]+?) makes a Strike against a creature, then Strides\. This Stride (?:doesn't|does not) trigger reactions\. If (?:the [\w' -]+?|it|they|he|she|[A-Z][\w'-]+) ends this Stride in a differen(?:t|ce) space adjacent to the same creature, (?:it|they|he|she) makes? another Strike against it\./i, (_all, who) => {
+        strideBetween = true;
+        return `${who} makes two Strikes against the same creature.`;
+    })
+        .replace(/\bIf both Strikes succeed, the creature is\b/i, "If both Strikes hit, the target is");
     const sentences = body.replace(/,? which (?:it|they) can make in any order\./i, ".").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 42: a first sentence that only tells what it does, "The test slayer swiftly attacks their prey with both weapons,
     // potentially combining their damage into a single devastating attack.")
@@ -164,6 +180,8 @@ export function readMultiStrikes(text) {
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
     let penalty = 0;
     const notes = [];
+    if (strideBetween) notes.push("Between the Strikes it Strides (no reactions) to another space beside the creature; the second Strike only if it gets there.");
+    if (preyOnly) notes.push("Only at its prey.");
     let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
@@ -173,6 +191,12 @@ export function readMultiStrikes(text) {
         // (Batch 152, Fan of Daggers: "…, each against a separate target; he ignores the multiple attack penalty until after making all three
         // Strikes".)
         .replace(/, each against a separate (target|creature|foe|enemy)\b/i, ", each against a different $1")
+        // (Batch 175, Fast Sweep: "makes two bill Strikes against two adjacent targets, with a +1 circumstance bonus to its attack rolls".)
+        .replace(/ against two adjacent (?:targets|foes|creatures), with an? \+(\d+) circumstance bonus to (?:its|their|his|her) attack rolls(?=\.$)/i, (_all, value) => {
+            penalty -= Number(value);
+            notes.push(`A +${value} circumstance bonus to the attack rolls.`);
+            return ", each against a different target";
+        })
         .replace(/; (?:it|they|he|she) ignores? the multiple attack penalty until after making all (?:two|three|four) Strikes(?=\.$)/i, () => {
             sameMap = true;
             return "";
@@ -523,8 +547,9 @@ export function readMultiStrikes(text) {
         const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
         if (both) {
             // (Batch 124, Barbed Limbs: "… is Grabbed until the end of the mantis's next turn" — for a round.)
-            const untilNext = /\buntil the (?:end|start|beginning) of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i.test(both[1]);
-            const said = both[1].replace(/-stuck between the doors\b/i, "").replace(/\s*\buntil the (?:end|start|beginning) of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i, untilNext ? " for 1 round" : "");
+            // (Batch 175, Guardbreaker: "until the start of Rayhnne's next turn" — its name.)
+            const untilNext = /\buntil the (?:end|start|beginning) of (?:the [\w' -]+?['’]s|(?:[A-Z][\w'-]+ )*[A-Z][\w'-]+['’]s|its|their|his|her) next turn\b/.test(both[1].replace(/\bUntil\b/, "until"));
+            const said = both[1].replace(/-stuck between the doors\b/i, "").replace(/\s*\buntil the (?:end|start|beginning) of (?:the [\w' -]+?['’]s|(?:[A-Z][\w'-]+ )*[A-Z][\w'-]+['’]s|its|their|his|her) next turn\b/, untilNext ? " for 1 round" : "");
             const damage = [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].map((tag) => tag[1].split("|")[0]);
             const rest = said.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?/g, "").trim();
             const conditions = [...rest.matchAll(new RegExp(String.raw`\b(${BOTH_CONDITIONS})(?: (\d+))?(?: for (\d+) rounds?)?\b`, "gi"))].map((found) => ({ slug: found[1].toLowerCase().replace(/^knocked /, ""), value: found[2] ? Number(found[2]) : null, rounds: found[3] ? Number(found[3]) : null }));

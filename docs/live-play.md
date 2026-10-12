@@ -1561,3 +1561,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Ferocious Bites ("makes three Strikes with its jaws attack. Each Strike must be against a different opponent"), Branch Whip (its longer reach the GM's), the pirate skeleton's Focused Assault (a note: only with one creature in its reach), a skeletal giant's Broad Swipe (the horns' penalty left out) → multi-Strikes. Axe Swipe ("compares the roll to the AC of up to two foes that are in reach and adjacent", its +1 a note and a negative `penalty`), Double Chomp ("targeting two creatures adjacent to each other"), Ricochet (once a round; its 60 feet a note) → one roll against up to two foes. Heavy Swing → a Strike activity with its own damage and the bleed on a hit. The diabolic messenger's Hidden Blade (its full stop missing) also compiles. A "Frequency once per round" before a swipe is now kept, so the cyclops's Swipe is once a round.
 - **Live:** no new live code. Their notes go to the GM as before. Not run in pftest.
 - **Simulator:** nothing new. Axe Swipe's bonus plays as a negative penalty.
+
+## Two Strikes with a Stride between; at its prey (2026-10-12, batch 175)
+
+- **Compiled:** Dancing Blade and Guardbreaker ("makes a Strike against a creature, then Strides. … another Strike against it. If both Strikes succeed, …") → two Strikes at one creature, the same penalty, off-guard for a round after both hit, the Stride between a note; Hunter's Wound ("Prerequisites", "a reload of 0", "two ranged Strikes against their prey") → its two Strikes, the bleed after both, a prey note (Spirit Shot gains that note too); Fast Sweep → two Strikes at different creatures with its +1 (a note, a negative `penalty`). A both-hit condition "until the start of Rayhnne's next turn" (a name) now lasts a round.
+- **Live:** no new live code. Not run in pftest.
+- **Simulator:** nothing new.

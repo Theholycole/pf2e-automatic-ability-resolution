@@ -3037,3 +3037,13 @@ test("multi-Strikes and one-roll swipes in more words; a heavy swing; a missing 
     const blade = compile(1, "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test thief draws a weapon and then Strikes with it The target of the Strike is Off-Guard against the attack.</p>");
     assert.deepEqual([blade.builtin, blade.offGuard], ["strike-activity", true]);
 });
+
+test("two Strikes with a Stride between, at its prey, a fast sweep (2026-10-12, batch 175)", () => {
+    const compile = (actions, html) => compileMonsterAbility({ type: "action", name: "Test Pair", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    const dance = compile(2, "<p>Test Duelist makes a Strike against a creature, then Strides. This Stride doesn't trigger reactions. If she ends this Stride in a different space adjacent to the same creature, she makes another Strike against it. If both Strikes succeed, the creature is Off-Guard until the start of Test Duelist's next turn. Each attack counts against Test Duelist's multiple attack penalty, but the penalty doesn't increase until she's made both attacks.</p>");
+    assert.deepEqual([dance.strikes.length, dance.sameTarget, dance.sameMap, dance.bothHit.conditions], [2, true, true, [{ slug: "off-guard", value: null, rounds: 1 }]]);
+    const wound = compile(1, "<p><strong>Frequency</strong> once per round</p><p><strong>Prerequisites</strong> The test tracker is wielding a ranged weapon with a reload of 0</p><hr /><p><strong>Effect</strong> The test tracker makes two ranged Strikes against their prey. If both hit and deal damage, the target takes an additional @Damage[1d6[bleed]].</p>");
+    assert.deepEqual([wound.oncePerTurn, wound.bothHit.damage, wound.notes], [true, ["1d6[bleed]"], ["Only at its prey."]]);
+    const sweep = compile(1, "<p><strong>Frequency</strong> once per turn</p><hr /><p><strong>Effect</strong> The test marlin makes two snout Strikes against two adjacent targets, with a +2 circumstance bonus to its attack rolls.</p>");
+    assert.deepEqual([sweep.strikes, sweep.each, sweep.penalty], [["snout", "snout"], true, -2]);
+});
