@@ -1082,6 +1082,11 @@ export function readReaction(item, text) {
         const said = effect.trim().replace(/@Check\[(?:type:)?flat\|dc:(\d+)[^\]]*\]/gi, "a DC $1 flat check").replace(/a a DC/i, "a DC");
         const lashes = /^(?:(?:A|An|The) [^.]+? (?:lances|bursts?) (?:out )?(?:from [^.]+? )?at (?:the [\w' -]+?'s|its|their) attacker\. )?(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against (a random creature within (?:(?:its|their) )?(?:reach|first range increment)|an adjacent creature without triggering reactions)\.( If (?:the [\w' -]+?|it|they) (?:has|have|is taking|are taking) persistent fire damage, (?:it|they|he|she) attempts? (?:a|an) DC 15 flat check to remove it\.)?$/i.exec(said);
         if (lashes) return { builtin: "reaction-strike", triggers: ["damaged-by"], damageTypes: [hurtBy[1], hurtBy[2]].filter(Boolean).map((type) => type.toLowerCase()), strike: lashes[1].replace(/\s+or\s+.*$/i, "").toLowerCase(), penalty: 0, disrupts: false, ...(/random/i.test(lashes[2]) ? { random: true } : {}), ...(lashes[3] ? { persistentFire: true } : {}) };
+        // (Batch 117, Furious Throw: "The troll uses Throw Rock targeting a random enemy within their first range increment. If the cavern troll
+        // has persistent acid damage, they attempt a DC 15 flat check to remove it." — its rock Strike at a random enemy, the flat check
+        // against that persistent damage.)
+        const thrown = /^(?:The )?[^.]+? uses Throw ([A-Z][\w'-]+) targeting a random (?:enemy|creature) within (?:its|their) first range increment\.( If (?:the [\w' -]+?|it|they) (?:has|have) persistent (\w+) damage, (?:it|they|he|she) attempts? (?:a|an) DC 15 flat check to remove it\.)?$/i.exec(said);
+        if (thrown) return { builtin: "reaction-strike", triggers: ["damaged-by"], damageTypes: [hurtBy[1], hurtBy[2]].filter(Boolean).map((type) => type.toLowerCase()), strike: thrown[1].toLowerCase(), penalty: 0, disrupts: false, random: true, ranged: true, ...(thrown[3] ? { persistentType: thrown[3].toLowerCase() } : {}) };
     }
     // Batch 57: a Strike back at a creature that Strikes it in its reach (Cutting Rebuke's "A creature within reach of the dragon's chin
     // blade that the dragon can see makes a Strike against the dragon", Bite Back's "The skull is attacked by a creature within their

@@ -2342,3 +2342,8 @@ test("a reaction that exposes a creature to its own affliction (2026-10-12, batc
     const plan = compileMonsterAbility(spill, { basicActions: {}, actor: { name: "Test", items: [spill, venom] } });
     assert.deepEqual([plan?.trigger?.event, plan?.trigger?.damageTypes, plan?.targeting?.target, plan?.resolution?.check?.against?.value], ["damaged", ["piercing", "slashing"], "1 creature", 18]);
 });
+
+test("a thrown rock at a random enemy when hurt by its damage types; a flat check against that persistent damage (2026-10-12, batch 117)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test ogre takes cold or sonic damage</p><hr /><p><strong>Effect</strong> The test ogre uses Throw Boulder targeting a random enemy within its first range increment. If the test ogre has persistent cold damage, it attempts a @Check[flat|dc:15] to remove it.</p>" } } }, { basicActions: {} });
+    assert.deepEqual(plan, { builtin: "reaction-strike", triggers: ["damaged-by"], damageTypes: ["cold", "sonic"], strike: "boulder", penalty: 0, disrupts: false, random: true, ranged: true, persistentType: "cold" });
+});
