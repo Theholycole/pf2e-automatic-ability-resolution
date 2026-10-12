@@ -902,6 +902,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 210, a Battlezoo dragon's teleporting charge: a teleport next to a creature it can see within some distance, then its named Strike — read
+        // as a move and the Strike, the teleport a note.)
+        .replace(/\b(It|They|(?:The )?[\w' -]+?) (?:teleports to an empty space adjacent to|blinks next to) a creature (?:it|they) can see within (\d+) feet, then makes an? ([\w' -]+?) Strike against (?:the creature|it)\./i, (_all, who, feet, name) => `${who} Strides and makes a ${name} Strike. [teleport ${feet}]`)
         // (Batch 207, Parry Dance: "makes a melee Strike, then Steps, positioning their blade defensively." — the Strike; the Step a note.)
         .replace(/\b(makes an? (?:melee )?Strike), then Steps, positioning (?:its|their) [\w' -]+? defensively\./i, "$1. [then steps]")
         // (Batch 206, Goring Charge: "Strides twice and makes an antlers Strike after either Stride." — two Strides and the Strike, after either a note.)
@@ -1051,6 +1054,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
             // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
             // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            // (Batch 210: a sentence giving the Strike extra damage of some dice and type — on a hit; a penalty to the target's save against another of its abilities, a
+            // note.)
+            .replace(/^The Strike deals an additional (\d+d\d+) (\w+) damage\.$/i, (_all, dice, type) => `On a hit, the target takes @Damage[${dice}[${type.toLowerCase()}]] damage.`)
+            .replace(/^Additionally, the creature takes a [-\u2013\u2212](\d+) circumstance penalty on (?:its|their) save against ([A-Z][\w' -]+?)\.$/i, (_all, penalty, name) => {
+                (activity.notes ??= []).push(`The creature also takes a –${penalty} circumstance penalty to its save against ${name}.`);
+                return "[told]";
+            })
             // (Batch 207: Parry Dance's "They gain a +2 circumstance bonus to AC until the end of their next turn." — on itself after the Strike; Devour
             // Flesh's "On a success, the ghul successfully devours some of the flesh and regains 3d6 Hit Points. The grabbed creature becomes Drained 1 (or
             // Drained 2 if the jaws Strike was a critical success). The violent consumption requires the ghul to release the creature as it feasts. …")
@@ -1567,6 +1577,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         if (text === "[boat boarding]") {
             activity.requires = "requirement";
             (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
+            continue;
+        }
+        if ((match = /^\[teleport (\d+)\]$/.exec(text))) {
+            (activity.notes ??= []).push(`It teleports next to a creature it can see within ${match[1]} feet first.`);
             continue;
         }
         if (text === "[after either stride]") {

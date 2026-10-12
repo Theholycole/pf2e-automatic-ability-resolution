@@ -3381,3 +3381,9 @@ test("a guard for one it's sworn to protect; a healing split with it; states it 
     assert.deepEqual(split, { builtin: "heal-siphon", within: 20, share: 0.5, tempRounds: 10 });
     assert.deepEqual(compileMonsterAbility(item("action", "<p><strong>Requirements</strong> The test bard has Weaved a Narrative today</p><hr /><p><strong>Effect</strong> The test bard tells a tale and attacks with flair.</p>"), {}), { builtin: "no-effect", gm: "state" });
 });
+
+test("a teleport next to a creature, then a Strike with extra damage on a hit (2026-10-12, batch 210)", () => {
+    const item = { type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p>The test unicorn flashes away. It blinks next to a creature it can see within 45 feet, then makes a tusk Strike against it. The Strike deals an additional 3d6 cold damage.</p>" } } };
+    const charge = compileMonsterAbility(item, {});
+    assert.deepEqual([charge.builtin, charge.strides, charge.strike, charge.onHit.damage, charge.notes.length], ["strike-activity", 1, "tusk", ["3d6[cold]"], 1]);
+});

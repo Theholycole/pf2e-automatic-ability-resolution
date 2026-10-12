@@ -1888,3 +1888,9 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - Not run in pftest.
 - **Simulator:** see B209 in its ability decisions.
 
+## A teleport and a Strike (2026-10-12, batch 210)
+
+- **Compiled:** a Battlezoo dragon's teleporting charge (four copies; its own words stay out of this repository) → a Strike activity with one move (the teleport, a note), its horn Strike, extra piercing damage on a hit, and a note for the save penalty it adds. "The Strike deals an additional NdM type damage." is now read as damage on a hit.
+- **Live:** a card as for Strike activities. Not run in pftest.
+- **Simulator:** nothing new.
+
