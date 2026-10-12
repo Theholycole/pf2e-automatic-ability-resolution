@@ -2376,3 +2376,17 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - Lurking Death's offer reads "moved within 60 feet of it".
 - **Simulator:** see B244 in its ability decisions.
 
+## Rage of Elements and Howl of the Wild combos (2026-10-12, batch 245)
+
+- **Compiled** (7 new in PF2e):
+  - **A Strike at a creature starting its turn in its reach** (Whirling Hands) → `reaction-strike` with the new trigger `turn-start-adjacent`, and `free: true` for a free action.
+  - **Poison on all within a burst** (Wing Flurry) → its own affliction in an emanation of that size around it.
+  - **Strike combos:**
+    - Follow-Up Combo: one rapier and two fist Strikes at one target, at one multiple attack penalty;
+    - Lightning Punch: a fist Strike and a lightning Strike at different creatures; the second's distance from the first target is a note.
+  - **A heavier hammer** (Volcanic Hammer) → a Strike activity with one extra weapon die and the persistent fire on a hit.
+  - **A twisting spear** (Swinging Spear) → a Strike activity with the extra damage on a hit; moving the target beside it is a note.
+  - **A Trip at every creature in a cone** (Unseating Sweep) → PF2e's Trip in a cone, one roll.
+- **Live:** a creature starting its turn in the monster's reach gets the Strike offer ("started its turn in its reach"), a free action's not spending its reaction.
+- **Simulator:** see B245 in its ability decisions.
+

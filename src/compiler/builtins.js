@@ -486,6 +486,18 @@ export function readMultiStrikes(text) {
         // (Batch 129, Frenzied Attack: "… against one or two different creatures (splitting up the attacks any way he wishes)" — its choice; Telekinetic
         // Reach: "makes a Strike with each of its jaws, claw, and tail" — one with each.)
         .replace(/ against one or two different creatures(?: \(splitting up the attacks any way (?:he|she|it|they) wishes?\))?(?=\.$)/i, "")
+        // (Batch 245, Lightning Punch: "… makes a fist Strike, then makes a lightning Strike against a different creature within 120 feet of the fist
+        // Strike's target" — two Strikes at different creatures, the distance a note.)
+        .replace(/^((?:The )?[^.]+?) makes an? ([\w' -]+?) Strike, then makes an? ([\w' -]+?) Strike against a different creature within (\d+) feet of the \2 Strike['’]s target(?=\.$)/i, (_all, who, first, second, feet) => {
+            notes.push(`The ${second} Strike at a creature within ${feet} feet of the ${first} Strike's target.`);
+            return `${who} makes a ${first} Strike and a ${second} Strike, each against a different target`;
+        })
+        .replace(/^Both Strikes count toward (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, but it (?:doesn't|does not) increase until after both attacks are made(?=\.$)/i, () => {
+            sameMap = true;
+            return "";
+        })
+        // (Batch 245, Follow-Up Combo: "… makes a rapier Strike, followed by two fist Strikes, all against the same target".)
+        .replace(/^((?:The )?[^.]+?) makes? an? ([\w' -]+?) Strike, followed by two ([\w' -]+?) Strikes, all against the same target(?=\.$)/i, "$1 makes one $2 Strike and two $3 Strikes against a single target")
         .replace(/\bmakes a Strike with each of (?:its|their|his|her) ([\w' -]+?), ([\w' -]+?),? and ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike, a $2 Strike, and a $3 Strike")
         // (Batch 129: Hammering Flurry's "…, ignoring the multiple attack penalty until after all three attacks are completed"; Twin Chop's "…, each
         // of which must target a different foe within reach".)
@@ -2237,6 +2249,10 @@ export function readReaction(item, text) {
     // the creature." → a reaction Strike as a creature ends its turn beside it.
     const ending = /^An? creature ends its turn adjacent to (?:the [\w' -]+?|[A-Z][\w'-]+|it)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the (?:triggering )?creature\.$/i.exec(effect.trim()) : null;
     if (ending) return { builtin: "reaction-strike", triggers: ["turn-end-adjacent"], strike: ending[1].toLowerCase(), penalty: 0, disrupts: false };
+    // (Batch 245, Whirling Hands: "Trigger A creature starts its turn in the capritellix's melee reach Effect The capritellix makes a metal hand Strike
+    // against the creature." — a Strike as a creature starts its turn beside it; a free action's, not its reaction.)
+    const starting = /^An? creature starts its turn in (?:the [\w' -]+?['’]s|its) (?:melee )?reach\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the (?:triggering )?creature\.$/i.exec(effect.trim()) : null;
+    if (starting) return { builtin: "reaction-strike", triggers: ["turn-start-adjacent"], strike: starting[1].toLowerCase(), penalty: 0, disrupts: false, ...(item?.system?.actionType?.value === "free" ? { free: true } : {}) };
     // Wing Thrash (batch 54): "Trigger An adjacent enemy damages the giant bat Effect The bat makes one or two wing Strikes—one against the
     // triggering creature and one against another adjacent creature." → a reaction Strike at it as it's damaged (and a second at another).
     const thrash = /^An? adjacent enemy damages (?:the [\w' -]+?|it|him|her|them)\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? makes one or two ([\w' -]+?) Strikes(?:\s*[-\u2013\u2014]\s*one against the triggering creature and one against another adjacent creature|, each against a different adjacent creature)\.$/i.exec(effect.trim()) : null;

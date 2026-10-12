@@ -1333,6 +1333,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + ({ one: 1, two: 2, three: 3 }[count.toLowerCase()]);
                 return made;
             })
+            // (Batch 245, Volcanic Hammer: "… makes a warhammer Strike that deals one extra weapon die of damage and @Damage[2d6[persistent,fire]] damage." —
+            // its own die more, and that damage on a hit.)
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) that deals (one|two|three) extra weapon (?:damage )?(?:die|dice)(?: of damage)? and (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage(?=\.$)/i, (_all, made, count, damage) => {
+                activity.extraWeaponDice = (activity.extraWeaponDice ?? 0) + ({ one: 1, two: 2, three: 3 }[count.toLowerCase()]);
+                activity.onHit.damage.push(readDamage(inlineTags(damage, "Damage")[0]));
+                return made;
+            })
             .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) and deals an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|\d+d\d+ \w+) damage on a hit(?=\.$)/i, (_all, made, damage) => {
                 const tags = inlineTags(damage, "Damage");
                 const formula = tags.length ? readDamage(tags[0]) : plainDice(damage.replace(/ (\w+)$/, "[$1]"));
@@ -1623,6 +1630,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 return made;
             })
             .replace(/^If successful, the attack deals an (additional|extra) (.+?) damage(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
+            // (Batch 245, Swinging Spear: "On a hit, the murajau twists their spear to move the target to any space adjacent to the murajau and deals an
+            // additional 2d6 bludgeoning damage as the target smashes into …" — the damage; the move a note.)
+            .replace(/^On a hit, (?:the [\w' -]+?|it|they) twists? (?:their|its) [\w' -]+? to move the target to any space adjacent to (?:the [\w' -]+?|it|them) and deals? an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage as the target smashes into [^.]+(?=\.$)/i, (_all, damage) => {
+                (activity.notes ??= []).push("On a hit it moves the target to any space beside it.");
+                return `If it hits, it deals an additional ${damage} damage`;
+            })
             .replace(/^If the Strike hits, that creature becomes Drained (\d)(?: \(or increases its drained value by \1, to a maximum of 4\))?(?=\.$)/i, "If it hits, the target is Drained $1")
             .replace(/\b(makes a Strike with (?:its|his|her|their) [\w' -]+?), increasing (?:its|his|her|their) reach by (\d+) feet for that Strike(?=\.$)/i, (_all, made, feet) => {
                 (activity.notes ??= []).push(`Its reach is ${feet} feet longer for this Strike.`);
@@ -3324,10 +3337,13 @@ function areaExposure(item, actor) {
     const gas = new RegExp(String.raw`^(?:The )?[^.]+? (?:exhales|emits|breathes out|sprays) (?:a cloud of )?(?:poisonous|toxic|noxious) gas in an? @T(?: centered on (?:the corner of )?one of (?:the [\w' -]+?['’]s|its|their) squares)?\. The gas persists (?:for 1 round|until the start of (?:the [\w' -]+?['’]s|its|their) next turn)\. Any creature in the area \(or that later enters the area\) is exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
     const area = gas ? null : new RegExp(String.raw`^(?:[^.@]+\. )?(?:Each|Every|All)(?: living)? creatures? within an? @T (?:is|are) exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
     // (Batch 230, Scratch: "The goblin dog vigorously scratches itself, exposing all adjacent creatures to goblin pox." — the creatures beside it.)
-    const beside = gas || area ? null : /^(?:The )?[^.]+?, exposing all adjacent creatures to ([^.]+?)\.$/i.exec(plain);
+    const beside = gas || area ? null : /^(?:The )?[^.]+?, exposing all adjacent creatures to ([^.]+?)\.$/i.exec(plain)
+        // (Batch 245, Wing Flurry: "…, exposing all creatures within a @Template[burst|distance:10] to crying cicada poison." — around itself.)
+        ?? (template ? /^(?:The )?[^.]+?, exposing all creatures within an? @T to ([^.]+?)\.$/i.exec(plain) : null);
     if (beside) {
         const poison = ownAffliction(item, actor, beside[1].toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, ""));
-        return poison ? { ...poison, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] }, targeting: { target: null, range: null, area: { type: "emanation", value: 5 } }, trigger: { event: "use" } } : null;
+        const radius = /\bwithin an? @T\b/i.test(plain) ? Number(template[2]) : 5;
+        return poison ? { ...poison, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] }, targeting: { target: null, range: null, area: { type: "emanation", value: radius } }, trigger: { event: "use" } } : null;
     }
     const one = gas || area ? null : /^(?:The )?[^.]+? (?:an adjacent|a) (?:living )?creature(?: (?:that(?:'s| is)|who is) ([^,]+?))?, exposing (?:it|them) to ([^.]+?)\.$/i.exec(plain)
         ?? /^(?:The )?[^.]+? (?:on|at) a single creature within (\d+) feet\. The target is exposed to ([^.]+?)\.$/i.exec(plain);
@@ -3775,7 +3791,10 @@ function variedManeuver(item, basicActions = {}) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
     // (Batch 126: an emanation's template as its distance, "each creature within @Template[emanation|distance:30]{30 feet}".)
-    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/(?:an? )?@Template\[[^\]]*?(?:emanation|burst)[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "$1 feet")).replace(/\s+/g, " ").trim();
+    // (Batch 245, Unseating Sweep: a cone, "all creatures within a @Template[cone|distance:15]" — "a 15-foot cone"; "making a single … check against all
+    // targets' Reflex DCs" — one roll, as the card's.)
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/(?:an? )?@Template\[[^\]]*?(?:emanation|burst)[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "$1 feet").replace(/(?:an? )?@Template\[[^\]]*?cone[^\]]*?distance:(\d+)[^\]]*\](?:\{[^}]*\})?/g, "a $1-foot cone")).replace(/\s+/g, " ").trim()
+        .replace(/, making a single @Check\[[^\]]*\](?:\{[^}]*\})? check against all targets['’] (?:Reflex|Fortitude|Will) DCs(?=\.$)/i, "");
     // (Deadly Display's "Requirements Ordulf is wielding a melee weapon": always so; any other requirement or a frequency isn't read.)
     // (Batch 141: Strangle's "Requirements The dero must have two free hands or be wielding a spiked chain" — what it holds; "… to Grapple with a +2
     // circumstance bonus." and Condemn's "The grand inquisitor Demoralizes." — at a creature; Stampeding Shove's "…, gaining a +2 circumstance
@@ -3868,7 +3887,7 @@ function variedManeuver(item, basicActions = {}) {
     // (Batch 126: "all living creatures within 60 feet that can hear the durnolith", "all enemies within 30 feet", "… and applies the result to
     // every opponent within 30 feet".)
     // (Batch 126: "all living creatures within 60 feet that can hear the minotaur but not see them" — those it can't see, a note; "up to 4 creatures".)
-    const whom = String.raw`(an? (?:creature|foe|enemy|target)(?: within (\d+) feet)?|the nearest creature|the prone creature|all creatures in or adjacent to (?:its|their|his|her) space|(?:each|all|every) (?:enem(?:y|ies)|foes?|(?:living )?creatures?|opponents?) (?:within|in) (\d+) feet(?: (?:that|who) can hear (?:the [\w' -]+?|it|them|him|her)( but not (?:clearly )?see (?:it|them|him|her)(?: \([^)]*\))?)?)?|all non-allied creatures within (\d+) feet|up to (\d|two|three|four) creatures)`;
+    const whom = String.raw`(an? (?:creature|foe|enemy|target)(?: within (\d+) feet)?|the nearest creature|the prone creature|all creatures in or adjacent to (?:its|their|his|her) space|all creatures (?:within|in) a \d+-foot cone|(?:each|all|every) (?:enem(?:y|ies)|foes?|(?:living )?creatures?|opponents?) (?:within|in) (\d+) feet(?: (?:that|who) can hear (?:the [\w' -]+?|it|them|him|her)( but not (?:clearly )?see (?:it|them|him|her)(?: \([^)]*\))?)?)?|all non-allied creatures within (\d+) feet|up to (\d|two|three|four) creatures)`;
     // (Shove and Run: "… and then Strides with a +20-foot circumstance bonus to Speed" — the Stride the GM's, a note.)
     // (Batch 126: "attempt to" (a troop's), "makes an Intimidation check to Demoralize", "He Demoralizes all enemies within 30 feet, rolling once and
     // comparing the result to each target's Will DC", "…; these Demoralize attempts don't take any penalty for not sharing a language".)
@@ -3967,7 +3986,8 @@ function variedManeuver(item, basicActions = {}) {
     const many = first[11] ? { one: 1, two: 2, three: 3, four: 4 }[String(first[11]).toLowerCase()] ?? Number(first[11]) : null;
     // (Batch 243: "each enemy", "all foes", "every opponent", "non-allied creatures" — its foes only, area.foes.)
     const foes = /\b(?:enem(?:y|ies)|foes?|opponents?|non-allied)\b/i.test(first[6] ?? "");
-    const targeting = radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius, ...(foes ? { foes: true } : {}) } } : many ? { ...plan.targeting, target: `up to ${many} creatures` } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
+    const cone = Number(/\b(\d+)-foot cone\b/.exec(first[6] ?? "")?.[1]) || 0;
+    const targeting = cone ? { ...plan.targeting, target: null, range: null, area: { type: "cone", value: cone } } : radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius, ...(foes ? { foes: true } : {}) } } : many ? { ...plan.targeting, target: `up to ${many} creatures` } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
     const immunity = immune ? readImmunity(html, [item.name]) : null;
     const notes = [...(proneOnly ? ["Only at a Prone creature beside it."] : []), ...(direction ? ["Only the enemies beside it in one direction it chooses, straight or diagonal (the GM's)."] : []), ...(first[9] ? ["Only creatures that can hear it but not see it."] : []), ...extra, ...(first[13] ? [`Then it${first[13].replace(/^ and then/, "")}.`] : [])];
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}), ...(proneOnly ? { requires: "requirement" } : {}) };

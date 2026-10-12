@@ -3929,3 +3929,22 @@ test("Bestiaries: a troop's damage of its chosen type by actions, at its enemies
     const cling = plan("<p><strong>Trigger</strong> A creature leaves the swarm's space</p><hr /><p><strong>Effect</strong> The swarm takes @Damage[1d4[untyped]] damage as gnats cling to the creature and continue biting, dealing @Damage[2d6[bleed]]. Immersion in water reduces the DC of the flat check to end this persistent damage to 5, and any area damage dealt to the creature destroys these clinging gnats.</p>", "reaction");
     assert.deepEqual([cling?.trigger, cling?.resolution?.sharedDamage?.components?.[0]?.formula, cling?.notes?.length], [{ event: "provoke", reaction: true, triggers: ["leave"], within: 0 }, "2d6[persistent,bleed]", 3]);
 });
+
+test("Rage of Elements: a Strike as a creature starts its turn beside it, poison on all around, Strike combos, a heavier hammer, a twisting spear, a Trip in a cone (2026-10-12, batch 245)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const item = (html, name = "Test", type = "action", actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type = "action", actions = 1, actor) => compileMonsterAbility(item(html, "Test", type, actions), { basicActions, ...(actor ? { actor } : {}) });
+    assert.deepEqual(plan("<p><strong>Trigger</strong> A creature starts its turn in the test golem's melee reach</p><hr /><p><strong>Effect</strong> The test golem makes a gear Strike against the creature.</p>", "free", null), { builtin: "reaction-strike", triggers: ["turn-start-adjacent"], strike: "gear", penalty: 0, disrupts: false, free: true });
+    const pox = item("<p><strong>Saving Throw</strong> @Check[fortitude|dc:18]</p><hr /><p><strong>Stage 1</strong> @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (1 round)</p>", "Test Pollen", "passive", null);
+    const flurry = item("<p>The test moth beats its wings, exposing all creatures within a @Template[burst|distance:10] to test pollen.</p>", "Test Flurry");
+    assert.deepEqual(compileMonsterAbility(flurry, { basicActions, actor: { name: "Test Moth", items: [flurry, pox] } })?.targeting?.area, { type: "emanation", value: 10 });
+    assert.deepEqual(plan("<p>The test pair makes a saber Strike, followed by two fist Strikes, all against the same target. These attacks all count toward the pair's multiple attack penalty, but the penalty doesn't increase until after the pair make their attacks.</p>", "action", 2)?.strikes, ["saber", "fist", "fist"]);
+    const punch = plan("<p>The test drum makes a fist Strike, then makes a spark Strike against a different creature within 60 feet of the fist Strike's target. Both Strikes count toward the test drum's multiple attack penalty, but it doesn't increase until after both attacks are made.</p>", "action", 2);
+    assert.deepEqual([punch?.strikes, punch?.sameMap, punch?.each, punch?.notes?.length], [["fist", "spark"], true, true, 1]);
+    const hammer = plan("<p>The test smith makes a maul Strike that deals one extra weapon die of damage and @Damage[1d6[persistent,fire]] damage.</p>", "action", 2);
+    assert.deepEqual([hammer?.builtin, hammer?.extraWeaponDice, hammer?.onHit?.damage], ["strike-activity", 1, ["1d6[persistent,fire]"]]);
+    const spear = plan("<p>The test crab makes a spear Strike. On a hit, the test crab twists their spear to move the target to any space adjacent to the test crab and deals an additional @Damage[1d6[bludgeoning]] damage as the target smashes into the test crab's carapace.</p>", "action", 2);
+    assert.deepEqual([spear?.onHit?.damage, spear?.notes?.length], [["1d6[bludgeoning]"], 1]);
+    const sweep = plan("<p>The test tree attempts to @UUID[Compendium.pf2e.actionspf2e.Item.ge56Lu1xXVFYUnLP]{Trip} all creatures within a @Template[cone|distance:20], making a single @Check[athletics|traits:action:trip] check against all targets' Reflex DCs.</p>", "action", 2);
+    assert.deepEqual(sweep?.targeting?.area, { type: "cone", value: 20 });
+});

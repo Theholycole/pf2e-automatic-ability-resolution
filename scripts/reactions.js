@@ -710,11 +710,20 @@ async function onTurnStart(combat) {
     const token = combat.combatant?.token;
     const scene = token?.parent;
     if (!token?.actor || !scene) return;
+    // (Batch 245, Whirling Hands: a creature starting its turn in a monster's reach — its Strike offer, a free action's or its reaction's.)
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (monster.id === token.id || !isFoe(monster, token)) continue;
+        const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("turn-start-adjacent"));
+        if (!entry) continue;
+        const distance = distanceFeet(box(monster, grid.size), box(token, grid.size), grid);
+        const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`).filter((strike) => distance <= strike.reach);
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, penalty: entry.plan.penalty ?? 0, trigger: "started its turn in its reach", free: !!entry.plan.free });
+    }
     // Its own free action as its turn begins (Shrieking Frenzy, Sudden Surge; batch 26).
     const self = reactors(scene, combat).find((entry) => entry.token.id === token.id);
     const own = self?.reactions.find(({ plan }) => plan.trigger?.event === "own-turn-start");
     if (own) await offer({ kind: "card", item: own.item, monster: token, actor: token.actor, target: null, trigger: "its turn begins", free: true });
-    const grid = gridOf(scene);
     const living = !["undead", "construct"].some((trait) => token.actor.traits?.has?.(trait));
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
