@@ -2991,3 +2991,19 @@ test("a Strike that misses it sent at a creature beside it (2026-10-12, batch 17
     assert.deepEqual(compile("The duelist twirls aside. The duelist redirects the attack to a creature of her choice that is adjacent to her and within reach of the triggering attack. The attacker rerolls the Strike's attack roll against the new target."), { builtin: "redirect-attack" });
     assert.deepEqual(compile("The duelist can choose to either Step or redirect the attack to a creature that is adjacent to her and within the reach of the triggering attack. The attacker rerolls the Strike's attack roll against the new target."), { builtin: "redirect-attack", step: true });
 });
+
+test("more ways to move and Strike: a tackle, a toss, a hop, a skewer, a lurch (2026-10-12, batch 172)", () => {
+    const compile = (actions, text) => compileMonsterAbility({ type: "action", name: "Test Move", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${text}</p>` } } }, { basicActions: {} });
+    const tackle = compile(2, "The test golem Strides up to twice its Speed in a straight line. If it ends this movement in reach of a creature, it makes a fist Strike against that creature. On a hit or critical hit, the target takes an additional @Damage[1d4[bludgeoning]] damage and is knocked Prone.");
+    assert.deepEqual([tackle.builtin, tackle.strides, tackle.strike, tackle.onHit.damage, tackle.onHit.conditions.map((entry) => entry.slug)], ["strike-activity", 2, "fist", ["1d4[bludgeoning]"], ["prone"]]);
+    const toss = compile(2, "The test ram Strides and makes a horn Strike. If the Strike hits, the target is flung 15 feet in a direction of the test ram's choice.");
+    assert.deepEqual([toss.onHit.push, toss.notes], [15, ["The target is flung 15 feet in a direction of its choice."]]);
+    const hop = compile(2, "The test toad Leaps 10 feet and makes one tongue Strike at any point during that movement, dealing an additional @Damage[1d4[acid]] damage.");
+    assert.deepEqual([hop.strides, hop.strike, hop.onHit.damage], [1, "tongue", ["1d4[acid]"]]);
+    const skewer = compile(2, "The test hunter Strides, then makes two javelin Strikes, one with each of the two javelins they wield. Both Strikes must have the same target. Apply the test hunter's multiple attack penalty to each Strike normally.");
+    assert.deepEqual([skewer.builtin, skewer.strikes, skewer.sameTarget, skewer.strides], ["multi-strike", ["javelin", "javelin"], true, 1]);
+    const lurch = compile(2, "The test lizard Strides twice and then makes a jaws Strike. If it moves at least 20 feet from where it started, it gets a +1 circumstance bonus on the attack roll.");
+    assert.deepEqual([lurch.builtin, lurch.strides, lurch.attackBonus], ["charge", 2, 1]);
+    const pounce = compile(1, "The test cat Strides and makes a Strike at the end of that movement. If the test cat successfully used [[/act hide]] before this action, the target has the Off-Guard condition against this Strike.");
+    assert.deepEqual([pounce.builtin, pounce.strides], ["charge", 1]);
+});

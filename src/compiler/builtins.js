@@ -667,7 +667,9 @@ export function chargeSentences(text) {
     // Strike" — the bonus as its attack roll's.)
     // (Batch 85, Clobbering Charge: "Strides up to its Speed. If it ends its movement within melee reach of a target, it can make a skull Strike
     // against that target." — one Stride.)
-    return String(text).replace(/\b(Strides? twice|Strides? or Swims? twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Strides up to (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)(?:[.;]\s+|\s+)[Ii]f (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) ends? (?:its|their|his|her) (?:movement|flight) (?:at a lower elevation than (?:it|they|he|she) started and )?(?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that (?:enemy|foe|creature|target)|the (?:enemy|foe|creature|target)|it)(?:, gaining a \+(\d+) circumstance bonus to the Strike)?\./gi, (_whole, move, strike, bonus) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice").replace(/^Strides up to (?:its|their|his|her) Speed$/i, "Strides")} and makes a ${strike}Strike${bonus ? ` with a +${bonus} circumstance bonus to its attack roll` : ""}.`);
+    // (Batch 172, Tackle: "Strides up to twice its Speed in a straight line. If it ends this movement in reach of a creature, it makes a fist
+    // Strike against that creature.")
+    return String(text).replace(/\b(Strides? twice|Strides? or Swims? twice|Strides up to (?:double|twice) (?:its|their|his|her) Speed|Strides up to (?:its|their|his|her) Speed|Flies twice|Flies up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed)(?: in a straight line)?(?:[.;]\s+|\s+)[Ii]f (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) ends? (?:its|their|his|her|this) (?:movement|flight) (?:at a lower elevation than (?:it|they|he|she) started and )?(?:within (?:a )?(?:melee )?(?:reach|range) of (?:at least one|an?|any|one) (?:enemy|foe|creature|target)|in reach of an? (?:enemy|foe|creature)|with (?:an?|at least one) (?:enemy|foe|creature) within (?:its|their|his|her) reach), (?:it|they|he|she|the [\w' -]+?|[A-Z][\w'-]+) (?:can )?makes? an? ((?:[\w' -]+? )?)Strike against (?:that (?:enemy|foe|creature|target)|the (?:enemy|foe|creature|target)|it)(?:, gaining a \+(\d+) circumstance bonus to the Strike)?\./gi, (_whole, move, strike, bonus) => `${move.replace(/up to (?:double|twice) (?:its|their|his|her) (?:fly )?Speed/i, "twice").replace(/^Strides up to (?:its|their|his|her) Speed$/i, "Strides")} and makes a ${strike}Strike${bonus ? ` with a +${bonus} circumstance bonus to its attack roll` : ""}.`);
 }
 
 // A Strike at every creature in reach (2026-10-10): "The shambler makes a vine Strike against each creature within reach.
@@ -779,7 +781,7 @@ export function moveThenStrike(said) {
     // (Batch 37: "Strides or Steps, then Strikes with his hand crossbow", "Burrows and then Strikes", "Strides twice and Strikes with its bayonet".)
     const bare = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or (?:${MOVES}|Steps?))?)( twice| up to two times)?(?:, then| and(?: then)?) Strikes(?: with (?:its|their|his|her) ([\w' -]+?))?(?: at any point during (?:its|their|his|her|the|this) movement)?\.$`, "i").exec(text);
     if (bare) return { strides: bare[2] ? 2 : 1, strike: bare[3] ? bare[3].toLowerCase() : null };
-    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:single )?(?:([\w' -]+?) )??Strike((?: (?:at any (?:point|time) (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way|along (?:its|the) movement)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|(?:after|at the end of) either Stride|against (?:a|an|one) (?:foe|enemy|creature|target)(?: (?:within (?:its|their|his|her) reach|adjacent to it))?|against any (?:foe|enemy|creature) along (?:its|their|his|her) path|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
+    const match = new RegExp(String.raw`^(?:The )?[^.]+? (${MOVES}(?: or ${MOVES})?)((?: (?:twice|three times|up to two times|at least \d+ feet|\d+ feet|up to (?:twice|three times|double|half|its|their|his|her|\d+ feet)[^,.]*?))?)(?: in a straight line)?(?:,? (?:while flying|descending at least \d+ feet))?,? (?:and |then |and then )+(?:makes|attempts) (?:a|an|one) (?:single )?(?:([\w' -]+?) )??Strike((?: (?:at any (?:point|time) (?:during (?:that|the|its|this) (?:movement|Stride|move|flight|Fly)|along the way|along (?:its|the) movement)|at the end of (?:that|its|the|this) (?:movement|Stride|move)|(?:after|at the end of) either Stride|against (?:a|an|one) (?:foe|enemy|creature|target)(?: (?:within (?:its|their|his|her) reach|adjacent to it))?|against any (?:foe|enemy|creature) along (?:its|their|his|her) path|against an adjacent (?:creature|foe|enemy)|with (?:a|an extended) reach of \d+ feet))*)\.$`, "i").exec(text);
     if (!match) return null;
     const how = match[2].trim();
     const strides = /three times/i.test(how) ? 3 : /twice|double|two times/i.test(how) ? 2 : 1;
@@ -837,7 +839,9 @@ export function readCharge(text) {
     // one Stride; the hurlilu's Dive Bomb, "Strides using its fly Speed and makes a Strike at the end of that movement".)
     const told = chargeSentences(String(text).replace(/^Requirements? (?:The )?[^.]+? has nothing in (?:its|their|his|her) hands Effect /i, "").replace(/^(?:Frequency once per (?:turn|round) )?Effect /, "").replace(/’/g, "'").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\]\{([^}]*)\}/g, "$1")
         .replace(/\b(Strides), ignoring (?:non-magical )?difficult terrain(?: and uneven ground)?(?=\. If )/i, "$1 up to its Speed")
-        .replace(/\bStrides using (?:its|their|his|her) (?:fly|swim|climb) Speed and makes\b/i, "Strides and makes"))
+        .replace(/\bStrides using (?:its|their|his|her) (?:fly|swim|climb) Speed and makes\b/i, "Strides and makes")
+        // (Batch 172, Ibis Dive: "Flies up to double its fly Speed in a straight line, descends at least 10 feet, and then makes a talon Strike.")
+        .replace(/\b(Flies up to (?:double|twice) (?:its|their|his|her) fly Speed) in a straight line, descends at least \d+ feet, and then makes\b/i, "$1 and then makes"))
         .replace(/\b((?:Strides|Flies|Swims)(?: or (?:Strides|Flies|Swims))? (?:twice|up to (?:double|twice) (?:its|their|his|her) Speed)),? (?:ignoring (?:any )?difficult terrain(?: caused by [^.;]+?)?|during which (?:it|they|he|she) attempts a High Jump or a Long Jump)(?=[.;])/i, "$1")
         .replace(/\bStrides twice, Leaps twice, or Strides once and Leaps once\. (?:It|They|He|She) then makes an? ([\w' -]+?) Strike at the end of the movement\./i, "Strides twice and makes a $1 Strike.");
     const sentences = told.trim().split(/(?<=\.)\s+/);
@@ -865,7 +869,8 @@ export function readCharge(text) {
     const charge = other ?? { strides: match[1] ? 2 : 1, strike: match[2] && !/^(?:melee|weapon|unarmed|melee weapon)$/i.test(match[2].trim()) ? match[2].toLowerCase() : null };
     if (plainBonus) charge.attackBonus = plainBonus;
     // (Batch 70: any name, "the ōmukade".)
-    const moved = "^(?:If|As long as) (?:it|they|he|she|the [^,.]+?|[A-Z][\\w'-]+) moved at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position)?, ";
+    // (Batch 172, Lurching Charge: "If it moves at least 20 feet from where it started, it gets a +2 circumstance bonus on the attack roll.")
+    const moved = "^(?:If|As long as) (?:it|they|he|she|the [^,.]+?|[A-Z][\\w'-]+) (?:moved|moves) at least 20 feet(?: (?:away )?from (?:its|their|his|her) starting position| from where (?:it|they|he|she) started)?, ";
     for (const sentence of sentences.slice(1)) {
         // (Batch 70: what only tells it — concealed as it moves, moving through creatures, flying or swimming in place of a Stride, another
         // ability's temporary Hit Points.)
@@ -892,6 +897,9 @@ export function readCharge(text) {
             continue;
         }
         // (Nothing for the simulation: "During the Stride, it gains a +10-foot circumstance bonus to its Speed.")
+        // (Batch 172, a leopard's Pounce: "If the leopard successfully used Hide before this action, the target has the Off-Guard condition against this
+        // Strike." — its Hide the GM's.)
+        if (/^If (?:the [\w' -]+?|it|they|he|she) successfully used (?:\[\[\/act hide\]\]|Hide) before this action, the target (?:has the Off-Guard condition|is Off-Guard) (?:against|to) this Strike\.$/i.test(sentence)) continue;
         if (/remains? hidden until after/i.test(sentence) || /^During (?:the|this|that) (?:Stride|movement), (?:it|they|he|she|the [\w' -]+?) gains? a \+\d+-foot circumstance bonus to (?:its|their|his|her) Speed\.$/i.test(sentence)) continue;
         // (Batch 60, Propulsive Launch: "If it's in the air and not attached to a creature after the Strike, it falls.")
         if (/^If (?:it|they)'s in the air and not attached to a creature after the Strike, (?:it|they) falls?\.$/i.test(sentence.replace(/’/g, "'"))) continue;
@@ -905,7 +913,7 @@ export function readCharge(text) {
             charge.halfDamage = true;
             continue;
         }
-        const bonus = new RegExp(`${moved}(?:it gains|they gain|he gains|she gains) a \\+(\\d+) circumstance bonus to (?:its|their|his|her|this|the) attack roll\\.$`, "i").exec(sentence);
+        const bonus = new RegExp(`${moved}(?:it gains|they gain|he gains|she gains|it gets|they get|he gets|she gets) a \\+(\\d+) circumstance bonus (?:to|on) (?:its|their|his|her|this|the) attack roll\\.$`, "i").exec(sentence);
         const damage = new RegExp(`${moved}the Strike's damage (?:is increased to|increases to) (.+?)(?: damage)?\\.$`, "i").exec(sentence);
         if (bonus) charge.attackBonus = Number(bonus[1]);
         // (An inline roll as its formula: "@Damage[(3d10+10)[piercing]]" → "(3d10+10)[piercing]".)
@@ -2325,6 +2333,10 @@ export function compileBuiltin(item, slug) {
     // makes four hatchet Strikes, applying his multiple attack penalty as normal.")
     const rush = /^(?:The )?[\w' -]+? (?:[a-z]+ forward[^,.]*, Striding and then making|Strides(?: up to (?:half )?(?:its|their|his|her) [sS]peed)?(?:, ignoring difficult terrain)?,? (?:and )?then makes) (two|three|four) ([\w' -]+?) Strikes(?: at the end of (?:its|their|his|her) movement)?(?:, applying (?:its|their|his|her) multiple attack penalty as normal)?\.$/i.exec(text.trim().replace(/^Requirements? Each of [\w' -]+?['’]s (?:two|three|four|six) (?:hands|arms) wields an? [\w' -]+?\.? Effect /i, ""));
     if (rush) return { builtin: "multi-strike", actions, strikes: Array({ two: 2, three: 3, four: 4 }[rush[1].toLowerCase()]).fill(rush[2].toLowerCase()), sameTarget: true, strides: 1 };
+    // (Batch 172, Lurching Skewer: "Strides, then makes two spear Strikes, one with each of the two spears they wield. Both Strikes must have the
+    // same target. Apply the guhdggi's multiple attack penalty to each Strike normally.")
+    const skewer = /^(?:The )?[\w' -]+? Strides, then makes two ([\w' -]+?) Strikes, one with each of the two [\w' -]+? (?:they|it|he|she) wields?\. Both Strikes must have the same target\. Apply (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty to each Strike normally\.$/i.exec(text.trim());
+    if (skewer) return { builtin: "multi-strike", actions, strikes: [skewer[1].toLowerCase(), skewer[1].toLowerCase()], sameTarget: true, strides: 1 };
     // (Batch 85: a Stride with Strikes at different creatures along the way — Mauling Rush's "Strides up to its Speed. It can make up to
     // four claw Strikes at any point during this movement, each against a different target. These attacks count toward …, but the multiple
     // attack penalty doesn't increase until after …", Whirling Slashes' "… His multiple attack penalty applies as usual."; a movement that

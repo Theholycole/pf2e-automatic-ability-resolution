@@ -1543,3 +1543,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Sidestep, Glide Aside, Deflective Dodge → `redirect-attack`, with `step` for Deflective Dodge's choice of a Step.
 - **Live:** a Strike on it that fails or critically fails brings an offer, "Use it: redirect the attack", while another creature in the encounter is beside it. The note names those creatures and says the attacker rerolls the Strike's attack roll against the one it picks; Deflective Dodge's note adds the Step. Run in pftest: a missed Strike from one of two heroes beside the assassin brought the offer naming the other hero, and using it marked the reaction used. Tokens beside it but not in the encounter aren't named.
 - **Simulator:** its reaction on that miss, while another of the attacker's side is in its melee. The attacker rerolls that Strike against that creature at the same multiple attack penalty (B171).
+
+## More ways to move and Strike (2026-10-12, batch 172)
+
+- **Compiled:** Tackle ("If it ends this movement in reach of a creature, it makes a fist Strike against that creature") → a Strike activity with its Strides; Horn Toss ("the target is flung 20 feet in a direction of its choice") → a push on a hit, with a note; Hopping Strike ("Leaps 15 feet … dealing an additional 1d6 bludgeoning damage") → a Stride and the damage on a hit; Ibis Dive (its descent) and Lurching Charge ("If it moves at least 20 feet from where it started, it gets a +2 circumstance bonus on the attack roll") → charges; Lurching Skewer → two Strikes at one creature after a Stride; the leopard's Pounce, its Hide part the GM's.
+- **Live:** no new live code. They play as the charges, Strike activities and multi-Strikes did before. Not run in pftest.
+- **Simulator:** nothing new: the same plans.

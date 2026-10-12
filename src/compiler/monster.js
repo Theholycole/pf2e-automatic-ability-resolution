@@ -776,7 +776,9 @@ function openingParts(text) {
         attack += Number(value);
         return "";
     });
-    plain = plain.replace(/, dealing an? (?:extra|additional) (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?)(?: damage)? on a hit(?: \([^()]*? on a critical hit\))?(?=\.$)/i, (_all, tag) => {
+    // (Batch 172, Hopping Strike: "makes one spring Strike at any point during that movement, dealing an additional @Damage[1d6[bludgeoning]] damage"
+    // — on a hit, though it doesn't say.)
+    plain = plain.replace(/, dealing an? (?:extra|additional) (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?)(?: damage)?(?: on a hit(?: \([^()]*? on a critical hit\))?)?(?=\.$)/i, (_all, tag) => {
         damage = hitDamage(tag);
         return "";
     });
@@ -1007,6 +1009,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
             })
             .replace(/^On a hit, (?:it|he|she|they) deals an (extra|additional) (.+?) damage on a hit(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
             .replace(/^On a successful hit, the target is pushed back (\d+) feet, with the effects of a successful Shove(?=\.$)/i, "If it hits, the target is pushed $1 feet")
+            // (Batch 172, Horn Toss: "If the Strike hits, the target is flung 20 feet in a direction of the aoyin's choice." — a push, its way the
+            // GM's.)
+            .replace(/^If (?:the Strike|it) hits, the target is flung (\d+) feet in a direction of (?:the [\w' -]+?['’]s|its|their|his|her) choice(?=\.$)/i, (_all, feet) => {
+                (activity.notes ??= []).push(`The target is flung ${feet} feet in a direction of its choice.`);
+                return `If it hits, the target is pushed ${feet} feet`;
+            })
             .replace(/^On a hit, (?:the [\w' -]+?|it|they) automatically Grabs the (?:creature|target)(?=\.$)/i, "If it hits, the target is Grabbed")
             // (Batch 153: Shared Feast's "If it hits, an ally of their choice can spend a reaction to make a jaws Strike against the same target.",
             // Bonded Strike's "If this attack hits, the bonded mortal can spend their reaction to Strike the same target." — an ally's Strike after a
