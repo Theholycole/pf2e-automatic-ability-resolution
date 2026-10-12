@@ -1775,3 +1775,18 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** cards, offers and buffs as for their kinds before. Not run in pftest.
 - **Simulator:** see B200 in its ability decisions.
 
+## NPC Core Strike riders, a guard and moves (2026-10-12, batch 201)
+
+- **Compiled:**
+  - Head Shot → a Strike: Dazzled until the end of its next turn on a hit, Blinded on a critical hit instead. Its Create a Diversion first is PF2e's, on the sheet.
+  - Disrupt Qi → an unarmed Strike: on a hit, 3d6 persistent void and Enfeebled 2, with notes for a living target and the Enfeebled lasting with the damage.
+  - Wrangling Whip → a whip Strike that knocks Prone on a hit, the simulator's pick; the 5-foot pull instead and the mount's free Strike are notes.
+  - Full Bore → two arquebus Strikes at different creatures, counting as two attacks, with a note for the two being side by side and the damage rolled once.
+  - Shields Up! → +2 AC and Reflex until its next turn, with a note for +3 against physical ranged attacks.
+  - Daredevil Strike → played as a Stride and a Strike (`strikeOnly`); its Step after is the GM's.
+  - Will Not Falter → a Stride and a Strike; the allies' bonus is PF2e's linked effect.
+  - Beat a Retreat → `safe-move`.
+  - Chasm Crossing → `no-effect` (a move).
+- **Live:** cards and buffs as before. Not run in pftest.
+- **Simulator:** nothing new.
+

@@ -3282,3 +3282,18 @@ test("NPC Core Strikes: a cone sweep, three Strikes then Fatigued, swings and le
     const poison = compileMonsterAbility(item("<p>The test hunter coats their knife. Until the end of their turn, Strikes with their knife deal an additional 1 persistent poison damage.</p>"), {});
     assert.deepEqual([poison.builtin, poison.damage, poison.strike], ["self-effect", ["1[persistent,poison]"], "knife"]);
 });
+
+test("NPC Core: Strike riders on a hit or a critical hit, a choice of Prone, two creatures side by side, a guard, moves (2026-10-12, batch 201)", () => {
+    const item = (html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const qi = compileMonsterAbility(item("<p>The test monk attempts an unarmed Strike against a living creature. On a hit, the creature takes 2d6 persistent spirit damage and is Clumsy 1 until the persistent damage ends.</p>"), {});
+    assert.deepEqual([qi.onHit.damage, qi.onHit.conditions[0].slug, qi.notes.length], [["2d6[persistent,spirit]"], "clumsy", 2]);
+    const shot = compileMonsterAbility(item("<p>The test archer Strikes. The target is Dazzled until the end of the test archer's next turn on a successful Strike (or Blinded on a critical hit).</p>"), {});
+    assert.deepEqual([shot.onHit.conditions[0].slug, shot.onHit.critical[0].slug], ["dazzled", "blinded"]);
+    const whip = compileMonsterAbility(item("<p>The test herder makes a whip Strike. On a hit, the test herder can either knock the target Prone or pull it up to 10 feet.</p>"), {});
+    assert.deepEqual([whip.strike, whip.onHit.conditions[0].slug, whip.notes.length], ["whip", "prone", 1]);
+    const bore = compileMonsterAbility(item("<p>The test gunner makes a musket Strike against two creatures that are adjacent to each other. The attack ignores any lesser cover one target provides the other. Roll damage once, and apply it to each creature the test gunner hits. This counts as two attacks when determining the test gunner's multiple attack penalty.</p>"), {});
+    assert.deepEqual([bore.strikes, bore.each, bore.countsAs], [["musket", "musket"], true, 2]);
+    assert.equal(compileMonsterAbility(item("<p>The test squad raises their shields to protect one another. The test squad gains a +1 circumstance bonus to AC and Reflex until the start of their next turn. This bonus increases to +2 against physical ranged attacks.</p>", 1), {}).model.modifiers[0].value, 1);
+    assert.deepEqual(compileMonsterAbility(item("<p>The test climber Strides twice and Leaps up to 15 feet horizontally.</p>"), {}), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("<p>The test coward Strides three times and gains a +2 circumstance bonus to AC during those actions.</p>"), {}), { builtin: "safe-move", actions: 2 });
+});

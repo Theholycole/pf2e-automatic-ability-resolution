@@ -212,6 +212,12 @@ export function readMultiStrikes(text) {
             earlyNotes.push(`Then a ${beak} Strike at one creature it Grabbed with them, at its multiple attack penalty as normal.`);
             return `${who} makes ${count.toLowerCase()} ${limb} Strikes, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
         });
+    // (Batch 201, Full Bore: "makes an arquebus Strike against two creatures that are adjacent to each other. The attack ignores any lesser cover one
+    // target provides the other. Roll damage once, and apply it to each creature the sniper hits." — its Strike at each, the damage once a note.)
+    body = body.replace(/^((?:The )?[^.]+?) makes an? ([\w' -]+?) Strike against two creatures that are adjacent to each other\. The attack ignores any lesser cover one target provides the other\. Roll damage once, and apply it to each creature (?:the [\w' -]+?|it|they) hits\./i, (_all, who, name) => {
+        earlyNotes.push("The two creatures must be adjacent to each other; it ignores lesser cover between them and rolls damage once for both.");
+        return `${who} makes two ${name} Strikes, each against a different target.`;
+    });
     body = body.replace(/^((?:The )?[^.]+?) Flies and Strikes twice with (?:its|their|his|her) ([\w' -]+?) at any points? during (?:its|their|his|her) movement\./i, (_all, who, weapon) => `${who} Strides once and makes two ${weapon.replace(/s$/i, "")} Strikes at any point along its movement.`)
         .replace(/^(?:The )?([^.,]+?) [^.,]+?, Striding and making two Strikes against different targets during the movement\./i, (_all, who) => {
             strideFirst = true;
@@ -667,7 +673,8 @@ export function readMultiStrikes(text) {
             notes.push("Only while it can see no more than one creature in its reach.");
             continue;
         }
-        if ((match = /^This counts as (one|two) attacks? when calculating [^.]*multiple attack penalty\.$/i.exec(sentence))) {
+        // (Batch 201, Full Bore: "… when determining …".)
+        if ((match = /^This counts as (one|two) attacks? when (?:calculating|determining) [^.]*multiple attack penalty\.$/i.exec(sentence))) {
             sameMap = true;
             countsAs = /one/i.test(match[1]) ? 1 : 2;
             continue;
@@ -2896,6 +2903,10 @@ export function readSelfGuard(item) {
     // Strike's extra die a note.)
     const spinning = /^(?:The )?[^.,]+? [^.,]+?, giving (?:her|him|it|them|itself|herself|himself|themselves) an? \+(\d) circumstance bonus to (?:her|his|its|their) AC and Reflex saves until the start of (?:her|his|its|their) next turn\.(?: If (?:she|he|it|they) uses Reactive Strike while this ability is active, (?:she|he|it|they) adds? (\d+d\d+) to (?:her|his|its|their) damage\.)?$/i.exec(body.trim());
     if (spinning) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(spinning[1]) }, { on: "reflex", type: "circumstance", value: Number(spinning[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, ...(spinning[2] ? { notes: [`While it lasts, its Reactive Strike deals ${spinning[2]} more damage.`] } : {}) };
+    // (Batch 201, Shields Up!: "The phalanx formation raises their shields to protect one another. The formation gains a +2 circumstance bonus to AC and
+    // Reflex until the start of their next turn. This bonus increases to +3 against physical ranged attacks." — the higher bonus a note.)
+    const phalanx = /^(?:The )?[^.]+? raises? (?:their|its) shields? to protect one another\. (?:The [\w' -]+?|It|They) gains? an? \+(\d) circumstance bonus to AC and Reflex until the start of (?:its|their) next turn\. This bonus increases to \+(\d) against physical ranged attacks\.$/i.exec(body.trim());
+    if (phalanx) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(phalanx[1]) }, { on: "reflex", type: "circumstance", value: Number(phalanx[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, notes: [`+${phalanx[2]} instead against physical ranged attacks.`] };
     const shields = /^(?:The )?[^.]+? raises? (?:their|its) shields?(?: in tandem)?, gaining an? \+(\d) circumstance bonus to AC and Reflex saves\.$/i.exec(body.trim());
     if (shields) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(shields[1]) }, { on: "reflex", type: "circumstance", value: Number(shields[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" } };
     const resisting = readSelfResistance(item, body);
@@ -3079,7 +3090,9 @@ function readGmSpellcasting(text) {
 function readRetreat(text) {
     const said = String(text).replace(/’/g, "'").trim().replace(/^Requirements? (?:The )?[^.]+? is adjacent to at least one enemy\.? Effect /i, "").replace(/^If (?:the )?[^,]+? is adjacent to at least one enemy, /i, "");
     return /^(?:The )?[^.]+? Strides up to (?:its|their|his|her) (?:s|S)peed(?: plus 5 feet)?|^(?:The )?[^.]+? Strides up to \d+ feet/i.test(said)
-        && /\band gains? a \+2 circumstance bonus to AC against reactions triggered by this movement\.(?: (?:It|They|He|She|The [\w' -]+?) must end this movement in a space that's not adjacent to any enemy\.)?$/i.test(said);
+        && /\band gains? a \+2 circumstance bonus to AC against reactions triggered by this movement\.(?: (?:It|They|He|She|The [\w' -]+?) must end this movement in a space that's not adjacent to any enemy\.)?$/i.test(said)
+        // (Batch 201, Beat a Retreat: "The beggar Strides three times and gains a +2 circumstance bonus to AC during those actions.")
+        || /^(?:The )?[^.]+? Strides (?:twice|three times) and gains? a \+2 circumstance bonus to AC during those actions\.$/i.test(said);
 }
 
 // A move that doesn't trigger reactions (2026-10-10, batch 38): "The cultist jumps up to half its Speed. This movement doesn't
@@ -3182,6 +3195,8 @@ function readNoCombatEffect(text) {
     // claws against objects.)
     if (((/\bglides?\b/i.test(said) && /\bthrough the air\b/i.test(said)) || /\bhover \d+ foot in the air and Strides twice\b/i.test(said)) && !/\b(?:Strikes?|saves?|DC)\b|@|\bdamage\b(?! from falls)/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed in its [\w' -]+?\.? Effect (?:The )?[^.]+? moves the creature up to \d+ feet closer to it\.$|^(?:The )?[^.]+? pulls all creatures it has Grabbed \d+ feet closer to itself\.$/i.test(said)) return true;
+    // (Batch 201, Chasm Crossing: "The mountaineer Strides twice and Leaps up to 20 feet horizontally." — a move.)
+    if (/^(?:The )?[^.]+? Strides twice and Leaps up to \d+ feet (?:horizontally|vertically)\.$/i.test(said)) return true;
     // (Batch 200, Scurry: "The toady Strides, then can Hide. They can attempt to Hide from creatures without cover or being Concealed, but at a –2
     // circumstance penalty."; Stealthy Pad: "Frequency once per round Effect The leaping thief Steps, then Hides or Sneaks, ignoring difficult terrain for
     // this movement." — a move and its hiding, which the simulator doesn't play.)

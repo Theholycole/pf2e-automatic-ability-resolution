@@ -902,6 +902,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
         // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
+        // (Batch 201, Daredevil Strike: "Strides up to their Speed, makes a melee Strike, then Steps." — the Stride and the Strike; the Step a note.)
+        .replace(/\b((?:The )?[\w' -]+?) Strides up to (?:its|their|his|her) Speed, makes an? ([\w' -]+?) Strike, then Steps\./i, "$1 Strides and makes a $2 Strike. [then steps]")
         // (Batch 200, Swinging Strike: "swings on a rope or trapeze, moving up to double their Speed. At any point during the swing, they can make a melee
         // Strike." — two Strides and the Strike, only where there's a rope or trapeze (the GM's); Flying Attack: "makes a Leap, High Jump, or Long Jump. At
         // any point during the jump, if they're adjacent to an enemy, they can Strike that enemy with a fist or nunchaku Strike, even in midair. …" — a
@@ -1033,6 +1035,35 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // wounded value by 1 if already wounded. On a critical hit, the creature instead becomes wounded 2, or … If a creature dies from Tooth Grind,
             // Grendel regains 40 HP; this is a healing effect."; Gnaw Metal's armor sentences; Isolating Lash's "makes a melee Strike trailing a wave of
             // shadowy illusions", its extra die and its Will save on the hit, the save's results the GM's.)
+            // (Batch 201: Disrupt Qi's "attempts an unarmed Strike against a living creature. On a hit, the creature takes 3d6 persistent void damage and is
+            // Enfeebled 2 until the persistent damage ends."; Head Shot's "The target is Dazzled until the end of the lucky courser's next turn on a successful
+            // Strike (or Blinded on a critical hit)."; Will Not Falter's allies' bonus on a hit, its PF2e effect; Wrangling Whip's "can either knock the target
+            // Prone or pull it up to 5 feet. If the creature ends this movement adjacent to the wrangler's mount, …" — Prone, the pull and the mount notes.)
+            .replace(/\b((?:makes|attempts) an? [\w' -]+? Strike) against a living creature(?=\.$)/i, (_all, made) => {
+                (activity.notes ??= []).push("Only at a living creature.");
+                return made;
+            })
+            .replace(/^On a hit, the creature takes (\d+d\d+) persistent (\w+) damage and is (Enfeebled|Clumsy|Drained|Stupefied|Sickened) (\d) until the persistent damage ends\.$/i, (_all, dice, type, condition, value) => {
+                (activity.notes ??= []).push(`${condition} ${value} lasts until the persistent damage ends.`);
+                return `On a hit, the target takes @Damage[${dice}[persistent,${type.toLowerCase()}]] damage and is ${condition} ${value}.`;
+            })
+            .replace(/^The target is (Dazzled|Blinded|Deafened|Frightened \d) until the end of (?:the [\w' -]+?['’]s|its|their) next turn on a successful Strike \(or (Dazzled|Blinded|Deafened|Frightened \d) on a critical hit\)\.$/i, (_all, hit, critical) => {
+                const [slug, value] = critical.toLowerCase().split(" ");
+                activity.onHit.critical = [{ slug, value: value ? Number(value) : null, duration: { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-end", anchor: "source-turn" } }];
+                return `On a hit, the target is ${hit} until the end of its next turn.`;
+            })
+            .replace(/^If the Strike hits an enemy, all allies within (?:its|their) champion's aura gain a \+2 status bonus to attack rolls and saving throws against fear until the start of (?:the [\w' -]+?['’]s|its|their) next turn\.$/i, (said) => {
+                (activity.notes ??= []).push(said.replace(/^If the Strike hits an enemy, /, "On a hit, ").replace(/the start of the [\w' -]+?['’]s next turn/i, "the start of its next turn"));
+                return "[told]";
+            })
+            .replace(/^On a hit, (?:the [\w' -]+?|it|they) can either knock the target Prone or pull it up to (\d+) feet\.$/i, (_all, feet) => {
+                (activity.notes ??= []).push(`It can pull the target up to ${feet} feet instead of knocking it Prone.`);
+                return "On a hit, the target is knocked Prone.";
+            })
+            .replace(/^If the creature ends this movement adjacent to (?:the [\w' -]+?['’]s|its|their) mount, the mount can make a melee unarmed Strike against the creature as a free action\.$/i, (said) => {
+                (activity.notes ??= []).push("If the pull leaves it beside its mount, the mount can make a free melee unarmed Strike at it.");
+                return "[told]";
+            })
             // (Batch 200: Reshape the Battle's "If it hits a creature of the master's size or smaller, the master can automatically Reposition it to any
             // space within the bo staff's reach."; Reel In's "If the Strike hits, the guard can haul on the attached line, moving the target up to 30 feet in
             // a straight line toward the iruxi." — notes.)
@@ -1459,6 +1490,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         if (text === "[boat boarding]") {
             activity.requires = "requirement";
             (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
+            continue;
+        }
+        if (text === "[then steps]") {
+            (activity.notes ??= []).push("Then it Steps.");
             continue;
         }
         // (Batch 200: Swinging Strike's rope or trapeze, which the GM checks; Flying Attack's jump.)
