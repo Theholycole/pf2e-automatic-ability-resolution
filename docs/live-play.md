@@ -2024,3 +2024,16 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** offers as for these kinds. The own reroll is offered only for a spell's save. Not run in pftest.
 - **Simulator (B217):** `saveReroll.against` "spell" checks the save comes from a spell.
 
+## More Battlezoo reactions (2026-10-12, batch 218)
+
+- **Compiled** (7 Battlezoo abilities; their own words stay out of this repository):
+  - A bonus to its own save when a mental effect that allows one is aimed at it → `save-bonus-reaction` `{ against: "mental" }`.
+  - A creature moving into its space, answered with a jaws Strike after a sentence that only tells it → `reaction-strike` on `approach`.
+  - A flight toward a spell's caster as it's targeted → no-effect.
+  - Damage from a physical attack cut by some, then a Step, with a little cold back at an adjacent attacker → `resist-damage` `{ on: ["physical"], attack: true }`; the Step and the cold are a note.
+  - An AC bonus for a creature in its aura as it's attacked → `ally-ac-reaction` within the aura's size (30 feet when the aura can't be read); a teleport on a miss is a note.
+  - A taunt, then a Stride of half its Speed once the Strike resolves → `withdraw` on `attacked`; its allies' Strides are a note.
+  - Invisible before a Strike at it resolves, then a Step → `conceal-reaction` (DC 11, as Hidden). How long it stays invisible is a note.
+- **Live:** the mental bonus is offered only for a save against a mental effect. Not run in pftest.
+- **Simulator (B218):** `saveBonusReaction.against` of another trait checks the effect's traits.
+

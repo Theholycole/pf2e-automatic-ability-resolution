@@ -292,6 +292,14 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - Moves away as it's hurt, hit, targeted or left beside a foe.
   - A swarm chasing a creature out of its space.
   - Resistance to all but one damage type against what hurt it.
+- **More Battlezoo reactions** (2026-10-12, batch 218): 7 new.
+  - A save bonus against mental effects.
+  - A Strike at a creature moving into its space.
+  - A flight toward a caster (no-effect).
+  - Damage from a physical attack cut by some, with a Step.
+  - An AC shield for a creature in its aura.
+  - A taunt and a Stride.
+  - Turning Invisible as a Strike comes.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

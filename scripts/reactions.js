@@ -764,7 +764,7 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 const spell = message.flags?.pf2e?.origin?.type === "spell" || (context.options ?? []).some((option) => /^origin:item:type:spell$|^item:type:spell$/.test(option));
                 const magical = spell || (context.options ?? []).some((option) => /^(?:origin:)?item:trait:(?:magical|arcane|divine|occult|primal)$/.test(option));
                 // (Batch 214, Scatter: its Reflex save only; against an area, the GM's — a note.)
-                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total) || (plan.against === "spell" && !spell) || (plan.against === "magical" && !magical) || (plan.kind && plan.kind !== statistic)) continue;
+                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total) || (plan.against === "spell" && !spell) || (plan.against === "magical" && !magical) || (plan.kind && plan.kind !== statistic) || (plan.against && !["spell", "magical"].includes(plan.against) && !effectTraits.has(plan.against))) continue;
                 const after = degreeOf(roll.total + plan.value, dc, roll.dice?.[0]?.total ?? null);
                 if (after === context.outcome) continue;
                 return offer({ kind: "ac", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, value: plan.value, what: "to the save", before: context.outcome, after }, note: plan.area ? "Only against an area effect (and +" + plan.value + " AC against a splash attack aimed at it)." : (plan.notes?.length ? plan.notes.join(" ") : null) });

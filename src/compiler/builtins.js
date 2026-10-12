@@ -1433,6 +1433,8 @@ export function readWithdraw(text) {
         else if (/^An? creature (?:successfully )?deals damage to (?:the )?[\w' -]+?$/i.test(trigger)) on = "damaged";
         else if (/^An? (?:foe|enemy|creature) hits (?:the )?[\w' -]+? with a Strike$/i.test(trigger)) on = "hit";
         else if (new RegExp(`^An? creature attempts to target ${subject}, or attempts to include ${subject} in an area of effect$`, "i").test(trigger)) on = "attacked";
+        // (Batch 218, a Battlezoo taunt: a Strike aimed at it.)
+        else if (/^(?:The )?[\w' -]+? is targeted by a Strike$/i.test(trigger)) on = "attacked";
         else if (new RegExp(`^An? (?:foe|enemy) ends (?:their|its) turn,? (?:and ${subject} is|with ${subject}) within that (?:foe|enemy)['’]s reach$`, "i").test(trigger)) on = "approach";
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
@@ -1475,9 +1477,11 @@ export function readWithdraw(text) {
         if (smoke) sentences.splice(0, 1, `It Strides up to ${smoke[1]} feet.`, "This movement doesn't trigger reactions.");
         const leaps = /^(?:The )?[\w' -]+? Leaps (?:up to )?(\d+ feet|half (?:its|their) Speed)(?: away from (?:the triggering|that) (?:foe|creature))?\.$/i.exec(sentences[0] ?? "");
         if (leaps) sentences[0] = /^\d/.test(leaps[1]) ? `It Strides up to ${parseInt(leaps[1], 10)} feet.` : "It Strides.";
+        // (Batch 218: a taunt, then a Stride of half its Speed once the Strike resolves; its allies' Strides as they hear it, a note.)
+        if (/^(?:The )?[\w' -]+? (?:goads|taunts) (?:its|their) attacker(?:, then Strides up to half (?:its|their) Speed after the Strike resolves| and Strides half (?:its|their) Speed once the Strike resolves)\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Strides.";
         if (smoke) later.push("It's Concealed until the attacker's turn ends.");
         for (let index = sentences.length - 1; index > 0; index--) {
-            if (/^(?:They|It) can instead use [A-Z][\w' -]+? if [^.]+\.$|^The triggering creature can select another action if [^.]+\.$/i.test(sentences[index])) later.push(...sentences.splice(index, 1));
+            if (/^(?:They|It) can instead use [A-Z][\w' -]+? if [^.]+\.$|^The triggering creature can select another action if [^.]+\.$|^Any ally who hears this taunt can use a reaction to Stride up to half (?:its|their) [Ss]peed\.$/i.test(sentences[index])) later.push(...sentences.splice(index, 1));
         }
         // (Batch 136, Crumble: "… crumbles into the ground, Burrowing down 10 feet." — a Burrow.)
         if (/^(?:The )?[\w' -]+? crumbles into the ground, Burrowing down \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*Burrowing down (\d+) feet\.$/i, "It Burrows $1 feet.");
@@ -2033,12 +2037,13 @@ export function readReaction(item, text) {
     // magical effect", "is about to attempt a saving throw", "is targeted by a spell that allows a saving throw", "An opponent casts a spell
     // that targets the manticore and requires a saving throw"; what a critical success brings besides, the GM's.)
     const ownSaveSplit = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
-    const saveTrigger = ownSaveSplit ? /^(?:(?:The )?[^.]+? (?:attempts|is about to (?:make|attempt)) a saving throw(?: against (a spell(?: cast by a creature (?:it|he|she|they) can see)?|a spell or magical effect))?|(?:The )?[^.]+? is targeted by a spell that allows a saving throw|An opponent casts a spell that targets (?:the [\w' -]+?|it|[A-Z][\w'-]+) and requires a saving throw)$/i.exec(ownSaveSplit[1].trim()) : null;
+    // (Batch 218, a Battlezoo creature's bravado: a mental effect with a save aimed at it — a bonus against mental effects only.)
+    const saveTrigger = ownSaveSplit ? /^(?:(?:The )?[^.]+? (?:attempts|is about to (?:make|attempt)) a saving throw(?: against (a spell(?: cast by a creature (?:it|he|she|they) can see)?|a spell or magical effect))?|(?:The )?[^.]+? is targeted by a (spell|mental effect) that allows a saving throw|(?:The )?[^.]+? is targeted by a mental effect that requires a (?:save|saving throw)|An opponent casts a spell that targets (?:the [\w' -]+?|it|[A-Z][\w'-]+) and requires a saving throw)$/i.exec(ownSaveSplit[1].trim().replace(/;$/, "")) : null;
     if (saveTrigger) {
         const said = ownSaveSplit[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
-        const gains = /^(?:The )?[^.]+? (?:touches [^,.]+? and )?gains an? \+(\d+) circumstance bonus to the (?:triggering )?(?:save|saving throw)\.$/i.exec(said[0] ?? "");
+        const gains = /^(?:The )?[^.]+? (?:touches [^,.]+? and )?(?:gains|gaining|granting (?:itself|themself|themselves)) an? \+(\d+) circumstance bonus to the (?:triggering )?(?:save|saving throw)\.$/i.exec(said[0] ?? "");
         if (gains && said.slice(1).every((sentence) => /^If (?:it|they|he|she|the [\w' -]+?) critically succeeds? (?:at|on) the (?:save|saving throw)\b/i.test(sentence) || !/\d|@|\b(?:damage|bonus|penalty|condition)\b/i.test(sentence))) {
-            const against = /\bspell or magical effect\b/i.test(ownSaveSplit[1]) ? "magical" : /\bspell\b/i.test(ownSaveSplit[1]) ? "spell" : null;
+            const against = /\bspell or magical effect\b/i.test(ownSaveSplit[1]) ? "magical" : /\bspell\b/i.test(ownSaveSplit[1]) ? "spell" : /\bmental effect\b/i.test(ownSaveSplit[1]) ? "mental" : null;
             return { builtin: "save-bonus-reaction", value: Number(gains[1]), ...(against ? { against } : {}) };
         }
     }
@@ -2120,6 +2125,15 @@ export function readReaction(item, text) {
         const shield = (item?.actor?.itemTypes?.shield ?? [])[0];
         const value = Number(shield?.system?.acBonus) || 2;
         return { builtin: "ally-ac-reaction", value, type: "circumstance", within: Number(shielded[1]), self: true, note: `It raises its shield: +${value} circumstance bonus to AC against the attack, or for the ally until the start of its next turn.` };
+    }
+    // (Batch 218, a Battlezoo creature's aura shield: "A creature within the X's <name> aura" — any creature in its aura, its size from the aura's own text,
+    // else 30 feet.)
+    const auraGuard = /^A creature within (?:the [\w' -]+?['’]s|its) ([\w' -]+?) aura is (?:targeted by|the target of) an attack\.?$/i.exec(trigger.trim());
+    if (auraGuard) {
+        const shield = /\+(\d+) (circumstance|status) bonus to AC against the triggering attack\b/i.exec(effect);
+        const aura = (item?.actor?.items?.contents ?? item?.actor?.items ?? []).find?.((other) => String(other.name ?? "").toLowerCase().includes(auraGuard[1].toLowerCase()) && /emanation\|distance:(\d+)/i.test(String(other.system?.description?.value ?? "")));
+        const feet = Number(/emanation\|distance:(\d+)/i.exec(String(aura?.system?.description?.value ?? ""))?.[1]) || 30;
+        if (shield && !/\b(?:save|damage|Grab|Prone|condition)\b/i.test(effect)) return { builtin: "ally-ac-reaction", value: Number(shield[1]), type: shield[2].toLowerCase(), within: feet, ...(/\bteleport\b/i.test(effect) ? { note: "On a miss, the creature can teleport to any open space in the aura." } : {}) };
     }
     const guardedBy = /^(?:A creature or object|An? (?:[\w' -]+ )?ally) within (?:(?:the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s|its|their) reach|(\d+) feet(?: of (?:the [\w' -]+?|it|them))?) is targeted (?:by|with) (?:an? )?(?:(physical ranged|ranged or melee|melee or ranged|ranged|melee) )?attack(?: or offensive troop ability)?(?: (?:by|from) an attacker (?:she|he|it|they|the [\w' -]+?) can see)?(?:, and (?:the [\w' -]+?|it|they) can see the attacker)?\.?$/i.exec(trigger.trim())
         ?? /^An adjacent (?:[\w' -]+ )?ally is targeted by an? (?:melee or ranged|ranged or melee) attack from an attacker (?:the [\w' -]+?|it|they|she|he) can see\.?$/i.exec(trigger.trim())
@@ -2314,8 +2328,9 @@ export function readReaction(item, text) {
     // beyond the reach of the roc's wing to within the reach of the roc's wing", "A creature moves into the reach of the frost roc's wing";
     // "Effect The poltergeist makes a telekinetic object Strike against the triggering creature." (and "If the roc Pushes the creature, it
     // disrupts the triggering move action.") → a reaction Strike as a creature comes near.
-    const near = /^An? creature (?:approaches within (\d+) feet of (?:the [\w' -]+?|it)|moves (?:from beyond the reach of (?:the [\w' -]+?'s|its) [\w' -]+? to within the reach of (?:the [\w' -]+?'s|its) [\w' -]+?|into the reach of (?:the [\w' -]+?'s|its) [\w' -]+?))\.?$/i.exec(trigger.trim());
-    const answer = near ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the triggering creature\.( If (?:the [\w' -]+?|it) Pushes the creature, it disrupts the triggering move action\.)?$/i.exec(effect.trim()) : null;
+    // (Batch 218, a Battlezoo booth's snapping jaws: a creature moving into its space, a first sentence that only tells it.)
+    const near = /^An? creature (?:approaches within (\d+) feet of (?:the [\w' -]+?|it)|moves (?:from beyond the reach of (?:the [\w' -]+?'s|its) [\w' -]+? to within the reach of (?:the [\w' -]+?'s|its) [\w' -]+?|into the reach of (?:the [\w' -]+?'s|its) [\w' -]+?|into (?:the [\w' -]+?['’]s|its) space))\.?;?$/i.exec(trigger.trim());
+    const answer = near ? /^(?:(?:The )?[^.]+?\. )?(?:The |It )?[^.]*?makes an? ([\w' -]+?) Strike against the triggering creature\.( If (?:the [\w' -]+?|it) Pushes the creature, it disrupts the triggering move action\.)?$/i.exec(effect.trim()) : null;
     if (answer) return { builtin: "reaction-strike", triggers: ["approach"], strike: answer[1].toLowerCase(), penalty: 0, disrupts: Boolean(answer[2]), ...(near[1] ? { within: Number(near[1]) } : {}) };
     // A failed save made better (batch 53): Golden Luck, "Trigger The gold dragon fails a saving throw Effect The dragon improves its result
     // by one degree of success, turning a failure into a success or a critical failure into a normal failure. The dragon can't use this
@@ -2400,6 +2415,11 @@ export function readReaction(item, text) {
     if (/^(?:The )?[^.]+? would gain the Dying condition\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? instead falls Unconscious for [^.]*?(?:hours?|minutes?)[^.]*? or until (?:it|they|he|she) regains? 1 Hit Point\.$/i.test(effect.trim().replace(/\[\[\/\w+ [^\]]*\]\]\{([^}]*)\}/g, "$1"))) return { builtin: "no-effect" };
     if (/^(?:The )?[^.]+? critically fails a (?:Deception|Performance|Diplomacy)(?: or (?:Deception|Performance|Diplomacy))? check\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     if (/^(?:The )?[^.]+? casts a spell that takes 1 or more actions and affects only (?:it|them|him|her|itself|themself)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to \d+ feet, or up to (?:its|their|his|her) full Speed if the triggering spell took 2 actions or more to cast\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 218, Battlezoo: a flight toward a spell's caster as it's targeted — a move; damage from a physical attack cut by some, a Step and cold back
+    // at an adjacent attacker — resistance to that attack's physical damage, the rest notes.)
+    if (/^(?:The )?[^.]+? is targeted by a spell\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Flies \d+ feet toward the caster\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    const clone = /^(?:The )?[^.]+? takes damage from a physical attack\.?$/i.test(trigger.trim()) ? /^The damage is reduced by (\d+) and (?:the [\w' -]+?|it) can immediately Step\.(?: (?:If the attack was a melee Strike made from an adjacent square, the attacker|An adjacent melee attacker) takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\])(?:\{[^}]*\})? damage\.)?$/i.exec(effect.trim()) : null;
+    if (clone) return { builtin: "resist-damage", value: Number(clone[1]), on: ["physical"], types: null, attack: true, note: `Then it can Step.${clone[2] ? ` An adjacent attacker's melee Strike: that attacker takes ${/^@Damage\[\(?([^\[\]()]+)\)?(?:\[(\w+)\])?\]/.exec(clone[2])?.slice(1).filter(Boolean).join(" ")} damage.` : ""}` };
     // (Batch 214, Rally: "Trigger The thrall ends their turn more than 30 feet away from their master Effect The thrall Strides up to their Speed toward
     // their master." — a move back to its master, which the simulator doesn't place.)
     if (/^(?:The )?[^.]+? ends (?:its|their) turn more than \d+ feet away from (?:its|their) master\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to (?:its|their) Speed toward (?:its|their) master\.$/i.test(effect.trim())) return { builtin: "no-effect" };
@@ -2523,6 +2543,10 @@ export function readReaction(item, text) {
         const named = flat ? Number(flat) : null;
         const hidden = /\bas if (?:it|they|he|she|the [\w' -]+?) (?:were|was) Hidden\b/i.test(effect);
         const concealed = /\b(?:gains?|gaining|grants?)\b[^.]*\b(?:concealment|Concealed)\b[^.]*\bagainst (?:the|that|this) triggering (?:attack|Strike)\b/i.test(effect);
+        // (Batch 218, a Battlezoo creature's vanishing: Invisible before the Strike resolves, until its next turn ends, then a Step — Hidden to the attacker
+        // (DC 11); the rest notes.)
+        const invisible = /^(?:The )?[^.]+? (?:becomes Invisible until the end of (?:its|it's|their) next turn|turns Invisible until its next turn ends) and Steps (\d+) feet\. The invisibility (?:occurs before resolving the Strike|comes before the Strike resolves)\b/i.exec(effect.trim());
+        if (invisible) return { builtin: "conceal-reaction", dc: 11, ranged: false, when: "targeted", note: `It stays Invisible until the end of its next turn (or until it takes a hostile action) and Steps ${invisible[1]} feet after the Strike.` };
         const misses = named && /\b(?:in order to affect|to affect|or the attack misses|on a failure, the attack (?:misses|passes)|fails? to hit)\b/i.test(effect);
         const dc = hidden ? 11 : concealed ? 5 : misses ? named : null;
         if (dc) return { builtin: "conceal-reaction", dc, ranged: /\branged\b/i.test(trigger) && !/\bmelee\b/i.test(trigger), when: /\bis hit\b/i.test(trigger) ? "hit" : "targeted" };
