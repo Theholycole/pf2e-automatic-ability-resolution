@@ -189,3 +189,8 @@ test("Quickened for its rolled rounds after a resistance; damage a critical hit 
     const outcomes = rider.plan.resolution.outcomes;
     assert.deepEqual([outcomes.criticalSuccess.damage.formulas, outcomes.criticalSuccess.effects.map((effect) => effect.slug), outcomes.success.damage.mode, outcomes.success.effects], [[{ formula: "2d10[bleed]" }], ["blinded"], "none", []]);
 });
+
+test("the Hit Points a Strike activity's hit gives back to the monster (2026-10-12, batch 153)", () => {
+    const rider = activityRider({ builtin: "strike-activity", source: { name: "Test Drain" }, onHit: { conditions: [{ slug: "drained", value: 1, duration: null }], damage: [], selfHeal: 4 } });
+    assert.deepEqual(rider.plan.resolution.outcomes.success.effects.map((effect) => effect.kind === "heal" ? [effect.kind, effect.amount, effect.recipient] : effect.slug), ["drained", ["heal", 4, "self"]]);
+});

@@ -843,6 +843,17 @@ function hitResults(text, activity, item, conditions) {
     return true;
 }
 
+// (Batch 153: a Strike the text names that the sheet calls otherwise — Kannitri's "ghostly hand Strike" is its Ghostly Fist, the Gardener's its
+// Spectral Hand: the one Strike on the sheet that shares a word with it; the name as written when the sheet has it, or no creature is given.)
+function sheetStrikeName(actor, name) {
+    const melee = [...(actor?.items ?? [])].filter((item) => item?.type === "melee").map((item) => String(item.name ?? "").toLowerCase());
+    if (!name || name === "ranged" || !melee.length) return name;
+    if (melee.some((strike) => strike === name || strike.startsWith(name) || name.startsWith(strike) || strike.includes(name))) return name;
+    const words = name.split(/\s+/);
+    const sharing = [...new Set(melee.filter((strike) => strike.split(/\s+/).some((word) => words.includes(word))))];
+    return sharing.length === 1 ? sharing[0] : name;
+}
+
 function strikeActivity(item, actor, { after = null } = {}) {
     const reject = (text) => {
         strikeActivityReject.last = text;
@@ -985,6 +996,51 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^On a hit, (?:it|he|she|they) deals an (extra|additional) (.+?) damage on a hit(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
             .replace(/^On a successful hit, the target is pushed back (\d+) feet, with the effects of a successful Shove(?=\.$)/i, "If it hits, the target is pushed $1 feet")
             .replace(/^On a hit, (?:the [\w' -]+?|it|they) automatically Grabs the (?:creature|target)(?=\.$)/i, "If it hits, the target is Grabbed")
+            // (Batch 153: Shared Feast's "If it hits, an ally of their choice can spend a reaction to make a jaws Strike against the same target.",
+            // Bonded Strike's "If this attack hits, the bonded mortal can spend their reaction to Strike the same target." — an ally's Strike after a
+            // hit.)
+            .replace(/^If (?:it|this attack|the Strike|the attack) hits, (?:an ally of (?:its|their|his|her) choice can spend a reaction to make an? ([\w' -]+?) Strike against the same target|the bonded mortal can spend (?:its|their|his|her) reaction to Strike the same target)\.$/i, (_all, name) => {
+                activity.onHit.allyStrike = true;
+                (activity.notes ??= []).push(name ? `If it hits, an ally can spend its reaction to make a ${name.toLowerCase()} Strike (or a similar one) against the same target.` : "If it hits, its bonded mortal can spend its reaction to Strike the same target.");
+                return "[told]";
+            })
+            .replace(/^Allies with [^.]+? can use those instead of [\w' -]+\.$/i, (all) => (activity.onHit.allyStrike ? "[told]" : all))
+            // (Batch 153: Draining Touch's "makes a ghostly hand Strike but deals no damage on a hit. Instead, the target is Drained 1 for 1 day and
+            // Ulthadar regains 4 Hit Points."; Pinning Shot's "If the attack hits, it deals no damage and instead pins the target to an adjacent
+            // surface. The target is Immobilized and must spend an Interact action to attempt a DC 10 Athletics check to pull the dart free; …" —
+            // no damage, its results; the healing on itself.)
+            .replace(/^((?:The )?[^.]+? makes an? [\w' -]+? Strike) but deals no damage on a hit(?=\.$)/i, (_all, made) => {
+                activity.noDamage = true;
+                return made;
+            })
+            .replace(/^Instead, the target (?:is|becomes) (?:@UUID\[[^\]]*\]\{Drained (\d)\}|Drained (\d))(?: for 1 day)?,? and (?:the [\w' -]+?|[A-Z][\w'-]+|it|he|she|they) regains? @Damage\[(\d+|\(max\(1,floor\(@actor\.level\/2\)\)\))\[healing\]\](?:\{[^}]*\})?(?: (?:Hit Points|HP))?\.?$/i, (all, linked, plain, heal) => {
+                const value = linked ?? plain;
+                const level = Number(actor?.system?.details?.level?.value);
+                const amount = /^\d+$/.test(heal) ? Number(heal) : Number.isFinite(level) ? Math.max(1, Math.floor(level / 2)) : null;
+                if (!activity.noDamage || !amount) return all;
+                activity.onHit.conditions.push({ slug: "drained", value: Number(value), duration: { mode: "fixed", value: 1, unit: "days" } });
+                activity.onHit.selfHeal = amount;
+                (activity.notes ??= []).push(`It deals no damage: on a hit, the target is Drained ${value} for 1 day and it regains ${amount} HP.`);
+                return "[told]";
+            })
+            // ("… regains @Damage[4[healing]] Hit Points." split after its tag.)
+            .replace(/^(?:Hit Points|HP)\.$/, (all) => (activity.onHit.selfHeal ? "[told]" : all))
+            .replace(/^If the attack hits, it deals no damage and instead pins the target to an adjacent surface\.$/i, () => {
+                activity.noDamage = true;
+                return "[told]";
+            })
+            .replace(/^The target is Immobilized and must spend an Interact action to attempt an? (?:@Check\[athletics\|dc:(\d+)[^\]]*\]|DC (\d+) Athletics) check to pull the ([\w' -]+?) free; it can(?:'t|not) move from its space until it succeeds\.$/i, (all, dc, plainDc, what) => {
+                if (!activity.noDamage) return all;
+                activity.onHit.conditions.push({ slug: "immobilized", value: null, duration: null });
+                (activity.notes ??= []).push(`It deals no damage: on a hit, the target is pinned — Immobilized (and Off-Guard) until it spends an Interact action on a DC ${dc ?? plainDc} Athletics check to pull the ${what} free (two successes after a critical hit); remove them then.`);
+                return "[told]";
+            })
+            .replace(/^If [^.]+? Strike was a critical hit, the target must succeed at two separate Athletics checks to pull the [\w' -]+? free\.$/i, (all) => (activity.noDamage ? "[told]" : all))
+            .replace(/^The target is Off-Guard while it remains immobilized in this way\.$/i, (all) => {
+                if (!activity.noDamage) return all;
+                activity.onHit.conditions.push({ slug: "off-guard", value: null, duration: null });
+                return "[told]";
+            })
             // (Batch 152, Disorienting Shot: "He must then Stride." — the GM's.)
             .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^(?:It|They|He|She|The [\w' -]+?) must then Stride\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
             // (Batch 140: what it does to itself — Defensive Slam's "Strikes once and gains a +2 circumstance bonus to AC until the start of their
@@ -1211,8 +1267,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
             opening();
             activity.strides = match.strides;
             activity.strike = match.strike;
-        } else if (!opened && !flavorSkipped && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentence) && /^(?:The )?[A-Z][\w' -]*? [a-z]+s\b/.test(text)) {
-            // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws").
+        } else if (!opened && !flavorSkipped && !/\b(?:Strikes?|save|damage|check|DC|bonus|penalty|feet|Hit Points|@\w+\[)\b/i.test(sentence) && /^(?:The )?[A-Z][\w' -]*? [a-z]+s\b/.test(text.replace(/^With an? [a-z]+, the /, "The "))) {
+            // A first sentence that only describes it ("The goblin shark dashes forward and extends its jaws"; batch 153, "With a touch, the ghost
+            // attempts to drain a living creature's life force").
             flavorSkipped = true;
             continue;
         } else if (!opened) return reject(text);
@@ -1319,9 +1376,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
     // (Batch 112: "a ranged weapon Strike" — any of its ranged Strikes, as "a ranged Strike"; "a melee weapon Strike" — any melee one.)
     if (/^ranged weapon$/i.test(activity.strike ?? "")) activity.strike = "ranged";
     if (/^melee weapon$/i.test(activity.strike ?? "")) activity.strike = null;
+    activity.strike = sheetStrikeName(actor, activity.strike);
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage;
+    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage && !rider.allyStrike && !activity.noDamage;
     // (Batch 90, Feathered Charge: every sentence read, and only a Stride and a Strike for as many actions — terrain it ignores, a fall the
     // GM's: nothing more than its Strike.)
     if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };

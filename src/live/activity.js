@@ -17,8 +17,10 @@ export function activityRider(activity, { strikeType = null, targetProne = false
     // (Batch 127, Clobber: saveIf, its save only against an off-guard target.)
     const save = onHit.save?.resolution || onHit.follow ? { ...(onHit.save?.resolution ? { save: onHit.save, size: onHit.size ?? null, ...(onHit.saveIf ? { saveIf: onHit.saveIf } : {}) } : {}), ...(onHit.follow ? { follow: onHit.follow } : {}) } : null;
     const conditions = (list) => (list ?? []).map((entry) => ({ kind: "condition", slug: entry.slug, value: entry.value ?? null, duration: entry.duration ?? null }));
-    const hit = conditions(onHit.conditions);
-    const critical = onHit.critical ? conditions(onHit.critical) : hit;
+    // (Batch 153, Draining Touch: the Hit Points it regains on a hit, on itself.)
+    const healSelf = Number(onHit.selfHeal) > 0 ? [{ kind: "heal", amount: Number(onHit.selfHeal), recipient: "self" }] : [];
+    const hit = [...conditions(onHit.conditions), ...healSelf];
+    const critical = onHit.critical ? [...conditions(onHit.critical), ...healSelf] : hit;
     // (Precision damage too, "4d6[precision]", batch 37: the Strike's type.)
     const formulas = [...(onHit.damage ?? []), ...(targetProne ? onHit.proneDamage ?? [] : [])].filter(Boolean).map((formula) => String(formula).replace(/\[strike\]/g, `[${strikeType ?? "untyped"}]`).replace(/\[precision\]/g, `[precision,${strikeType ?? "untyped"}]`));
     const pushOf = (distance) => (Number(distance) > 0 ? { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } : null);
