@@ -3199,3 +3199,16 @@ test("a ranged spell attack rolled twice; resistance to spells equal to the spel
     assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> The test wyrm is targeted with a ranged spell attack</p><hr /><p><strong>Effect</strong> The test wyrm bends the air in front of itself. The creature targeting the test wyrm must roll the spell attack twice and take the worse result.</p>"), {}), { builtin: "attack-misfortune", spell: true, ranged: true });
     assert.deepEqual(compileMonsterAbility(item("<p><strong>Trigger</strong> A creature within 60 feet Casts a Spell that targets the test wyrm</p><hr /><p><strong>Effect</strong> The test wyrm drinks in the magic, gaining resistance to damage from spells equal to the triggering spell's rank until the start of its next turn.</p>"), {}), { builtin: "resist-damage", value: "rank", spell: true, on: null, types: ["spells"], lasts: 1, until: "turn-start" });
 });
+
+test("an ability of its own with more actions and a push; a Dirty Trick after a tail Strike, also as a free action (2026-10-12, batch 194)", () => {
+    const item = (name, type, actions, html) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } });
+    const pulse = item("Test Pulse", "action", 1, "<p>The test salamander sends out a @Template[type:emanation|distance:20] of force, dealing @Damage[4d6[force]|options:area-damage] damage (@Check[reflex|dc:30|basic|options:area-effect] save).</p><p>For each action spent, a new pulse of force is created, each one 5 feet larger than the last.</p>");
+    const shove = item("Test Shove", "action", 2, "<p>The test salamander performs a 2-action Test Pulse. Each creature that fails its save is pushed 10 feet away from the test salamander (20 feet on a critical failure).</p>");
+    const pushed = compileMonsterAbility(shove, { actor: { items: [pulse, shove] } });
+    assert.deepEqual([pushed.activation.time, pushed.resolution.outcomes.failure.forcedMovement.distance, pushed.resolution.outcomes.criticalFailure.forcedMovement.distance, pushed.notes.length], ["2", 10, 20, 1]);
+    const vex = (type) => item("Test Vex", type, type === "action" ? 1 : null, "<p><strong>Requirements</strong> The test salamander's last action was a successful tail Strike</p><hr /><p><strong>Effect</strong> The test salamander attempts a @UUID[Compendium.pf2e.feats-srd.Item.5eNKs6738aykAhK2]{Dirty Trick} against the target of its tail Strike. This attempt neither applies nor counts toward its multiple attack penalty.</p>");
+    const one = compileMonsterAbility(vex("action"), {});
+    assert.deepEqual([one.resolution.check.statistic, one.resolution.check.against.statistic, one.trigger.map, one.trigger.followUp.strike, one.activation.time], ["thievery", "reflex", false, "tail", "1"]);
+    const free = compileMonsterAbility(vex("free"), {});
+    assert.deepEqual([free.activation.time, free.trigger.cost, free.resolution.outcomes.success.effects[0].slug], ["free", "free", "clumsy"]);
+});

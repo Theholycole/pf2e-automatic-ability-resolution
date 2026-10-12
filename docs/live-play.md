@@ -1690,3 +1690,12 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - Not run in pftest.
 - **Simulator:** see B193 in its ability decisions.
 
+## Another ability with a push; a Dirty Trick after a tail Strike (2026-10-12, batch 194)
+
+- **Compiled:**
+  - Pushing Pulse → Force Pulse's plan at two actions, with a push on a failure (the archdragon's: 15 feet, or 30 feet when the save is critically failed). Force Pulse's further pulses for more actions are a note.
+  - Vex → a follow-up to a successful tail Strike: PF2e's Dirty Trick (a Thievery check against the Reflex DC; Clumsy 1, or Prone itself on a critical failure), with `map: false`.
+  - Improved Vex → the same as a free action (`time: "free"`, `trigger.cost: "free"`). A free action's follow-up is read only when no other reading has it, so Strike riders stay riders.
+- **Live:** no new code. They are cards, as other follow-ups and save abilities are. Not run in pftest.
+- **Simulator:** a free follow-up is used at once after the hit (B194).
+

@@ -2289,6 +2289,10 @@ function effectAbility(item) {
 // Strike hit, used as before (the card comes when the GM uses it), with trigger.followUp { strike, melee, on } for the
 // simulator, which uses it only straight after such a hit: strike is the Strike's name ("claw"; null for any), on the
 // degrees ("a critical hit": criticalSuccess only). null otherwise.
+// (Batch 194, Vex: PF2e's Dirty Trick, as its feat has it — a Thievery check against the Reflex DC: Clumsy 1 on a success, Prone itself on a critical
+// failure.)
+const DIRTY_TRICK = "<p>Attempt a @Check[thievery|defense:reflex] check against the target's Reflex DC.</p><hr /><p><strong>Critical Success</strong> The target is @UUID[Compendium.pf2e.conditionitems.Item.i3OJZU2nk64Df3xm]{Clumsy 1} until they use an Interact action to end the impediment</p><p><strong>Success</strong> As critical success, but the condition ends automatically after 1 round.</p><p><strong>Critical Failure</strong> You fall @UUID[Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60]{Prone} as your attempt backfires.</p>";
+
 function followUp(item, actor, basicActions = {}) {
     // (Batch 150, Gnash with no labels: "When the severed head succeeds at its jaws Strike, it can use this action immediately after to make a
     // second jaws Strike at the same target as it …" — written as its requirement and its Strike.)
@@ -2301,7 +2305,11 @@ function followUp(item, actor, basicActions = {}) {
     const { strike: name, melee, on } = last;
     // The Effect, as an ability of its own.
     // ("must succeed on a … save" as "at a", batch 36.)
-    const effect = html.slice(block.index + block[0].length).replace(/^\s*<\/p>\s*(?:<hr\s*\/?>)?\s*/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "").replace(/\bsucceed on an? (@Check\[)/gi, "succeed at a $1");
+    let effect = html.slice(block.index + block[0].length).replace(/^\s*<\/p>\s*(?:<hr\s*\/?>)?\s*/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "").replace(/\bsucceed on an? (@Check\[)/gi, "succeed at a $1");
+    // (Batch 194, Vex: "The mocking dragon attempts a Dirty Trick against the target of their tail Strike. This attempt neither applies nor counts
+    // toward the creature's multiple attack penalty." — PF2e's Dirty Trick at the creature it hit, outside its multiple attack penalty.)
+    const trick = /^(?:The )?[^.]+? attempts a Dirty Trick against the target of (?:its|their|his|her) [\w' -]+? Strike\. This attempt neither applies nor counts toward (?:the [\w' -]+?['’]s|its|their) multiple attack penalty\.$/i.test(htmlToPlainText(effect.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim());
+    if (trick) effect = DIRTY_TRICK;
     // (One of several ways, "choosing one of the three following options": the GM's.)
     if (/\bchoos(?:es|ing) one of\b|\bone of the (?:\w+ )?following (?:options|effects)\b/i.test(htmlToPlainText(effect))) return null;
     // A Strike it makes (batch 36): "the zombie horse makes a second jaws Strike as it … On a success, the target takes an
@@ -2349,10 +2357,13 @@ function followUp(item, actor, basicActions = {}) {
     }
     if (!plan?.resolution) return null;
     if (plan.resolution.outcomes) noteUnread(plan.resolution.outcomes, effect);
+    const free = item.system?.actionType?.value === "free";
     return {
         ...plan,
         targeting: plan.targeting?.area ? plan.targeting : { target: "the creature the Strike hits", range: "touch", area: null },
-        trigger: { ...(plan.trigger ?? {}), event: "use", followUp: { strike: name, melee, on, ...(last.listing ? { listing: last.listing } : {}) } }
+        // (Batch 194: a free action's, Improved Vex — free, at once after the Strike.)
+        ...(free ? { activation: { ...(plan.activation ?? {}), time: "free" } } : {}),
+        trigger: { ...(plan.trigger ?? {}), event: "use", ...(trick ? { map: false } : {}), ...(free ? { cost: "free" } : {}), followUp: { strike: name, melee, on, ...(last.listing ? { listing: last.listing } : {}) } }
     };
 }
 
@@ -2498,6 +2509,32 @@ function actionUsesTwice(item, actor, options) {
         }
         if (!plan?.resolution || !plan.targeting?.area) return null;
         return { ...plan, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] }, trigger: { event: "use" }, notes: [...(plan.notes ?? []), `${thrice[1]} ${thrice[2].toLowerCase()}: that many areas, none overlapping.`] };
+    }
+    // (Batch 194, Pushing Pulse: "The barrage dragon performs a 2-action Force Pulse. Each creature who fails its save is pushed 15 feet away from
+    // the dragon (30 feet on a critical failure)." — that ability's plan with this action's cost and a push on a failure; its pulses for more
+    // actions a note.)
+    const pushes = /^(?:The )?[\w' -]+? performs a (\d)-action ([A-Z][\w'-]*(?: [A-Z][\w'-]*)*)\. Each creature (?:who|that) fails its save is pushed (\d+) feet away from (?:the [\w' -]+?|it|them) \((\d+) feet on a critical failure\)\.$/i.exec(plain);
+    if (pushes) {
+        const owner = actor ?? item.actor ?? item.parent;
+        const other = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && String(entry.name ?? "").toLowerCase() === pushes[2].toLowerCase());
+        let plan = null;
+        try {
+            plan = other ? compileMonsterAbility(other, { ...options, actor: owner }) : null;
+        } catch {
+            plan = null;
+        }
+        const outcomes = plan?.resolution?.kind === "save" ? plan.resolution.outcomes : null;
+        if (!outcomes?.failure || !outcomes.criticalFailure || !plan.targeting?.area) return null;
+        const push = (distance) => ({ kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" });
+        const more = Number(pushes[1]) > 1 && /\bFor each action spent\b/i.test(htmlToPlainText(String(other.system?.description?.value ?? "")));
+        return {
+            ...plan,
+            source: base(item).source,
+            activation: { time: String(Number(item.system?.actions?.value) || Number(pushes[1])), traits: plan.activation?.traits ?? [] },
+            trigger: { event: "use" },
+            resolution: { ...plan.resolution, outcomes: { ...outcomes, failure: { ...outcomes.failure, forcedMovement: push(pushes[3]) }, criticalFailure: { ...outcomes.criticalFailure, forcedMovement: push(pushes[4]) } } },
+            ...(more || plan.notes?.length ? { notes: [...(plan.notes ?? []), ...(more ? [`${pushes[2]} with ${pushes[1]} actions: as ${pushes[2]} says for that many actions (its further pulses), the GM's.`] : [])] } : {})
+        };
     }
     const match = /^(?:The )?[\w' -]+? uses ([A-Z][\w'-]*(?: [A-Z][\w'-]*)*) twice\. A creature attempts only one save and can take damage only once\.(?: (?:The )?[\w' -]+? can(?:'t|not) use [\w' -]+? or [\w' -]+? again for (\d+d\d+|\d+) rounds\.)?$/.exec(plain);
     if (!match) return null;
@@ -3812,7 +3849,9 @@ export function compileMonsterAbility(source, options = {}) {
     }
     // (2026-10-12, the user's choice: what no reading plays, behind a state the simulator can't see, out of combat, or a one-off adventure
     // creature's — the GM's.)
-    return read ?? gmFallback(modernItem(source), options);
+    // (Batch 194, Improved Vex: a free action's follow-up to a Strike, when no other reading has it.)
+    const free = !read && modernItem(source).system?.actionType?.value === "free" ? followUp(modernItem(source), options.actor ?? null, options.basicActions ?? {}) : null;
+    return read ?? free ?? gmFallback(modernItem(source), options);
 }
 
 function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
