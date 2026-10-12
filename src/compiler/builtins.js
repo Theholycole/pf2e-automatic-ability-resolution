@@ -1390,6 +1390,32 @@ export function readAllySave(text) {
     return null;
 }
 
+// (Batch 168, Drowning Drone: "Trigger The boggard swampseer or one of its allies within 60 feet attempts a saving throw against an auditory
+// or sonic effect. Effect The swampseer releases a croak that drowns out other sound. It rolls a @Check[performance] check. It and boggard
+// allies in the area can use the higher result of the swampseer's Performance check or their saves to resolve the effects against the auditory
+// or sonic effect."; Cautionary Tale's "… attempts a Will save … makes a Performance check. Lasheeli and any allies can use the better result of
+// her check or their saving throw."; Focusing Drone's, its own Will save only → { builtin: "save-skill", skill, save, against, ally, within,
+// allyTrait }: one skill check, its result for each of those saves against that effect where it's higher.)
+export function readSaveSkill(text) {
+    const body = String(text).trim().replace(/@Check\[(\w+)[^\]]*\](?:\{[^}]*\})?/g, (_all, slug) => slug[0].toUpperCase() + slug.slice(1));
+    const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(body);
+    if (!split) return null;
+    const trigger = /^(?:The )?[\w' -]+?(?: or (?:one of (?:its|their|his|her) allies|an ally) within (\d+) feet)? attempts an? (?:(Fortitude|Reflex|Will) )?(?:saving throw|save)(?: against an? (\w+(?: or \w+)*) effect)?$/i.exec(split[1]);
+    if (!trigger) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const skillAt = said.findIndex((sentence) => /\b(?:rolls?|makes?) an? (Acrobatics|Athletics|Deception|Diplomacy|Intimidation|Performance|Religion|Occultism|Survival) check\.$/i.test(sentence));
+    if (skillAt < 0) return null;
+    const skill = /\b(?:rolls?|makes?) an? (\w+) check\.$/i.exec(said[skillAt])[1].toLowerCase();
+    const uses = said.slice(skillAt + 1);
+    const higher = uses.length === 1 ? new RegExp(String.raw`^(?:(?:The )?[\w' -]+?|It|They|She|He)(?: and (?:(\w+) allies in the area|any allies))? can use the (?:higher|better) result (?:of|between) (?:[\w' -]+?['’]s?|its|their|her|his) (?:${skill} )?check (?:or|and) (?:their|its|her|his) (?:saves?|saving throws?|(?:Fortitude|Reflex|Will) saving throw)(?: to resolve the effects? against (?:the|that) [^.]+)?\.$`, "i").exec(uses[0]) : null;
+    if (!higher) return null;
+    // (The rest: its flavour — "releases a croak that drowns out other sound" — nothing to play.)
+    if (said.slice(0, skillAt).some((sentence) => /\d|@|\b(?:damage|bonus|penalty|condition)\b/i.test(sentence))) return null;
+    const ally = Boolean(trigger[1]);
+    if (ally !== /\band (?:\w+ allies in the area|any allies)\b/i.test(uses[0])) return null;
+    return { builtin: "save-skill", skill, ...(trigger[2] ? { save: trigger[2].toLowerCase() } : {}), ...(trigger[3] ? { against: trigger[3].toLowerCase().split(/\s+or\s+/) } : {}), ...(ally ? { ally: true, within: Number(trigger[1]) } : {}), ...(higher[1] ? { allyTrait: higher[1].toLowerCase() } : {}) };
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -1413,7 +1439,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readSaveSkill(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a

@@ -129,3 +129,9 @@ test("the recharge and critical-hit offers' buttons (2026-10-11, batch 100)", ()
     assert.match(offerHTML({ kind: "recharge", ability: { name: "Test Revenge" }, monster: { name: "Test Hound" }, target: { name: "Valeros" }, trigger: "critically hit it", move: { label: "recharge Smoke Breath" }, status: "open" }), /Use it: recharge Smoke Breath/);
     assert.match(offerHTML({ kind: "upgrade", ability: { name: "Test Flash" }, monster: { name: "Test Giant" }, target: { name: "Valeros" }, trigger: "was hit", free: true, status: "open" }), /Use it: a critical hit/);
 });
+
+test("a skill check for a save: its button rolls that skill (2026-10-12, batch 168)", () => {
+    const html = offerHTML({ kind: "save-skill", ability: { name: "Test Hum" }, monster: { name: "Toad" }, target: { name: "Toad Ally" }, trigger: "failed a will save", skill: { slug: "performance" }, attack: { total: 14, dc: 22, before: "failure" }, note: null, status: "open" });
+    assert.match(html, /data-aar-reaction="use">Use it: roll Performance</);
+    assert.match(html, /data-aar-reaction="decline"/);
+});

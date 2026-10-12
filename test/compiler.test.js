@@ -2964,3 +2964,11 @@ test("Attack of Opportunity granted to its allies of a trait in an emanation (20
     const plan = compileMonsterAbility({ type: "action", name: "Test Direction", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: ["auditory"] }, description: { value: "<p>Each ghoul ally in a @Template[emanation|distance:20] gains the Attack of Opportunity reaction until the end of their next turn.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.actions, plan.within, plan.trait], ["grant-aoo", 1, 20, "ghoul"]);
 });
+
+test("a skill check as it or its allies save, the higher result kept (2026-10-12, batch 168)", () => {
+    const compile = (text) => compileMonsterAbility({ type: "action", name: "Test Hum", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: ["auditory"] }, description: { value: `<p>${text}</p>` } } }, { basicActions: {} });
+    const allies = compile("<strong>Trigger</strong> The test toad or one of its allies within 30 feet attempts a saving throw against a sonic or visual effect. <strong>Effect</strong> The toad hums loudly. It rolls a @Check[performance] check. It and toad allies in the area can use the higher result of the toad's Performance check or their saves to resolve the effects against that effect.");
+    assert.deepEqual([allies.builtin, allies.skill, allies.against, allies.ally, allies.within, allies.allyTrait], ["save-skill", "performance", ["sonic", "visual"], true, 30, "toad"]);
+    const own = compile("<strong>Trigger</strong> Test Singer attempts a Fortitude saving throw <strong>Effect</strong> Test Singer hums. She rolls a @Check[performance] check. She can use the higher result between her Performance check and her Fortitude saving throw to resolve the effects against the attack that triggered her Fortitude saving throw.");
+    assert.deepEqual([own.builtin, own.save, own.ally], ["save-skill", "fortitude", undefined]);
+});

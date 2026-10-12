@@ -134,6 +134,8 @@ export function offerHTML(state) {
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
+        // (Batch 168: "Use it: roll Performance".)
+        if (state.kind === "save-skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: roll ${escape(String(state.skill?.slug ?? "the check").replace(/^\w/, (letter) => letter.toUpperCase()))}</button>`);
         if (state.kind === "boost") buttons.push(`<button type="button" data-aar-reaction="use">Use it: one degree better</button>`);
         if (state.kind === "negate") buttons.push(`<button type="button" data-aar-reaction="use">Use it: negate ${escape(state.negate?.name ?? "it")}</button>`);
         // (The attacker's choice, batch 58: a normal hit, or the critical hit and a condition.)

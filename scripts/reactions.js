@@ -39,7 +39,7 @@ const FLAG = "reaction";
 export const NO_GRAB = "pf2e-automatic-ability-resolution:no-grab";
 // PF2e's actor sizes in the words a trigger uses ("A Medium creature").
 const SIZE_WORDS = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -666,6 +666,18 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 await offer({ kind: "ac", item, monster: token, actor, target: saver, trigger: `failed a ${statistic ?? ""} save`.replace(/ {2,}/g, " "), note: plan.upgrade ? "If the save becomes a success, it's a critical success instead." : null, attack: { messageId: message.id, value: plan.value, what: "to the save", before: context.outcome, after } });
                 break;
             }
+            // (Batch 168, Drowning Drone: its skill check, the higher of it and the save resolving the effect — its own save, or an ally's
+            // within its distance (of its trait, where it names one); that kind of save, against the effect's traits it names.)
+            if (plan.builtin === "save-skill" && (self || plan.ally)) {
+                if (!self && (token.disposition !== saver.disposition || distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within || (plan.allyTrait && !saver.actor?.traits?.has?.(plan.allyTrait)))) continue;
+                if ((plan.save && plan.save !== statistic) || (plan.against && !plan.against.some((trait) => effectTraits.has(trait)))) continue;
+                const roll = message.rolls?.[0];
+                const dc = context.dc?.value;
+                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total)) continue;
+                const skill = plan.skill.replace(/^\w/, (letter) => letter.toUpperCase());
+                await offer({ kind: "save-skill", item, monster: token, actor, target: self ? null : saver, trigger: `failed ${self ? "its" : "a"} ${statistic ?? ""} save`.replace(/ {2,}/g, " "), skill: { slug: plan.skill }, attack: { messageId: message.id, total: roll.total, dc, before: context.outcome }, note: plan.ally ? `One ${skill} check counts for it and its ${plan.allyTrait ? `${plan.allyTrait} ` : ""}allies in the area against that effect.` : null });
+                break;
+            }
             // (Batch 65: "must use the new result", keep "new"; a free action's.)
             if (self && !plan.ally && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
                 const left = Number(item.system?.frequency?.value);
@@ -1120,6 +1132,20 @@ async function use(message, action, slug) {
         if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
         result = `${state.ability.name}: the save is rerolled, ${state.attack.keep === "new" ? "the new result taken" : "keeping the better"}.`;
         if (state.free) return settle(message, state, "used", result);
+    } else if (state.kind === "save-skill") {
+        // (Batch 168, Drowning Drone: its skill check rolled through PF2e against the save's DC; the higher total resolves the effect, for the GM
+        // to apply.)
+        const statistic = actor.getStatistic?.(state.skill.slug) ?? actor.skills?.[state.skill.slug];
+        if (!statistic) throw new Error(`${state.monster.name} has no ${state.skill.slug} modifier.`);
+        const item = await fromUuid(state.ability.uuid);
+        const roll = await statistic.roll({ dc: { value: state.attack.dc, label: "The save's DC" }, skipDialog: true, ...(item ? { item } : {}) });
+        if (!Number.isFinite(roll?.total)) throw new Error("The check wasn't rolled.");
+        const after = degreeOf(roll.total, state.attack.dc, roll.dice?.[0]?.total ?? null);
+        result = roll.total > state.attack.total
+            ? after === state.attack.before
+                ? `${state.ability.name}: ${roll.total} beats the save's ${state.attack.total}, but it's still ${degreeWords(after, true)}.`
+                : `${state.ability.name}: ${roll.total} beats the save's ${state.attack.total}, so the save is ${degreeWords(after, true)}. Apply that result instead.`
+            : `${state.ability.name}: ${roll.total} doesn't beat the save's ${state.attack.total}; the save stands.`;
     } else if (state.kind === "boost") {
         // Golden Luck, Word of Wisdom (batch 53): one degree better, for the GM to apply; a use of its frequency spent (batch 65).
         const item = await fromUuid(state.ability.uuid);
