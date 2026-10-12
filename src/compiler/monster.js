@@ -4195,6 +4195,215 @@ function variedManeuver(item, basicActions = {}) {
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}), ...(proneOnly ? { requires: "requirement" } : {}) };
 }
 
+// Random effect tables (2026-10-12, batch 255; the user's choice of 2026-10-12: rolled and played, not picked). A die picks the way:
+// - Draxie Dust: a roll for the effect, a save in its area to avoid it, and a numbered list of effects — each way the save, its failure the
+//   row's effects;
+// - Inflict Warpwave: a warpwave on one creature in range, a save to resist — PF2e's warpwave table (1d8, 1d4 rounds);
+// - Generate Bomb: a bomb made, then its Strike, and a table of rows (damage, or a save) — the bomb's hit, its row rolled (randomOnHit);
+// - a Battlezoo golem's d20 table of wonders ("<strong>2–3:</strong> …" paragraphs), a Battlezoo curse picked at random.
+// → { builtin: "modes", actions, random: { formula, times }, modes: [{ name, plan, faces }] }, or a Strike activity with randomOnHit. null
+// otherwise.
+const WARPWAVES = [
+    "Clumsy 2 (Clumsy 3 on a critical failure)", "Confused and gains 4d6 temporary Hit Points", "Dazzled (permanent on a critical failure)",
+    "Enfeebled 2 (Enfeebled 3 on a critical failure)", "Immobilized by filaments of energy", "Quickened (Stride, Strike, or Step only)", "Slowed 1",
+    "Stupefied 2 (Stupefied 3 on a critical failure)"
+];
+// One row's results on a failed save (and its critical failure's): its conditions, damage and temporary Hit Points; what else it says, a note.
+function tableRow(text, { duration = null } = {}) {
+    const plain = htmlToPlainText(String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const crit = /\(([^()]*?) on a critical failure\)/i.exec(plain);
+    const fail = crit ? plain.replace(crit[0], "").trim() : plain;
+    const conditions = (said) => readConditions(said, { plain: [...STAGE_CONDITIONS, "quickened"] }).map(({ recipient, ...effect }) => ({ ...effect, ...(duration && !effect.duration && !["prone"].includes(effect.slug) ? { duration } : {}) }));
+    const temp = /\bgains? (\d+d\d+(?: ?\+ ?\d+)?) temporary Hit Points\b/i.exec(plain);
+    const failEffects = [...conditions(fail), ...(temp ? [{ kind: "temp-hp", formula: temp[1].replace(/\s+/g, ""), duration: null }] : [])];
+    const critEffects = !crit ? failEffects : /^permanent$/i.test(crit[1].trim()) ? failEffects.map((effect) => ({ ...effect, duration: null })) : conditions(crit[1]);
+    const damage = inlineTags(String(text), "Damage").filter((raw) => !/healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) }));
+    // A Sleep spell's effects: asleep (unconscious) for 1 minute, 1 hour on a critical failure; damage wakes it.
+    if (/\beffects of (?:a|the) Sleep spell\b/i.test(plain)) {
+        const asleep = (lasts) => [{ kind: "condition", slug: "unconscious", duration: readDuration(lasts) }];
+        const slept = (effects) => ({ damage: none().damage, effects, manualInstructions: ["Asleep: it wakes up if it takes damage."] });
+        return { failure: slept(asleep("for 1 minute")), criticalFailure: slept(asleep("for 1 hour")), read: true };
+    }
+    // What isn't read (a row with nothing read, or a restriction in brackets) is a note.
+    const note = (!failEffects.length && !damage.length) || /\([^()]*\)/.test(fail) ? plain : null;
+    const row = (effects) => ({ damage: damage.length ? { mode: "formulas", formulas: damage, rollScope: "target" } : none().damage, effects, ...(note ? { manualInstructions: [note] } : {}) });
+    return { failure: row(failEffects), criticalFailure: row(critEffects), read: failEffects.length > 0 || damage.length > 0 };
+}
+function randomTable(item, actor, options = {}) {
+    if (!["action", "free", "reaction"].includes(item.system?.actionType?.value)) return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const actions = Number(item.system?.actions?.value) || 1;
+    const recharge = readRecharge(html);
+    // ("Frequency once per round": usable again next round, as a 1-round recharge.)
+    const perRound = item.system?.frequency?.per === "round" || /\bFrequency\b[^.;]*\bonce per round\b/i.test(plain);
+    const trigger = { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : perRound ? { recharge: { formula: "1", unit: "rounds" } } : {}) };
+    const saveOf = (check, targeting, row, name) => ({ ...base(item), targeting, trigger, resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: false, against: { dc: "fixed", value: check.dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: row.failure, criticalFailure: row.criticalFailure } }, source: { ...base(item).source, name: `${item.name} (${name})` } });
+    const short = (text) => {
+        const said = htmlToPlainText(readableText(String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"))).replace(/\s+/g, " ").trim();
+        return said.length > 60 ? `${said.slice(0, 57).replace(/\s+\S*$/, "")}…` : said;
+    };
+    // Draxie Dust: a numbered list after the roll for the effect, the save in the opening.
+    const lead = /\bRoll (?:a )?\[\[\/(?:r|gmr|br) \{?(\d+)d(\d+)\}?[^\]]*\]\](?:\{[^}]*\})? to determine the effect\b/i.exec(html);
+    const items = [...html.matchAll(/<li>([\s\S]*?)<\/li>/gi)].map((match) => match[1]);
+    if (lead && Number(lead[1]) === 1 && items.length === Number(lead[2])) {
+        const opening = html.slice(0, html.search(/<ol\b|<ul\b/i));
+        const check = inlineTags(opening, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+        const template = inlineTags(opening, "Template").map(readTemplate).find(Boolean);
+        if (!check || !template || !/\bmust succeed at an? @Check\[[^\]]*\](?:\{[^}]*\})? save or be affected\b/i.test(opening)) return null;
+        const targeting = { target: null, range: null, area: template };
+        const modes = items.map((text, index) => ({ name: `${index + 1}: ${short(text)}`, faces: [index + 1], plan: saveOf(check, targeting, tableRow(text), String(index + 1)) }));
+        return { builtin: "modes", actions, random: { formula: `1d${lead[2]}`, times: 1 }, modes };
+    }
+    // Inflict Warpwave: PF2e's warpwave table on a failed save.
+    const warp = /\binflicts a warpwave on a creature within (\d+) feet \(@Check\[(?:type:)?(fortitude|reflex|will)\|dc:(\d+)[^\]]*\](?:\{[^}]*\})? save to resist\)\.$/i.exec(htmlToPlainText(html).replace(/\s+/g, " ").trim());
+    if (warp) {
+        const check = { statistic: warp[2].toLowerCase(), dc: Number(warp[3]) };
+        const targeting = { target: "1 creature", range: `${warp[1]} feet`, area: null };
+        const lasts = readDuration("for 1d4 rounds");
+        const modes = WARPWAVES.map((text, index) => ({ name: `${index + 1}: ${short(text)}`, faces: [index + 1], plan: saveOf(check, targeting, tableRow(text, { duration: lasts }), String(index + 1)) }));
+        return { builtin: "modes", actions, random: { formula: "1d8", times: 1 }, modes, notes: ["A new warpwave ends any earlier one on that creature."] };
+    }
+    // Generate Bomb: a table of bombs, then its bomb Strike — on a hit the row's damage (its splash, not doubled), its effect or its save.
+    const table = /<table\b[\s\S]*?<\/table>/i.exec(html)?.[0] ?? null;
+    const named = /\bthen makes an? ([\w' -]+?) Strike\b/i.exec(plain);
+    const tableDie = table ? /\[\[\/(?:r|gmr|br) \{?1d(\d+)\}?[^\]]*\]\]/i.exec(table) : null;
+    if (table && named && tableDie) {
+        const parts = (raw) => {
+            const out = [];
+            let depth = 0;
+            let start = 0;
+            for (let index = 0; index < raw.length; index++) {
+                if ("([".includes(raw[index])) depth++;
+                else if (")]".includes(raw[index])) depth--;
+                else if (raw[index] === "," && depth === 0) {
+                    out.push(raw.slice(start, index).trim());
+                    start = index + 1;
+                }
+            }
+            return [...out, raw.slice(start).trim()].filter(Boolean);
+        };
+        const bomb = (cell, face) => {
+            const said = htmlToPlainText(cell.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim().replace(/\btargets next\b/gi, "target's next");
+            const label = /^([^:@]{1,40}):/.exec(said)?.[1]?.trim() ?? `Bomb ${face}`;
+            const check = inlineTags(cell, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+            const tag = inlineTags(cell, "Damage")[0];
+            const damage = tag ? parts(readDamage(tag)) : [];
+            const splash = damage.map((part) => /^\((\d+)\[splash\]\)\[(\w+)\]$/i.exec(part)).filter(Boolean).map((match) => `${match[1]}[${match[2]}]`);
+            const native = [...cell.matchAll(/@UUID\[([^\]]+)\]\{(Effect: [^}]+)\}/g)].map((match) => ({ uuid: match[1], label: match[2].replace(/^Effect:\s*/i, "") }));
+            const save = check ? saveOf(check, { target: "1 creature", range: null, area: null }, tableRow(cell.slice(cell.search(/@Check/))), label) : null;
+            const lasts = /\buntil (?:the )?(start|end) of (?:the )?target's next turn\b/i.exec(said);
+            const conditions = check ? [] : readConditions(said.replace(/\bEffect: [^,.;]+/g, ""), { plain: STAGE_CONDITIONS }).map(({ recipient, kind, ...entry }) => ({ ...entry, duration: entry.duration ?? (lasts ? readDuration(`until the ${lasts[1].toLowerCase()} of the target's next turn`) : null) }));
+            const onHit = { conditions, critical: null, push: null, damage: damage.filter((part) => !/\[splash\]/i.test(part)), ...(splash.length ? { splash } : {}), ...(native.length ? { nativeEffects: native } : {}), save, size: null };
+            const notes = [...(splash.length ? [`Splash: ${splash.join(" + ").replace(/\[(\w+)\]/g, " $1")} damage on each creature within 5 feet of the target, and on the target on a miss (not a critical miss).`] : []), ...(check ? ["Its sickness reaches the creatures in the splash too, at +2 to their saves."] : []), ...(native.length ? [] : /\bstatus penalty to Speeds\b/i.test(said) ? [said] : [])];
+            return { name: label, onHit, notes };
+        };
+        const rows = [...table.matchAll(/<tr>\s*<td>\s*(\d+)(?:\s*[–-]\s*(\d+))?\s*<\/td>\s*<td>([\s\S]*?)<\/td>\s*<\/tr>/gi)].map((match) => {
+            const from = Number(match[1]);
+            const to = Number(match[2] ?? match[1]);
+            return { faces: Array.from({ length: to - from + 1 }, (unused, index) => from + index), ...bomb(match[3], from) };
+        });
+        const covered = rows.flatMap((row) => row.faces);
+        if (!rows.length || covered.length !== Number(tableDie[1]) || !rows.every((row) => row.onHit.damage.length || row.onHit.save || row.onHit.conditions.length)) return null;
+        const strike = named[1].toLowerCase();
+        return { builtin: "strike-activity", actions, strides: 0, strike, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: rows[0].onHit, randomOnHit: { formula: `1d${tableDie[1]}`, rows } };
+    }
+    const automatic = (effects, notes, targeting) => ({ ...base(item), targeting, trigger, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: { ...none(), effects, ...(notes.length ? { manualInstructions: notes } : {}) }, failure: none(), criticalFailure: none() } } });
+    const range = Number(/\b(?:a|one) (?:target|creature) within (\d+) feet\b/i.exec(plain)?.[1]) || null;
+    const one = { target: "1 creature", range: range ? `${range} feet` : null, area: null };
+    // An attack of its own at a fixed bonus whose damage type a die picks (a list of types after the roll, one face perhaps dealing nothing) —
+    // each type a way, its attack against AC, double damage on a critical hit.
+    const typed = /\bRoll (?:a )?\[\[\/(?:r|gmr|br) \{?1d(\d+)\}?[^\]]*\]\](?:\{[^}]*\})? to (?:randomly )?(?:determine|pick|choose) (?:the )?(?:type of )?damage(?: type)?\b/i.exec(html);
+    const bonus = /\b(?:makes an? (?:ranged |melee )?(?:Strike|attack) (?:roll )?with an?|attacks at) \[\[\/(?:r|gmr|br) \{?1d20 ?\+ ?(\d+)\}?[^\]]*\]\](?:\{[^}]*\})?/i.exec(html);
+    if (typed && bonus && items.length === Number(typed[1])) {
+        const statistic = String(item.name ?? "attack").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const reach = Number(/\bwithin (\d+) feet\b/i.exec(plain)?.[1]) || null;
+        const check = { roll: "skill", statistic, against: { dc: "target", statistic: "ac" }, modifier: Number(bonus[1]) };
+        const modes = items.map((text, index) => {
+            const tag = inlineTags(text, "Damage")[0];
+            const formula = tag ? readDamage(tag) : null;
+            const hit = (double) => ({ damage: { mode: "formulas", formulas: [{ formula: double ? `2*${formula}` : formula }], rollScope: "target" }, effects: [] });
+            const plan = formula ? { ...base(item), targeting: { target: "1 creature", range: reach ? `${reach} feet` : null, area: null }, trigger, resolution: { kind: "check", check, sharedDamage: null, outcomes: { criticalSuccess: hit(true), success: hit(false), failure: none(), criticalFailure: none() } }, source: { ...base(item).source, name: `${item.name} (${index + 1})` } } : null;
+            return { name: `${index + 1}: ${formula ? /\[(\w+)\]\s*$/.exec(formula)?.[1] ?? short(text) : short(text)}`, faces: [index + 1], plan };
+        });
+        if (!modes.some((mode) => mode.plan)) return null;
+        return { builtin: "modes", actions, random: { formula: `1d${typed[1]}`, times: 1 }, modes };
+    }
+    // A save whose failure brings one of a list of curses, picked at random (two on a critical failure): each curse a way.
+    const cursed = /\b(?:On a failure, the target is (?:cursed by|afflicted (?:by|with)|subjected to)|If it fails, it suffers) one of the following(?: effects| curses)? \((?:randomly selected|chosen at random|determined at random|at random)\); (?:on a critical failure|if it critically fails), two (?:curses|of them|effects) apply(?: instead)?\b/i.test(plain);
+    if (cursed && items.length >= 2) {
+        const check = inlineTags(html.slice(0, html.search(/<ul\b|<ol\b/i)), "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+        if (!check) return null;
+        const modes = items.map((text, index) => {
+            const name = htmlToPlainText(/<strong>([\s\S]*?)<\/strong>/i.exec(text)?.[1] ?? `Curse ${index + 1}`).trim();
+            const body = text.replace(/^\s*<strong>[\s\S]*?<\/strong>\s*:?\s*/i, "");
+            const said = htmlToPlainText(body.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+            const raised = /^(?:Increase the target's (\w+) (?:condition )?value by (\d+)|Its (\w+) value goes up by (\d+))\.?$/i.exec(said)?.filter(Boolean);
+            const row = raised && STAGE_CONDITIONS.includes(raised[1].toLowerCase())
+                ? { failure: { ...none(), effects: [{ kind: "condition", slug: raised[1].toLowerCase(), value: Number(raised[2]), duration: null, stack: { by: Number(raised[2]) } }] } }
+                : { failure: { ...none(), manualInstructions: [`${name}: ${said}`] } };
+            const second = "And a second curse: roll again for another one.";
+            const plan = saveOf(check, one, { failure: row.failure, criticalFailure: { ...row.failure, manualInstructions: [...(row.failure.manualInstructions ?? []), second] } }, name);
+            return { name: `${index + 1}: ${name}`, faces: [index + 1], plan };
+        });
+        return { builtin: "modes", actions, random: { formula: `1d${items.length}`, times: 1 }, modes };
+    }
+    // A d20 table in paragraphs ("<strong>2–3:</strong> …"), each row its own: another two rolls, a save, a spell it casts, a condition on
+    // the target or on itself, damage in an area, or a note.
+    const d20 = /\bRoll (?:a )?\[\[\/(?:r|gmr|br) \{?1d(\d+)\}?[^\]]*\]\](?:\{[^}]*\})? on the (?:following )?table\b/i.exec(html);
+    const paragraphs = [...html.matchAll(/<p>\s*<strong>\s*(\d+)(?:\s*[–-]\s*(\d+))?:?\s*<\/strong>:?\s*([\s\S]*?)<\/p>/gi)];
+    if (d20 && paragraphs.length >= 2) {
+        const anyDc = Number(/\bAny DC (?:required )?is (\d+)\b/i.exec(plain)?.[1] ?? /\bThe DC (?:for these effects |for any save )?is (\d+)\b/i.exec(plain)?.[1]) || null;
+        const way = (cell, name) => {
+            const said = htmlToPlainText(cell.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+            if (/^Roll twice\b/i.test(said)) return { again: 2, plan: null, notes: [said] };
+            if (/@UUID\[Compendium\.pf2e\.spells-srd\./.test(cell)) {
+                const cast = castSpell({ ...item, system: { ...item.system, actionType: { value: "action" }, description: { value: `<p>${cell}</p>` } } }, actor);
+                if (cast) return { plan: { ...cast, dc: cast.dc ?? anyDc } };
+            }
+            const check = inlineTags(cell, "Check").map(readCheck).find((entry) => entry?.save) ?? null;
+            const template = inlineTags(cell, "Template").map(readTemplate).find(Boolean);
+            const tag = inlineTags(cell, "Damage")[0];
+            if (check && tag && template && check.basic) {
+                const hurt = (multiplier) => ({ damage: { mode: "shared", multiplier, sourceComponentIds: multiplier ? ["0"] : [] }, effects: [] });
+                return { plan: { ...base(item), targeting: { target: null, range: null, area: template }, trigger, resolution: { kind: "save", check: { roll: "save", statistic: check.statistic, basic: true, against: { dc: "fixed", value: check.dc ?? anyDc } }, sharedDamage: { rollOnce: true, components: [{ id: "0", formula: readDamage(tag), type: null, category: null }] }, outcomes: { criticalSuccess: hurt(0), success: hurt(0.5), failure: hurt(1), criticalFailure: hurt(2) } }, source: { ...base(item).source, name: `${item.name} (${name})` } } };
+            }
+            // (A time said in another sentence than the condition's: the condition's.)
+            const lasts = /\bfor (\d+) (rounds?|minutes?)\b/i.exec(said);
+            const conditions = readConditions(said, { plain: [...STAGE_CONDITIONS, "quickened"] }).map(({ recipient, ...effect }) => ({ ...effect, duration: effect.duration ?? (lasts ? readDuration(lasts[0]) : null) }));
+            const rest = said.split(/(?<=\.)\s+/).slice(1).join(" ");
+            if (check && /\bmust succeed at an? @?[\w ]*save or\b|\bsave or (?:their|its|be)\b/i.test(said) && conditions.length) {
+                const row = { ...none(), effects: conditions, manualInstructions: [said] };
+                return { plan: saveOf({ statistic: check.statistic, dc: check.dc ?? anyDc }, one, { failure: row, criticalFailure: row }, name) };
+            }
+            // On itself when the row's subject is the creature (its name's last word, or "it"), otherwise on the target.
+            const subject = /^(?:The )?([\w' -]+?) (?:is|are|becomes?|gains?)\b/i.exec(said)?.[1]?.toLowerCase() ?? "";
+            const own = String(actor?.name ?? item.name).toLowerCase().split(/[^a-z']+/).filter((word) => word.length > 2);
+            if (!check && conditions.length && (subject === "it" || own.includes(subject.split(" ").at(-1))) && !/\btarget\b/i.test(subject)) return { plan: automatic(conditions.map((effect) => ({ ...effect, recipient: "self" })), rest ? [rest] : [], { target: "self", range: null, area: null }) };
+            if (conditions.length && /\bthe target(?:'s)?\b/i.test(said)) return { plan: automatic(conditions, [said], one) };
+            return { plan: null, notes: [said] };
+        };
+        const modes = paragraphs.map((match) => {
+            const from = Number(match[1]);
+            const to = Number(match[2] ?? match[1]);
+            const label = from === to ? `${from}` : `${from}–${to}`;
+            const read = way(match[3], `${label}`);
+            return { name: `${label}: ${short(match[3])}`, faces: Array.from({ length: to - from + 1 }, (unused, index) => from + index), plan: read.plan, ...(read.again ? { again: read.again } : {}), ...(read.notes?.length ? { notes: read.notes } : {}) };
+        });
+        if (modes.flatMap((mode) => mode.faces).length !== Number(d20[1]) || !modes.some((mode) => mode.plan)) return null;
+        return { builtin: "modes", actions, random: { formula: `1d${d20[1]}`, times: 1 }, modes };
+    }
+    // Strikes picked by a die, rolled more than once ("roll 1d6 twice": a face does nothing, or makes the Strike it names).
+    const twice = /\bRoll (?:a )?\[\[\/(?:r|gmr|br) \{?1d(\d+)\}?[^\]]*\]\](?:\{[^}]*\})? (twice|three times)\b/i.exec(html);
+    if (twice) {
+        const faces = {};
+        for (const match of plain.matchAll(/\b(?:for )?(?:each|a) roll of (\d+)(?:,? (?:or|and) (\d+))?(?:,| means) (?:the [\w' -]+?|it|they) makes? an? ([\w' -]+?) Strike\b/gi)) for (const face of [match[1], match[2]].filter(Boolean)) faces[face] = match[3].toLowerCase();
+        if (!Object.keys(faces).length) return null;
+        return { builtin: "random-strikes", actions, formula: `1d${twice[1]}`, times: twice[2].toLowerCase() === "twice" ? 2 : 3, faces, ...(/\bonce per round\b/i.test(plain) ? { oncePerTurn: true } : {}) };
+    }
+    return null;
+}
+
 // One of two spells (2026-10-12, batch 249, Change Size): "This works as a 4th-rank Enlarge or Shrink spell but can target an unwilling creature
 // (… Fortitude save negates)." → { builtin: "modes" }: each spell's cast at that rank (castSpell), an unwilling target's save a note. null otherwise.
 function eitherSpell(item, actor) {
@@ -4831,7 +5040,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     }
     if (slug === "engulf") return engulf(item, actor);
     // Used in one of several ways (two breath weapons): a plan for each.
-    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor }) ?? strideThenEither(item, basicActions) ?? eitherSpell(item, actor);
+    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor }) ?? strideThenEither(item, basicActions) ?? eitherSpell(item, actor) ?? randomTable(item, actor, { basicActions });
     if (modes) return modes;
     // Damage by the number of actions spent (a troop's attacks): one plan, the damage for each count.
     const byActions = actionCountSave(item, actor);

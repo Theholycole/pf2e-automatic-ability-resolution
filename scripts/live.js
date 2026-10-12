@@ -12,6 +12,7 @@
 import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { strikeBuffEffect } from "../src/live/buff.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
@@ -151,6 +152,48 @@ async function cardForAbility(message) {
     await ready;
     const plan = compile(item);
     const sourceToken = message.token ?? item.actor.getActiveTokens(true, true)[0] ?? null;
+    // A random effect table (batch 255): its die rolled in chat, the way it picks played as the ability; a bomb's table, its row
+    // the Strike's results on a hit; random Strikes, the ones the dice give, for the GM to roll from the sheet.
+    if (plan?.builtin === "modes" && plan.random) {
+        const rolls = [];
+        const picks = await pickWays(plan, async (formula) => {
+            const roll = await new Roll(formula).evaluate();
+            rolls.push(roll);
+            return roll.total;
+        });
+        await rollsToChat(item, sourceToken, rolls, [...picks.map(({ face, way }) => `${face}: ${way?.name?.replace(/^[\d–-]+:\s*/, "") ?? "nothing happens"}`), ...(plan.notes ?? [])]);
+        for (const { way } of picks) {
+            if (way?.plan) await playAbility(item, way.plan, sourceToken);
+            else if (way?.notes?.length && !way.again) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${way.notes.join(" ")}`]);
+        }
+        return;
+    }
+    if (plan?.builtin === "strike-activity" && plan.randomOnHit) {
+        const roll = await new Roll(plan.randomOnHit.formula).evaluate();
+        const rowed = withRow(plan, roll.total);
+        await rollsToChat(item, sourceToken, [roll], [`${roll.total}: ${rowed.rowName ?? "nothing"}`]);
+        return playAbility(item, rowed, sourceToken);
+    }
+    if (plan?.builtin === "random-strikes") {
+        const rolls = await Promise.all(Array.from({ length: plan.times ?? 1 }, () => new Roll(plan.formula).evaluate()));
+        const strikes = strikesFor(plan, rolls.map((roll) => roll.total));
+        await rollsToChat(item, sourceToken, rolls, strikes.map((strike, index) => `${rolls[index].total}: ${strike ? `a ${strike} Strike` : "nothing"}`));
+        const made = strikes.filter(Boolean);
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${made.length ? `${made.map((strike) => `a ${strike} Strike`).join(" and ")}${made.length > 1 ? ", in either order" : ""} — roll ${made.length > 1 ? "them" : "it"} from the sheet.` : "no Strike this time."}`]);
+        return;
+    }
+    return playAbility(item, plan, sourceToken);
+}
+
+// The dice a random table rolled, in chat: each roll and what it picked.
+async function rollsToChat(item, sourceToken, rolls, lines) {
+    const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    if (!rolls.length) return;
+    await ChatMessage.create({ speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flavor: `<strong>${escape(item.name)}</strong>: ${lines.map(escape).join("; ")}`, rolls });
+}
+
+// A monster's or a hazard's ability as compiled (or the way a random table picked): its card, its effect, its note.
+async function playAbility(item, plan, sourceToken) {
     const formula = rechargeFormula(item, plan);
     // Used again while it recharges: the card says so (the GM decides).
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;

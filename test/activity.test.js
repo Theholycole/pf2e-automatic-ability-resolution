@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { resistEffects, selfEffectDuration, strikeBuffEffect } from "../src/live/buff.js";
 import { CORE_FAMILIES, createRegistry, validateChanges } from "../../pf2e-resolution-core/src/index.js";
 
@@ -237,4 +238,19 @@ test("regeneration on itself: a FastHealing rule of the regeneration kind, switc
     const plan = { builtin: "self-effect", actions: 2, model: { name: "Test Regrow", rounds: 10, modifiers: [], tempHp: 0, fastHealing: 10, regeneration: { value: 10, deactivatedBy: ["void"] } }, duration: { value: 1, unit: "minutes", expiry: null } };
     const effect = strikeBuffEffect(plan, { name: "Test Regrow", strikes: [] });
     assert.deepEqual(effect.system.rules, [{ key: "FastHealing", type: "regeneration", value: 10, deactivatedBy: ["void"] }]);
+});
+
+test("random tables live: the ways a roll picks (again without itself), a bomb's row on its Strike with the splash not doubled, Strikes by faces (2026-10-12, batch 255)", async () => {
+    const plan = { builtin: "modes", random: { formula: "1d4", times: 1 }, modes: [{ name: "1: again", faces: [1], plan: null, again: 2 }, { name: "2: a", faces: [2], plan: { id: "a" } }, { name: "3: b", faces: [3], plan: { id: "b" } }, { name: "4: c", faces: [4], plan: null }] };
+    const dice = (faces) => async () => faces.shift();
+    assert.deepEqual((await pickWays(plan, dice([3]))).map(({ face, way }) => [face, way?.plan?.id ?? null]), [[3, "b"]]);
+    assert.deepEqual((await pickWays(plan, dice([1, 2, 1, 4]))).map(({ face, way }) => [face, way?.again ?? way?.plan?.id ?? null]), [[1, 2], [2, "a"], [4, null]]);
+    const bomb = { builtin: "strike-activity", strike: "flask", notes: ["Its Strike."], onHit: { conditions: [], damage: [] }, randomOnHit: { formula: "1d2", rows: [{ name: "Burn", faces: [1], onHit: { conditions: [], critical: null, push: null, damage: ["2d6[fire]"], splash: ["2[fire]"], save: null, size: null }, notes: ["Splash."] }, { name: "Chill", faces: [2], onHit: { conditions: [], critical: null, push: null, damage: ["1d6[cold]"], nativeEffects: [{ uuid: "Compendium.pf2e.equipment-effects.Item.test", label: "Test Chill" }], save: null, size: null }, notes: [] }] } };
+    const burn = withRow(bomb, 1);
+    assert.deepEqual([burn.rowName, burn.notes, burn.randomOnHit], ["Burn", ["Its Strike.", "Splash."], undefined]);
+    const rider = activityRider(burn);
+    assert.deepEqual([rider.plan.resolution.outcomes.success.damage.formulas, rider.plan.resolution.outcomes.criticalSuccess.damage.formulas], [[{ formula: "2d6[fire]" }, { formula: "2[fire]" }], [{ formula: "2*(2d6)[fire]" }, { formula: "2[fire]" }]]);
+    const chill = activityRider(withRow(bomb, 2)).plan.resolution.outcomes;
+    assert.deepEqual([chill.success.nativeEffects?.[0]?.label, chill.criticalSuccess.nativeEffects?.length, chill.failure.nativeEffects], ["Test Chill", 1, undefined]);
+    assert.deepEqual(strikesFor({ faces: { 3: "claw", 4: "tail" } }, [1, 4]), [null, "tail"]);
 });

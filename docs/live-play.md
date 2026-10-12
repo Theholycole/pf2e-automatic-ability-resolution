@@ -2479,3 +2479,19 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a spell or check with the linguistic trait sets off the monster's card, as auditory ones do.
 - **Simulator:** see B254 in its ability decisions.
 
+## Random effect tables, copies of itself (2026-10-12, batch 255)
+
+- **The user's call (2026-10-12):** duplicates and copies are the GM's; random effect tables and zones are automated (zones come next).
+- **Compiled** (22 new in PF2e, 13 in Battlezoo):
+  - **Copies of the creature** (Dazzling Duplicate, Shadow Doubles, Stepping Decoy, Temporal Eddies, and Battlezoo's copies and decoys): `{ builtin: "no-effect", gm: "copies" }`, after every reading fails. Voice mimicry without a save or damage is out of combat.
+  - **A random table** → `{ builtin: "modes", actions, random: { formula, times }, modes: [{ name, faces, plan, again?, notes? }] }`:
+    - a numbered list after a roll for the effect, with the save and area in the opening (Draxie Dust): each row is the save, its failure the row's conditions, temporary Hit Points or damage. "(X on a critical failure)" sets the critical failure, "permanent" with no duration. A Sleep spell's effects are Unconscious for 1 minute (1 hour on a critical failure), with damage waking it as a note. What isn't read is a note;
+    - Inflict Warpwave: PF2e's warpwave table (1d8), each row's condition lasting 1d4 rounds, rolled when it's applied (`duration.valueRoll`);
+    - a d20 table in paragraphs, one row per range of faces. Each row is compiled on its own: "roll twice" (`again: 2`, with faces that roll again rolled over), a spell it casts (cast-spell, at the table's DC), a save with conditions, a condition on the creature itself when the row's subject is the creature, a condition on the target, basic-save damage in an area, or a note. The table's DC fills in a check that has none;
+    - a curse picked at random on a failed save (a way per curse; "two on a critical failure" is a note to roll again). A raised condition value is a stacking condition;
+    - an attack at a fixed bonus whose damage type a die picks: each type is a check against AC, double on a critical hit. A face that does nothing is a way with no plan.
+  - **A bomb table** (Generate Bomb) → a Strike activity on the bomb Strike with `randomOnHit: { formula, rows: [{ name, faces, onHit, notes }] }`. Each row's damage goes on the hit. Its splash is on the target and isn't doubled (the creatures around get a note). Its effect is PF2e's own (Frost Vial), its conditions with their durations, and its save (the sickness bomb).
+  - **Strikes by dice** → `{ builtin: "random-strikes", actions, formula, times, faces: { face: strike } }`.
+  - "Frequency once per round" on a random table is a 1-round recharge.
+- **Live:** the die is rolled in chat, with what it picked. The way it picks is played as the ability: its card, its spell, its note. A face with nothing to play is said in that message. For a bomb table, the row picked becomes the activity's results on the Strike's next hit, with splash and PF2e's effect on the card. For random Strikes, the GM gets a note naming the Strikes the dice gave, to roll from the sheet.
+- **Simulator:** see B255 in its ability decisions.

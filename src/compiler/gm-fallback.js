@@ -72,6 +72,9 @@ const COMBAT = /\bCasts? (?:a|the) Spell\b|\bcasts\b|@Check|@Damage|\bStrikes?\b
 // Out of combat in its words.
 const OUT_OF_COMBAT = /\b(?:out of combat|outside of combat|not in combat|in exploration mode|during exploration|downtime)\b|\b\d+ miles?\b|\b(?:within|across|up to) (?:a|1|one) mile\b|\bfor (?:\d+|one|two|several) (?:hours?|days?|weeks?|months?|years?)\b|\b(?:learns?|knows?|communicates?|telepathically|speaks? with|understands?|Recall Knowledge|Gather Information|Make an Impression|Request|Coerce|Thievery|Crafting|unattended|weather|ritual|merchant|purchase|sells?|buys?|gold pieces|reveals? (?:a|the) (?:location|secret|answer))\b/i;
 
+// Duplicates of the creature itself (batch 255).
+const DUPLICATES = /\b(?:creates?|spins?|leaving behind|leaves behind|splits? (?:themself|itself|himself|herself) into)\b[^.]*?\b(?:(?:illusory|shadowy|temporal) )?(?:duplicates?|decoys?|copy|copies|afterimages?|doubles?|(?:two|three) versions)\b(?! of (?:a|an|any) )|\b(?:all of (?:their|its) copies|while (?:they have|it has) at least one duplicate|swap places\b[^.]*\bduplicate)\b|\bshadowy afterimage\b|\bA duplicate of (?:itself|themselves|themself)\b|\bboth copies\b|\bThe [\w' -]+? is a minion\b/i;
+
 export function gmFallback(item, options = {}) {
     // (Batch 248, a passive that takes a full minute to do — moving through a wall over a minute: out of combat.)
     if (item?.type === "action" && item.system?.actionType?.value === "passive") {
@@ -98,8 +101,13 @@ export function gmFallback(item, options = {}) {
     // (Batch 243: a requirement about a spell aimed at it last round (Reflexive Understanding) — a state the simulator doesn't keep; a boon offered for a
     // directive until the creature's next daily preparations (Inspire Envoy), another creature's thoughts read (Thought Whispers) — out of combat.)
     // (Batch 251, Lick Rust: "rusted a metal item with its tongue this turn" — what it rusted, the GM's.)
-    if (requirement && /\bwas targeted by a spell\b[^.]*?\bin the last round\b|\brusted a metal item\b/i.test(requirement)) return { builtin: "no-effect", gm: "state" };
+    // (Batch 255, Copy Spell: a spell it counteracted since its last turn — the GM's, as Counterspell's kin.)
+    if (requirement && /\bwas targeted by a spell\b[^.]*?\bin the last round\b|\brusted a metal item\b|\bsuccessfully counteracted a spell\b/i.test(requirement)) return { builtin: "no-effect", gm: "state" };
     if (/\boffers? (?:their|its|his|her) [\w' -]+? blessing in exchange for\b[^.]*\bdirective\b/i.test(text) || /\bseek (?:others['’]|other creatures['’]) thoughts\b[^.]*\bwith mind reading\b/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
+    // (Batch 255, the user's choice of 2026-10-12: duplicates of the creature itself — illusory doubles, decoys, afterimages, copies of itself or other
+    // versions of it, copies that a creature's Strike resolves against — the GM's, as summons are. A creature imitating voices or sounds: out of combat.)
+    if (DUPLICATES.test(text)) return { builtin: "no-effect", gm: "copies" };
+    if (/\b(?:perfectly )?(?:imitates?|mimics?|repeats?) (?:voices|sounds|speech|up to [\w]+ words)\b/i.test(text) && !/@Damage|\bsave\b|\bStrikes?\b/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
     if (/\b(?:has|have) no effect (?:outside(?: of)?|out of) (?:the )?water\b|\bonly (?:works|functions) underwater\b/i.test(text)) return { builtin: "no-effect", gm: "state" };
     const traits = item.system?.traits?.value ?? [];

@@ -28,14 +28,18 @@ export function activityRider(activity, { strikeType = null, targetProne = false
     const criticalPush = pushOf(onHit.criticalPush) ?? push;
     // (Batch 152, Fan of Daggers: damage a critical hit alone brings, "On a critical hit, the target takes 2d10 bleed damage", as written.)
     const criticalOnly = (onHit.criticalDamage ?? []).filter(Boolean);
-    if (!hit.length && !critical.length && !formulas.length && !criticalOnly.length && !push && !criticalPush) return save;
+    // (Batch 255, Generate Bomb: a bomb's splash on the target, not doubled; PF2e's own effect it leaves, Frost Vial's.)
+    const splash = (onHit.splash ?? []).filter(Boolean);
+    const native = onHit.nativeEffects?.length ? onHit.nativeEffects.map((entry) => ({ ...entry })) : null;
+    if (!hit.length && !critical.length && !formulas.length && !criticalOnly.length && !push && !criticalPush && !splash.length && !native) return save;
     // (A critical hit doubles the Strike's damage, its extra dice too.)
-    const row = (effects, double, moved = push, more = []) => {
+    const row = (effects, double, moved = push, more = [], landed = true) => {
         const all = [...formulas.map((formula) => ({ formula: double ? doubled(formula) : formula })), ...more.map((formula) => ({ formula }))];
         return {
             damage: all.length ? { mode: "formulas", formulas: all, rollScope: "outcome" } : { ...NONE },
             effects,
-            ...(moved ? { forcedMovement: { ...moved } } : {})
+            ...(moved ? { forcedMovement: { ...moved } } : {}),
+            ...(native && landed ? { nativeEffects: native } : {})
         };
     };
     const source = activity.source ?? { name: "Strike activity" };
@@ -54,7 +58,7 @@ export function activityRider(activity, { strikeType = null, targetProne = false
                 kind: "check",
                 check: { roll: "skill", statistic: "strike", against: { dc: "target", statistic: "ac" } },
                 sharedDamage: null,
-                outcomes: { criticalSuccess: row(critical, true, criticalPush, criticalOnly), success: row(hit, false), failure: row([], false, null), criticalFailure: row([], false, null) }
+                outcomes: { criticalSuccess: row(critical, true, criticalPush, [...criticalOnly, ...splash]), success: row(hit, false, push, splash), failure: row([], false, null, [], false), criticalFailure: row([], false, null, [], false) }
             }
         }
     };
