@@ -1937,6 +1937,16 @@ function compileModes(item, options) {
         });
         item = withDescription(item, html);
     }
+    // (Batch 180, Veksciralenix's Breath Weapon: its ways as "<p><strong>Storm</strong> …</p><hr /><p><strong>Time Displacement</strong> …</p>"
+    // paragraphs one after another, the last way's degrees of success after them — read as a list.)
+    const LABELS = /^(?:Critical Success|Success|Failure|Critical Failure|Trigger|Effect|Frequency|Requirements?|Cost|Special|Activate|Prerequisites?)$/i;
+    const ways = [...html.matchAll(/<p>\s*<strong>([^<]+)<\/strong>([\s\S]*?)<\/p>/g)].filter((found) => !LABELS.test(found[1].trim()));
+    const runs = ways.length >= 2 && ways.slice(1).every((found, index) => /^\s*(?:<hr\s*\/?>\s*)*$/.test(html.slice(ways[index].index + ways[index][0].length, found.index)));
+    if (html.search(/<ul\b/i) < 0 && runs) {
+        const last = ways.at(-1);
+        html = `${html.slice(0, ways[0].index)}<ul>${ways.map((found) => `<li><strong>${found[1]}</strong>${found[2]}</li>`).join("")}</ul>${html.slice(last.index + last[0].length)}`;
+        item = withDescription(item, html);
+    }
     const start = html.search(/<ul\b/i);
     const end = html.search(/<\/ul>/i);
     if (start < 0 || end < start) return null;

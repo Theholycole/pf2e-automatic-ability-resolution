@@ -1591,3 +1591,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** a way of a `modes` ability can be a `cast-spell` plan (Hilarious Exhalation's "This has the effect of Laughing Fit …", "This creates a 15-foot burst with the area effect of Grease …"). A sentence with an area before a casting becomes a note on any cast-spell plan, and so does the casting sentence when it has the area itself (Belch Smoke, Breath of Phantasms, Silkworm's Basket and Despairing Weep gained theirs).
 - **Live:** the mode card shows such a way, and picking it turns the card into that spell's cast card at the ability's rank and DC. Run in pftest: a young mocking dragon's Hilarious Exhalation card offered both ways. Slippery Puddle became "Grease (rank 4, DC 26)" with its burst note, and casting it posted PF2e's Grease and started the recharge.
 - **Simulator:** the in-Foundry snapshot reads each way that casts a spell as one of its abilities, sharing the recharge. In pftest the young dragon's Laughing Gas came in at rank 4, DC 26. Grease, which the engine can't cast, was left out (B179).
+
+## Ways as paragraphs (2026-10-12, batch 180)
+
+- **Compiled:** when a choose-a-way ability has no list but bold-named paragraphs one after another (with only rules between them), those paragraphs are its ways. The last way's degrees of success after them stay with it. Veksciralenix's Breath Weapon (Storm, and Time Displacement's stunned 1/4/6) and Saint Fang's Dragon Breath (Blade and Forge Breath, once read as one) are such abilities.
+- **Live:** no new live code: the mode card as before. Not run in pftest.
+- **Simulator:** nothing new: each way one of its abilities, sharing the recharge.

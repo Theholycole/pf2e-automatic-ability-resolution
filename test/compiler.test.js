@@ -3081,3 +3081,10 @@ test("ways that have a spell's effects, an area before a casting as a note (2026
     assert.deepEqual(plan.modes.map((mode) => [mode.name, mode.plan.builtin, mode.plan.spell.name, mode.plan.dc]), [["Giggle Gas", "cast-spell", "Laughing Fit", 20], ["Slick Spit", "cast-spell", "Grease", 20]]);
     assert.equal(plan.modes[0].plan.notes[0], "The test drake breaths a cloud of gas in a 15-foot cone.");
 });
+
+test("ways written as paragraphs one after another, the last one's degrees after them (2026-10-12, batch 180)", () => {
+    const html = "<p>The test drake breathes in one of two ways.</p><p>The test drake can't use Test Breath again for [[/gmr 1d4 #Recharge Test Breath]]{1d4 rounds}.</p><hr /><p><strong>Sparks</strong> The test drake breathes sparks in a @Template[cone|distance:15] that deal @Damage[4d6[electricity]] damage (@Check[reflex|dc:20|basic] save).</p><hr /><p><strong>Slow Fog</strong> The test drake breathes a grey fog. Each creature within a @Template[cone|distance:15] must attempt a @Check[fortitude|dc:20] save.</p><hr /><p><strong>Critical Success</strong> The creature is unaffected.</p><p><strong>Success</strong> The creature is Slowed 1.</p><p><strong>Failure</strong> The creature is Slowed 2.</p><p><strong>Critical Failure</strong> The creature is Slowed 3.</p>";
+    const plan = compileMonsterAbility({ type: "action", name: "Test Breath", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    assert.deepEqual(plan.modes.map((mode) => [mode.name, mode.plan.resolution.check.statistic]), [["Sparks", "reflex"], ["Slow Fog", "fortitude"]]);
+    assert.deepEqual(plan.modes[1].plan.resolution.outcomes.failure.effects.map((effect) => [effect.slug, effect.value]), [["slowed", 2]]);
+});
