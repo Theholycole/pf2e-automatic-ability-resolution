@@ -302,6 +302,7 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - Turning Invisible as a Strike comes.
 - **Lost Omens Strike riders, curls and splashes** (2026-10-12, batch 219): 9 new in PF2e: Chain Shot, Drain Nutrients, Cuetzmonquali's Impaling Charge, Tactical Gnaw, Defensive Curl, Bounce Away, Digestive Secretions, Drag Under, Pacify.
 - **Chains, fury, second chances, stolen healing** (2026-10-12, batch 220): 7 new in PF2e: Cleanse the Forest, Blood Fury, Second Chance (×4), Parasitic Healing.
+- **Monster Core sweeps, leaps and moves** (2026-10-12, batch 221): 11 new in PF2e: Flaming Stroke, Tail Sweep, Strafing Chomp, Leaping Grab, Thundering Iron, Shielded Charge, and moves and stows (no-effect).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

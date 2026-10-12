@@ -929,6 +929,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // move and the Strike, the fall after notes.)
         .replace(/\b((?:The )?[\w' -]+?) swings on a rope or trapeze, moving up to double (?:its|their|his|her) Speed\. At any point during the swing, (?:it|they|he|she) can make an? ([\w' -]+?) Strike\./i, "$1 Strides twice and makes a $2 Strike. [rope or trapeze]")
         .replace(/\b((?:The )?[\w' -]+?) makes a (?:@UUID\[[^\]]*\]\{)?Leap\}?, (?:@UUID\[[^\]]*\]\{)?High Jump\}?, or (?:@UUID\[[^\]]*\]\{)?Long Jump\}?\. At any point during the jump, if (?:it's|they're|he's|she's) adjacent to an enemy, (?:it|they|he|she) can Strike that enemy with an? [\w' -]+?(?: or [\w' -]+?)? Strike, even in midair\. (?:The [\w' -]+?|It|They|He|She) falls? to the ground after the Strike\. If the distance (?:it|they|he|she) falls? is no more than the height of (?:its|their|his|her) jump, (?:it|they|he|she) lands? upright and takes? no damage\./i, "$1 Strides and makes a Strike. [leap strike]")
+        // (Batch 221, Leaping Grab: "The mantis Leaps up to 40 feet vertically and 20 feet horizontally. At any point during the jump, it can make a leg Strike. If
+        // it hits, it automatically Grabs the target, bringing the creature along until the end of the jump." — a Leap and the Strike, Grabbed on a hit;
+        // Strafing Chomp: "Swims up to half its swim Speed, makes a jaws Strike, and then Swims up to half its Speed further." — a move and the Strike, the
+        // move after a note.)
+        .replace(/\b((?:The )?[\w' -]+?) Leaps up to (\d+) feet vertically and (\d+) feet horizontally\. At any point during the jump, (?:it|they|he|she) can make an? ([\w' -]+?) Strike\. If (?:it|they|he|she) hits, (?:it|they|he|she) automatically (?:@UUID\[[^\]]*\]\{)?Grabs\}? the target, bringing the creature along until the end of the jump\./i, "$1 Strides and makes a $4 Strike. If it hits, the target is Grabbed. [leap $2 $3]")
+        .replace(/\b((?:The )?[\w' -]+?) (Swims|Strides|Flies) up to half (?:its|their|his|her) (?:swim |fly )?Speed, makes an? ([\w' -]+?) Strike, and then (?:Swims|Strides|Flies) up to half (?:its|their|his|her) (?:swim |fly )?Speed further\./i, "$1 $2 and makes a $3 Strike. [half before and after]")
         // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
         .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -1500,6 +1506,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // Chain Shot's reeling in, its ship pulling the creature along; Drain Nutrients' "On a success, Somnalu drains the creature's life through its
             // skin." and its temporary Hit Points from what the creature loses — the GM's.)
             .replace(/^(?:In addition|On a successful attack), if the target is wearing armor with Hardness \d+ or lower, the armor becomes Broken\.$|^If the target is Off-Guard, then the [\w' -]+? can follow the foe\.$/i, "[gm]")
+            // (Batch 221, Thundering Iron: each creature in an emanation around the target taking the extra damage too and pushed — the GM's.)
+            .replace(/^Each creature in an? @Template\[(?:type:)?emanation\|distance:\d+\](?:\{[^}]*\})? around the target, other than (?:the [\w' -]+?|it), takes? this damage as well and (?:is|are) pushed \d+ feet away from the target\.$/i, "[gm]")
             .replace(/^(?:The )?[\w' -]+? can use Interact actions to reel in a grabbed creature \d+ feet per action spent, and when (?:the [\w' -]+?|it) moves, it pulls the grabbed creature along with it\.$|^On a success, (?:the [\w' -]+?|[A-Z][\w'-]+|it) drains the creature['’]s life through its skin\.$|^(?:The [\w' -]+?|[A-Z][\w'-]+|It) gains temporary Hit Points equal to the amount of Hit Points the creature loses from this Strike\.$/i, "[gm]")
             // (Batch 219, Drain Nutrients: "Somnalu targets a creature with a claw Strike." — its claw Strike; Chain Shot: "A creature hit by this Strike is
             // Grabbed by the chain ([[/act escape dc=41]])." — Grabbed on a hit, its Escape DC a note.)
@@ -1619,6 +1627,15 @@ function strikeActivity(item, actor, { after = null } = {}) {
         if (text === "[rope or trapeze]") {
             activity.requires = "requirement";
             (activity.notes ??= []).push("Only with a rope or trapeze to swing on; the Strike at any point along the swing.");
+            continue;
+        }
+        // (Batch 221: Leaping Grab's jump; Strafing Chomp's move after.)
+        if ((match = /^\[leap (\d+) (\d+)\]$/.exec(text))) {
+            (activity.notes ??= []).push(`It Leaps up to ${match[1]} feet up and ${match[2]} feet across, Striking at any point in the jump; a creature it Grabs comes along to the end of the jump.`);
+            continue;
+        }
+        if (text === "[half before and after]") {
+            (activity.notes ??= []).push("It moves up to half its Speed before the Strike and half after.");
             continue;
         }
         if (text === "[leap strike]") {
@@ -1834,7 +1851,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
     // (Batch 156: a Strike whose only extra is the GM's — Shattering Scrape's broken armor — still posts its note.)
     if (!opened || (bare && !activity.notes?.length)) return null;
     // (Batch 184: not one behind a requirement the GM checks, Halyard Swing's ship deck — its card and notes, never planned by the simulator.)
-    if (activity.strides && !activity.attackBonus && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length && !rider.follow && !(activity.requires === "requirement" && activity.notes?.length)) return null;
+    // (Batch 221, Strafing Chomp: one action for a move and a half-damage Strike — its own trade, kept.)
+    if (activity.strides && !activity.attackBonus && !activity.halfDamage && activity.actions < activity.strides + 1 && !rider.save && !rider.conditions.length && !rider.damage.length && !rider.proneDamage?.length && !rider.follow && !(activity.requires === "requirement" && activity.notes?.length)) return null;
     return activity;
 }
 

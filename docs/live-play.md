@@ -2069,3 +2069,16 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - the ally reroll can keep the new result and be free once a round;
   - the heal-siphon can heal the siphoner by the full amount.
 
+## Monster Core sweeps, leaps and moves (2026-10-12, batch 221)
+
+- **Compiled:**
+  - **Flaming Stroke** → a sweep over a 15-foot line at –2: one attack roll (a note), +1d6 fire on each hit, counted as one attack.
+  - **Tail Sweep** → up to three foes on one roll, counted as two attacks (`countsAs: 2` from the swipe's sentence). The tail's reach and "adjacent to at least one other target" are read too.
+  - **Strafing Chomp** → a Swim and a half-damage jaws Strike in one action; the swim after is a note. A half-damage Strike is now kept even with fewer actions than its moves plus one.
+  - **Leaping Grab** → a Leap (a Stride) and a leg Strike that Grabs on a hit; the jump's distances are a note.
+  - **Thundering Iron** → +1d10 sonic on a hit. The same damage and a push for creatures around the target are the GM's, a note.
+  - **Shielded Charge** → its shield's AC bonus until its next turn (2 when there's none to read); the two Strides are a note.
+  - **No-effect:** Deep Plunge, Wriggling Rush, Swim Together, Mask Stench, Quick Stow.
+- **Live:** cards as for these kinds. Not run in pftest.
+- **Simulator:** nothing new.
+

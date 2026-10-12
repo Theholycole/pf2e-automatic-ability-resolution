@@ -3547,3 +3547,19 @@ test("Strikes at enemy after enemy while each hits; Hit Points and a bonus as it
     assert.deepEqual([second.builtin, second.ally, second.self, second.within, second.keep, second.perRound, second.free], ["save-reroll", true, true, 30, "new", true, true]);
     assert.deepEqual(plan("<p><strong>Trigger</strong> A creature within 30 feet regains Hit Points</p><hr /><p><strong>Effect</strong> The test thief smirks. The triggering creature regains only half the number of Hit Points, and the test thief regains the full amount.</p>", "reaction"), { builtin: "heal-siphon", within: 30, share: 0.5, selfHeal: "full" });
 });
+
+test("a half-damage Strike between two half moves; a leap with a Strike that Grabs; extra damage with the splash a note; three foes on one roll; a line of Strikes on one roll; a shield raised on the move; moves (2026-10-12, batch 221)", () => {
+    const item = (html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${html}</p>` } } });
+    const plan = (html, actions) => compileMonsterAbility(item(html, actions), {});
+    const chomp = plan("The test shark Swims up to half its swim Speed, makes a jaws Strike, and then Swims up to half its Speed further. The Strike deals half damage.", 1);
+    assert.deepEqual([chomp.builtin, chomp.strides, chomp.strike, chomp.halfDamage], ["strike-activity", 1, "jaws", true]);
+    const grab = plan("The test mantis Leaps up to 35 feet vertically and 15 feet horizontally. At any point during the jump, it can make a leg Strike. If it hits, it automatically Grabs the target, bringing the creature along until the end of the jump.");
+    assert.deepEqual([grab.strides, grab.strike, grab.onHit.conditions.map((entry) => entry.slug)], [1, "leg", ["grabbed"]]);
+    const thunder = plan("The test oni makes a club Strike. On a success, the target takes an additional 1d8 sonic damage. Each creature in a @Template[emanation|distance:10] around the target, other than the test oni, takes this damage as well and is pushed 5 feet away from the target.");
+    assert.deepEqual([thunder.onHit.damage, thunder.notes.length], [["1d8[sonic]"], 1]);
+    assert.deepEqual(plan("The test sauropod makes a tail Strike and compares the attack roll to the AC of up to three foes, each of whom must be within its tail's melee reach and adjacent to at least one other target. It rolls damage only once and applies it to each creature hit. A Tail Sweep counts as two attacks for its multiple attack penalty."), { builtin: "multi-strike", actions: 2, strikes: ["tail"], each: true, max: 3, sameMap: true, countsAs: 2 });
+    const stroke = plan("The test giant makes a greatsword Strike with a –2 circumstance penalty against each creature in a @Template[line|distance:20]. They make one attack roll only and compare the result to each creature's AC. This Strike deals an additional 1d6 fire damage and counts as one attack for the test giant's multiple attack penalty.");
+    assert.deepEqual([stroke.strikes, stroke.penalty, stroke.extraDamage, stroke.countsAs, stroke.sameMap], [["greatsword"], 2, ["1d6[fire]"], 1, true]);
+    assert.deepEqual(plan("The test dwarf Raises a Shield and Strides twice."), { builtin: "self-effect", actions: 2, model: { name: "Test", rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0 }, notes: ["It Strides twice as well."] });
+    assert.deepEqual(plan("The test eel dives straight down into the water, moving up to twice its swim Speed in a straight vertical line.", 1), { builtin: "no-effect" });
+});
