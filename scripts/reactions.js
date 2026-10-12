@@ -768,10 +768,16 @@ async function onDamaged(actor, amount) {
         const attacker = combat.combatant?.token;
         // Its own reaction to damage on it (Solar Flare, Caustic Blood): the creature whose turn it is taken as the attacker.
         const mine = reactors(scene, combat).find((entry) => entry.token.id === token.id);
-        const own = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "damaged");
+        // (Batch 132: not when the damage roll's types are known and none is one it names — Electric Reflexes on slashing damage.)
+        const rolledTypes = lastDamageTypes();
+        const typeFits = (wanted) => !wanted?.length || !rolledTypes || rolledTypes.some(({ type }) => wanted.includes(type) || (wanted.includes("physical") && ["bludgeoning", "piercing", "slashing"].includes(type)));
+        const own = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "damaged" && typeFits(plan.trigger.damageTypes));
         if (own) {
             const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
-            await offer({ kind: "card", item: own.item, monster: token, actor, target: foe, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: damageNote(own.plan.trigger), free: !!own.plan.trigger.free });
+            // (Batch 132, Electric Reflexes: at a creature beside it — the attacker only when it's adjacent.)
+            const beside = own.plan.targeting?.target === "an adjacent creature";
+            const near = foe && (!beside || distanceFeet(box(token, gridOf(scene).size), box(foe, gridOf(scene).size), gridOf(scene)) <= 5) ? foe : null;
+            await offer({ kind: "card", item: own.item, monster: token, actor, target: near, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: [damageNote(own.plan.trigger), beside && !near ? "At a creature beside it: target it first." : null].filter(Boolean).join(" ") || null, free: !!own.plan.trigger.free });
         }
         // Skittish (batch 98): damage from a Strike, the creature whose turn it is taken as the attacker; the GM checks it was a Strike.
         const off = mine?.reactions.find(({ plan }) => plan.builtin === "withdraw" && plan.on === "damaged");
@@ -1022,7 +1028,8 @@ async function use(message, action, slug) {
         const taking = running ? inEncounter(running) : new Set();
         const tokens = plan.targeting?.target === "self" || ownEffect ? [monster.object ?? monster]
             : allyEffect ? monster.parent.tokens.filter((token) => taking.has(token.id) && token.id !== monster.id && !token.hidden && token.disposition === monster.disposition && token.actor && !token.actor.isDead).map((token) => token.object ?? token)
-            : ["the attacker", "the creature the Strike hits"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
+            // (Batch 132: "an adjacent creature", Electric Reflexes — the offer's creature when it was beside it.)
+            : ["the attacker", "the creature the Strike hits", "an adjacent creature"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
             : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0) : [];
         if (applications.length) await postEffectCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens: ownEffect ? [] : tokens });

@@ -1375,3 +1375,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** the save card after the Strike hits says "Only if the target is off-guard."; checked in pftest with the Black Whale guard.
 - **Simulator:** the save only when the target is off-guard (B130).
 
+## A Grapple as a reaction to damage of a type (2026-10-12, batch 132)
+
+- **Compiled:** Electric Reflexes ("takes electricity damage and a creature is adjacent to it … attempts an Athletics check to Grapple an adjacent creature. The creature also takes 3d6 electricity damage on a success, or 6d6 … on a critical success") → the Grapple basic action's plan with that damage on its successes, `trigger: { event: "damaged", reaction: true, damageTypes: ["electricity"] }`, `targeting.target: "an adjacent creature"`.
+- **Live:** a reaction to damage on itself is offered only when the latest damage roll's types include one it names (slashing no longer offers Electric Reflexes); "Use it" posts the Grapple card on the attacker when it's beside it (otherwise the GM targets); checked in pftest with a flesh golem: a critical success dealt 6d6 electricity and Restrained the goblin.
+- **Simulator:** "an adjacent creature" — the creature that set it off when it's in its Melee, else another foe there (B131).
+

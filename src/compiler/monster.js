@@ -2492,6 +2492,32 @@ function variedManeuver(item, basicActions = {}) {
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}) };
 }
 
+// A Grapple as a reaction to damage of a type (2026-10-12, batch 132, Electric Reflexes): "Trigger The golem takes electricity damage and a
+// creature is adjacent to it" (or "would be affected by an effect with the electricity trait and a creature is in its reach") "Effect The golem
+// lashes out and tries to grab a nearby creature. The golem attempts an Athletics check to Grapple an adjacent creature. The creature also takes
+// 3d6 electricity damage on a success, or 6d6 electricity damage on a critical success." → PF2e's Grapple with that damage on its successes,
+// set off by that damage, at a creature beside it.
+function damagedManeuver(item, basicActions = {}) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const html = String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const parts = /^Trigger (.+?)\.? Effect (.+)$/.exec(plain);
+    const type = parts ? /^(?:The )?[\w' -]+? (?:takes (\w+) damage|would be affected by an effect with the (\w+) trait) and a creature is (?:adjacent to it|in its reach)$/i.exec(parts[1].trim()) : null;
+    if (!type) return null;
+    const sentences = parts[2].split(/(?<=\.)\s+(?=[A-Z])/);
+    if (sentences.length && /^(?:The )?[\w' -]+? lashes out and tries to grab a nearby creature\.$/i.test(sentences[0])) sentences.shift();
+    if (!/^(?:The )?[\w' -]+? attempts an Athletics check to Grapple (?:an adjacent creature|a creature within reach)\.$/i.test(sentences[0] ?? "")) return null;
+    const damage = /^The creature also takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage on a success, or (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage on a critical success\.$/i.exec(sentences[1] ?? "");
+    if (!damage || sentences.length > 2 || !basicActions.grapple?.resolution) return null;
+    const plan = structuredClone(basicActions.grapple);
+    const formula = (tag) => ({ formula: readDamage(inlineTags(tag, "Damage")[0]) });
+    const add = (row, entry) => ({ ...row, damage: row.damage?.mode === "formulas" ? { ...row.damage, formulas: [...row.damage.formulas, entry] } : { mode: "formulas", formulas: [entry], rollScope: "target" } });
+    plan.resolution.outcomes.success = add(plan.resolution.outcomes.success, formula(damage[1]));
+    plan.resolution.outcomes.criticalSuccess = add(plan.resolution.outcomes.criticalSuccess, formula(damage[2]));
+    const damageType = (type[1] ?? type[2]).toLowerCase();
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "an adjacent creature", range: "touch" }, trigger: { event: "damaged", reaction: true, damageTypes: [damageType] } };
+}
+
 // A Strike at a creature that moves (or acts) in its reach, Reactive Strike's kin in its own words (2026-10-11, batch 68): "Trigger A
 // creature within reach of Racharak's tail uses a move action or leaves a square during a move action it's using. Effect Racharak makes a
 // tail Strike at the creature with a -2 penalty. If it hits, she disrupts the creature's action.", Gripping Tentacle's "… against the
@@ -2900,7 +2926,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

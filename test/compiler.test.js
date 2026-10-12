@@ -2514,3 +2514,10 @@ test("the glossary's Power Attack, two-weapon flurries, an attack bonus on this 
     const swing = compile("The test duelist makes a melee weapon Strike. On this Strike, he gains a +2 circumstance bonus to the attack roll and ignores any concealment the target has.");
     assert.deepEqual([swing?.attackBonus, swing?.notes], [2, ["This Strike ignores the target's concealment."]]);
 });
+
+test("a Grapple as a reaction to damage of a type, at a creature beside it (2026-10-12, batch 132)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const plan = compile("<p><strong>Trigger</strong> The test golem takes cold damage and a creature is adjacent to it.</p><hr /><p><strong>Effect</strong> The test golem lashes out and tries to grab a nearby creature. The test golem attempts an Athletics check to [[/act grapple]] an adjacent creature. The creature also takes @Damage[2d6[cold]] damage on a success, or @Damage[4d6[cold]] damage on a critical success.</p>");
+    assert.deepEqual([plan?.trigger, plan?.targeting?.target, plan?.resolution?.outcomes?.success?.damage?.formulas?.[0]?.formula, plan?.resolution?.outcomes?.success?.effects?.[0]?.slug], [{ event: "damaged", reaction: true, damageTypes: ["cold"] }, "an adjacent creature", "2d6[cold]", "grabbed"]);
+});
