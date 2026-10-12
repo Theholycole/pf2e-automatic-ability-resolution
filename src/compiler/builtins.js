@@ -298,6 +298,27 @@ export function readMultiStrikes(text) {
     });
     // (Batch 212, Battlezoo: a Stride up to its Speed, then up to so many Strikes on the way, in a sentence of their own; so many Strikes "times"
     // with one weapon, each at its own creature.)
+    // (Batch 243, Unstoppable Onslaught: "… transforms into pure energy and surges across the battlefield. They Fly up to their Speed, and during this
+    // movement they have resistance 30 to all damage (except spirit damage). At any point during this movement, the dragon can make up to two claw
+    // Strikes; each of these Strikes deals an additional 3d8+3 force damage." — a flight first, its resistance a note, the extra damage on each.)
+    body = body.replace(/^((?:The )?[^.]+?) transforms into [^.]+? and surges across the battlefield\. (?:They|It) Fl(?:y|ies) up to (?:their|its) Speed, and during this movement (?:they|it) (?:have|has) resistance (\d+) to all damage \(except (\w+) damage\)\. At any point during this movement, (?:the [\w' -]+?|it|they) can make up to (two|three) ([\w' -]+?) Strikes; each of these Strikes deals an additional (\d+d\d+(?:\+\d+)?) (\w+) damage\./i, (_all, who, value, except, count, name, dice, type) => {
+        movesFirst = 1;
+        earlyNotes.push(`It Flies up to its Speed, with resistance ${value} to all damage except ${except} while it moves; the Strikes at any point along the way.`);
+        // (Its dice and its flat part as two, as live play's rules and the simulator read them.)
+        const [, roll, flat] = /^(\d+d\d+)(?:\+(\d+))?$/.exec(dice);
+        return `${who} makes up to ${count.toLowerCase()} ${name} Strikes. These attacks deal an additional @Damage[${roll}[${type.toLowerCase()}],${flat ?? 0}[${type.toLowerCase()}]] damage.`;
+    });
+    // (Batch 243, Illusory Ambush: "… Strides up to twice its Speed. If it ends its movement within its melee reach of at least one enemy to which it's
+    // undetected, it can attempt two claw Strikes against that enemy. … remains undetected to the creature it's attacking until after resolving both of
+    // the claw attacks." — two Strides, then two Strikes at that enemy; only at an enemy it's undetected by, a requirement.)
+    let undetectedOnly = false;
+    body = body.replace(/^(?:[^.]+\. )?((?:The )?[^.]+?) Strides up to twice (?:its|their) Speed\. If (?:it|they) ends? (?:its|their) movement within (?:its|their) melee reach of at least one enemy to which (?:it|they)(?:'s|’s| is| are) undetected, (?:it|they) can attempt two ([\w' -]+?) Strikes against that enemy\./i, (_all, who, name) => {
+        movesFirst = 2;
+        undetectedOnly = true;
+        earlyNotes.push("It Strides twice first; only at an enemy it's undetected by, which stays so until both Strikes are done.");
+        return `${who} makes two ${name} Strikes against the same target.`;
+    })
+        .replace(/ (?:The [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*|It|They) remains? undetected to the creature (?:it['’]s|they['’]re) attacking until after resolving both of the [\w' -]+? attacks\./i, "");
     // (Batch 241, Rocketing Strafe: "Flies and makes two melee Strikes at any point during that movement. Each Strike must target a different
     // creature." — a flight first; the one ranged Strike it may make instead a note; "Any Strike made as part of … deals an additional 2d6 damage"
     // — the Strike's own damage type.)
@@ -366,7 +387,7 @@ export function readMultiStrikes(text) {
     if (strideBetween) notes.push("Between the Strikes it Strides (no reactions) to another space beside the creature; the second Strike only if it gets there.");
     if (preyOnly) notes.push("Only at its prey.");
     if (swimAfter) notes.push("Then it Swims up to its swim Speed; that Swim triggers no reactions.");
-    let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : notFatigued ? "not-fatigued" : null;
+    let requires = held ? "grabbed" : raging ? "raging" : stated || undetectedOnly ? "requirement" : notFatigued ? "not-fatigued" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
     let strides = movesFirst || (strideFirst ? 1 : 0);
@@ -637,7 +658,8 @@ export function readMultiStrikes(text) {
     // 1 round"; extra damage on each, Hellfire Flurry's "These attacks deal an extra 1d4 fire damage".)
     let critical = null;
     const extraDamage = [];
-    const damageTags = (said) => [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].map((tag) => tag[1].split("|")[0]);
+    // (Batch 243: a tag of several parts, "@Damage[3d8[force],3[force]]", as each part.)
+    const damageTags = (said) => [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].flatMap((tag) => tag[1].split("|")[0].split(/,(?![^[]*\])/));
     for (let sentence of sentences) {
         const extra = /^(?:These|The|Both) (?:attacks|Strikes) deal an? (?:extra|additional) (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage\.$/i.exec(sentence);
         if (extra && !extraDamage.length) {
@@ -1502,7 +1524,8 @@ export function readWithdraw(text) {
     const body = String(text).trim();
     const subject = "(?:the [\\w' -]+?|it|[A-Z][\\w'-]+(?: [A-Z][\\w'-]+)*)";
     const legacy = new RegExp(`^If an? (?:creature|enemy|foe) ends its movement adjacent to ${subject}(?: or within ${subject}['’]s space)?, ${subject} can use (?:its|their|his|her) reaction to (Step|Stride)(?:, Climb,? or Swim| or (?:Climb|Swim))?(?: up to (\\d+) feet)?\\.((?: [^.]+\\.)*)$`, "i").exec(body);
-    const split = /^Trigger (.+?)[.;]? Effect (.+)$/.exec(body);
+    // (Batch 243: a frequency first, PF2e's own — "Frequency once per minute Trigger …".)
+    const split = /^(?:Frequency once per (?:round|turn|minute|10 minutes|hour|day)\.? )?Trigger (.+?)[.;]? Effect (.+)$/.exec(body);
     if (!legacy && !split) return null;
     let on = null;
     let melee = false;
@@ -1520,6 +1543,8 @@ export function readWithdraw(text) {
         else if (/^(?:The )?[\w' -]+? is attacked with a melee weapon$/i.test(trigger)) [on, melee] = ["attacked", true];
         // (Batch 214, Tactical Retreat: "The tanuki takes damage" — any damage.)
         else if (/^(?:The )?[\w' -]+? takes damage$/i.test(trigger)) on = "damaged";
+        // (Batch 243, Putrid Evanescence: "Desert's Howl is damaged by another creature".)
+        else if (/^(?:The )?[\w' -]+? is damaged by another creature$/i.test(trigger)) on = "damaged";
         // (Batch 217, Battlezoo: damage dealt to it; a foe's Strike that hits it; an attempt to target it or catch it in an area (as it's attacked); a foe
         // ending its turn with it in reach (as a foe beside it).)
         else if (/^An? creature (?:successfully )?deals damage to (?:the )?[\w' -]+?$/i.test(trigger)) on = "damaged";
@@ -1584,6 +1609,11 @@ export function readWithdraw(text) {
         // (Batch 133, Slip: "… teleports to a clear space adjacent to another creature she can see within 30 feet" — away, triggering no reactions.)
         const slip = /^(?:The )?[\w' -]+? teleports to a clear space adjacent to another creature (?:it|she|he|they) can see within (\d+) feet\.$/i.exec(sentences[0] ?? "");
         if (slip && sentences.length === 1) return { builtin: "withdraw", on, ...(enters ? { enters } : {}), move: "Teleport", feet: Number(slip[1]), safe: true };
+        // (Batch 243, Putrid Evanescence: "… bursts into a cloud of putrid smoke, ash, and nightmares, becoming Invisible and teleporting up to 100 feet
+        // away to an unoccupied space it can see. It remains invisible until the end of its next turn or until it uses a hostile action, whichever comes
+        // first." — a teleport away; its invisibility a note.)
+        const burst = /^(?:The )?[\w' -]+? bursts into a cloud of [^.]+?, becoming Invisible and teleporting up to (\d+) feet away to an unoccupied space (?:it|they) can see\.$/i.exec(sentences[0] ?? "");
+        if (burst && sentences.length === 2 && /^(?:It|They) remains? invisible until the end of (?:its|their) next turn or until (?:it|they) uses? a hostile action, whichever comes first\.$/i.test(sentences[1])) return { builtin: "withdraw", on, move: "Teleport", feet: Number(burst[1]), safe: true, notes: ["It's Invisible until the end of its next turn or until it uses a hostile action."] };
         const first = /^(?:After resolving the attack, )?(?:The )?[\w' -]+? (?:quickly takes advantage of the attacker['’]s error and )?(Steps(?: or Strides)?|Strides(?:,? (?:Climbs|Swims),? or (?:Climbs|Swims)| or (?:Climbs|Swims))?|Climbs or Strides|Flies|Burrows)(?: (?:up to )?(\d+) feet)?(?: \((?:or (?:up to )?(?:the relevant|its|his|her|their) Speed)[^)]*\))?(?: away(?: from (?:the source of the Strike|the triggering creature))?)?\.$/i.exec(sentences.shift() ?? "");
         if (!first) return null;
         move = /^Steps/i.test(first[1]) ? "Step" : /^Flies/i.test(first[1]) ? "Fly" : /^Burrows/i.test(first[1]) ? "Burrow" : "Stride";

@@ -2347,3 +2347,18 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - a charge's notes go to the GM.
 - **Simulator:** see B242 in its ability decisions.
 
+## Lost Omens dragons, ambushers and crews (2026-10-12, batch 243)
+
+- **Compiled** (27 new in PF2e, 2 in Battlezoo):
+  - **An invisible teleport away when damaged** (Putrid Evanescence) → `withdraw` on "damaged" with `move: "Teleport"`. Its invisibility is a note. A withdraw's trigger may now follow a frequency ("Frequency once per minute Trigger …").
+  - **A flight with charged Strikes** (Unstoppable Onslaught) → `multi-strike`: a flight first, two claw Strikes, and its extra damage as two parts (`["3d8[force]", "3[force]"]`, which live rules and the simulator both read). Its resistance while moving is a note.
+  - **Two Strikes from hiding after two Strides** (Illusory Ambush) → `multi-strike` at one target, `strides: 2`, `requires: "requirement"` (only at an enemy it's undetected by).
+  - **Creatures blown aloft** (Typhoon Fling) → Trample's targeting over one move, with a non-basic Fortitude save. A failure takes half the height as bludgeoning damage and lands Prone.
+  - **A troop's Shove in a direction it picks** (Repel Boarders!) → PF2e's Shove at each enemy beside it. The direction and the Stride after are notes.
+  - **Maneuvers at "each enemy", "all foes" or "non-allied creatures" around it** now mark the area `foes: true` (7 earlier plans gain it).
+  - **The GM's:**
+    - out of combat: a boon offered for a directive until the next daily preparations (Inspire Envoy), and reading others' thoughts (Thought Whispers);
+    - a state the simulator can't see: a successful Hide (Look Behind You), and a spell aimed at it last round (Reflexive Understanding).
+- **Live:** the withdraw and multi-Strike offers and notes as before; the charged Strikes' extra damage as a DamageDice and a FlatModifier rule.
+- **Simulator:** see B243 in its ability decisions.
+

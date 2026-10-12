@@ -2437,7 +2437,7 @@ test("a basic maneuver in its own words, and at each creature around it (2026-10
     const cry = compile("The test hound bays and snarls as it attempts to Demoralize a creature. It gains a +2 circumstance bonus to this Intimidation check, and the attempt is not penalized if the target can't understand the test hound.");
     assert.deepEqual(cry?.resolution?.check?.bonus, { value: 2, type: "circumstance" });
     const flourish = compile("The test duelist attempts an Intimidation check to Demoralize each enemy within 30 feet, without suffering penalties for not sharing a language. Regardless of the result, each creature is temporarily immune to Test for 1 minute.");
-    assert.deepEqual([flourish?.targeting?.area, flourish?.trigger?.immunity?.duration], [{ type: "emanation", value: 30 }, { value: 1, unit: "minutes" }]);
+    assert.deepEqual([flourish?.targeting?.area, flourish?.trigger?.immunity?.duration], [{ type: "emanation", value: 30, foes: true }, { value: 1, unit: "minutes" }]);
     assert.deepEqual(compile("The test ram attempts to Shove the nearest creature and then Strides with a +20-foot circumstance bonus to Speed.")?.notes, ["Then it Strides with a +20-foot circumstance bonus to Speed."]);
     // (Not one with a critical success of its own.)
     assert.equal(compile("The test bouncer attempts to Demoralize a creature. If the test bouncer rolls a critical success, the target can't reduce its frightened value for 1 round."), null);
@@ -2451,7 +2451,7 @@ test("Demoralize at every foe around it, in more words (2026-10-12, batch 126)",
     const howl = compile("The test wolf throws back its head, attempting to [[/act demoralize options=area-effect]] each creature within @Template[emanation|distance:20]{20 feet}. These creatures are then immune to Test Howl for 1 minute.");
     assert.deepEqual([howl?.targeting?.area, howl?.trigger?.immunity?.duration], [{ type: "emanation", value: 20 }, { value: 1, unit: "minutes" }]);
     const display = compile("<strong>Requirements</strong> The test knight is wielding a melee weapon</p><hr /><p><strong>Effect</strong> The test knight waves the blade about. It [[/act demoralize]]{Demoralizes} all enemies within 20 feet, rolling once and comparing the result to each target's Will DC.", 2);
-    assert.deepEqual(display?.targeting?.area, { type: "emanation", value: 20 });
+    assert.deepEqual(display?.targeting?.area, { type: "emanation", value: 20, foes: true });
     const lurk = compile("The test beast growls from the dark. The test beast makes an Intimidation check to Demoralize all living creatures within 40 feet that can hear the test beast but not see them. Roll once and apply the result to all creatures. Each target is temporarily immune for 1 minute.");
     assert.deepEqual(lurk?.notes, ["Only creatures that can hear it but not see it."]);
     assert.equal(compile("The test gang attempts to [[/act demoralize]] up to 3 creatures.")?.targeting?.target, "up to 3 creatures");
@@ -2604,7 +2604,7 @@ test("guards that last until it moves, a guard raised with a weapon, more multi-
     assert.deepEqual([prey.builtin, prey.sameTarget, prey.oncePerTurn, prey.requires], ["multi-strike", true, true, "requirement"]);
     // A Demoralize at each foe within 30 feet, straight after a hit with its spear.
     const rattle = action("<p><strong>Requirements</strong> The test lizard's last action was a successful pike Strike</p><hr /><p><strong>Effect</strong> The test lizard bangs the butt of their pike, attempting an Intimidation check to [[/act demoralize]] all enemies within @Template[emanation|distance:30]{30 feet} (compare the test lizard's Intimidation check result to the targets' Will DCs individually).</p>");
-    assert.deepEqual([rattle.trigger.followUp.strike, rattle.targeting.area, rattle.resolution.check.statistic], ["pike", { type: "emanation", value: 30 }, "intimidation"]);
+    assert.deepEqual([rattle.trigger.followUp.strike, rattle.targeting.area, rattle.resolution.check.statistic], ["pike", { type: "emanation", value: 30, foes: true }, "intimidation"]);
     // Not a requirement read as its subject.
     assert.equal(action("<p><strong>Requirements</strong> The test lizard is in the water</p><hr /><p><strong>Effect</strong> The test lizard attempts to Demoralize all enemies within 30 feet.</p>")?.resolution?.check?.statistic === "intimidation", false);
 });
@@ -3889,4 +3889,31 @@ test("Monster Core: a teleport then a Strike, a teleport after a moving creature
     assert.deepEqual([nails?.requires, nails?.notes?.length], [undefined, 2]);
     const charge = plan("<p>The test giant Strides twice and makes a melee Strike. If the Strike hits, the test giant can cast Earthquake centered on the target as a free action.</p>", "action", 2);
     assert.deepEqual([charge?.builtin, charge?.strides, charge?.notes?.length], ["charge", 2, 1]);
+});
+
+test("Lost Omens: a teleport away while invisible, a flight with charged Strikes, an ambush from hiding, creatures blown aloft; boons, mind reading, Hide and a spell's memory to the GM (2026-10-12, batch 243)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const vanish = plan("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Trigger</strong> The test wisp is damaged by another creature</p><hr /><p><strong>Effect</strong> The test wisp bursts into a cloud of grey smoke, becoming Invisible and teleporting up to 60 feet away to an unoccupied space it can see. It remains invisible until the end of its next turn or until it uses a hostile action, whichever comes first.</p>", "reaction");
+    assert.deepEqual([vanish?.builtin, vanish?.on, vanish?.move, vanish?.feet, vanish?.notes?.length], ["withdraw", "damaged", "Teleport", 60, 1]);
+    const surge = plan("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Effect</strong> The test drake transforms into pure light and surges across the battlefield. It Flies up to its Speed, and during this movement it has resistance 10 to all damage (except spirit damage). At any point during this movement, the drake can make up to two claw Strikes; each of these Strikes deals an additional 2d6+2 fire damage.</p>", "action", 3);
+    assert.deepEqual([surge?.builtin, surge?.strikes, surge?.extraDamage, surge?.strides, surge?.oncePerFight], ["multi-strike", ["claw", "claw"], ["2d6[fire]", "2[fire]"], 1, true]);
+    const ambush = plan("<p>The test phantom flickers. The test phantom Strides up to twice its Speed. If it ends its movement within its melee reach of at least one enemy to which it's undetected, it can attempt two talon Strikes against that enemy. The test phantom remains undetected to the creature it's attacking until after resolving both of the talon attacks.</p>", "action", 2);
+    assert.deepEqual([ambush?.strikes, ambush?.sameTarget, ambush?.strides, ambush?.requires], [["talon", "talon"], true, 2, "requirement"]);
+    const gale = plan("<p><strong>Effect</strong> The test roc Flies up to half its Fly speed. All creatures the roc passes within 10 feet of must attempt a @Check[fortitude|dc:30] save or be blown 40 feet up in the air and then fall, taking fall damage as appropriate. Creatures already airborne add their current height to the distance fallen.</p>", "action", 2);
+    assert.deepEqual([gale?.targeting?.trample, gale?.resolution?.outcomes?.failure?.damage?.formulas, gale?.resolution?.outcomes?.failure?.effects?.[0]?.slug], [{ size: "gargantuan", strides: 1 }, [{ formula: "20[bludgeoning]" }], "prone"]);
+    const gm = (kind) => ({ builtin: "no-effect", gm: kind });
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per hour</p><p><strong>Requirements</strong> The test sage was targeted by a spell of 5th rank or lower in the last round</p><hr /><p><strong>Effect</strong> The test sage studies the spell. For the next 10 minutes, it can cast the spell as an innate spell.</p>"), gm("state"));
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test wyrm picks a mortal and offers its lordly blessing in exchange for the creature carrying out a specific directive. If the creature agrees, until its next daily preparations, it gains a +1 status bonus to attack rolls.</p>", "action", 2), gm("out-of-combat"));
+    assert.deepEqual(plan("<p><strong>Effect</strong> The test wyrm sends its mind out to seek others' thoughts, affecting all creatures within 30 feet with mind reading (@Check[will|dc:30]).</p>", "action", 2), gm("out-of-combat"));
+    assert.deepEqual(plan("<p><strong>Trigger</strong> The test wyrm successfully Hides from a foe up to 50 feet off</p><hr /><p><strong>Effect</strong> The test wyrm teleports behind that foe.</p>", "free"), gm("state"));
+});
+
+test("a troop's Shove in a direction it picks, and maneuvers at each enemy around it marked foes (2026-10-12, batch 243)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions });
+    const repel = compile("The test crew chooses a single direction and smashes into its enemies to push them in that direction. The troop attempts one Athletics check to [[/act shove]] and compares the result to the Fortitude DC of all enemies that are adjacent to the troop and in the chosen direction. The direction can be straight or diagonal, and the GM determines which enemies can be affected. If at least one enemy was moved, the troop can Stride to follow as described in Shove; the troop can move any number of its segments when it does, and this Stride doesn't trigger reactions.");
+    assert.deepEqual([repel?.resolution?.check?.statistic, repel?.targeting?.area, repel?.notes?.length], ["athletics", { type: "emanation", value: 5, foes: true }, 2]);
+    assert.deepEqual(compile("The test duelist attempts an Intimidation check to Demoralize each enemy within 30 feet.")?.targeting?.area, { type: "emanation", value: 30, foes: true });
+    assert.deepEqual(compile("The test engine attempts to Trip all creatures in or adjacent to its space.")?.targeting?.area, { type: "emanation", value: 5 });
 });

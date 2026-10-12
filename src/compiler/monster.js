@@ -306,6 +306,29 @@ function auraPush(item, actor) {
     };
 }
 
+// A flight that throws creatures into the air (2026-10-12, batch 243, Typhoon Fling): "Flies up to half its Fly speed. All creatures the dragon
+// passes within 10 feet of must attempt a … Fortitude save or be blown 120 feet up in the air and then fall, taking fall damage as appropriate.
+// Creatures already airborne add their current height to the distance fallen." → Trample's targeting over one move, any size: a failed save
+// takes half the height as bludgeoning damage and lands Prone; a height already in the air, a note. null otherwise.
+function blownAloft(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const dc = Number(/@Check\[(?:type:)?fortitude\|dc:(\d+)/i.exec(html)?.[1]);
+    if (!dc) return null;
+    const plain = htmlToPlainText(html.replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "")).replace(/\s+/g, " ").trim().replace(/^Frequency [^.]+?\.? Effect /i, "");
+    const match = /^(?:The )?[^.]+? Flies up to half (?:its|their) Fly speed\. All creatures (?:the [\w' -]+?|it|they) pass(?:es)? within (\d+) feet of must attempt an? save or be blown (\d+) feet up in the air and then fall, taking fall damage as appropriate\. Creatures already airborne add their current height to the distance fallen\.$/i.exec(plain);
+    if (!match) return null;
+    const fall = Math.floor(Number(match[2]) / 2);
+    const thrown = { damage: { mode: "formulas", formulas: [{ formula: `${fall}[bludgeoning]` }], rollScope: "target" }, effects: [{ kind: "condition", slug: "prone", value: null, duration: null }] };
+    return {
+        ...base(item),
+        targeting: { target: "creatures whose space it moves through", range: null, area: null, trample: { size: "gargantuan", strides: 1 } },
+        trigger: { event: "use" },
+        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: thrown, criticalFailure: structuredClone(thrown) } },
+        notes: [`Creatures within ${match[1]} feet of its path; it Flies up to half its fly Speed.`, `A creature that fails falls ${match[2]} feet (plus any height it was already at: more damage, the GM's).`]
+    };
+}
+
 function trample(item, actor) {
     const html = item.system?.description?.value ?? "";
     const raw = inlineTags(html, "Check")[0];
@@ -3727,7 +3750,15 @@ function variedManeuver(item, basicActions = {}) {
     const proneOnly = /^Requirements? (?:The )?[^.]+? (?:is|are) adjacent to a Prone creature\.? Effect /i.test(plain);
     // (Batch 241, Down to Our Level: "Frequency once per round Effect …" — its frequency PF2e's; "all creatures in or adjacent to their space" — an
     // emanation of 5 feet.)
-    const told = plain.replace(/^Frequency once per (?:round|turn) Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? (?:is|are) adjacent to a Prone creature\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? must have two free hands or be wielding an? [\w' -]+?\.? Effect /i, "")
+    // (Batch 243, Repel Boarders!: "… chooses a single direction and smashes into its enemies to push them in that direction. The troop attempts one
+    // Athletics check to Shove and compares the result to the Fortitude DC of all enemies that are adjacent to the troop and in the chosen direction."
+    // — a Shove at each enemy beside it, the direction's the GM's; its Stride after, a note.)
+    let direction = false;
+    const told = plain.replace(/^Frequency once per (?:round|turn) Effect /i, "")
+        .replace(/^((?:The )?[^.]+?) chooses a single direction and smashes into its enemies to push them in that direction\. The troop attempts one Athletics check to Shove and compares the result to the Fortitude DC of all enemies that are adjacent to the troop and in the chosen direction\./i, (_all, who) => {
+            direction = true;
+            return `${who} attempts an Athletics check to Shove each enemy within 5 feet.`;
+        }).replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? (?:is|are) adjacent to a Prone creature\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? must have two free hands or be wielding an? [\w' -]+?\.? Effect /i, "")
         .replace(/\b(to Grapple) with a \+(\d) circumstance bonus\./i, "$1 a creature, with a +$2 circumstance bonus.")
         // (Batch 156: Telekinetic Interference's "The haunt attempts to Trip a living creature within 60 feet with a bonus of +8." — that modifier
         // of its own; living creatures only, a note.)
@@ -3841,6 +3872,11 @@ function variedManeuver(item, basicActions = {}) {
         }
         // (Batch 126: no penalty for an unshared language, however it's said; Demoralize's own immunity said again; one roll for all.)
         if (/^They roll one Athletics check and compare the result to the (?:Reflex|Fortitude) DC of each target\.$/i.test(sentence)) continue;
+        if (direction && /^The direction can be straight or diagonal, and the GM determines which enemies can be affected\.$/i.test(sentence)) continue;
+        if (direction && /^If at least one enemy was moved, the troop can Stride to follow as described in Shove; the troop can move any number of its segments when it does, and this Stride (?:doesn't|does not) trigger reactions\.$/i.test(sentence)) {
+            extra.push("If it moved at least one enemy, it can Stride after them (no reactions), moving any of its segments.");
+            continue;
+        }
         if (/^These checks take no penalty for not sharing a language\.$|^This Intimidation check (?:doesn't|does not) take the [–-]4 circumstance penalty for [^.]+? not speaking a language\.$|^As usual for Demoralize, affected (?:enemies|creatures) are then temporarily immune for 10 minutes\.$|^Roll once and apply the results? to all (?:creatures|targets)\.$/i.test(sentence)) continue;
         // (Batch 141: Condemn's "On a success, the target is Stunned with a value equal to its Frightened condition." — Stunned 1, or 2 on a critical
         // success (Demoralize's Frightened); Stampeding Shove's "If the Shove succeeds, the target takes 2d10 bludgeoning damage (double damage on a
@@ -3892,9 +3928,11 @@ function variedManeuver(item, basicActions = {}) {
     const radius = Number(first[8] ?? first[10]) || (/^all creatures in or adjacent to /i.test(first[6] ?? "") ? 5 : 0);
     const reach = Number(first[7]) || null;
     const many = first[11] ? { one: 1, two: 2, three: 3, four: 4 }[String(first[11]).toLowerCase()] ?? Number(first[11]) : null;
-    const targeting = radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius } } : many ? { ...plan.targeting, target: `up to ${many} creatures` } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
+    // (Batch 243: "each enemy", "all foes", "every opponent", "non-allied creatures" — its foes only, area.foes.)
+    const foes = /\b(?:enem(?:y|ies)|foes?|opponents?|non-allied)\b/i.test(first[6] ?? "");
+    const targeting = radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius, ...(foes ? { foes: true } : {}) } } : many ? { ...plan.targeting, target: `up to ${many} creatures` } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
     const immunity = immune ? readImmunity(html, [item.name]) : null;
-    const notes = [...(proneOnly ? ["Only at a Prone creature beside it."] : []), ...(first[9] ? ["Only creatures that can hear it but not see it."] : []), ...extra, ...(first[13] ? [`Then it${first[13].replace(/^ and then/, "")}.`] : [])];
+    const notes = [...(proneOnly ? ["Only at a Prone creature beside it."] : []), ...(direction ? ["Only the enemies beside it in one direction it chooses, straight or diagonal (the GM's)."] : []), ...(first[9] ? ["Only creatures that can hear it but not see it."] : []), ...extra, ...(first[13] ? [`Then it${first[13].replace(/^ and then/, "")}.`] : [])];
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}), ...(proneOnly ? { requires: "requirement" } : {}) };
 }
 
@@ -4497,7 +4535,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (slug === "stench") return stench(item);
     if (slug === "swallow-whole") return swallowWhole(item);
     if (slug === "trample") return trample(item, actor);
-    const march = inexorableMarch(item, actor) ?? auraPush(item, actor);
+    const march = inexorableMarch(item, actor) ?? auraPush(item, actor) ?? blownAloft(item);
     if (march) return march;
     if (slug === "buck") return buck(item);
     if (/drink-blood|drink-essence/.test(slug ?? "") || /^Drink (?:Blood|Essence)$/i.test(item.name ?? "")) {

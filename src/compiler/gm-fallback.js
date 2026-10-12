@@ -58,7 +58,7 @@ const TRIGGER_UNSEEN = /\bwhile (?:it's |it is |they're |they are |he's |she's )
 // (Batch 240, Battlezoo: one of its own named creations doing it, a creature that refused its offer, one of its prey, a larger battle, an emotion effect
 // on it.)
 const TRIGGER_UNSEEN_DRAGONS = /\bone of (?:the [\w' -]+?['’]s|its|their) (?!Strikes\b)[A-Z][\w' -]+?s\b|\brefused (?:the [\w' -]+?['’]s|its|their) offer\b|\bone of (?:its|their) prey\b|\bunder the effect of a beneficial\b/;
-const TRIGGER_UNSEEN_MORE = /\bwhile (?:the [\w' -]+?|it|they) (?:is|are) [^.;]*?\busing [A-Z]|\bits victim\b|\bthe area of (?:the [\w' -]+?['’]s|its|their) [A-Z]|\bwhile (?:its|their|his|her) [A-Z][\w' -]+? is active\b|\bwhile [A-Z][a-z]+ing\b|\bhas (?:fewer|more) than \w+ (?:arms|heads|limbs|tentacles|legs)\b|\battached creature\b|\bcreature attached to\b|\bremoved from (?:the )?water\b|\bgains the broken condition\b|\blight source\b/;
+const TRIGGER_UNSEEN_MORE = /\bwhile (?:the [\w' -]+?|it|they) (?:is|are) [^.;]*?\busing [A-Z]|\bits victim\b|\bthe area of (?:the [\w' -]+?['’]s|its|their) [A-Z]|\bwhile (?:its|their|his|her) [A-Z][\w' -]+? is active\b|\bwhile [A-Z][a-z]+ing\b|\bhas (?:fewer|more) than \w+ (?:arms|heads|limbs|tentacles|legs)\b|\battached creature\b|\bcreature attached to\b|\bremoved from (?:the )?water\b|\bgains the broken condition\b|\blight source\b|\bsuccessfully Hides from\b/;
 // A requirement or an effect behind such a state too (batch 226): cover an animal ally gives it, a burrow hole nearby.
 // (Batch 228: a teleport to darkness far away as it drops — where it goes, the GM's.)
 // (Batch 238: a persona change; its aura moved to another place; an energy picked for its runes; a rider on its next action; a blessing of its own
@@ -90,6 +90,10 @@ export function gmFallback(item, options = {}) {
     if (magicTrigger && /\b(?:attempts? (?:a |to )?counteract|counteract check|attempts? to (?:dispel|unravel))\b/i.test(text) && !/\b(?:Unconscious|dying)\b|@Damage|\bdamage\b(?! type)|\bStrikes?\b|@Check\[(?:type:)?(?:fortitude|reflex|will)\b|\b(?:bonus|penalty|rerolls?|Concealed|Hidden|Invisible|Sickened|Frightened|Stunned|Slowed|Quickened|Clumsy|Enfeebled|Drained|Stupefied|Prone|Grabbed|Immobilized|Paralyzed|Fatigued)\b|\bcan be dispelled\b|\banyone else\b/i.test(text)) return { builtin: "no-effect" };
     // (Batch 228, Battlezoo: a sound illusion with no damage or save, at most a Perception check to see through it — narrative.)
     if (/\bcreates an auditory illusion\b/i.test(text) && !/@Damage|\bsave\b|@Check\[(?!(?:type:)?perception\b)/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
+    // (Batch 243: a requirement about a spell aimed at it last round (Reflexive Understanding) — a state the simulator doesn't keep; a boon offered for a
+    // directive until the creature's next daily preparations (Inspire Envoy), another creature's thoughts read (Thought Whispers) — out of combat.)
+    if (requirement && /\bwas targeted by a spell\b[^.]*?\bin the last round\b/i.test(requirement)) return { builtin: "no-effect", gm: "state" };
+    if (/\boffers? (?:their|its|his|her) [\w' -]+? blessing in exchange for\b[^.]*\bdirective\b/i.test(text) || /\bseek (?:others['’]|other creatures['’]) thoughts\b[^.]*\bwith mind reading\b/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
     if (/\b(?:has|have) no effect (?:outside(?: of)?|out of) (?:the )?water\b|\bonly (?:works|functions) underwater\b/i.test(text)) return { builtin: "no-effect", gm: "state" };
     const traits = item.system?.traits?.value ?? [];
