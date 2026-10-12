@@ -995,6 +995,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 (activity.notes ??= []).push("It's Off-Guard until the start of its next turn.");
                 return "[told]";
             })
+            // (Batch 142, Create Boulder: "… molds a boulder from primal earth and throws it as a rock Strike. A creature hit by the Strike must
+            // succeed at a … save or be knocked Prone.")
+            .replace(/^((?:The )?[^.]+?) (?:[a-z]+s [^.]*? and )?throws it as an? ([\w' -]+?) Strike(?=\.$)/i, "$1 makes a $2 Strike")
+            .replace(/^A creature hit by the Strike must succeed at /i, "If it hits, the target must succeed at ")
             // (Batch 139: Skewer's "Strikes with its rapier, and gains a +1 circumstance bonus to the attack roll" and "A creature damaged by the
             // attack takes 1d6 bleed"; Big Swing's "The target is Pushed up to 10 feet on a hit or up to 20 feet on a critical hit" and its
             // collision (the GM's).)
@@ -1336,7 +1340,31 @@ function readsTrigger(item) {
     return Boolean(text && /\bEffect\b/.test(plain));
 }
 
+// (Batch 142, Roar: "… must succeed at a … save or become Frightened 2 (Frightened 3 on a critical failure, Frightened 1 on a success, or
+// unaffected on a critical success)." — each degree's own, written out as PF2e's sections at the end; null when it isn't said so.)
+function degreeListHtml(html) {
+    const part = String.raw`(?:@UUID\[[^\]]*\]\{[^}]*\}|[^,().<])+?`;
+    const match = new RegExp(String.raw`(must) succeed at (?:a|an) (@Check\[[^\]]*\](?:\{[^}]*\})?) save or become (${part}) \((${part}) on a critical failure, (${part}) on a success, or unaffected on a critical success\)\.`, "i").exec(String(html));
+    if (!match) return null;
+    const [whole, must, check, failure, critical, success] = match;
+    const sections = [["Critical Success", "unaffected"], ["Success", success], ["Failure", failure], ["Critical Failure", critical]].map(([label, result]) => `<p><strong>${label}</strong> The creature is ${result.trim()}.</p>`).join("");
+    // ("Other creatures within 100 feet" with no template: that emanation.)
+    return `${String(html).replace(whole, `${must} attempt a ${check} save.`).replace(/\b(Other creatures within) (\d+) feet(?= must\b)/i, "$1 @Template[emanation|distance:$2]{$2 feet}")}${sections}`;
+}
+
 function inlineSave(item, actor = null, { afterHit = false } = {}) {
+    // (Batch 142: degrees listed in brackets, as sections.)
+    const listed = degreeListHtml(item.system?.description?.value ?? "");
+    if (listed) return inlineSave(withDescription(item, listed), actor, { afterHit });
+    // (Batch 142, Eye Beams: "2d6 cold or 2d6 fire damage" — one roll, its type the monster's pick: PF2e's caster choice, a GM button live, the
+    // simulator's best.)
+    const typed = /(@Damage\[(\d+d\d+(?:[+-]\d+)?)\[(\w+)\](?:\|[^\]]*)?\](?:\{[^}]*\})?) or @Damage\[\2\[(\w+)\](?:\|[^\]]*)?\](?:\{[^}]*\})?/.exec(item.system?.description?.value ?? "");
+    // (Only one such pair, for a basic save's damage; results by degree with their own pairs (Agonizing Overload, Boomstrike) read as before.)
+    const pairs = String(item.system?.description?.value ?? "").match(/@Damage\[[^\]]*\[\w+\][^\]]*\](?:\{[^}]*\})? or @Damage\[/g) ?? [];
+    if (typed && typed[3] !== typed[4] && pairs.length === 1) {
+        const plan = inlineSave(withDescription(item, String(item.system.description.value).replace(typed[0], typed[1])), actor, { afterHit });
+        if (plan?.resolution?.kind === "save" && plan.resolution.check?.basic && plan.resolution.sharedDamage?.components?.length) return { ...plan, resolution: { ...plan.resolution, casterChoice: { kind: "damage-type", label: "Damage type", values: [typed[3].toLowerCase(), typed[4].toLowerCase()] } } };
+    }
     const html = item.system?.description?.value ?? "";
     const checks = inlineTags(html, "Check").map(readCheck).filter((check) => check.save && check.dc);
     if (!checks.length) return null;

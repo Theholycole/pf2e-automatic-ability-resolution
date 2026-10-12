@@ -1422,3 +1422,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Condemn → PF2e's Demoralize with Stunned 1 on a success and Stunned 2 on a critical success; Stampeding Shove → PF2e's Shove with `2d10[bludgeoning]` on a success and `2*2d10[bludgeoning]` on a critical success; Strangle → PF2e's Grapple at +2 with `(1d6+6)[bludgeoning]` on its successes; Into the Fray and Shielded Advance → `approach: { strides: 1 }` with their notes (Shielded Advance `requires: "requirement"`).
 - **Live:** no new live code: their cards are the maneuver cards of batches 125 and 134, the notes on them.
 - **Simulator:** the doubled formula ("2*2d10") resolves as twice the roll (B141).
+
+## A damage type of its choosing; degrees listed in brackets (2026-10-12, batch 142)
+
+- **Compiled:** Eye Beams → a basic Reflex save with one damage component (`2d6[cold]`) and `resolution.casterChoice: { kind: "damage-type", values: ["cold", "fire"] }`; Roar → its four degrees as sections (Frightened 1, 2, 3; nothing on a critical success) in a 100-foot emanation, with its immunity; Create Boulder → a rock Strike activity with its Reflex save against Prone.
+- **Live:** a card whose plan has that damage-type choice shows "Damage type:" buttons (the first chosen at first; GM only) and, applied, "As fire damage" with the damage rolled as that type; checked in pftest (Eye Beams: fire picked, "2d6 fire" rolled).
+- **Simulator:** PF2e's caster choice answered by the type that does the most to the targets after their weaknesses and resistances (B142).

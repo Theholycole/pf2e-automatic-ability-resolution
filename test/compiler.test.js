@@ -2657,3 +2657,15 @@ test("maneuvers in their own words with more on a success; a Stride and a maneuv
     const advance = action("<p><strong>Requirements</strong> The test sergeant has their shield raised</p><hr /><p><strong>Effect</strong> The test sergeant pushes ahead behind the shield. The test sergeant Strides and [[/act shove]]{Shoves}, in either order. The multiple attack penalty doesn't apply to this Shove, though the Shove does count toward the test sergeant's multiple attack penalty.</p>");
     assert.deepEqual([advance.approach, advance.requires], [{ strides: 1 }, "requirement"]);
 });
+
+test("degrees listed in brackets, a damage type of its choosing, a thrown rock that knocks down (2026-10-12, batch 142)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const action = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const roar = action("<p>The test beast bellows. Other creatures within 60 feet must succeed at a @Check[will|dc:20] save or become Frightened 2 (Frightened 3 on a critical failure, Frightened 1 on a success, or unaffected on a critical success).</p><p>No matter the result, the creature is temporarily immune to the effect for 1 minute.</p>");
+    const rows = roar.resolution.outcomes;
+    assert.deepEqual([roar.targeting.area, rows.criticalSuccess.effects.length, rows.success.effects[0].value, rows.failure.effects[0].value, rows.criticalFailure.effects[0].value, Boolean(roar.trigger.immunity)], [{ type: "emanation", value: 60 }, 0, 1, 2, 3, true]);
+    const beams = action("<p>The test eye glares, dealing @Damage[3d6[acid]|options:area-damage]{acid} or @Damage[3d6[electricity]|options:area-damage]{electricity} damage (@Check[reflex|dc:20|basic|options:area-effect] save) to all creatures in a @Template[line|distance:30].</p>", 2);
+    assert.deepEqual([beams.resolution.casterChoice, beams.resolution.sharedDamage.components.map((component) => component.formula)], [{ kind: "damage-type", label: "Damage type", values: ["acid", "electricity"] }, ["3d6[acid]"]]);
+    const boulder = action("<p>The test giant pries up a stone and throws it as a rock Strike. A creature hit by the Strike must succeed at a @Check[reflex|dc:24] save or be knocked Prone.</p>");
+    assert.deepEqual([boulder.builtin, boulder.strike, boulder.onHit.save.resolution.check.statistic], ["strike-activity", "rock", "reflex"]);
+});

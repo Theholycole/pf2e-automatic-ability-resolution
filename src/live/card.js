@@ -196,7 +196,13 @@ export function cardHTML(state) {
     const actions = !counts.length ? ""
         : state.status === "open" ? `<p class="aar-actions">Actions spent: ${counts.map((count) => `<button type="button" data-aar-action="actions" data-actions="${count}" data-gm-only="true"${count === state.actions ? ' class="aar-chosen" disabled' : ""}>${count}</button>`).join("")}</p>`
         : `<p class="aar-actions">With ${escape(state.actions ?? counts[0])} action${(state.actions ?? counts[0]) === 1 ? "" : "s"}</p>`;
-    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong>${rider}<span class="aar-check">${escape(checkLine(state))}</span></header>${warning}${actions}${empty}<ul class="aar-targets">${rows}</ul>${results}${controls}</section>`;
+    // (Batch 142, Eye Beams: a damage type of the monster's choosing — the GM's pick while the card is open, the first at first.)
+    const types = state.plan?.resolution?.casterChoice?.kind === "damage-type" ? state.plan.resolution.casterChoice.values ?? [] : [];
+    const chosenType = state.damageType ?? types[0];
+    const typePicker = !types.length ? ""
+        : state.status === "open" ? `<p class="aar-actions">Damage type: ${types.map((type) => `<button type="button" data-aar-action="damage-type" data-type="${escape(type)}" data-gm-only="true"${type === chosenType ? ' class="aar-chosen" disabled' : ""}>${escape(type)}</button>`).join("")}</p>`
+        : `<p class="aar-actions">As ${escape(chosenType)} damage</p>`;
+    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong>${rider}<span class="aar-check">${escape(checkLine(state))}</span></header>${warning}${actions}${typePicker}${empty}<ul class="aar-targets">${rows}</ul>${results}${controls}</section>`;
 }
 
 // An effect card: the effect, who gets it, the targets (allies marked), Apply.

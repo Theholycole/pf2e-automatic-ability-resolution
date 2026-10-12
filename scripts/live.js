@@ -848,6 +848,12 @@ async function press(message, action, targetId, data = {}) {
     if (!game.user.isGM) throw new Error("Only the GM can use this control.");
     if (action === "mode") return chooseMode(message, state, Number(data.mode));
     if (action === "cast") return castFromCard(message, state, data);
+    // (Batch 142: the damage type the monster picks.)
+    if (action === "damage-type") {
+        if (state.status !== "open") return null;
+        const next = { ...state, damageType: String(data.type) };
+        return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    }
     // Damage by the number of actions: the count the monster spent.
     if (action === "actions") {
         if (state.status !== "open") return null;
@@ -931,7 +937,9 @@ async function applyCard(message) {
             const roll = await new Roll(formula).evaluate();
             rolled.push(`${formula}${instance.type ? ` ${instance.type}` : ""} = ${roll.total}`);
             return roll.total;
-        }
+        },
+        // (Batch 142: the GM's damage type on the card.)
+        choose: (decision) => (decision?.id === "caster-choice:damage-type" ? state.damageType ?? undefined : undefined)
     };
     const result = await core.registry.resolve(state.plan, context, io);
     const lines = rolled.map((line) => `Damage rolled: ${line}`);
