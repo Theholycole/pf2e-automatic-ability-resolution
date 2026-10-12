@@ -216,7 +216,7 @@ async function cardForAbility(message) {
     // More damage on its own Strikes for a while (batch 37, Vocal Warm-Up): an effect on the monster with that damage, for its time;
     // not when the ability links PF2e's own effect (its card offers that).
     // (Batch 39: a bonus to its AC for a while, Dueling Parry; a plan with its own time only, not a rage's, whose PF2e effect is linked.)
-    if (plan?.builtin === "self-effect" && plan.duration && (plan.damage?.length || plan.model?.modifiers?.length) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+    if (plan?.builtin === "self-effect" && plan.duration && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
         await strikeBuff(item, plan, sourceToken);
         if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
         return;

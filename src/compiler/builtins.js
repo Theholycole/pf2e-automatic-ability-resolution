@@ -2046,6 +2046,9 @@ export function readReaction(item, text) {
     if (/^(?:The )?[^.]+? is reduced below \d+ (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? collapses\. (?:It|They|He|She) (?:is|are) Off-Guard and can use actions that require only (?:its|their|his|her) mind, but any other action ends the ruse\./i.test(effect.trim())) return { builtin: "no-effect" };
     // Mist Escape (batch 40): at 0 Hit Points it goes to its coffin as mist: out of the fight, as the simulation already has it.
     if (/^(?:The )?[^.]+? is reduced to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? uses Turn to Mist\. [^.]*\bcoffin\b/i.test(effect.trim())) return { builtin: "no-effect" };
+    // (Batch 196, Dying Wish: "The dragon wishes to survive by any means necessary. The dragon is instead reduced to 1 Hit Point and teleports up to 10
+    // miles away." — out of the fight as well, at 1 HP.)
+    if (/^(?:The )?[^.]+? is reduced to 0 (?:HP|Hit Points)\.?$/i.test(trigger.trim()) && /^(?:[^.]+\. )?(?:The )?[^.]+? is instead reduced to 1 (?:HP|Hit Point) and teleports up to \d+ miles away\.$/i.test(effect.trim().replace(/\s*Effect: [^.]+$/i, ""))) return { builtin: "no-effect" };
     const ac = (item?.system?.rules ?? []).find((rule) => rule?.key === "FlatModifier" && [].concat(rule.selector).includes("ac") && Number.isFinite(Number(rule.value)));
     // (Batch 122: "a +2 circumstance bonus to their Armor Class against the triggering attack" too.)
     if (ac && /\b(?:AC|Armor Class) against the triggering attack\b/i.test(effect) && /\b(?:targets?|targeted|is hit|critically hit)\b/i.test(trigger)) {
@@ -2715,6 +2718,72 @@ export function compileBuiltin(item, slug) {
     return null;
 }
 
+// Resistance on itself for a while (2026-10-12, batch 196) → { builtin: "self-effect", actions, model: { name, rounds, modifiers: [], tempHp,
+// resistances: [{ type, value, exceptions }], endsWithTempHp? }, duration, stance?, endsOnMove?, notes? }:
+// - "… encases themself in an shell of protective coral, gaining 80 temporary Hit Points and resistance 15 to piercing and slashing damage until
+//   the temporary Hit Points are depleted. The effect lasts for 1 minute, until destroyed, or until the dragon Dismisses the effect." (Reef Armor);
+// - "The joseung saja is incorporeal until the end of their next turn. While they're incorporeal, they have resistance 10 to all damage (except
+//   force, void, and ghost touch weapons)." (Shifting Form);
+// - "They gain resistance 5 to all damage (except mental and spirit) until they next take a move action." (Harden Chitin);
+// - "While Osseous Defense is active, the jitterbone … gains resistance 5 to piercing damage and slashing damage. …" (until it ends it);
+// - "It stays in this form for 3 rounds or until it Dismisses the effect. While in this form, the uthul gains resistance 10 to physical damage
+//   and can move through other creatures." (Whirlwind Form).
+const RESIST_TYPES = "acid|bludgeoning|cold|electricity|fire|force|mental|piercing|poison|slashing|sonic|spirit|void|vitality|physical|precision";
+function resistanceTypes(phrase) {
+    const words = String(phrase).toLowerCase().replace(/\bdamage\b/g, " ").replace(/\b(?:and|or)\b|,/g, " ").trim().split(/\s+/).filter(Boolean);
+    return words.length && words.every((word) => new RegExp(`^(?:${RESIST_TYPES})$`).test(word)) ? words : null;
+}
+function resistanceExceptions(phrase) {
+    const words = String(phrase).toLowerCase().replace(/\bweapons?\b/g, " ").split(/\s*(?:,|\band\b|\bor\b)\s*/).map((word) => word.trim().replace(/\s+/g, "-")).filter(Boolean);
+    return words.every((word) => new RegExp(`^(?:${RESIST_TYPES}|ghost-touch|non-magical)$`).test(word)) ? words : null;
+}
+function readSelfResistance(item, body) {
+    // (Osseous Defense's Strikes listed after it, "Melee bone spike +14 (finesse), Damage …": PF2e's own, on its sheet.)
+    const said = body.trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\s+(?:Melee|Ranged)\b[^.]*?\+\d+ \([^)]*\),? Damage\b[\s\S]*$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    const plan = (resistances, extra) => ({ builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: extra.rounds, modifiers: [], tempHp: extra.tempHp ?? 0, resistances, ...(extra.endsWithTempHp ? { endsWithTempHp: true } : {}) }, duration: extra.duration, ...(extra.stance ? { stance: true } : {}), ...(extra.endsOnMove ? { endsOnMove: true } : {}), ...(extra.notes?.length ? { notes: extra.notes } : {}) });
+    const told = (sentence) => !/\d|\b(?:damage|bonus|penalty|save|check|Strikes?|Hit Points|resistance|weakness)\b/i.test(sentence);
+    // Reef Armor.
+    let match = /^(?:The )?[^.]+?, gaining (\d+) temporary Hit Points and resistance (\d+) to ([a-z, ]+?) damage until the temporary Hit Points are depleted\.$/i.exec(said[0] ?? "");
+    if (match && said.length === 2 && resistanceTypes(match[3])) {
+        const minutes = /^The effect lasts for (\d+|1|one) minutes?, until destroyed, or until (?:the [\w' -]+?|it|they) Dismiss(?:es)? the effect\.$/i.exec(said[1])?.[1];
+        if (!minutes) return null;
+        const count = Number(minutes) || 1;
+        return plan(resistanceTypes(match[3]).map((type) => ({ type, value: Number(match[2]), exceptions: [] })), { rounds: 10 * count, tempHp: Number(match[1]), endsWithTempHp: true, duration: { value: count, unit: "minutes", expiry: null }, notes: ["It ends when the temporary Hit Points are gone."] });
+    }
+    // Shifting Form.
+    match = /^(?:The )?[^.]+? is incorporeal until the (end|start) of (?:its|their|his|her) next turn\.$/i.exec(said[0] ?? "");
+    const ghostly = match ? /^While (?:it's|they're|it is|they are) incorporeal, (?:it has|they have) resistance (\d+) to all damage \(except ([^)]+)\)\.$/i.exec(said[1] ?? "") : null;
+    if (ghostly && said.length === 2 && resistanceExceptions(ghostly[2])) {
+        const end = /end/i.test(match[1]);
+        return plan([{ type: "all-damage", value: Number(ghostly[1]), exceptions: resistanceExceptions(ghostly[2]) }], { rounds: end ? 2 : 1, duration: { value: 1, unit: "rounds", expiry: end ? "turn-end" : "turn-start" }, notes: ["It's incorporeal for that time."] });
+    }
+    // Harden Chitin.
+    const last = said.at(-1) ?? "";
+    match = /^(?:The [\w' -]+?|It|They|He|She) gains? resistance (\d+) to all damage \(except ([^)]+)\) until (?:it|they|he|she) next takes? a move action\.$/i.exec(last);
+    if (match && said.slice(0, -1).every(told) && resistanceExceptions(match[2])) {
+        return plan([{ type: "all-damage", value: Number(match[1]), exceptions: resistanceExceptions(match[2]) }], { rounds: null, stance: true, endsOnMove: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: ["It ends when it next takes a move action."] });
+    }
+    // Osseous Defense.
+    const active = said.findIndex((sentence) => /^While [\w' -]+? is active, (?:the [\w' -]+?|it|they) (?:can make [^.]+? Strikes and )?gains? resistance (\d+) to ([a-z, ]+?(?: damage and [a-z]+)?) damage\.$/i.test(sentence));
+    if (active >= 0) {
+        const found = /gains? resistance (\d+) to ([a-z, ]+?(?: damage and [a-z]+)?) damage\.$/i.exec(said[active]);
+        const types = resistanceTypes(found[2]);
+        const ends = said.slice(active + 1).every((sentence) => /^(?:The [\w' -]+?|It|They) loses [A-Z][\w' -]+? while (?:its|their) [\w' -]+? is active\.$|^(?:The [\w' -]+?|It|They) can end [\w' -]+? as a single action\b[^.]*\.$/i.test(sentence));
+        if (types && ends && said.slice(0, active).every(told)) {
+            const notes = [/can make ([^.]+?) Strikes/i.exec(said[active])?.[1] ? `While it lasts it can make ${/can make ([^.]+?) Strikes/i.exec(said[active])[1]} Strikes.` : null, ...said.slice(active + 1)].filter(Boolean);
+            return plan(types.map((type) => ({ type, value: Number(found[1]), exceptions: [] })), { rounds: null, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes });
+        }
+    }
+    // Whirlwind Form.
+    const form = said.findIndex((sentence) => /^(?:It|They|The [\w' -]+?) stays? in this form for (\d+) rounds or until (?:it|they) Dismiss(?:es)? the effect\.$/i.test(sentence));
+    const gains = form >= 0 ? /^While in this form, (?:the [\w' -]+?|it|they) gains? resistance (\d+) to ([a-z, ]+?) damage(?: and (can move through other creatures))?\.$/i.exec(said[form + 1] ?? "") : null;
+    if (gains && said.length === form + 2 && said.slice(0, form).every((sentence) => !/\d+ (?:damage|bonus|penalty)|@/i.test(sentence)) && resistanceTypes(gains[2])) {
+        const rounds = Number(/for (\d+) rounds/i.exec(said[form])[1]);
+        return plan(resistanceTypes(gains[2]).map((type) => ({ type, value: Number(gains[1]), exceptions: [] })), { rounds, duration: { value: rounds, unit: "rounds", expiry: "turn-start" }, notes: gains[3] ? ["It can move through other creatures."] : [] });
+    }
+    return null;
+}
+
 // A bonus to its own AC for a while (2026-10-10, batch 39): "He gains a +2 circumstance bonus to AC until the start of his next turn"
 // (Dueling Parry), "They gain a +1 circumstance bonus to AC until the start of their next turn" (Hydraulic Deflection), "Until the start
 // of its next turn, it gains a +2 circumstance bonus to AC, and when an adjacent creature touches it … takes 2d6 persistent fire
@@ -2754,6 +2823,8 @@ export function readSelfGuard(item) {
     if (spinning) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(spinning[1]) }, { on: "reflex", type: "circumstance", value: Number(spinning[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, ...(spinning[2] ? { notes: [`While it lasts, its Reactive Strike deals ${spinning[2]} more damage.`] } : {}) };
     const shields = /^(?:The )?[^.]+? raises? (?:their|its) shields?(?: in tandem)?, gaining an? \+(\d) circumstance bonus to AC and Reflex saves\.$/i.exec(body.trim());
     if (shields) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(shields[1]) }, { on: "reflex", type: "circumstance", value: Number(shields[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" } };
+    const resisting = readSelfResistance(item, body);
+    if (resisting) return resisting;
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/);
     const until = String.raw`until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn`;
     const gains = new RegExp(String.raw`^(?:(?:Until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn), )?(?:The [\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?) gains? an? \+(\d+) (circumstance|status) bonus to (?:its |their |his |her )?AC(?: ${until})?((?:, or an? \+\d+ circumstance bonus if [^.,]+)?(?:,? (?:as long as|but loses this bonus if) [^.]+)?(?:, and [^.]+)?)\.$`, "i");
@@ -3043,7 +3114,12 @@ function readNoCombatEffect(text) {
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
     // (Batch 192, Aquatic Drag: "Requirements The platecarpus has a creature Grabbed Effect The platecarpus Swims up to half its Speed, carrying the
     // grabbed creature with it." — a move, the creature it holds along.)
-    if (/^Requirements? (?:The )?[^.]+? has a creature Grabbed\.? Effect (?:The )?[^.]+? (?:Swims|Strides|Flies|Burrows) up to half (?:its|their) Speed, carrying the grabbed creature with (?:it|them)\.$/i.test(said)) return true;
+    // (Batch 196, a giant ant's: "has a Large or smaller creature Grabbed …, carrying the grabbed creature with it. It is Encumbered if the grabbed
+    // creature is Medium or larger.")
+    if (/^Requirements? (?:The )?[^.]+? has an? (?:[A-Z][a-z]+ or smaller )?creature Grabbed\.? Effect (?:The )?[^.]+? (?:Swims|Strides|Flies|Burrows) up to (?:half|(?:its|their) full) (?:its |their )?Speed, carrying the grabbed creature with (?:it|them)\.(?: (?:It is|They are) Encumbered if the grabbed creature is [A-Z][a-z]+ or larger\.)?$/i.test(said)) return true;
+    // (Batch 196, Haul Away: "Requirements The giant ant army has at least one creature Restrained Effect The army Strides up to its Speed, carrying any
+    // restrained creatures with it. If the creature is Gargantuan, the giant ant army is Encumbered.")
+    if (/^Requirements? (?:The )?[^.]+? has at least one creature Restrained\.? Effect (?:The )?[^.]+? (?:Swims|Strides|Flies|Burrows) up to (?:its|their) Speed, carrying any restrained creatures with (?:it|them)\.(?: If the creature is Gargantuan, (?:the )?[^.]+? is Encumbered\.)?$/i.test(said)) return true;
     // (Batch 191: allies' Steps only — Bark Orders' "Any allies who hear and understand this order can use a reaction to Step.", Encircling Command's
     // "Each caligni skulker within 30 feet of the skulker can Step. Each skulker can benefit from Encircling Command only once per round." — no change
     // to a fight's numbers.)

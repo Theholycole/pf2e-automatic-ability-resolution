@@ -38,17 +38,22 @@ const modifierRule = (modifier, label) => (MODIFIER_SELECTORS[modifier.on] ? { k
 // ability's own switch, when PF2e gives it one ([{ domain, option }] from its toggleable RollOption rules, batch 39: Hydraulic
 // Deflection's "hydraulic-deflection", whose FlatModifier waits on it): the effect turns that on instead, for its time.
 export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null, toggles = [] } = {}) {
-    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length)) return null;
+    // (Batch 196: resistance and temporary Hit Points on itself too — Reef Armor, Shifting Form, Harden Chitin.)
+    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp)) return null;
     const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
     if (plan.damage?.length && !toggles.length && !selector) return null;
     const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
-        : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name))];
+        : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name)),
+            ...(plan.model?.resistances ?? []).map((entry) => ({ key: "Resistance", type: entry.type, value: Number(entry.value), ...(entry.exceptions?.length ? { exceptions: [...entry.exceptions] } : {}) })),
+            ...(plan.model?.tempHp ? [{ key: "TempHP", value: Number(plan.model.tempHp) }] : [])];
     if (rules.some((rule) => !rule)) return null;
     const duration = plan.duration ?? { value: -1, unit: "unlimited", expiry: null };
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
     const which = plan.strike ? `its ${plan.strike} Strikes` : plan.melee ? "its melee Strikes" : "its Strikes";
     const notes = (plan.notes ?? []).map((note) => `<p>${escape(note)}</p>`).join("");
-    const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " "))].filter(Boolean).join(" ");
+    const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " ")),
+        ...(plan.model?.resistances ?? []).map((entry) => `Resistance ${entry.value} to ${entry.type.replace(/-/g, " ")}${entry.exceptions?.length ? ` (except ${entry.exceptions.join(", ").replace(/-/g, " ")})` : ""}.`),
+        plan.model?.tempHp ? `${plan.model.tempHp} temporary Hit Points.` : null].filter(Boolean).join(" ");
     return {
         name,
         type: "effect",

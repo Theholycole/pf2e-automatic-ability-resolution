@@ -45,6 +45,8 @@ export function gmFallback(item, options = {}) {
     const text = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
     const requirement = /\bRequirements? (.+?)(?= (?:Effect|Trigger|Frequency) |$)/.exec(text)?.[1] ?? null;
     if (requirement && UNSEEN.some((pattern) => pattern.test(requirement))) return { builtin: "no-effect", gm: "state" };
+    // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
+    if (/\b(?:has|have) no effect (?:outside(?: of)?|out of) (?:the )?water\b|\bonly (?:works|functions) underwater\b/i.test(text)) return { builtin: "no-effect", gm: "state" };
     const traits = item.system?.traits?.value ?? [];
     if (traits.includes("exploration") || traits.includes("downtime") || (!COMBAT.test(text) && OUT_OF_COMBAT.test(text))) return { builtin: "no-effect", gm: "out-of-combat" };
     if (isAdventurePack(sourcePack(options.actor ?? item.actor ?? item.parent, options))) return { builtin: "no-effect", gm: "adventure" };

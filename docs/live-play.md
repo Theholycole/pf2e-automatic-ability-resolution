@@ -1718,3 +1718,18 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
     - Seelah's Lay on Hands card, posted near it, brought the Siphon Life offer. Use rolled 3d8 (16) and gave it 16 temporary HP. In the same round, with its reaction already spent on Reawaken!, it had brought no offer, as it should.
 - **Simulator:** see B195 in its ability decisions.
 
+## Resistance on itself; a condition unless it saves (2026-10-12, batch 196)
+
+- **Compiled:**
+  - Self-buffs with resistance → `self-effect` with `model.resistances` (`{ type, value, exceptions }`):
+    - Reef Armor: with `tempHp` and `endsWithTempHp`, for 1 minute;
+    - Shifting Form: all damage except force, void and ghost touch, to the end of its next turn, with a note that it's incorporeal;
+    - Harden Chitin: a stance ending when it moves;
+    - Osseous Defense: a stance; its Strike lines after the text are PF2e's own, on its sheet.
+  - Gales of Laughter → a Will save: on a failure, Deafened for 1 round and the persistent damage. "Deafening it … and causing … damage unless it succeeds" is read as "becomes Deafened … and takes … damage".
+  - Dying Wish → `no-effect`: back at 1 HP miles away, out of the fight as Mist Escape is.
+  - Haul Away and a giant ant's carry → `no-effect`: a move with what it holds.
+  - Ink Cloud → `{ builtin: "no-effect", gm: "state" }`: "no effect outside water" is where it is, which the simulator can't see.
+- **Live:** Use puts an effect on the monster with PF2e's Resistance rules (exceptions kept) and a TempHP rule, for the plan's time. The effect's text says what it gives and when it ends. Osseous Defense instead turns on its own PF2e switch, which holds its resistance and Strikes. Not run in pftest: the same path as batch 39's AC bonuses.
+- **Simulator:** see B196 in its ability decisions.
+

@@ -3221,3 +3221,18 @@ test("a creature that dies brought back; a foe's healing at its least (2026-10-1
     const siphon = compileMonsterAbility(item("<p><strong>Trigger</strong> A creature within 30 feet uses a healing effect that restores Hit Points</p><hr /><p><strong>Effect</strong> The test phoenix drinks the warmth away. The triggering effect results in the minimum amount on any dice rolls to restore Hit Points, and any flat values for restoring Hit Points are cut in half. The test phoenix then gains 2d8 temporary Hit Points that last for 1 round.</p>"), {});
     assert.deepEqual(siphon, { builtin: "heal-siphon", within: 30, tempHp: "2d8", tempRounds: 1 });
 });
+
+test("a condition and persistent damage unless it saves; resistance on itself; out of the fight at 1 HP; a carry; water only (2026-10-12, batch 196)", () => {
+    const item = (type, html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const gales = compileMonsterAbility(item("action", "<p>The test sphinx howls at one foe, Deafening it for 1 round and causing @Damage[4d4[persistent,sonic]] damage unless it succeeds on a @Check[will|dc:30] save.</p>"), {});
+    assert.deepEqual([gales.resolution.outcomes.success.effects.length, gales.resolution.outcomes.failure.effects[0].slug, gales.resolution.outcomes.failure.damage.formulas[0].formula], [0, "deafened", "4d4[persistent,sonic]"]);
+    const shell = compileMonsterAbility(item("action", "<p>The test turtle grows a shell of stone, gaining 30 temporary Hit Points and resistance 5 to bludgeoning damage until the temporary Hit Points are depleted. The effect lasts for 1 minute, until destroyed, or until the test turtle Dismisses the effect.</p>", 2), {});
+    assert.deepEqual([shell.model.tempHp, shell.model.resistances, shell.model.endsWithTempHp, shell.model.rounds], [30, [{ type: "bludgeoning", value: 5, exceptions: [] }], true, 10]);
+    const ghost = compileMonsterAbility(item("action", "<p>The test shade is incorporeal until the end of its next turn. While it's incorporeal, it has resistance 8 to all damage (except force and ghost touch weapons).</p>"), {});
+    assert.deepEqual([ghost.model.resistances[0].exceptions, ghost.duration.expiry], [["force", "ghost-touch"], "turn-end"]);
+    const chitin = compileMonsterAbility(item("action", "<p>The test beetle locks its plates. It gains resistance 3 to all damage (except mental) until it next takes a move action.</p>"), {});
+    assert.deepEqual([chitin.stance, chitin.endsOnMove, chitin.model.resistances[0].value], [true, true, 3]);
+    assert.deepEqual(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test genie is reduced to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test genie refuses to fall. The test genie is instead reduced to 1 Hit Point and teleports up to 5 miles away.</p>"), {}), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("action", "<p><strong>Requirements</strong> The test beetle has a Medium or smaller creature Grabbed</p><hr /><p><strong>Effect</strong> The test beetle Strides up to its full Speed, carrying the grabbed creature with it. It is Encumbered if the grabbed creature is Huge or larger.</p>"), {}), { builtin: "no-effect" });
+    assert.deepEqual(compileMonsterAbility(item("action", "<p>The test squid squirts a @Template[type:emanation|distance:10] of ink. The ink has no effect outside of water. Creatures inside it are Undetected.</p>"), {}), { builtin: "no-effect", gm: "state" });
+});

@@ -507,7 +507,12 @@ function proseOutcomes(html, { criticalOnly = false } = {}) {
 const TARGET_WORDS = /\b(?:creatures?|targets?|enem(?:y|ies)|foes?|victims?|each|all|any|anyone|those|characters?|PCs?|riders?|attackers?|triggering|ally|allies|living|someone)\b/i;
 
 // "X unless it succeeds at a @Check[…] save (Y on a critical failure)" → "becomes X (Y on a critical failure)", or null.
+// (Batch 196, Gales of Laughter: "…, Deafening it for 1 round and causing @Damage[10d4[persistent,mental]] damage unless it succeeds on a … save." →
+// "becomes Deafened for 1 round and takes @Damage[…] damage".)
+const ING_CONDITIONS = { blinding: "Blinded", deafening: "Deafened", dazzling: "Dazzled", frightening: "Frightened", sickening: "Sickened", stunning: "Stunned", slowing: "Slowed" };
 function unlessClause(sentence) {
+    const ing = /(?:@UUID\[[^\]]*\]\{)?\b(Blinding|Deafening|Dazzling)\}? it( for \d+ rounds?)? and causing (@Damage\[(?:[^[\]]|\[[^\]]*\])*\]) damage unless (?:it|they|the (?:creature|target)) succeeds? (?:at|on) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save)\.?\s*$/i.exec(sentence);
+    if (ing) return `becomes ${ING_CONDITIONS[ing[1].toLowerCase()]}${ing[2] ?? ""} and takes ${ing[3]} damage`;
     const match = /\b(becomes?|is|are|falls?|takes?) (.+?) unless (?:it|they|the (?:creature|target)) succeeds? (?:at|on) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save)(.*)$/i.exec(sentence);
     // ("takes 1d6 piercing damage unless it succeeds at a … save": the damage, 2026-10-10.)
     return match ? `${/^takes?$/i.test(match[1]) ? "takes" : "becomes"} ${match[2]}${/^\s*\(/.test(match[3]) ? ` ${match[3].trim()}` : ""}` : null;

@@ -179,6 +179,13 @@ test("what a resistance reaction leaves on the monster: the resistance for a whi
     assert.deepEqual(resistEffects(divert, { name: "Test Divert" }), []);
 });
 
+test("a resistance and temporary Hit Points on itself as PF2e's rules (2026-10-12, batch 196)", () => {
+    const plan = { builtin: "self-effect", actions: 2, model: { name: "Test Shell", rounds: 10, modifiers: [], tempHp: 30, resistances: [{ type: "all-damage", value: 5, exceptions: ["force"] }], endsWithTempHp: true }, duration: { value: 1, unit: "minutes", expiry: null }, notes: ["It ends when the temporary Hit Points are gone."] };
+    const data = strikeBuffEffect(plan, { name: "Test Shell" });
+    assert.deepEqual(data.system.rules, [{ key: "Resistance", type: "all-damage", value: 5, exceptions: ["force"] }, { key: "TempHP", value: 30 }]);
+    assert.match(data.system.description.value, /Resistance 5 to all damage \(except force\)\. 30 temporary Hit Points\./);
+});
+
 test("more damage on a creature already Prone (2026-10-11, batch 83)", () => {
     const stomp = { builtin: "strike-activity", source: { name: "Test Stomp" }, onHit: { conditions: [], damage: [], proneDamage: ["2d6[bleed]"] } };
     assert.equal(activityRider(stomp), null, "not on a creature standing");
