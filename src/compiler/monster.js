@@ -2502,8 +2502,24 @@ function variedManeuver(item, basicActions = {}) {
 function maneuverAfterMove(item, actor, basicActions = {}) {
     if (item.system?.actionType?.value !== "action") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase())).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim().replace(/(Grapple|Trip|Shove): Athletics\b/g, "$1");
-    const sentences = plain.split(/(?<=\.)\s+(?=[A-Z])/);
-    const first = /^(?:The )?[\w' -]+? (Strides twice|Strides up to (?:10|15|20) feet|Strides up to twice its (?:normal )?Speed(?: in a straight line)?|Leaps to a square adjacent to a creature),? (?:and )?(?:then )?(?:attempts to (Grapple|Trip|Shove) a creature(?: in its reach)?( that can't see them and doesn't know where they are| (?:they're|she's|he's|it's) [Uu]ndetected by)?|(Shoves) that creature)\.$/i.exec(sentences[0] ?? "");
+    // (Batch 135: Advancing Flourish's "Strides twice. If they end their movement within melee reach of an enemy, they can Feint."; Deceptive
+    // Reposition's "Strides up to half their Speed and attempts a Feint, in either order"; Aggressive Rush's "moves up to half its Speed. This
+    // movement doesn't trigger reactions. At the end of the movement, it attempts an Intimidation check to Demoralize a target within 5 feet of
+    // it."; Stop in the Name of the Law!'s "Strides twice and then Demoralizes".)
+    const extra = [];
+    const told = plain
+        .replace(/^((?:The )?[\w' -]+? Strides twice)\. If (?:they|he|she|it) ends? (?:their|his|her|its) movement within melee reach of an enemy, (?:they|he|she|it) can (Feint|Demoralize)\./i, "$1 and then attempts to $2 a creature.")
+        .replace(/^((?:The )?[\w' -]+? Strides up to half (?:its|their|his|her) Speed) and attempts a (Feint), in either order\./i, (_all, moves, act) => {
+            extra.push("It can Feint first and Stride after.");
+            return `${moves} and then attempts to ${act} a creature.`;
+        })
+        .replace(/^((?:The )?[\w' -]+?) moves up to half (its|their|his|her) Speed\. This movement (?:doesn't|does not) trigger reactions\. At the end of the movement, (?:it|they|he|she) attempts an Intimidation check to Demoralize a target within 5 feet of (?:it|them|him|her)\./i, (_all, who, owner) => {
+            extra.push("This movement doesn't trigger reactions.");
+            return `${who} Strides up to half ${owner} Speed and then attempts to Demoralize a creature.`;
+        })
+        .replace(/^((?:The )?[\w' -]+? Strides twice) and then Demoralizes\./i, "$1 and then attempts to Demoralize a creature.");
+    const sentences = told.split(/(?<=\.)\s+(?=[A-Z])/);
+    const first = /^(?:The )?[\w' -]+? (Strides twice|Strides up to (?:10|15|20) feet|Strides up to (?:twice|half) (?:its|their|his|her) (?:normal )?Speed(?: in a straight line)?|Leaps to a square adjacent to a creature),? (?:and )?(?:then )?(?:attempts to (Grapple|Trip|Shove|Feint|Demoralize) a creature(?: in its reach)?( that can't see them and doesn't know where they are| (?:they're|she's|he's|it's) [Uu]ndetected by)?|(Shoves) that creature)\.$/i.exec(sentences[0] ?? "");
     if (!first) return null;
     const slug = (first[2] ?? first[4]).toLowerCase().replace(/^shoves$/, "shove");
     const basic = basicActions[slug];
@@ -2511,7 +2527,9 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
     const plan = structuredClone(basic);
     const rows = plan.resolution.outcomes;
     const strides = /twice/i.test(first[1]) ? 2 : 1;
-    const notes = [`It ${/^Leaps/i.test(first[1]) ? "Leaps beside the creature" : `${first[1].replace(/^Strides/i, "Strides")}`} first: move its token.`];
+    // (How far, when less than a Stride: "up to 10 feet"; "up to half its Speed".)
+    const short = /up to (\d+) feet/i.exec(first[1])?.[1] ? { feet: Number(/up to (\d+) feet/i.exec(first[1])[1]) } : /\bhalf\b/i.test(first[1]) ? { half: true } : {};
+    const notes = [`It ${/^Leaps/i.test(first[1]) ? "Leaps beside the creature" : `${first[1].replace(/^Strides/i, "Strides")}`} first: move its token.`, ...extra];
     for (const sentence of sentences.slice(1)) {
         if (/^On a success, the target is also knocked Prone\.$/i.test(sentence)) {
             for (const degree of ["success", "criticalSuccess"]) rows[degree].effects = [...rows[degree].effects, { kind: "condition", slug: "prone", value: null, duration: null }];
@@ -2535,6 +2553,16 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
             rows.success = structuredClone(rows.criticalSuccess);
             continue;
         }
+        // (Aggressive Rush: no language penalty — the module has none; Stop in the Name of the Law!: Slowed as much as it's Frightened, while it is.)
+        if (/^This Intimidation check (?:doesn't|does not) take the [-\u2013]4 circumstance penalty for [^.]+? not speaking a language\.$/i.test(sentence)) continue;
+        if (slug === "demoralize" && /^On a success, the target is Slowed with a value equal to its Frightened value until it is no longer frightened\.$/i.test(sentence)) {
+            for (const degree of ["success", "criticalSuccess"]) {
+                const fear = rows[degree].effects.find((effect) => effect.slug === "frightened");
+                if (fear) rows[degree].effects = [...rows[degree].effects, { kind: "condition", slug: "slowed", value: fear.value, duration: null }];
+            }
+            notes.push("The Slowed lasts until it's no longer frightened.");
+            continue;
+        }
         if (/^If a creature falls Prone from this Trip, it takes @?[^.]*? damage for every 10 feet the [\w' -]+? moved\.$/i.test(sentence)) {
             notes.push(readableText(sentence));
             continue;
@@ -2543,7 +2571,7 @@ function maneuverAfterMove(item, actor, basicActions = {}) {
     }
     const unseen = Boolean(first[3]);
     if (unseen) notes.push("Only at a creature it's undetected by.");
-    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "1 creature", range: "touch" }, approach: { strides }, notes, ...(unseen ? { requires: "requirement" } : {}) };
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "1 creature", range: "touch" }, approach: { strides, ...short }, notes, ...(unseen ? { requires: "requirement" } : {}) };
 }
 
 // A Grapple as a reaction to damage of a type (2026-10-12, batch 132, Electric Reflexes): "Trigger The golem takes electricity damage and a

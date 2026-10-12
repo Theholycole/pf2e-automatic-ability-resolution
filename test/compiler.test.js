@@ -2540,3 +2540,16 @@ test("a move first, then a basic maneuver with what its successes add (2026-10-1
     const ambush = compile("The test lurker Strides up to 10 feet and attempts to Grapple a creature they're Undetected by. If they succeed, they also deal fist damage to that creature.", 1, actor);
     assert.deepEqual([ambush?.requires, ambush?.resolution?.outcomes?.success?.damage?.formulas], ["requirement", [{ formula: "(1d6+2)[bludgeoning]" }]]);
 });
+
+test("a move first, then a Feint or Demoralize (2026-10-12, batch 135)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions });
+    const flourish = compile("The test rogue Strides twice. If they end their movement within melee reach of an enemy, they can Feint.");
+    assert.deepEqual([flourish?.resolution?.check?.statistic, flourish?.approach], ["deception", { strides: 2 }]);
+    const shuffle = compile("The test spy Strides up to half their Speed and attempts a Feint, in either order.", 1);
+    assert.deepEqual([shuffle?.approach, shuffle?.notes?.length], [{ strides: 1, half: true }, 2]);
+    const rush = compile("The test wolf moves up to half its Speed. This movement doesn't trigger reactions. At the end of the movement, it attempts an Intimidation check to [[/act demoralize]] a target within 5 feet of it.", 1);
+    assert.equal(rush?.resolution?.check?.statistic, "intimidation");
+    const halt = compile("The test watchman Strides twice and then [[/act demoralize]]{Demoralizes}. On a success, the target is Slowed with a value equal to its Frightened value until it is no longer frightened.");
+    assert.deepEqual(halt?.resolution?.outcomes?.criticalSuccess?.effects?.map((effect) => `${effect.slug}${effect.value}`), ["frightened2", "slowed2"]);
+});
