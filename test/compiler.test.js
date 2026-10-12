@@ -2264,3 +2264,16 @@ test("Strike activities: a ranged Strike that gains deadly, a flavour clause, mo
     assert.deepEqual([pry?.strike, pry?.onHit?.damage, pry?.onHit?.conditions?.[0]?.value, pry?.countsAs], ["chisel", ["2d10[strike]"], 1, 2]);
     assert.deepEqual(compile("<p>The test sea elf swims and attacks in one of two patterns. They either Swim twice and Strike at the end of their movement, or Swim once and Strike at any point during their movement.</p>"), { builtin: "charge", actions: 2, strides: 2, strike: null });
 });
+
+test("a requirement the module doesn't play; the first round; a Strike at an animal or humanoid; damage told as a wound; Strikes at the creature it holds (2026-10-12, batch 109)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const burrowed = compile("<p><strong>Requirements</strong> The test wurm is burrowed</p><hr /><p><strong>Effect</strong> The test wurm makes a jaws Strike. If it hits, the target is Grabbed.</p>");
+    assert.deepEqual([burrowed?.builtin, burrowed?.requires], ["strike-activity", "requirement"]);
+    const first = compile("<p><strong>Requirements</strong> It's the first round of combat</p><hr /><p><strong>Effect</strong> The test stag Strides twice and makes a hoof Strike at the end of either Stride. If the Strike hits, the test stag deals an additional 1d4 piercing damage.</p>");
+    assert.equal(first?.requires, "first-round");
+    const flay = compile("<p>The test stitcher makes a blade Strike against an animal or humanoid. On a success, the test stitcher cuts deep; if the test stitcher dealt damage, it deals an additional 1d6 persistent bleed damage.</p>");
+    assert.deepEqual([flay?.strike, flay?.targetTraits, flay?.onHit?.damage], ["blade", ["animal", "humanoid"], ["1d6[persistent,bleed]"]]);
+    const hook = compile("<p>The test giant makes a melee Strike with its harpoon. If it hits, it twists and wrenches the harpoon to tear the wound, dealing 2d6 persistent bleed damage to the creature.</p>");
+    assert.deepEqual([hook?.strike, hook?.onHit?.damage], ["harpoon", ["2d6[persistent,bleed]"]]);
+    assert.deepEqual(compile("<p><strong>Requirements</strong> A creature is grabbed in the test demon's claw.</p><hr /><p><strong>Effect</strong> The test demon pulls the grabbed creature up to 5 feet closer, then makes two horn Strikes against it.</p>", 1), { builtin: "multi-strike", actions: 1, strikes: ["horn", "horn"], sameTarget: true, requires: "grabbed" });
+});

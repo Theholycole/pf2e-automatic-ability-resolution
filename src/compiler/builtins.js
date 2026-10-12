@@ -84,6 +84,13 @@ export function readMultiStrikes(text) {
     body = body.replace(/(^|Frequency once per (?:turn|round) )Requirements? (?:The |You )?[^.]+? (?:is wielding|are wielding|wields) two melee weapons, each in a different hand\.? Effect /i, (_all, before) => (before ? `${before}Effect ` : ""));
     // (Batch 91: Paired Strike's "Requirements The maftet is wielding two scimitars Effect …"; the "diferent" of some texts.)
     body = body.replace(/^Requirements? (?:The |You )?[^.]+? (?:is|are) wielding two [\w' -]+?s\.? Effect /i, "").replace(/\bdiferent\b/g, "different");
+    // (Batch 109, Captive Rake: "Requirements A creature is grabbed in the glabrezu's pincer. Effect The glabrezu pulls the grabbed creature up to
+    // 5 feet closer, then makes two claw Strikes against it. Those Strikes count as one attack …" — at the creature it holds.)
+    let held = false;
+    body = body.replace(/^Requirements? An? creature is grabbed in (?:the [\w' -]+?['’]s|its|their) [\w' -]+?\.? Effect (?:The [\w' -]+?|It|They) pulls the grabbed creature up to \d+ feet closer, then makes ([^.]+?) against it\./i, (_all, strikes) => {
+        held = true;
+        return `The creature makes ${strikes} against the same target.`;
+    }).replace(/(?<=\. )Those Strikes count as one attack when determining (?:an? [\w' -]+?['’]s|its|their) multiple attack penalty, and the penalty doesn't increase until after both Strikes\.$/i, "This counts as one attack for its multiple attack penalty, and the penalty doesn't increase until after both attacks.");
     const frequency = /^Frequency (.+?) Effect /i.exec(body);
     if (frequency) {
         if (!/^once per (?:turn|round)$/i.test(frequency[1].trim())) return null;
@@ -104,7 +111,8 @@ export function readMultiStrikes(text) {
     // (Flying Strafe), "within the shortbow's first range increment", "; no more than two can be against the same target",
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
     let penalty = 0;
-    let requires = null;
+    let requires = held ? "grabbed" : null;
+    if (held) sameTarget = true;
     first = first.trim().replace(/([^.])$/, "$1.")
         .replace(/\b(attempts|attempt)\b(?= (?:up to )?(?:a|an|one|two|three|four) )/i, "makes")
         .replace(/,? (?:each )?at an? [-\u2013\u2212](\d+) penalty(?: to (?:its|their|the) attack rolls?)?/i, (_all, value) => {

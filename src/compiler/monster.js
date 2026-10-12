@@ -861,6 +861,17 @@ function strikeActivity(item, actor, { after = null } = {}) {
             })
             .replace(/\b((?:attempts|makes) an? [\w' -]+? Strike) while [a-z]+ing (?:(?!\d|@|\bdamage\b|\bbonus\b|\bpenalty\b)[^.])+(?=\.$)/i, "$1")
             .replace(/^On a successful hit, the target also /i, "If it hits, the target ")
+            // (Batch 109: Twist the Hook's "makes a melee Strike with its gaff"; Flay's "makes a blade Strike against an animal or humanoid" —
+            // only at those, targetTraits; "On a success, … slices a long strip of flesh from the target; if the skitterstitch dealt damage, it
+            // deals an additional 1d6 persistent bleed damage"; Twist the Hook's "If it hits, it twists and yanks the gaff to create an awful
+            // wound, dealing 3d6 persistent bleed damage to the creature" — the damage on a hit.)
+            .replace(/\bmakes an? (?:melee|ranged) Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike")
+            .replace(/\b(makes an? [\w' -]+? Strike) against an? (animal|humanoid|beast|undead|construct|fey|fiend|dragon|plant)(?: or (animal|humanoid|beast|undead|construct|fey|fiend|dragon|plant))?(?=\.$)/i, (_all, made, one, two) => {
+                activity.targetTraits = [one, two].filter(Boolean).map((trait) => trait.toLowerCase());
+                return made;
+            })
+            .replace(/^On a (?:success|hit), [^;.]+; if (?:it|the [\w' -]+?) dealt damage, (?:it|they) deals? an additional (.+?) damage(?=\.$)/i, "If it hits, it deals an additional $1 damage")
+            .replace(/^If it hits, (?:it|he|she|they) [a-z]+s(?: and [a-z]+s)? (?:[^,.])+, dealing (\d+d\d+) (persistent )?(\w+) damage to the (?:creature|target)(?=\.$)/i, (_all, dice, persistent, type) => `If it hits, it deals an additional ${dice} ${persistent ?? ""}${type} damage`)
             .replace(/ or until the creature is fully healed(?=\.$)/i, "")
             // (Batch 83, Portal Strike: "makes a claw Strike against a creature within 120 feet" — the distance the GM's.)
             .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy|target) within \d+ feet(?=\.$)/i, "$1")
@@ -903,7 +914,14 @@ function strikeActivity(item, actor, { after = null } = {}) {
             else if (/^(?:The )?[^,]*? hit an? (?:foe|creature|enemy|target) earlier this turn(?: with an? (?:weapon |melee )?Strike)?$/i.test(match[1])) activity.requires = "hit-earlier";
             // (Batch 82, Berserk Slam: "The flesh golem is berserk": only then; the simulator doesn't play a golem's berserk state.)
             else if (/^(?:The )?[^,]*? is berserk\.?$/i.test(match[1])) activity.requires = "berserk";
-            else if (!/is wielding|is holding/i.test(match[1])) return reject(text);
+            // (Batch 109, Startled Charge: "It's the first round of combat".)
+            else if (/^It['’]s the first round of (?:combat|an encounter)\.?$/i.test(match[1])) activity.requires = "first-round";
+            // (Batch 109: another requirement — "The dragon is burrowed", "is enraged", "is on the deck of a ship", "has expensive bolts": a state
+            // the module doesn't play. Live, the GM uses it when it's met; the simulator doesn't plan it.)
+            else if (!/is wielding|is holding/i.test(match[1])) {
+                if (/@|\d+d\d+|\bdamage\b/i.test(match[1])) return reject(text);
+                activity.requires = "requirement";
+            }
         } else if (!opened && (match = /^(?:The )?[^.]+? (?:(Strides?(?: twice| or Steps?)?),? (?:and |then |and then )*)?(?:makes?|attempts?) an? (?:([\w' -]+?) )?Strike(?: (?:against|at) an? (?:creature|foe|enemy) (?:it has |it's |it is |that is |that's )?(?:Grabbed|grabbing|Restrained)[^.,]*?| (?:against|at) an? Prone (?:creature|foe|enemy))?(?: with an? \+(\d+) circumstance bonus to (damage|(?:its |the )?attack roll)(?: against the (?:grabbed|restrained) (?:creature|target))?)?(?: with an? [\w' -]+? weapon(?: or unarmed attack)?|, [a-z][^.\d]*| while keeping one hand free)?\.$/i.exec(head)) && !/\b(?:damage|feet|bonus|penalty|reach|each|two|three|Strikes)\b/i.test(head.slice(head.search(/Strike\b/) + 6).replace(/with an? \+\d+ circumstance bonus to (?:damage|(?:its |the )?attack roll)/i, ""))) {
             // A move written into the subject ("The worm Burrows at least 10 feet and then attempts a jaws Strike"): read as a move.
             const moving = !match[1] && /\b(?:Flies|Swims|Climbs|Burrows|Leaps|Steps|Strides)\b/.test(head.slice(0, head.search(/\b(?:makes|attempts)\b/i)));
