@@ -3415,6 +3415,18 @@ function rewordedSave(item, actor = null) {
     return plan && notes.length ? { ...plan, notes: [...(plan.notes ?? []), ...notes] } : plan;
 }
 
+// A check of its own compared with every creature sharing its space (2026-10-12, batch 165, Grasping Bites): "The cobbleswarm attempts an @Check[athletics]
+// check and compares the result to the Fortitude DC of all creatures in its space." with its results by degree → PF2e's inline form of that
+// check ("@Check[athletics|against:fortitude]"), read as a skill action, at every creature sharing its space.
+function skillAgainstAll(item, actor) {
+    const html = String(item.system?.description?.value ?? "");
+    const match = /@Check\[(acrobatics|athletics|deception|intimidation|stealth|thievery)\]( check)? and compares the result to the (Fortitude|Reflex|Will) DC of (?:all creatures|each creature) in its space\.( This counts as two attacks for (?:the [\w' -]+?['’]s|its) multiple attack penalty\.)?/i.exec(html);
+    if (!match) return null;
+    const plan = compileSkillAction(withDescription(item, html.replace(match[0], `@Check[${match[1]}|against:${match[3].toLowerCase()}]${match[2] ?? ""} against every creature sharing its space.`)), { actor });
+    if (!plan?.resolution) return null;
+    return { ...plan, targeting: { target: "every creature sharing its space", range: "touch", area: null }, notes: [...(plan.notes ?? []), "One check, compared with every creature sharing its space.", ...(match[4] ? ["It counts as two attacks for its multiple attack penalty."] : [])] };
+}
+
 // Scattershot (2026-10-11, batch 56): "The dragon exhales a cloud of small balls of pure energy that deal @Damage[(11d4+11)[force]] damage in
 // a @Template[type:cone|distance:60] with no save. The dragon can't use Scattershot again for 1d4 rounds." → that damage on everyone in
 // the area, no roll; its recharge. null otherwise.
@@ -3657,7 +3669,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? rewordedSave(item, actor) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? rewordedSave(item, actor) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? skillAgainstAll(item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // (Batch 154, Exit Stage: once per mask it carries, each use breaking one — the masks on its sheet; with no creature given, the GM counts.)
     if (plan?.builtin === "ferocity" && plan.perMask) {
         delete plan.perMask;
