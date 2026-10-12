@@ -502,6 +502,9 @@ export function readCharge(text) {
     // (Batch 63: a move of up to half its Speed that triggers no reactions, with a Strike at a foe in reach at any point of it, the foe
     // off-guard, perhaps after a sentence that only tells it → safe, offGuard.)
     if (/^(?:[^.]+\. )?(?:The )?[^.]+? (?:Strides|Flies|Swims) up to (?:half )?(?:its|their|his|her) Speed; this movement (?:doesn't|does not) trigger reactions\. At any point during this movement, (?:it|they|he|she) can Strike an? (?:foe|creature|enemy) within reach; the (?:foe|creature|enemy|target) is Off-Guard against that attack\.$/i.test(String(text).replace(/’/g, "'").trim())) return { strides: 1, strike: null, offGuard: true, safe: true };
+    // (Batch 108, Aquatic Dash: "The merfolk warrior swims and attacks in one of two patterns. They either Swim twice and Strike at the end of
+    // their movement, or Swim once and Strike at any point during their movement." — the GM's choice live; two moves and a Strike played.)
+    if (/^(?:The )?[^.]+? swims and attacks in one of two patterns\. (?:They|It|He|She) either Swims? twice and Strikes? at the end of (?:their|its|his|her) movement, or Swims? once and Strikes? at any point during (?:their|its|his|her) movement\.$/i.test(String(text).trim())) return { strides: 2, strike: null };
     // (Not only in the first round: "Requirements It's the first round of combat Effect The elk Strides twice …".)
     if (/^Requirements?\b[^.]*?\bfirst round of (?:combat|an encounter)\b/i.test(String(text).trim())) return null;
     // (Batch 70, Feral Leap: "The rabbit jumps with a maximum height and distance each equal to half its Speed. This movement doesn't
@@ -885,6 +888,46 @@ export function readGuardian(text) {
     return null;
 }
 
+// An ally's save helped (2026-10-11, batch 107):
+// - a reroll keeping the better: "Trigger An ally within 60 feet fails a saving throw against an emotion or mental effect Effect The ally
+//   rerolls the saving throw, taking the better of the two results." (Hold Fast), "Trigger An ally within 10 feet of the dancer rolls a
+//   saving throw against a mental or illusion effect Effect The target ally can roll the save twice and take the better result."
+//   (Distracting Frolic), "Frequency once per hour Trigger The lucky courser or an ally within 10 feet fails a Reflex save, Acrobatics
+//   check, or Athletics check Effect The triggering creature rerolls the save or check and uses the better result." (Guide to Fortune) →
+//   { builtin: "save-reroll", ally, self, within, save, against, uses };
+// - a bonus as it comes: "Trigger An allied animal within 30 feet attempts a saving throw Effect … granting the allied animal a +1
+//   circumstance bonus to the save." (Stay Strong!), "Trigger An ally of the yamah's attempts a saving throw against an effect that has the
+//   mental trait Effect The ally gains a +4 status bonus to the saving throw. If the ally rolls a success, they get a critical success
+//   instead." (Free Mind) → { builtin: "save-bonus-reaction", ally, within, value, kind, against, animal, upgrade }.
+export function readAllySave(text) {
+    const body = String(text).trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\befect\b/g, "effect");
+    const split = /^(?:Frequency (once per (?:hour|day|minute)) )?Trigger (.+?)\.? Effect (.+)$/.exec(body);
+    if (!split) return null;
+    const [, frequency, trigger, effect] = split;
+    const against = (words) => (words ? words.toLowerCase().split(/\s*(?:,|\bor\b)\s*/).filter(Boolean) : null);
+    const reroll = /^An ally within (\d+) feet(?: of (?:the [\w' -]+?|[A-Z][\w'-]+))? (fails|rolls) a saving throw against an? ((?:\w+)(?: or \w+)?) effect$/i.exec(trigger)
+        ?? /^(?:The [\w' -]+?|[A-Z][\w'-]+) or an ally within (\d+) feet (fails) a (Reflex|Fortitude|Will) save, [^.]*?check$/i.exec(trigger);
+    if (reroll) {
+        const self = /^(?:The [\w' -]+?|[A-Z][\w'-]+) or an ally/i.test(trigger);
+        const keeps = /^(?:The (?:target )?ally|The triggering creature) (?:can roll the save twice and take the better result|rerolls the (?:saving throw|save)(?: or check)?,? (?:taking the better of the two results|and uses the better result))\.$/i.test(effect.trim());
+        if (!keeps) return null;
+        return { builtin: "save-reroll", ally: true, ...(self ? { self: true } : {}), within: Number(reroll[1]), ...(self ? { save: reroll[3].toLowerCase() } : { against: against(reroll[3]) }), ...(frequency ? { uses: 1 } : {}) };
+    }
+    const animal = /^An allied animal within (\d+) feet attempts a saving throw$/i.exec(trigger);
+    if (animal) {
+        const gains = /^(?:The )?[^.]+? granting the allied animal an? \+(\d+) (circumstance|status) bonus to the save\.$/i.exec(effect.trim());
+        return gains ? { builtin: "save-bonus-reaction", ally: true, within: Number(animal[1]), value: Number(gains[1]), kind: gains[2].toLowerCase(), animal: true } : null;
+    }
+    const mind = /^An ally of (?:the [\w' -]+?['’]s?|[A-Z][\w'-]+['’]s?) attempts a saving throw against an effect that has the (\w+) trait$/i.exec(trigger);
+    if (mind) {
+        const said = effect.trim().replace(/^The ally['’]s gains\b/i, "The ally gains").split(/(?<=\.)\s+(?=[A-Z])/);
+        const gains = /^The ally gains an? \+(\d+) (circumstance|status) bonus to the saving throw\.$/i.exec(said[0] ?? "");
+        const upgrade = said.length === 2 && /^If the ally rolls a success, (?:they|it) gets? a critical success instead\.$/i.test(said[1]);
+        if (gains && (said.length === 1 || upgrade)) return { builtin: "save-bonus-reaction", ally: true, value: Number(gains[1]), kind: gains[2].toLowerCase(), against: mind[1].toLowerCase(), ...(upgrade ? { upgrade: true } : {}) };
+    }
+    return null;
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -901,7 +944,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a

@@ -2245,3 +2245,22 @@ test("a guard that takes its ward's damage; an ally kept from dropping (2026-10-
     assert.deepEqual(both("An allied creature within 30 feet would be reduced to 0 Hit Points", "The test captain barks an order. The creature avoids being knocked out and remains at 1 HP. The creature is then temporarily immune for 24 hours."), { builtin: "rescue", within: 30, hp: 1, oncePerTarget: true });
     assert.deepEqual(both("An allied creature within 60 feet who isn't a construct or undead is reduced to 0 Hit Points and their dying value is 2 or less", "The test angel restores @Damage[4d10[healing]] Hit Points to the target.", "<p><strong>Frequency</strong> once per day</p>"), { builtin: "rescue", within: 60, heal: "4d10", living: true, perDay: 1 });
 });
+
+test("an ally's save helped: a reroll keeping the better, a bonus as it comes (2026-10-11, batch 107)", () => {
+    const reaction = (body) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: body } } }, { basicActions: {} });
+    const both = (trigger, effect, frequency = "") => reaction(`${frequency}<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`);
+    assert.deepEqual(both("An ally within 30 feet fails a saving throw against an emotion or mental effect", "The ally rerolls the saving throw, taking the better of the two results."), { builtin: "save-reroll", ally: true, within: 30, against: ["emotion", "mental"] });
+    assert.deepEqual(both("An ally within 10 feet of the test jester rolls a saving throw against a mental or illusion effect", "The target ally can roll the save twice and take the better result."), { builtin: "save-reroll", ally: true, within: 10, against: ["mental", "illusion"] });
+    assert.deepEqual(both("The test scout or an ally within 10 feet fails a Fortitude save, Athletics check, or Survival check", "The triggering creature rerolls the save or check and uses the better result.", "<p><strong>Frequency</strong> once per hour</p>"), { builtin: "save-reroll", ally: true, self: true, within: 10, save: "fortitude", uses: 1 });
+    assert.deepEqual(both("An allied animal within 20 feet attempts a saving throw", "The test handler whistles, granting the allied animal a +1 circumstance bonus to the save."), { builtin: "save-bonus-reaction", ally: true, within: 20, value: 1, kind: "circumstance", animal: true });
+    assert.deepEqual(both("An ally of the test guardian's attempts a saving throw against an effect that has the fear trait", "The ally gains a +2 status bonus to the saving throw. If the ally rolls a success, they get a critical success instead."), { builtin: "save-bonus-reaction", ally: true, value: 2, kind: "status", against: "fear", upgrade: true });
+});
+
+test("Strike activities: a ranged Strike that gains deadly, a flavour clause, more damage of the Strike's type, two attacks; a swim and Strike (2026-10-11, batch 108)", () => {
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const shot = compile("<p>The test sculptor chips a sharp shard from the wall and makes a shard ranged Strike that gains the deadly d8 trait. On a successful hit, the target also falls Prone.</p>");
+    assert.deepEqual([shot?.strike, shot?.deadly, shot?.onHit?.conditions?.[0]?.slug], ["shard", 8, "prone"]);
+    const pry = compile("<p>The test mason attempts a chisel Strike while hammering the blow deeper with a mallet. If it hits, the target takes an additional 2d10 damage of the same type as the Strike and is Enfeebled 1 for 1 hour or until the creature is fully healed. This counts as two attacks for the test mason's multiple attack penalty.</p>");
+    assert.deepEqual([pry?.strike, pry?.onHit?.damage, pry?.onHit?.conditions?.[0]?.value, pry?.countsAs], ["chisel", ["2d10[strike]"], 1, 2]);
+    assert.deepEqual(compile("<p>The test sea elf swims and attacks in one of two patterns. They either Swim twice and Strike at the end of their movement, or Swim once and Strike at any point during their movement.</p>"), { builtin: "charge", actions: 2, strides: 2, strike: null });
+});

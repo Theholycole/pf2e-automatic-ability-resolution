@@ -594,17 +594,39 @@ async function saveAnswers(message, context, scene, combat, saver) {
     const statistic = ["fortitude", "reflex", "will"].find((save) => context.statistic === save || (context.domains ?? []).includes(save));
     const better = context.outcome === "criticalFailure" ? "a failure" : "a success";
     const grid = gridOf(scene);
+    // (Batch 107: the effect's traits, for an ally's reroll or bonus against a mental, emotion or illusion effect.)
+    const effectTraits = new Set([...(context.options ?? []).map((option) => /^(?:origin:)?item:trait:([\w-]+)$/.exec(option)?.[1]).filter(Boolean), ...(context.traits ?? []).map((trait) => trait?.name ?? trait)]);
     for (const { token, actor, reactions } of reactors(scene, combat)) {
         const self = token.id === saver.id;
         for (const { item, plan } of reactions) {
+            // (Batch 107: Hold Fast, Distracting Frolic, Guide to Fortune — an ally's failed save rerolled, keeping the better; Stay Strong!,
+            // Free Mind — a bonus to it, offered when it turns the failure around.)
+            if (plan.ally && ["save-reroll", "save-bonus-reaction"].includes(plan.builtin) && (!self || plan.self)) {
+                if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
+                if ((plan.save && plan.save !== statistic) || (plan.against && ![plan.against].flat().some((trait) => effectTraits.has(trait))) || (plan.animal && !saver.actor?.traits?.has?.("animal"))) continue;
+                const left = Number(item.system?.frequency?.value);
+                if (plan.uses && Number.isFinite(left) && left <= 0) continue;
+                // (Each helper's own offer; the GM picks.)
+                if (plan.builtin === "save-reroll") {
+                    await offer({ kind: "reroll", item, monster: token, actor, target: self ? null : saver, trigger: `failed ${self ? "its" : "a"} ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: "higher" } });
+                    break;
+                }
+                const roll = message.rolls?.[0];
+                const dc = context.dc?.value;
+                if (!Number.isFinite(dc) || !Number.isFinite(roll?.total)) continue;
+                const after = degreeOf(roll.total + plan.value, dc, roll.dice?.[0]?.total ?? null);
+                if (after === context.outcome) continue;
+                await offer({ kind: "ac", item, monster: token, actor, target: saver, trigger: `failed a ${statistic ?? ""} save`.replace(/ {2,}/g, " "), note: plan.upgrade ? "If the save becomes a success, it's a critical success instead." : null, attack: { messageId: message.id, value: plan.value, what: "to the save", before: context.outcome, after } });
+                break;
+            }
             // (Batch 65: "must use the new result", keep "new"; a free action's.)
-            if (self && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
+            if (self && !plan.ally && plan.builtin === "save-reroll" && (!plan.save || plan.save === statistic)) {
                 const left = Number(item.system?.frequency?.value);
                 if (Number.isFinite(left) && left <= 0) continue;
                 return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: plan.mythic ? "It costs a Mythic Point." : null });
             }
             // (Batch 87, Occult Ward: a bonus to its own save, offered when it turns the failure around; against a spell, a spell's save.)
-            if (self && plan.builtin === "save-bonus-reaction") {
+            if (self && !plan.ally && plan.builtin === "save-bonus-reaction") {
                 const roll = message.rolls?.[0];
                 const dc = context.dc?.value;
                 const spell = message.flags?.pf2e?.origin?.type === "spell" || (context.options ?? []).some((option) => /^origin:item:type:spell$|^item:type:spell$/.test(option));

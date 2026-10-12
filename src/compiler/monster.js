@@ -852,6 +852,16 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // Strike against a target, shouting threats and curses" — what it tells.)
             .replace(/\b(makes an? [\w' -]+? Strike) against a creature within the weapon's first range increment(?=\.$)/i, "$1")
             .replace(/\b((?:attempts|makes) an? (?:weapon |melee )?Strike) against a target, [a-z]+ing (?:(?!\d|@|\bdamage\b|\bbonus\b|\bpenalty\b)[^.])+(?=\.$)/i, "$1")
+            // (Batch 108: Carve Projectile's "makes a rock ranged Strike that gains the deadly d10 trait" — its rock Strike, deadly d10; Wedge's
+            // "attempts a stone tool Strike while wedging the blow further with another tool" — what it tells; "On a successful hit, the target
+            // also falls Prone"; "Enfeebled 2 for 1 hour or until the creature is fully healed" — the healing the GM's.)
+            .replace(/\b(makes an? [\w' -]+?) ranged Strike that gains the deadly (d\d+) trait(?=\.$)/i, (_all, made, die) => {
+                activity.deadly = Number(die.slice(1));
+                return `${made} Strike`;
+            })
+            .replace(/\b((?:attempts|makes) an? [\w' -]+? Strike) while [a-z]+ing (?:(?!\d|@|\bdamage\b|\bbonus\b|\bpenalty\b)[^.])+(?=\.$)/i, "$1")
+            .replace(/^On a successful hit, the target also /i, "If it hits, the target ")
+            .replace(/ or until the creature is fully healed(?=\.$)/i, "")
             // (Batch 83, Portal Strike: "makes a claw Strike against a creature within 120 feet" — the distance the GM's.)
             .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy|target) within \d+ feet(?=\.$)/i, "$1")
             // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
@@ -982,6 +992,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // Death Roll: "If it hits, it also knocks the creature Prone. If it fails, it releases the creature."
         else if (new RegExp(`${hit}(?:it|he|she|they|[A-Z][\\w'-]+) (?:also )?knocks? the (?:creature|target) Prone\\.$`, "i").test(text)) activity.onHit.conditions.push({ slug: "prone", value: null, duration: null });
         else if (/^If (?:it|the Strike|this Strike) (?:fails|misses), (?:it|the [\w' -]+?) releases the (?:creature|target)\.$/i.test(text)) continue;
+        // (Batch 108: Carve Projectile's "the target also falls Prone"; Wedge's "the target takes an additional 3d10 damage of the same type as the
+        // Strike and is Enfeebled 2 for 1 hour", "This counts as two attacks for the terra carver's multiple attack penalty.")
+        else if (new RegExp(`${hit}the (?:target|creature) (?:also )?falls Prone\\.$`, "i").test(text)) activity.onHit.conditions.push({ slug: "prone", value: null, duration: null });
+        else if ((match = new RegExp(`${hit}the target takes an (?:additional|extra) (\\d+d\\d+) damage of the same type as the Strike and is (.+?)\\.$`, "i").exec(text)) && conditions(match[2]).length) {
+            activity.onHit.damage.push(`${match[1]}[strike]`);
+            activity.onHit.conditions.push(...conditions(match[2]));
+        } else if ((match = /^This counts as (two|three) attacks for (?:the [\w' -]+?['’]s|its|their|his|her) multiple attack penalty\.$/i.exec(text))) activity.countsAs = { two: 2, three: 3 }[match[1].toLowerCase()];
         // (Batch 25: "he gains … to his attack roll", "to the attack roll", "from its starting position".)
         // (Batch 85: any distance, Rampaging Charge's "If it moved at least 10 feet, …"; extra damage on a hit, Powerful Charge's "If the
         // unicorn moved at least 20 feet, it deals an additional 2d6 damage on a hit" — as the charge's own.)
