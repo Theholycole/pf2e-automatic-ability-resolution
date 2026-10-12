@@ -1336,6 +1336,12 @@ export function readReaction(item, text) {
         // (Batch 94, Opportune Backstab: "A creature within Fayati's reach is hit by a melee Strike from one of her allies".)
         [new RegExp(String.raw`^A creature within (?:(?:the [\w' -]+?['’]s|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*['’]s|its|their|his|her) )?(?:melee )?reach is hit by a melee (?:attack|Strike) from one of (?:its|their|his|her|the [\w' -]+?['’]s) allies$`, "i"), "ally-hit"]
     ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
+    // (Batch 144, Opportune Riposte: "A foe within your reach critically fails a Strike against you … You either make a melee Strike against the
+    // triggering foe or attempt to Disarm it of the weapon it used for the Strike." — the Strike; the Disarm instead a note.)
+    if (/^An? (?:foe|enemy) within (?:your|(?:the )?[\w' -]+?['’]s) reach critically fails (?:on )?a Strike against (?:you|him|her|them|it)$/i.test(trigger.trim().replace(/\.$/, ""))
+        && /^(?:You take advantage of an opening from your enemy's fumbled attack\. )?(?:You|(?:The )?[\w' -]+?) either makes? a melee Strike against the triggering (?:foe|enemy) or attempts? to Disarm (?:it|them|him|her) of the weapon (?:(?:it|they|he|she) )?used for the Strike\.(?: If (?:he|she|they|it) succeeds, (?:he|she|they|it) gains panache\.)?$/i.test(effect.trim())) {
+        return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, note: "Or it can Disarm the attacker of that weapon instead." };
+    }
     // (Batch 103: Retaliatory Strike — "Trigger A creature within reach of the frost drake's tail successfully damages the frost drake with a
     // Strike Effect The frost drake attempts to Strike with their tail. If the Strike hits, it deals an additional 1d6 damage." → its tail
     // Strike back, extraDamage on a hit.)
@@ -2068,6 +2074,10 @@ export function readSelfGuard(item) {
     // stance that ends when it moves, what it can't be the GM's.)
     const held = readHeldGuard(item, body);
     if (held) return held;
+    // (Batch 144, Raise Shields: "The arboreal wardens of the copse raise their shields in tandem, gaining a +2 circumstance bonus to AC and Reflex
+    // saves." — Raise a Shield's, until the start of its next turn.)
+    const shields = /^(?:The )?[^.]+? raises? (?:their|its) shields?(?: in tandem)?, gaining an? \+(\d) circumstance bonus to AC and Reflex saves\.$/i.exec(body.trim());
+    if (shields) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(shields[1]) }, { on: "reflex", type: "circumstance", value: Number(shields[1]) }], tempHp: 0 }, duration: { value: 1, unit: "rounds", expiry: "turn-start" } };
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/);
     const until = String.raw`until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn`;
     const gains = new RegExp(String.raw`^(?:(?:Until the (start|beginning|end) of (?:its|their|his|her|the [\w' -]+?['’]s|[A-Z][\w'-]+['’]s) next turn), )?(?:The [\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?) gains? an? \+(\d+) (circumstance|status) bonus to (?:its |their |his |her )?AC(?: ${until})?((?:, or an? \+\d+ circumstance bonus if [^.,]+)?(?:,? (?:as long as|but loses this bonus if) [^.]+)?(?:, and [^.]+)?)\.$`, "i");
@@ -2252,8 +2262,9 @@ function readPlainMove(text) {
     if (sentences.length > 1 && !/\d|@|\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strikes?|Requirements?|Trigger|Frequency|moves?|jumps?)\b/i.test(sentences[0]) && !/\b(?:Strides?|Steps?|Fl(?:y|ies)|Swims?|Climbs?|Burrows?|Leaps?)\b/.test(sentences[0])) sentences.shift();
     const verb = String.raw`(?:Strides|Steps|Flies|Swims|Climbs|Burrows|Leaps|moves|jumps)`;
     const far = String.raw`(?: (?:up to )?(?:\d+ feet|(?:half |twice |double |three times |four times |five times )?(?:its|their|his|her) (?:\w+ )?Speed|once|twice|three times))?`;
-    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically)?))*(?:,? (?:ignoring difficult terrain(?: during this movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?))?`;
-    const move = new RegExp(String.raw`^(?:The |An? )?(?:(?!\b(?:and|then|uses?|Interacts?|Raises?|Hides?|Feints?)\b)[^.;])+? ${verb}(?:(?:,? or|,? and then| then) ${verb})*(?:,? or Steps and then Strides|,? or Strides and then Steps)?${far}${how}\.$`, "i");
+    // (Batch 144, Slither: "Strides, Climbs, or Swims up to half its Speed, pulling any creatures it has grabbed with it.")
+    const how = String.raw`(?: (?:in a straight line|through the water|downward|in any direction(?:, including vertically)?))*(?:,? (?:ignoring difficult terrain(?: during this movement)?|with (?:its|their|his|her) Speeds? increased by \d+ feet(?: for this movement)?|pulling any creatures (?:it|they|he|she) (?:has|have) [Gg]rabbed with (?:it|them|him|her)))?`;
+    const move = new RegExp(String.raw`^(?:The |An? )?(?:(?!\b(?:and|then|uses?|Interacts?|Raises?|Hides?|Feints?)\b)[^.;])+? ${verb}(?:, ${verb})*(?:(?:,? or|,? and then| then) ${verb})*(?:,? or Steps and then Strides|,? or Strides and then Steps)?${far}${how}\.$`, "i");
     const safe = /^(?:This|The|Its|Their) movement (?:doesn't|does not) (?:trigger|provoke) (?:any )?reactions(?: based on movement)?\.$/i;
     const through = /^(?:It|They|He|She) can (?:pass|move) through (?:other )?creatures' spaces during this movement(?:, though (?:it|they|he|she) must end (?:its|their|his|her) movement in an unoccupied space)?\.$/i;
     const longer = /^(?:It|They|He|She) can increase the number of actions for this activity to \d in order to (?:Stride|move) up to [^.]+? instead\.$/i;
@@ -2410,6 +2421,9 @@ function readStrikeOnly(text) {
     const sentences = String(text).trim().replace(/^Frequency once per (?:turn|round) Effect /i, "").replace(/^Requirements? (?:The )?[^.]*? is (?:holding|wielding) [^.]+? Effect /i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/)
         .filter((sentence, index) => index === 0 || !/^(?:If (?:that|the|this) Strike hits and the (?:creature|target) is wearing armor with Hardness \d+ or lower, the armor is broken|This Strike doesn't further damage armor that's already broken)\.$/i.test(sentence))
         .filter((sentence, index) => index === 0 || !/^If it hits, in addition to dealing damage, (?:the [\w' -]+?|it) Strides up to \d+ feet, dragging the (?:enemy|creature|target) along\.$/i.test(sentence))
+        // (Batch 144, Trident of Dis: "If there is an unholy ally between the vordine and their target, that creature's energy causes the Strike to
+        // deal an additional 1d6 spirit damage." — the GM's.)
+        .filter((sentence, index) => index === 0 || !/^If there is an unholy ally between [^.]+? causes the Strike to deal an additional \d+d\d+ spirit damage\.$/i.test(sentence))
         // (Batch 136, Sudden Retreat: "It gains a +2 circumstance bonus to AC against reactions triggered by this movement." — the GM's.)
         .filter((sentence, index) => index === 0 || !/^(?:It|They|He|She) gains? a \+\d circumstance bonus to AC against reactions triggered by this movement\.$/i.test(sentence))
         .filter((sentence, index) => index === 0 || !/^(?:(?:The [\w' -]+?|They|It|He|She) can (?:choose to )?(?:Trip|Disarm|Shove)(?: or (?:Trip|Disarm|Shove))?(?: (?:their|its|his|her) opponent)? instead of (?:making )?a Strike|If the weapon has the [\w, ]+ trait, (?:the [\w' -]+?|it|they|he|she) can use the corresponding action instead of a Strike)\.$/i.test(sentence));
@@ -2425,7 +2439,7 @@ function readStrikeOnly(text) {
     const returning = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike, after which the [\w' -]+? returns to (?:its|his|her|their|the [\w' -]+?'s) hand\.$`, "i");
     // (Batch 47, Lunge: "makes a Strike with a melee weapon, increasing the reach of the Strike by 5 feet", "… with their rotcarver
     // scythe, increasing their reach by 5 feet for that Strike", "extending their reach by 5 feet for that Strike".)
-    const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet|makes a Strike with (?:a melee weapon|(?:his|her|its|their|the) [\w' -]+?), (?:increasing|extending) (?:the reach of the Strike|(?:his|her|its|their) reach) by \d+ feet(?: for (?:that|this|the) Strike)?)\.$`, "i");
+    const reach = new RegExp(String.raw`${who} (?:makes an? [\w' -]+? Strike, increasing (?:his|her|its|their) reach to \d+ feet for that Strike|makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet|makes a Strike with (?:a melee weapon|(?:his|her|its|their|the) [\w' -]+?), (?:increasing|extending) (?:the reach of the Strike|(?:his|her|its|their) reach) by \d+ feet(?: for (?:that|this|the) Strike)?)\.$`, "i");
     // (Batch 42, Skirmish Strike: "The hunter can Step and then Strike, or Strike and then Step.")
     // (Batch 90, Darting Strike: "Strides up to 10 feet and then makes a Strike, or makes a Strike and then Strides up to 10 feet".)
     const skirmish = new RegExp(String.raw`${who} (?:(?:can )?(?:either )?Steps? and then Strikes?,? or Strikes? and then Steps?|Strides up to \d+ feet and then makes a Strike, or makes a Strike and then Strides up to \d+ feet)\.$`, "i");

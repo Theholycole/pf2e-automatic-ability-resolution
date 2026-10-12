@@ -2552,9 +2552,16 @@ function variedManeuver(item, basicActions = {}) {
         .replace(/, gaining a \+(\d) circumstance bonus to (?:its|their|his|her) Athletics check if the target is Prone\./i, (_all, value) => {
             extra.push(`+${value} circumstance bonus to the check if the target is Prone.`);
             return ".";
+        })
+        // (Batch 144, Right This Way: "Frequency once per round Effect …", "… to Reposition a Large or smaller creature within reach" — the size a note.)
+        .replace(/^Frequency once per (?:round|turn) Effect /i, "")
+        .replace(/\b(Reposition|Shove|Trip|Grapple|Disarm) an? (Small|Medium|Large|Huge) or smaller creature within reach\b/i, (_all, act, size) => {
+            extra.push(`Only a ${size} or smaller creature.`);
+            return `${act} a creature`;
         }).split(/(?<=\.)\s+(?=[A-Z])/);
     const sentences = told.length > 1 && !/^(?:Requirements?|Frequency|Trigger|Cost)\b/.test(told[0]) && !/\d|@|\b(?:Demoraliz\w*|Disarm\w*|Trip\w*|Shove\w*|Grappl\w*|checks?|damage|save|bonus|penalty)\b/i.test(told[0]) ? told.slice(1) : told;
-    const action = String.raw`(Demoralize|Disarm|Trip|Shove|Grapple)`;
+    // (Batch 144: Reposition too.)
+    const action = String.raw`(Demoralize|Disarm|Trip|Shove|Grapple|Reposition)`;
     // (Batch 126: "all living creatures within 60 feet that can hear the durnolith", "all enemies within 30 feet", "… and applies the result to
     // every opponent within 30 feet".)
     // (Batch 126: "all living creatures within 60 feet that can hear the minotaur but not see them" — those it can't see, a note; "up to 4 creatures".)
@@ -2565,7 +2572,7 @@ function variedManeuver(item, basicActions = {}) {
     // (Its subject only: not "Strides and then either Interacts to reload her gun or makes …", a choice after a move.)
     // (Batch 138: not a requirement or a frequency read as its subject; Rattling Spear's "(compare the check result to the targets' Will DCs
     // individually)".)
-    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?|Requirements?|Effect|Frequency|Trigger)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language| \(compare (?:the|the [\w' -]+?['’]s) (?:Intimidation |Athletics )?check result to the targets' (?:Will|Fortitude|Reflex) DCs individually\))?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
+    const first = new RegExp(String.raw`^(?:The )?(?:(?!\b(?:either|then|Strides?|Steps?|Interacts?|Raises?|Feints?|Requirements?|Effect|Frequency|Trigger)\b)[^.])+?(?:,? as (?:it|they|he|she))? (?:(?:attempts?|attempting) (?:to ${action}|(?:an?|a single) (?:Intimidation|Athletics) checks? to ${action}|Intimidate checks to ${action})|makes an? (?:Intimidation|Athletics) check to ${action}|(Demoralize|Disarm|Trip|Shove|Grapple|Reposition)s) (?:and applies the result to )?${whom}(?: with a mere glance)?(?:,? (?:rolling once and )?comparing the result(?: of a single (?:Intimidation|Athletics) check)? to each target's (?:Will|Fortitude|Reflex) DC|; these Demoralize attempts (?:don't|do not) take any penalty for not sharing a language| \(compare (?:the|the [\w' -]+?['’]s) (?:Intimidation |Athletics )?check result to the targets' (?:Will|Fortitude|Reflex) DCs individually\))?(?:,? with a \+(\d) circumstance bonus(?: to the (?:roll|check))?)?(?:, without suffering penalties for not sharing a language)?( and then Strides(?: with a \+\d+-foot circumstance bonus to (?:(?:its|their|his|her) )?Speed)?)?\.$`, "i").exec(sentences[0] ?? "");
     if (!first) return null;
     const slug = (first[1] ?? first[2] ?? first[3] ?? first[4] ?? first[5]).toLowerCase();
     const basic = basicActions[slug];
@@ -2601,6 +2608,17 @@ function variedManeuver(item, basicActions = {}) {
         // success (Demoralize's Frightened); Stampeding Shove's "If the Shove succeeds, the target takes 2d10 bludgeoning damage (double damage on a
         // critical success)."; Strangle's "On a success, the target also takes 1d6+6 bludgeoning damage and can't speak (…) as long as they're
         // Grabbed or Restrained." — the speech a note.)
+        // (Right This Way: "On a success, the target is also Clumsy 1 (Clumsy 2 on a critical success) as …", "The target can remove this condition
+        // by taking an Interact action." — a note.)
+        const worse = /^On a success, the target is also (Clumsy|Enfeebled|Stupefied|Frightened|Sickened) (\d) \(\1 (\d) on a critical success\)(?: as [^.]+)?\.$/i.exec(sentence);
+        if (worse) {
+            added.push(["success", { kind: "condition", slug: worse[1].toLowerCase(), value: Number(worse[2]), duration: null }], ["criticalSuccess", { kind: "condition", slug: worse[1].toLowerCase(), value: Number(worse[3]), duration: null }]);
+            continue;
+        }
+        if (/^The target can remove this condition by taking an Interact action\.$/i.test(sentence)) {
+            extra.push(sentence);
+            continue;
+        }
         if (slug === "demoralize" && /^On a success, the target is Stunned with a value equal to its Frightened condition\.$/i.test(sentence)) {
             added.push(["success", { kind: "condition", slug: "stunned", value: 1, duration: null }], ["criticalSuccess", { kind: "condition", slug: "stunned", value: 2, duration: null }]);
             continue;

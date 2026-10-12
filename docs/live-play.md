@@ -1434,3 +1434,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** `{ builtin: "champion-reaction", slug, resistance, self?, dice?, selfDamage?, damage?, note? }` — Glimpse of Redemption and Liberating Step for an ally; Iron Command (`dice`), Selfish Shield (`resistance`) and Destructive Vengeance (`selfDamage`, `damage`) on itself.
 - **Live:** an ally within 15 feet of the champion, hurt by a foe within 15 feet of it, brings the champion's offer: "Resist only" gives the resistance back as Hit Points, the note saying what the foe chooses (Glimpse) or what the ally gets (Liberating Step); the champion hurt itself by a foe within 15 feet: Selfish Shield "Use it: N HP back", Iron Command "Use it: command it to kneel" and Destructive Vengeance "Use it: take more, deal it back" with what to roll in the note. Checked in pftest (an aasimar redeemer's Glimpse gave 7 back, a Deskari champion's Selfish Shield 5; a first try offered self-only reactions to allies — fixed).
 - **Simulator:** played as a champion's (B143): the resistance; Glimpse's choice as before; Iron Command's kneel or mental damage; Destructive Vengeance's extra damage on itself and the damage back.
+
+## A riposte, shields raised together, a Reposition with more (2026-10-12, batch 144)
+
+- **Compiled:** Opportune Riposte → `{ builtin: "reaction-strike", triggers: ["critical-miss"], note }`; Raise Shields → a self-effect (+2 AC and Reflex) until its next turn; Slither → a plain move; Right This Way → PF2e's Reposition with Clumsy 1 / 2 and notes; Trident of Dis → a Strike.
+- **Live:** a reaction Strike's offer now carries its plan's note (Opportune Riposte: "Or it can Disarm the attacker of that weapon instead."); the rest use existing cards and effects. Not run in pftest: the only live change is that note.
+- **Simulator:** nothing new: the critical-miss reaction Strike, the guard, the Reposition card's conditions are played as before.
