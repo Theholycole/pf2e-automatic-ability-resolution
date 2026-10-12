@@ -783,11 +783,12 @@ async function onDamaged(actor, amount) {
             await offer({ kind: "card", item: own.item, monster: token, actor, target: near, trigger: foe ? `hurt it (${amount} damage, on ${foe.name}'s turn)` : `It took ${amount} damage`, note: [damageNote(own.plan.trigger), beside && !near ? "At a creature beside it: target it first." : null].filter(Boolean).join(" ") || null, free: !!own.plan.trigger.free });
         }
         // Skittish (batch 98): damage from a Strike, the creature whose turn it is taken as the attacker; the GM checks it was a Strike.
+        // (Batch 136, Crumble: any foe's damage, and where it must be, for the GM.)
         const off = mine?.reactions.find(({ plan }) => plan.builtin === "withdraw" && plan.on === "damaged");
         if (off) {
             const foe = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) ? attacker : null;
             const move = withdrawMove(off.plan);
-            await offer({ kind: "move", item: off.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: `Only if the damage came from a${off.plan.melee ? " melee" : ""} Strike. ${move.note}`, move: { label: move.label } });
+            await offer({ kind: "move", item: off.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: `${off.plan.hostile ? `Only damage from a hostile source${off.plan.while ? `, while ${off.plan.while}` : ""}.` : `Only if the damage came from a${off.plan.melee ? " melee" : ""} Strike.`} ${move.note}`, move: { label: move.label } });
         }
         // Liquefy, Chipping Scales (batch 71): its resistance against that damage, given back as Hit Points (the GM checks the type);
         // an enemy's damage only when it says so; while it has a use left.
@@ -803,7 +804,7 @@ async function onDamaged(actor, amount) {
             const fits = (type, types) => !types || types.includes(type) || (types.includes("physical") && ["bludgeoning", "piercing", "slashing"].includes(type));
             if ((!plan.foe || foe) && (!kinds || kinds.some(({ type }) => fits(type, plan.on)))) {
                 const restore = Math.min(amount, kinds ? kinds.filter(({ type }) => fits(type, plan.types)).reduce((sum, { total }) => sum + Math.min(plan.value, total), 0) : plan.value);
-                const note = [kinds ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? "It keeps the resistance until the end of its next turn." : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null].filter(Boolean).join(" ");
+                const note = [kinds ? null : `Only against ${plan.on ? `${plan.on.join(" or ")} damage` : "damage"}${plan.attack ? " from an attack" : ""}${plan.foe ? " by an enemy" : ""}: resistance ${plan.value}${plan.types ? ` to ${plan.types.join(", ")}` : ""}, so fewer Hit Points back if part of it was another type.`, kinds && plan.attack ? "Only against an attack's damage." : null, plan.lasts ? "It keeps the resistance until the end of its next turn." : null, plan.acPenalty ? `Its AC is ${plan.acPenalty} lower for a day.` : null, plan.shift ? "It then teleports to an adjacent space: move its token." : null].filter(Boolean).join(" ");
                 await offer({ kind: "resist", item: resist.item, monster: token, actor, target: foe, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note: note || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore } });
             }
         }

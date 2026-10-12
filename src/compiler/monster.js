@@ -1008,6 +1008,15 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 activity.attackBonus -= Number(value);
                 return made;
             })
+            // (Batch 136, Burrowing Pounce: "The dragon Burrows, then Leaps out of the ground, landing at a point within 25 feet." — its move, then
+            // "… makes a melee Strike against a creature within reach when they land" and "If the Strike is a critical hit, the target is knocked Prone".)
+            .replace(/^(?:The )?[^.]+? Burrows, then Leaps out of the ground, landing at a point within (\d+) feet\.$/i, (_all, feet) => {
+                activity.strides = Math.max(activity.strides, 1);
+                (activity.notes ??= []).push(`It Burrows, then Leaps out of the ground up to ${feet} feet away first: move its token.`);
+                return "[told]";
+            })
+            .replace(/\b(makes an? (?:melee )?(?:[\w' -]+? )?Strike) against a creature within reach when (?:they|it|he|she) lands?(?=\.$)/i, "$1")
+            .replace(/^If the Strike is a critical hit, the target is knocked Prone(?=\.$)/i, "On a critical hit, the target is knocked Prone")
             // (Batch 131, Insightful Swing: "On this Strike, he gains a +2 circumstance bonus to the attack roll and ignores any concealment the target
             // has" — the bonus, the concealment the GM's.)
             .replace(/^On this Strike, (?:it|he|she|they) gains? a \+(\d+) circumstance bonus to the attack roll(?: and ignores? any concealment the target has)?\.$/i, (whole, value) => {

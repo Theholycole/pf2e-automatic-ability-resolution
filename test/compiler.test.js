@@ -1802,9 +1802,9 @@ test("a reaction's resistance against the damage that sets it off (2026-10-11, b
         ["An enemy is about to damage the test seer with bludgeoning damage or with a spell that has the earth trait", "The test seer gains resistance 10 against the triggering damage.", "", { value: 10, on: ["bludgeoning"], types: null, foe: true }],
         ["The test scrap is damaged by an attack dealing physical damage", "The test scrap takes the blow on its scraps and gains resistance 15 against the triggering attack, but its AC is lowered by 2 for 24 hours. The test scrap's AC cannot be reduced below 16 in this way.", "", { value: 15, on: ["physical"], types: null, attack: true, acPenalty: 2 }]
     ]) assert.deepEqual(read(trigger, effect, frequency), { builtin: "resist-damage", ...expected }, trigger);
-    // Not for an ally, nor with more of its own (a move, damage back).
+    // Not for an ally, nor with more of its own (damage back); a short teleport is a shift (batch 136).
     assert.notEqual(read("An enemy damages one of the test knight's allies", "The ally gains resistance 10 against the triggering damage.")?.builtin, "resist-damage");
-    assert.notEqual(read("The test bard would take damage", "The test bard gains resistance 2 to the triggering damage and teleports to an adjacent space.")?.builtin, "resist-damage");
+    assert.deepEqual(read("The test bard would take damage", "The test bard gains resistance 2 to the triggering damage and teleports to an adjacent space."), { builtin: "resist-damage", value: 2, on: null, types: null, shift: true });
     assert.notEqual(read("The test devil takes fire damage", "The test devil gains resistance 8 to fire against the triggering attack. If this damage came from an unarmed attack, the creature who caused the damage takes @Damage[8[fire]] damage.")?.builtin, "resist-damage");
 });
 
@@ -2552,4 +2552,14 @@ test("a move first, then a Feint or Demoralize (2026-10-12, batch 135)", { skip:
     assert.equal(rush?.resolution?.check?.statistic, "intimidation");
     const halt = compile("The test watchman Strides twice and then [[/act demoralize]]{Demoralizes}. On a success, the target is Slowed with a value equal to its Frightened value until it is no longer frightened.");
     assert.deepEqual(halt?.resolution?.outcomes?.criticalSuccess?.effects?.map((effect) => `${effect.slug}${effect.value}`), ["frightened2", "slowed2"]);
+});
+
+test("a Burrow away on damage with a recharge, a resistance with a shift, a Strike then a Swim, a burrowed pounce (2026-10-12, batch 136)", () => {
+    const compile = (description, type = "reaction", actions = null) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    assert.deepEqual(compile("<p><strong>Trigger</strong> The test slab takes damage from a hostile source while atop rock or earth</p><hr /><p><strong>Effect</strong> The test slab crumbles into the ground, Burrowing down 10 feet. This Burrowing does not trigger reactions. The test slab can't Crumble again for [[/gmr 1d4 #Recharge Crumble]]{1d4 rounds}.</p>"), { builtin: "withdraw", on: "damaged", hostile: true, while: "atop rock or earth", move: "Burrow", feet: 10, safe: true, recharge: "1d4" });
+    assert.deepEqual(compile("<p><strong>Trigger</strong> The test bard would take damage</p><hr /><p><strong>Effect</strong> The test bard gains resistance 3 to the triggering damage and teleports to an adjacent space.</p>")?.shift, true);
+    assert.deepEqual(compile("<p>The test seahorse makes a tail Strike, then Swims with a +10-foot circumstance bonus to its swim Speed. It gains a +2 circumstance bonus to AC against reactions triggered by this movement.</p>", "action", 2), { builtin: "no-effect", strikeOnly: true });
+    const pounce = compile("<p><strong>Requirements</strong> The test drake is burrowed</p><hr /><p><strong>Effect</strong> The test drake Burrows, then Leaps out of the ground, landing at a point within 25 feet. The test drake makes a melee Strike against a creature within reach when they land. If the Strike is a critical hit, the target is knocked Prone.</p>", "action", 3);
+    assert.deepEqual([pounce?.builtin, pounce?.requires, pounce?.onHit?.critical?.[0]?.slug], ["strike-activity", "requirement", "prone"]);
+    assert.equal(compile("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Effect</strong> The test bird Strides three times in a straight line</p>", "action", 2)?.builtin, "no-effect");
 });

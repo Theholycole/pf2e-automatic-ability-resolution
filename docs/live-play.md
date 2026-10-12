@@ -1387,3 +1387,8 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** Slip's offer reads "Teleport away" ("It teleports to a clear space beside another creature it can see within 30 feet: move its token") — the approach detection is batch 98's (token movement couldn't be exercised in pftest this time: every token update was refused in that world, cause unknown). Gardener's Resolve: offered on its own failed Will save carrying a mental or fear trait, with the damage and the mask as the GM's lines; not on a critical failure, another save or a fire effect; checked in pftest.
 - **Simulator:** the boost only on a failure of that save against those traits, then 3d8 mental damage on itself (B132).
 
+## A Burrow away on damage; a resistance with a teleport (2026-10-12, batch 136)
+
+- **Compiled:** Crumble → `{ builtin: "withdraw", on: "damaged", hostile: true, while: "atop rock or earth", move: "Burrow", feet: 10, safe: true, recharge: "1d4" }`; Gnomish Shift → `{ builtin: "resist-damage", value: 2, on: null, types: null, shift: true }`.
+- **Live:** Crumble's offer, on any damage while a foe has the turn, reads "Burrow away" with "Only damage from a hostile source, while atop rock or earth. It Burrows 10 feet down into the ground: move its token or mark it as burrowed. This movement doesn't trigger reactions. Not again for 1d4 rounds." (the GM declines it off rock or earth and keeps the recharge); Gnomish Shift's offer gives 2 HP back with "It then teleports to an adjacent space: move its token."; both checked in pftest (the bard back from 9 to 11 HP).
+- **Simulator:** Crumble Burrows away from a Strike's damage, then not again for 1d4 rounds (B135); a spell's damage doesn't set it off there.

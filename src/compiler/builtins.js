@@ -756,7 +756,7 @@ function readResistDamage(text, trigger, effect) {
     // Its effect: the resistance, perhaps after a sentence that only tells it; an AC that drops for a day ("cannot be reduced below 16").
     const T = DAMAGE_WORDS;
     const sentences = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
-    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?\.?$`, "i");
+    const resist = new RegExp(String.raw`^(?:The )?[^.]*?\b(?:gains?|gaining) (?:(${T}) )?resistance (\d+)(?: to (?:all )?(${T})(?: damage)?)?(?: (?:against|to) the (?:triggering|incoming) (?:(${T}) )?(?:damage|attack|effect)| against (${T}) damage from the triggering attack| to the damage)?(?:,? including against the triggering effect)?(?:,? until the end of (?:its|their|his|her) next turn)?(?:,? but (?:its|their|his|her) AC is (?:reduced|lowered) by (\d+) for (?:1 day|24 hours)(?:, when [^.]+)?)?( and teleports to an adjacent (?:space|square))?\.?$`, "i");
     const at = sentences.findIndex((sentence) => resist.test(sentence));
     if (at < 0) return null;
     const told = (sentence) => !/\d|\b(?:damage|resistance|Strikes?|Steps?|Strides?|teleports?|Fl(?:y|ies)|attack rolls?|saves?|checks?|penalty|bonus)\b/i.test(sentence);
@@ -774,6 +774,8 @@ function readResistDamage(text, trigger, effect) {
         ...(foe ? { foe: true } : {}),
         ...(/until the end of (?:its|their|his|her) next turn/i.test(read[0]) ? { lasts: 1 } : {}),
         ...(read[6] ? { acPenalty: Number(read[6]) } : {}),
+        // (Batch 136, Gnomish Shift: "… and teleports to an adjacent space" — the GM's move.)
+        ...(read[7] ? { shift: true } : {}),
         ...(frequency ? { uses: frequency.toLowerCase() === "twice" ? 2 : 1 } : {})
     };
 }
@@ -804,11 +806,15 @@ export function readWithdraw(text) {
     let melee = false;
     let enters = false;
     let foe = null;
+    let source = null;
     if (legacy) on = "approach";
     else {
         const trigger = split[1].trim();
         if (new RegExp(`^An? (?:creature|enemy|foe) misses ${subject} with a melee Strike$`, "i").test(trigger)) [on, melee] = ["missed", true];
         else if (/^(?:The )?[\w' -]+? takes damage from an? (?:melee )?Strike$/i.test(trigger)) [on, melee] = ["damaged", /\bmelee Strike$/i.test(trigger)];
+        // (Batch 136, Crumble: "The living landslide takes damage from a hostile source while atop rock or earth" — any foe's damage, where it
+        // is the GM's, a note.)
+        else if (/^(?:The )?[\w' -]+? takes damage from a hostile source(?: while [^.]+)?$/i.test(trigger)) [on, source] = ["damaged", { hostile: true, ...(/ while ([^.]+)$/i.exec(trigger) ? { while: / while ([^.]+)$/i.exec(trigger)[1] } : {}) }];
         else if (/^(?:The )?[\w' -]+? is attacked with a melee weapon$/i.test(trigger)) [on, melee] = ["attacked", true];
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
@@ -823,20 +829,25 @@ export function readWithdraw(text) {
     else {
         // ("… takes a step after the effects of the triggering attack are resolved.")
         if (/^(?:The )?[\w' -]+? takes a step after the effects of the triggering attack are resolved\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Steps.";
+        // (Batch 136, Crumble: "… crumbles into the ground, Burrowing down 10 feet." — a Burrow.)
+        if (/^(?:The )?[\w' -]+? crumbles into the ground, Burrowing down \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*Burrowing down (\d+) feet\.$/i, "It Burrows $1 feet.");
         // (Batch 133, Slip: "… teleports to a clear space adjacent to another creature she can see within 30 feet" — away, triggering no reactions.)
         const slip = /^(?:The )?[\w' -]+? teleports to a clear space adjacent to another creature (?:it|she|he|they) can see within (\d+) feet\.$/i.exec(sentences[0] ?? "");
         if (slip && sentences.length === 1) return { builtin: "withdraw", on, ...(enters ? { enters } : {}), move: "Teleport", feet: Number(slip[1]), safe: true };
-        const first = /^(?:After resolving the attack, )?(?:The )?[\w' -]+? (?:quickly takes advantage of the attacker['’]s error and )?(Steps(?: or Strides)?|Strides(?:,? (?:Climbs|Swims),? or (?:Climbs|Swims)| or (?:Climbs|Swims))?|Climbs or Strides|Flies)(?: (?:up to )?(\d+) feet)?(?: \((?:or (?:up to )?(?:the relevant|its|his|her|their) Speed)[^)]*\))?(?: away(?: from (?:the source of the Strike|the triggering creature))?)?\.$/i.exec(sentences.shift() ?? "");
+        const first = /^(?:After resolving the attack, )?(?:The )?[\w' -]+? (?:quickly takes advantage of the attacker['’]s error and )?(Steps(?: or Strides)?|Strides(?:,? (?:Climbs|Swims),? or (?:Climbs|Swims)| or (?:Climbs|Swims))?|Climbs or Strides|Flies|Burrows)(?: (?:up to )?(\d+) feet)?(?: \((?:or (?:up to )?(?:the relevant|its|his|her|their) Speed)[^)]*\))?(?: away(?: from (?:the source of the Strike|the triggering creature))?)?\.$/i.exec(sentences.shift() ?? "");
         if (!first) return null;
-        move = /^Steps/i.test(first[1]) ? "Step" : /^Flies/i.test(first[1]) ? "Fly" : "Stride";
+        move = /^Steps/i.test(first[1]) ? "Step" : /^Flies/i.test(first[1]) ? "Fly" : /^Burrows/i.test(first[1]) ? "Burrow" : "Stride";
         feet = first[2] ? Number(first[2]) : null;
     }
     let safe = move === "Step";
+    let recharge = null;
     for (const sentence of sentences) {
-        if (/^This movement (?:doesn't|does not) trigger reactions\.$/i.test(sentence)) safe = true;
+        if (/^This (?:movement|Burrowing) (?:doesn't|does not) trigger reactions\.$/i.test(sentence)) safe = true;
+        // (Crumble: "The living landslide can't Crumble again for 1d4 rounds.")
+        else if (/^(?:The [\w' -]+?|It|They) can(?:'t|not) [\w' -]+? again for (?:\[\[\/\w+ (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.test(sentence)) recharge = /(\d+d\d+)/.exec(sentence)[1];
         else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$/i.test(sentence)) return null;
     }
-    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), move, ...(feet ? { feet } : {}), safe };
+    return { builtin: "withdraw", on, ...(melee ? { melee } : {}), ...(enters ? { enters } : {}), ...(foe ? { foe } : {}), ...(source ?? {}), move, ...(feet ? { feet } : {}), safe, ...(recharge ? { recharge } : {}) };
 }
 
 // Following a foe that moves away (2026-10-11, batch 99): "Trigger An enemy within reach of the guard attempts to move away Effect The guard
@@ -2083,7 +2094,9 @@ function readSafeMove(text) {
 // at most one sentence before that only tells it. "safe-move" when the movement triggers no reactions, "no-effect" otherwise (a move of
 // the creature's own, nothing for the fight's numbers); null for anything else.
 function readPlainMove(text) {
-    const sentences = String(text).replace(/’/g, "'").trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 136, Sprint: "Frequency once per minute Effect The terror bird Strides three times in a straight line" — its frequency the GM's, no
+    // final period.)
+    const sentences = String(text).replace(/’/g, "'").trim().replace(/^Frequency once per (?:minute|10 minutes|hour|day) Effect /i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/);
     if (sentences.length > 1 && !/\d|@|\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Strikes?|Requirements?|Trigger|Frequency|moves?|jumps?)\b/i.test(sentences[0]) && !/\b(?:Strides?|Steps?|Fl(?:y|ies)|Swims?|Climbs?|Burrows?|Leaps?)\b/.test(sentences[0])) sentences.shift();
     const verb = String.raw`(?:Strides|Steps|Flies|Swims|Climbs|Burrows|Leaps|moves|jumps)`;
     const far = String.raw`(?: (?:up to )?(?:\d+ feet|(?:half |twice |double |three times |four times |five times )?(?:its|their|his|her) (?:\w+ )?Speed|once|twice|three times))?`;
@@ -2245,6 +2258,8 @@ function readStrikeOnly(text) {
     const sentences = String(text).trim().replace(/^Frequency once per (?:turn|round) Effect /i, "").replace(/^Requirements? (?:The )?[^.]*? is (?:holding|wielding) [^.]+? Effect /i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/)
         .filter((sentence, index) => index === 0 || !/^(?:If (?:that|the|this) Strike hits and the (?:creature|target) is wearing armor with Hardness \d+ or lower, the armor is broken|This Strike doesn't further damage armor that's already broken)\.$/i.test(sentence))
         .filter((sentence, index) => index === 0 || !/^If it hits, in addition to dealing damage, (?:the [\w' -]+?|it) Strides up to \d+ feet, dragging the (?:enemy|creature|target) along\.$/i.test(sentence))
+        // (Batch 136, Sudden Retreat: "It gains a +2 circumstance bonus to AC against reactions triggered by this movement." — the GM's.)
+        .filter((sentence, index) => index === 0 || !/^(?:It|They|He|She) gains? a \+\d circumstance bonus to AC against reactions triggered by this movement\.$/i.test(sentence))
         .filter((sentence, index) => index === 0 || !/^(?:(?:The [\w' -]+?|They|It|He|She) can (?:choose to )?(?:Trip|Disarm|Shove)(?: or (?:Trip|Disarm|Shove))?(?: (?:their|its|his|her) opponent)? instead of (?:making )?a Strike|If the weapon has the [\w, ]+ trait, (?:the [\w' -]+?|it|they|he|she) can use the corresponding action instead of a Strike)\.$/i.test(sentence));
     // (A first sentence that only tells what it does; batch 42: "The hunter's feet and weapons move in tandem.")
     if (sentences.length === 2 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Grab|Prone)\b|\d/.test(sentences[0])) sentences.shift();
@@ -2270,5 +2285,8 @@ function readStrikeOnly(text) {
     // (Batch 83: "makes a mandibles Strike; if the Strike hits, the target's armor takes the damage and …", "makes a mandibles Strike
     // against a creature it has Grabbed" with its armor sentences above: the armor the GM's.)
     const armor = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike(?:; if the Strike hits, the target's armor takes the damage[^.]*| against a creature it has Grabbed)\.$`, "i");
-    return [draw, reload, returning, reach, skirmish, prone, reloading].some((pattern) => pattern.test(sentence)) || (armor.test(sentence) && /\barmor\b/i.test(text));
+    // (Batch 136, Sudden Retreat: "makes a tail Strike, then Swims with a +10-foot circumstance bonus to its swim Speed" — the move the GM's.)
+    // (Not after a move of its own: Daredevil Strike's "Strides up to their Speed, makes a melee Strike, then Steps".)
+    const away = new RegExp(String.raw`^(?:The |An? )?(?:(?!\b(?:Strides|Steps|Flies|Swims|Climbs|Leaps)\b)[^.])+? makes an? (?:[\w' -]+? )?Strike, then (?:Swims|Strides|Steps|Flies|Climbs)(?: with an? \+\d+-foot circumstance bonus to (?:its|their|his|her) (?:swim |fly )?Speed)?\.$`, "i");
+    return [draw, reload, returning, reach, skirmish, prone, reloading, away].some((pattern) => pattern.test(sentence)) || (armor.test(sentence) && /\barmor\b/i.test(text));
 }

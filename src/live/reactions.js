@@ -94,11 +94,13 @@ export function damageNote(trigger) {
 export function withdrawMove(plan) {
     // (Batch 133, Slip: a teleport beside another creature within its distance.)
     if (plan?.move === "Teleport") return { label: "Teleport away", note: `It teleports to a clear space beside another creature it can see within ${plan.feet ?? 30} feet: move its token.` };
+    // (Batch 136, Crumble: a Burrow down into the ground, its recharge.)
+    if (plan?.move === "Burrow") return { label: "Burrow away", note: [`It Burrows ${plan.feet ? `${plan.feet} feet ` : ""}down into the ground: move its token or mark it as burrowed.`, plan.safe ? "This movement doesn't trigger reactions." : null, plan.recharge ? `Not again for ${plan.recharge} rounds.` : null].filter(Boolean).join(" ") };
     const verb = { Step: "Step", Fly: "Fly", Stride: "Stride" }[plan?.move] ?? "Stride";
     const how = plan?.feet ? `up to ${plan.feet} feet` : verb === "Step" ? "5 feet" : "up to its Speed";
     return {
         label: `${verb} away`,
-        note: [`It ${verb === "Fly" ? "Flies" : `${verb}s`} ${how} away${plan?.on === "approach" ? " from the creature beside it" : ""}: move its token.`, plan?.safe && verb !== "Step" ? "This movement doesn't trigger reactions." : null, ["attacked", "hit"].includes(plan?.on) ? "After the attack's effects." : null].filter(Boolean).join(" ")
+        note: [`It ${verb === "Fly" ? "Flies" : `${verb}s`} ${how} away${plan?.on === "approach" ? " from the creature beside it" : ""}: move its token.`, plan?.safe && verb !== "Step" ? "This movement doesn't trigger reactions." : null, ["attacked", "hit"].includes(plan?.on) ? "After the attack's effects." : null, plan?.recharge ? `Not again for ${plan.recharge} rounds.` : null].filter(Boolean).join(" ")
     };
 }
 
