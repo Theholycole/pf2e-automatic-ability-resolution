@@ -146,3 +146,10 @@ test("an initiative warning's button: its allies' initiative (2026-10-12, batch 
     const html = offerHTML({ kind: "initiative", ability: { name: "Test Warning" }, monster: { name: "Lookout" }, target: null, trigger: "rolls initiative", attack: { value: 2 }, note: null, status: "open" });
     assert.match(html, /data-aar-reaction="use">Use it: \+2 to its allies' initiative</);
 });
+
+test("offer buttons: a creature brought back, a healing at its least, resistance to spells (2026-10-12, batches 193 and 195)", () => {
+    const base = { ability: { name: "Test" }, monster: { name: "Dragon" }, target: { name: "Valeros" }, trigger: "did something", status: "open" };
+    assert.match(offerHTML({ ...base, kind: "rescue", survive: { back: true } }), /Use it: bring it back/);
+    assert.match(offerHTML({ ...base, kind: "siphon" }), /Use it: the healing at its least/);
+    assert.match(offerHTML({ ...base, kind: "resist", retribution: { spells: true, rank: 4, restore: 0 } }), /Use it: resistance 4 to spells/);
+});

@@ -3212,3 +3212,12 @@ test("an ability of its own with more actions and a push; a Dirty Trick after a 
     const free = compileMonsterAbility(vex("free"), {});
     assert.deepEqual([free.activation.time, free.trigger.cost, free.resolution.outcomes.success.effects[0].slug], ["free", "free", "clumsy"]);
 });
+
+test("a creature that dies brought back; a foe's healing at its least (2026-10-12, batch 195)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const back = (how) => compileMonsterAbility(item(`<p><strong>Trigger</strong> A living creature the test phoenix can see dies</p><hr /><p><strong>Effect</strong> The test phoenix sings the soul home. The willing creature is returned to life ${how}. A creature can be resurrected by this ability only once.</p>`), {});
+    assert.deepEqual(back("with half of their total Hit Points"), { builtin: "rescue", within: null, sees: true, hp: "half", living: true, oncePerTarget: true, onDeath: true });
+    assert.deepEqual([back("with the @UUID[Compendium.pf2e.conditionitems.Item.yZRUzMqrMmfLu0V1]{Dying 1} condition at the start of its next turn").dying, back("stabilized at 0 HP").stable], [1, true]);
+    const siphon = compileMonsterAbility(item("<p><strong>Trigger</strong> A creature within 30 feet uses a healing effect that restores Hit Points</p><hr /><p><strong>Effect</strong> The test phoenix drinks the warmth away. The triggering effect results in the minimum amount on any dice rolls to restore Hit Points, and any flat values for restoring Hit Points are cut in half. The test phoenix then gains 2d8 temporary Hit Points that last for 1 round.</p>"), {});
+    assert.deepEqual(siphon, { builtin: "heal-siphon", within: 30, tempHp: "2d8", tempRounds: 1 });
+});

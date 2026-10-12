@@ -39,7 +39,7 @@ const FLAG = "reaction";
 export const NO_GRAB = "pf2e-automatic-ability-resolution:no-grab";
 // PF2e's actor sizes in the words a trigger uses ("A Medium creature").
 const SIZE_WORDS = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill", "redirect-attack"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill", "redirect-attack", "heal-siphon"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -259,7 +259,7 @@ async function onMessage(message) {
         const divert = mine && event.spell && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.builtin === "resist-damage" && plan.spell) : null;
         if (divert) {
             const rank = await spellRankOf(message);
-            await offer({ kind: "resist", item: divert.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: "aimed a spell at it", note: rank ? `Resistance ${rank} (the spell's rank) to damage from spells until the start of its next turn.` : "Resistance to damage from spells equal to the spell's rank, until the start of its next turn: the GM sets it.", retribution: { ally: { actorUuid: mine.actor.uuid, name: mine.token.name }, restore: 0, rank } });
+            await offer({ kind: "resist", item: divert.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: "aimed a spell at it", note: rank ? `Resistance ${rank} (the spell's rank) to damage from spells until the start of its next turn.` : "Resistance to damage from spells equal to the spell's rank, until the start of its next turn: the GM sets it.", retribution: { ally: { actorUuid: mine.actor.uuid, name: mine.token.name }, restore: 0, rank, spells: true } });
         }
         // Superconductor (batch 57): an attack or a spell aimed at it, its Strike back at the attacker at any range.
         const attack = event.spell || event.traits.includes("attack") || ["attack-roll", "spell-attack-roll"].includes(context?.type);
@@ -272,6 +272,10 @@ async function onMessage(message) {
     // (Batch 65: a failed Escape from a monster that answers it; batch 81: one it makes harder. PF2e rolls the Escape with the best of
     // Acrobatics, Athletics and an unarmed attack: a skill check or an attack roll.)
     if (["skill-check", "attack-roll"].includes(context?.type) && (context.options ?? []).includes("action:escape")) await escapeAnswers(message, context, scene, combat, token);
+    // (Batch 193, Ray Displacement: a spell attack roll that hit it, rerolled keeping the worse. PF2e 8.5 types a spell's attack roll
+    // "attack-roll", with the option "item:type:spell".)
+    const spellAttack = context?.type === "spell-attack-roll" || (context?.type === "attack-roll" && (context.options ?? []).includes("item:type:spell"));
+    if (spellAttack && ["success", "criticalSuccess"].includes(context.outcome)) await spellAttackAnswers(message, context, scene, combat, token);
     if (context?.type === "attack-roll") {
         const ranged = (context.options ?? []).includes("item:ranged") || (context.domains ?? []).includes("ranged-attack-roll");
         if (ranged) await reachTrigger(scene, combat, token, "made a ranged attack in its reach", "ranged");
@@ -287,8 +291,6 @@ async function onMessage(message) {
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike");
         return;
     }
-    // (Batch 193, Ray Displacement: a spell attack roll that hit it, rerolled keeping the worse.)
-    if (context?.type === "spell-attack-roll" && ["success", "criticalSuccess"].includes(context.outcome)) await spellAttackAnswers(message, context, scene, combat, token);
     // A failed saving throw (batch 53): Golden Luck, Word of Wisdom, Cat's Luck.
     if (context?.type === "saving-throw" && ["failure", "criticalFailure"].includes(context.outcome)) await saveAnswers(message, context, scene, combat, token);
     // (A skill check that's an attack, Trip or Grapple: Tail Lash's other trigger, batch 38.)
@@ -299,6 +301,8 @@ async function onMessage(message) {
     const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
     // (Batch 104, Spell Interception: any spell cast in its reach, its Strike; a hit disrupts the spell.)
     if (castTraits) await castInterception(scene, combat, token);
+    // (Batch 195, Siphon Life: a healing spell cast near it.)
+    if (castTraits?.includes("healing")) await healSiphonAnswers(scene, combat, token);
     if (castTraits?.includes("manipulate")) {
         await reachTrigger(scene, combat, token, "cast a manipulate spell in its reach", "manipulate");
         await provokeTrigger(scene, combat, token, "manipulate", "cast a manipulate spell");
@@ -546,15 +550,28 @@ async function guardAlly(message, context, scene, combat, attacker) {
     }
 }
 
-// (Batch 193, Ray Displacement: a spell attack at a monster that hit, its reaction rerolling it keeping the worse; a ranged spell's only, for the
-// GM to check.)
+// (Batch 193, Ray Displacement: a spell attack at a monster that hit, its reaction rerolling it keeping the worse; a ranged spell's only.)
 async function spellAttackAnswers(message, context, scene, combat, attacker) {
     const targetToken = context.target?.token ? fromUuidSync(context.target.token) : null;
     if (!targetToken || !inEncounter(combat).has(targetToken.id)) return;
     const mine = reactors(scene, combat).find((entry) => entry.token.id === targetToken.id);
     if (!mine || !isFoe(mine.token, attacker)) return;
-    const entry = mine.reactions.find(({ plan }) => plan.builtin === "attack-misfortune" && plan.spell);
-    if (entry) await offer({ kind: "misfortune", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} with a spell attack against it`, note: entry.plan.ranged ? "Only against a ranged spell attack, not a melee one." : null, attack: { messageId: message.id } });
+    // (A ranged one: PF2e's "item:ranged" option.)
+    const ranged = (context.options ?? []).includes("item:ranged");
+    const entry = mine.reactions.find(({ plan }) => plan.builtin === "attack-misfortune" && plan.spell && (!plan.ranged || ranged));
+    if (entry) await offer({ kind: "misfortune", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `rolled ${degreeWords(context.outcome)} with a spell attack against it`, attack: { messageId: message.id } });
+}
+
+// (Batch 195, Siphon Life: a foe's healing spell within its distance — the GM applies the healing at its least (each die at 1, flat values
+// halved); Use gives it its temporary Hit Points.)
+async function healSiphonAnswers(scene, combat, caster) {
+    const grid = gridOf(scene);
+    for (const { token, actor, reactions } of reactors(scene, combat)) {
+        const entry = reactions.find(({ plan }) => plan.builtin === "heal-siphon");
+        if (!entry || token.id === caster.id || !isFoe(token, caster) || distanceFeet(box(token, grid.size), box(caster, grid.size), grid) > (entry.plan.within ?? 60)) continue;
+        await offer({ kind: "siphon", item: entry.item, monster: token, actor, target: caster, trigger: "cast a healing spell near it", note: `Its healing is at its least: each die rolls 1 and flat values are halved. Apply it that way.${entry.plan.tempHp ? ` ${token.name} then gains ${entry.plan.tempHp} temporary Hit Points for ${entry.plan.tempRounds ?? 1} round.` : ""}` });
+        return;
+    }
 }
 
 // The rank of the spell a message is about: its origin's cast rank, its roll options' "item:rank:N", or the spell's own.
@@ -846,8 +863,16 @@ async function onDown(actor) {
             if (friend.id === token.id || friend.disposition !== token.disposition) continue;
             const entry = reactions.find(({ plan }) => plan.builtin === "rescue");
             const left = Number(entry?.item.system?.frequency?.value);
-            if (!entry || (entry.plan.perDay && Number.isFinite(left) && left <= 0) || distanceFeet(box(friend, grid.size), box(token, grid.size), grid) > (entry.plan.within ?? 30)) continue;
+            if (!entry || (entry.plan.perDay && Number.isFinite(left) && left <= 0) || distanceFeet(box(friend, grid.size), box(token, grid.size), grid) > (entry.plan.sees ? Infinity : entry.plan.within ?? 30)) continue;
             if (entry.plan.living && ["undead", "construct"].some((trait) => actor.traits?.has?.(trait))) continue;
+            // (Batch 195, Reawaken!: as it dies — back at half its Hit Points, or at 0 HP Dying 1 at the start of its next turn, or stable at 0 HP;
+            // a creature once, for the GM to keep to.)
+            const max = Number(actor.system?.attributes?.hp?.max) || 1;
+            if (entry.plan.onDeath) {
+                const back = entry.plan.hp === "half" ? `It returns to life at half its Hit Points (${Math.max(1, Math.floor(max / 2))}).` : entry.plan.dying ? `It returns to life at 0 HP, Dying ${entry.plan.dying}, at the start of its next turn.` : "It returns to life stable at 0 HP.";
+                await offer({ kind: "rescue", item: entry.item, monster: friend, actor: friendActor, target: token, trigger: "died", note: `${back} Only a willing creature, and each creature only once.`, survive: { hp: entry.plan.hp === "half" ? Math.max(1, Math.floor(max / 2)) : 0, dying: entry.plan.dying ?? 0, stable: !!entry.plan.stable, back: true, wounded: false, doomed: 0, perDay: false } });
+                continue;
+            }
             const note = [entry.plan.heal ? `It regains ${entry.plan.heal} Hit Points.` : "It stays at 1 HP.", entry.plan.doomed ? `It becomes Doomed ${entry.plan.doomed}${entry.plan.fastHealing ? ` and gains fast healing equal to ${friend.name}'s level for 1 minute` : ""}.` : null, entry.plan.oncePerTarget ? "Not again on this creature for 24 hours." : null].filter(Boolean).join(" ");
             await offer({ kind: "rescue", item: entry.item, monster: friend, actor: friendActor, target: token, trigger: "is reduced to 0 HP", note, survive: { hp: entry.plan.heal ?? 1, wounded: false, doomed: entry.plan.doomed ?? 0, perDay: !!entry.plan.perDay } });
         }
@@ -1132,23 +1157,38 @@ async function use(message, action, slug) {
         if (hp) await ward.update({ "system.attributes.hp.value": Math.min(hp.max, hp.value + state.retribution.restore) });
         await actor.applyDamage({ damage: state.retribution.taken, token: monster, skipIWR: !!state.retribution.unreduced });
         result = `${state.monster.name} takes ${state.retribution.taken} damage in place of ${state.retribution.ally.name}.`;
+    } else if (state.kind === "siphon") {
+        // (Batch 195, Siphon Life: its temporary Hit Points, rolled; the healing at its least is the GM's.)
+        const item = await fromUuid(state.ability.uuid);
+        const plan = item ? compile(item) : null;
+        let gained = 0;
+        if (plan?.tempHp) {
+            const roll = await new Roll(String(plan.tempHp)).evaluate();
+            await roll.toMessage({ flavor: `${state.ability.name}: temporary Hit Points`, speaker: ChatMessage.getSpeaker({ actor, token: monster }) });
+            gained = roll.total;
+            if (gained > (Number(actor.system?.attributes?.hp?.temp) || 0)) await actor.update({ "system.attributes.hp.temp": gained });
+        }
+        result = `The healing is at its least: each die 1, flat values halved.${gained ? ` ${state.monster.name} gains ${gained} temporary Hit Points.` : ""}`;
     } else if (state.kind === "rescue") {
         // (Batch 106: the ally back up — 1 HP or the Hit Points it restores — its unconscious and dying gone; doomed where it says so.)
         const ally = state.target ? (await fromUuid(state.target.tokenUuid))?.actor : null;
         if (!ally) throw new Error(`${state.target?.name ?? "The ally"} isn't there any more.`);
         const rule = state.survive ?? { hp: 1 };
         const max = Number(ally.system?.attributes?.hp?.max) || 1;
-        const hp = typeof rule.hp === "string" ? (await new Roll(rule.hp).evaluate()).total : Number(rule.hp) || 1;
-        await ally.update({ "system.attributes.hp.value": Math.max(1, Math.min(max, hp)) });
+        const hp = typeof rule.hp === "string" ? (await new Roll(rule.hp).evaluate()).total : rule.back ? Number(rule.hp) || 0 : Number(rule.hp) || 1;
+        await ally.update({ "system.attributes.hp.value": Math.max(rule.back ? 0 : 1, Math.min(max, hp)) });
         for (const slug of ["unconscious", "dying"]) if (ally.hasCondition?.(slug)) await ally.decreaseCondition(slug, { forceRemove: true }).catch(() => null);
         if (ally.statuses?.has?.("dead")) await Promise.resolve(ally.toggleStatusEffect?.("dead", { active: false })).catch(() => null);
         if (rule.doomed) await ally.increaseCondition("doomed", { value: rule.doomed }).catch(() => null);
+        // (Batch 195, Reawaken!: back at 0 HP — Dying, or stable and unconscious.)
+        if (rule.back && rule.dying) await ally.increaseCondition("dying", { value: rule.dying }).catch(() => null);
+        if (rule.back && rule.stable) await ally.increaseCondition("unconscious").catch(() => null);
         const combatant = game.combat?.combatants.find((entry) => entry.tokenId === state.target.tokenUuid.split(".").pop());
         if (combatant?.defeated) await combatant.update({ defeated: false });
         const item = await fromUuid(state.ability.uuid);
         const left = Number(item?.system?.frequency?.value);
         if (rule.perDay && item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
-        result = `${state.target.name} is back at ${ally.system?.attributes?.hp?.value ?? 1} HP.`;
+        result = `${state.target.name} is back at ${ally.system?.attributes?.hp?.value ?? 1} HP${rule.back && rule.dying ? `, Dying ${rule.dying}` : rule.back && rule.stable ? ", stable" : ""}.`;
     } else if (state.kind === "move") {
         // (Batch 98: where it goes is the GM's.)
         result = `${state.monster.name} uses ${state.ability.name}: ${state.note ?? "move its token."}`;

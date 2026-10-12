@@ -130,7 +130,10 @@ export function offerHTML(state) {
         if (state.kind === "upgrade") buttons.push(`<button type="button" data-aar-reaction="use">Use it: a critical hit</button>`);
         // (Batch 106: "Use it: take 12 damage", "Use it: keep it up".)
         if (state.kind === "intercept") buttons.push(`<button type="button" data-aar-reaction="use">Use it: take ${escape(state.retribution?.taken ?? 0)} damage</button>`);
-        if (state.kind === "rescue") buttons.push(`<button type="button" data-aar-reaction="use">Use it: keep it up</button>`);
+        // (Batch 195, Reawaken!: a creature that died, brought back.)
+        if (state.kind === "rescue") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${state.survive?.back ? "bring it back" : "keep it up"}</button>`);
+        // (Batch 195, Siphon Life: a foe's healing at its least, and temporary Hit Points.)
+        if (state.kind === "siphon") buttons.push(`<button type="button" data-aar-reaction="use">Use it: the healing at its least</button>`);
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
@@ -144,7 +147,8 @@ export function offerHTML(state) {
         if (state.kind === "flat" && state.attack?.or) buttons.push(`<button type="button" data-aar-reaction="use">A normal hit</button>`, `<button type="button" data-aar-reaction="keep">The critical hit, ${escape(state.attack.or.label)}</button>`);
         else if (state.kind === "flat") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.dc == null ? "Use it" : `Roll the DC ${escape(state.attack?.dc)} flat check`}</button>`);
         // (Batch 71, Liquefy: the resistance against the damage it took, as Hit Points back.)
-        if (state.kind === "resist") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.retribution?.restore ?? 0)} HP back</button>`);
+        // (Batch 193, Divert Essence: resistance to spells, by the spell's rank.)
+        if (state.kind === "resist") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${state.retribution?.spells ? `resistance ${escape(state.retribution.rank ?? "by rank")} to spells` : `${escape(state.retribution?.restore ?? 0)} HP back`}</button>`);
         // Retributive Strike: the ally's resistance, then a Strike at the foe if it's in reach.
         if (state.kind === "retribution") {
             for (const strike of state.strikes ?? []) buttons.push(`<button type="button" data-aar-reaction="strike" data-slug="${escape(strike.slug)}">Resist, then ${escape(strike.label)}</button>`);

@@ -1478,6 +1478,19 @@ export function readGuardian(text) {
         if (!rest) return null;
         return { builtin: "rescue", within: Number(dropping[1] ?? dropping[2]), hp: 1, ...(doomed ? { doomed: Number(doomed) } : {}), ...(healing ? { fastHealing: "level" } : {}), oncePerTarget: true, ...(dropping[2] ? { anyone: true } : {}) };
     }
+    // (Batch 195, Reawaken!: "Trigger A living creature the resurrection dragon can see dies Effect … The willing creature is returned to life with
+    // half of their total Hit Points. A creature can be resurrected by this ability only once." → back at half its Hit Points, a creature once;
+    // any it can see.)
+    if (new RegExp(String.raw`^A living creature ${who} can see dies$`, "i").test(trigger)) {
+        // (The young dragons': "The willing creature is returned to life with the Dying 1 condition at the start of its next turn."; the adults':
+        // "… returned to life stabilized at 0 HP.")
+        const back = said.findIndex((sentence) => /^The (?:willing )?creature is returned to life (?:with half (?:of )?(?:their|its) total Hit Points|with the Dying (\d) condition at the start of (?:its|their) next turn|stabilized at 0 (?:HP|Hit Points))\.$/i.test(sentence));
+        const rest = said.every((sentence, index) => index === back || /^A creature can be resurrected by this ability only once\.$/i.test(sentence) || (index === 0 && !/\d/.test(sentence)));
+        if (back < 0 || !rest) return null;
+        const dying = Number(/\bDying (\d)\b/i.exec(said[back])?.[1]) || null;
+        const stable = /\bstabilized at 0\b/i.test(said[back]);
+        return { builtin: "rescue", within: null, sees: true, ...(dying ? { hp: 0, dying } : stable ? { hp: 0, stable: true } : { hp: "half" }), living: true, oncePerTarget: true, onDeath: true };
+    }
     const fallen = /^An allied creature within (\d+) feet who isn't a construct or undead is reduced to 0 Hit Points and their dying value is 2 or less$/i.exec(trigger);
     const restores = fallen ? /^(?:The )?[^.]+? restores (\d+d\d+(?:\s*\+\s*\d+)?) Hit Points to the target\.$/i.exec(effect.trim()) : null;
     if (restores) return { builtin: "rescue", within: Number(fallen[1]), heal: restores[1].replace(/\s+/g, ""), living: true, ...(perDay ? { perDay: 1 } : {}) };
@@ -1587,6 +1600,21 @@ export function readInitiativeWarning(text, item = null) {
 // creature adjacent to the assassin and within reach of the triggering attack, the assassin redirects the attack to that adjacent creature. The
 // attacker then rerolls the Strike's attack roll against the new target."; Glide Aside's "dodges and redirects the attack to a creature adjacent
 // to him …"; Deflective Dodge's "can choose to either Step or redirect the attack …" → { builtin: "redirect-attack", step }.)
+// A healing near it made small (2026-10-12, batch 195, Siphon Life): "Trigger A creature within 60 feet uses a healing effect that restores Hit
+// Points Effect … The triggering effect rolls the minimum amount on any dice rolls to restore Hit Points, and any flat values for restoring Hit
+// Points (such as the additional Hit Points for a two-action Heal spell), are cut in half. The dragon then gains 4d8 temporary Hit Points that
+// last for 1 round." → { builtin: "heal-siphon", within, tempHp, tempRounds }.
+export function readHealSiphon(text) {
+    const split = /^Trigger An? creature within (\d+) feet uses a healing effect that restores Hit Points\.? Effect (.+)$/i.exec(String(text).trim().replace(/\s*Effect: [^.]+$/i, ""));
+    if (!split) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const least = said.findIndex((sentence) => /^The triggering effect (?:rolls|results in) the minimum amount on any dice rolls to restore Hit Points, and any flat values for restoring Hit Points(?: \([^)]*\))?,? are cut in half\.$/i.test(sentence));
+    if (least < 0) return null;
+    const temp = /^(?:The )?[^.]+? then gains (\d+d\d+|\d+) temporary Hit Points that last for (\d+) rounds?\.$/i.exec(said[least + 1] ?? "");
+    if (said.length !== least + 1 + (temp ? 1 : 0) || said.slice(0, least).some((sentence) => /\d|@/.test(sentence))) return null;
+    return { builtin: "heal-siphon", within: Number(split[1]), ...(temp ? { tempHp: temp[1], tempRounds: Number(temp[2]) } : {}) };
+}
+
 export function readRedirect(text) {
     const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
     // (Batch 191, Hop-Dodge: "Trigger The cauthooj is the target of a melee Strike and is adjacent to another enemy that is also within the reach of the
@@ -1653,7 +1681,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readAuraReroll(text, item) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readAuraReroll(text, item) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text) ?? readHealSiphon(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a

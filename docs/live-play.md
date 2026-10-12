@@ -1684,10 +1684,13 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - Ray Displacement → `attack-misfortune` with `spell: true, ranged: true`.
   - Divert Essence → `resist-damage` with `value: "rank"`, `spell: true`, `types: ["spells"]`, `lasts: 1` and `until: "turn-start"`.
 - **Live:**
-  - A spell attack roll that hits a monster with Ray Displacement brings an offer that rerolls it, keeping the lower roll (PF2e's reroll from the message). Its note says it only counts against a ranged spell attack.
+  - A spell attack roll that hits a monster with Ray Displacement brings an offer that rerolls it, keeping the lower roll (PF2e's reroll from the message). Only a ranged one counts: the roll's "item:ranged" option. PF2e 8.5 types a spell's attack roll "attack-roll", with the option "item:type:spell", and the module reads both that and "spell-attack-roll" (found live; the first version waited for "spell-attack-roll" alone).
   - A spell aimed at a monster with Divert Essence (its spell attack roll, or the monster's save against a spell that isn't an area's) brings a resist offer. Use puts PF2e's resistance to spells, equal to the spell's rank, on the monster until the start of its next turn. The rank is read from the message: the cast rank, its "item:rank" option, or the spell's own. Without a rank, the note asks the GM to set it.
   - Strike misfortune and damage resistance offers leave these spell variants out.
-  - Not run in pftest.
+  - The offer buttons say "Use it: resistance N to spells".
+  - **Live-checked in pftest (2026-10-12):**
+    - An adult sage dragon's Will save against Ezren's Fear brought "Resistance 1 (the spell's rank)", read from the message's cast rank. Use put PF2e's resistance 1 to spells on it, ending at the start of its turn.
+    - Ezren's Telekinetic Projectile hit an ancient barrage dragon. Use rerolled it keeping the lower, as a new reroll message, and brought no second offer.
 - **Simulator:** see B193 in its ability decisions.
 
 ## Another ability with a push; a Dirty Trick after a tail Strike (2026-10-12, batch 194)
@@ -1698,4 +1701,20 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
   - Improved Vex → the same as a free action (`time: "free"`, `trigger.cost: "free"`). A free action's follow-up is read only when no other reading has it, so Strike riders stay riders.
 - **Live:** no new code. They are cards, as other follow-ups and save abilities are. Not run in pftest.
 - **Simulator:** a free follow-up is used at once after the hit (B194).
+
+## A creature brought back; a foe's healing at its least (2026-10-12, batch 195)
+
+- **Compiled:**
+  - Reawaken! → `rescue` with `onDeath`, `sees` (any it can see), `oncePerTarget` and `living`, in three forms:
+    - `hp: "half"` (ancient and archdragons);
+    - `hp: 0, dying: 1` (young: "returned to life with the Dying 1 condition at the start of its next turn");
+    - `hp: 0, stable: true` (adult: "stabilized at 0 HP").
+  - Siphon Life → `heal-siphon` with `within`, `tempHp` (its dice by age) and `tempRounds`. "rolls" or "results in" the minimum amount.
+- **Live:**
+  - A monster ally of the dragon dropping to 0 HP brings "Use it: bring it back", at any distance. Use sets its Hit Points (half, or 0 with Dying 1, or 0 stable and unconscious), takes off dead and defeated, and says where it is. The note says only a willing creature, and each creature once (the GM keeps to that).
+  - A foe's spell cast with the healing trait within its distance brings "Use it: the healing at its least". The note says each die is 1 and flat values are halved, for the GM to apply. Use rolls its temporary Hit Points and gives them to it when they are more than it has; their 1 round is the GM's.
+  - **Live-checked in pftest (2026-10-12):**
+    - A goblin warrior dropped to 0 HP beside an ancient resurrection dragon. Use brought it back at 3 of its 6 HP, not dead or defeated.
+    - Seelah's Lay on Hands card, posted near it, brought the Siphon Life offer. Use rolled 3d8 (16) and gave it 16 temporary HP. In the same round, with its reaction already spent on Reawaken!, it had brought no offer, as it should.
+- **Simulator:** see B195 in its ability decisions.
 
