@@ -2901,3 +2901,13 @@ test("a stance for the fight and a guard only in it, AC and Reflex while spinnin
     const leap = ability("<p><strong>Trigger</strong> Tess is targeted with a ranged attack Tess Leaps up to 20 feet horizontally, and she gains a +2 circumstance bonus to AC against the triggering attack.</p>", "reaction");
     assert.deepEqual([leap.builtin, leap.against, leap.notes?.length], ["ac-reaction", "ranged", 1]);
 });
+
+test("area saves in other words, a Strike that pushes and then knocks Prone (2026-10-12, batch 159)", () => {
+    const ability = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const stomp = ability("<p>The test giant stamps the ground, causing all creatures within @Template[emanation|distance:15]{15 feet} to fall Prone (@Check[reflex|dc:20] save negates).</p>");
+    assert.deepEqual([stomp.resolution.kind, stomp.targeting.area, stomp.resolution.outcomes.failure.effects[0].slug], ["save", { type: "emanation", value: 15 }, "prone"]);
+    const choke = ability("<p>The test husk breathes out rot that targets all living creatures within a @Template[emanation|distance:20]. Creatures in this area that fail a @Check[fortitude|dc:24] save become Sickened 1 (Sickened 2 on a critical failure).</p>");
+    assert.deepEqual([choke.resolution.outcomes.failure.effects[0].slug, choke.resolution.outcomes.criticalFailure.effects[0].value], ["sickened", 2]);
+    const strike = ability("<p>The test brute makes a melee Strike and, if the attack hits, it can push the creature back 5 feet (10 feet on a critical hit). The target must succeed at a @Check[fortitude|dc:21] save or be knocked Prone by this attack.</p>");
+    assert.deepEqual([strike.builtin, strike.onHit.push, strike.onHit.criticalPush, strike.onHit.save.resolution.check.statistic], ["strike-activity", 5, 10, "fortitude"]);
+});

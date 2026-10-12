@@ -875,6 +875,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // after a hit.)
         .replace(/\b((?:The )?[\w' -]+?|He|She|It|They) Strikes an adjacent creature, then (?:@UUID\[[^\]]*\]\{(Shoves|Trips|Grapples|Disarms|Demoralizes)\}|(Shoves|Trips|Grapples|Disarms|Demoralizes)) the same creature\./i, (_all, who, linked, plain) => `${who} makes a melee Strike. [after-strike ${(linked ?? plain).toLowerCase().replace(/s$/, "")}]`)
         .replace(/\bStrides up to two times, then makes an? ([\w' -]+?) Strike with (?:@UUID\[[^\]]*\]\{Improved Knockdown\}|Improved Knockdown)\./i, "Strides twice and makes a $1 Strike. If it hits, it can attempt to Trip the target.")
+        // (Batch 159, Massive Strike: "makes a melee Strike and, if the attack hits, it can push the creature back 10 feet (20 feet on a critical hit). The
+        // target must succeed at a Fortitude save or be knocked Prone by this attack." — the push, then the save, on a hit.)
+        .replace(/\bmakes a melee Strike and, if the attack hits, it can push the creature back (\d+) feet \((\d+) feet on a critical hit\)\. The target must succeed at a (@Check\[[^\]]*\]) save or be knocked (@UUID\[[^\]]*\]\{Prone\}|Prone) by this attack\./i, "makes a melee Strike. If it hits, the target is pushed $1 feet. On a critical hit, the target is pushed back $2 feet. If it hits, the target must succeed at a $3 save or be knocked $4.")
         // (Batch 151, Rolling Charge: "Strides twice, and can then make a Strike with its jaws. This jaws Strike gains Knockdown." — a Trip after a hit.)
         .replace(/\b(Strides twice), and can then make a Strike with (?:its|their|his|her) ([\w' -]+?)\. This \2 Strike gains (?:@UUID\[[^\]]*\]\{Knockdown\}|Knockdown)\./i, "$1 and makes a $2 Strike. If it hits, it can attempt to Trip the target.")
         // (Batch 147: Residual Force's "makes a tentacle Strike that has a reach of 20 feet and deals 2d4 additional force damage", Addling Strike's
@@ -3295,6 +3298,17 @@ function unmarkedBasic(item) {
     return withDescription(item, html.replace(/\(@Check\[([^\]]*)\]/, "(@Check[$1|basic]"));
 }
 
+// An area save in other words (2026-10-12, batch 159), rewritten as the save reading takes it: Stomp's "…, causing all creatures within 10 feet to
+// fall Prone (Reflex save negates)", Gravechoke's "… that targets all living creatures within a 30-foot emanation. Creatures in this area that
+// fail a Fortitude save become Sickened 1 (Sickened 2 on a critical failure)." → "… must succeed at a … save or …". null when neither.
+function rewordedSave(item) {
+    const html = String(item.system?.description?.value ?? "");
+    const reworded = html
+        .replace(/, causing all creatures within (@Template\[[^\]]*\](?:\{[^}]*\})?) to fall (@UUID\[[^\]]*\]\{Prone\}|Prone) \((@Check\[[^\]]*\]) save negates\)\./i, ". All creatures within $1 must succeed at a $3 save or be knocked $2.")
+        .replace(/ that targets all (living )?creatures within (an? @Template\[[^\]]*\](?:\{[^}]*\})?)\. Creatures in this area that fail an? (@Check\[[^\]]*\]) save become ([^.]+)\./i, (_all, living, area, check, result) => `. Each ${living ?? ""}creature within ${area} must succeed at a ${check} save or become ${result}.`);
+    return reworded === html ? null : withDescription(item, reworded);
+}
+
 // Scattershot (2026-10-11, batch 56): "The dragon exhales a cloud of small balls of pure energy that deal @Damage[(11d4+11)[force]] damage in
 // a @Template[type:cone|distance:60] with no save. The dragon can't use Scattershot again for 1d4 rounds." → that damage on everyone in
 // the area, no roll; its recharge. null otherwise.
@@ -3537,7 +3551,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? rewordedSave(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // (Batch 154, Exit Stage: once per mask it carries, each use breaking one — the masks on its sheet; with no creature given, the GM counts.)
     if (plan?.builtin === "ferocity" && plan.perMask) {
         delete plan.perMask;
