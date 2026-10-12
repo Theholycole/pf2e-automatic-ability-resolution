@@ -45,8 +45,9 @@ const PENALTY_TARGETS = [
 export function readPenalties(text) {
     const match = /\btakes? an? [–-](\d+) (status|circumstance|item)? ?penalty to ([^.]+?)(?=(?: for \d+ \w+| until\b|\.|$))/i.exec(htmlToPlainText(String(text ?? "")));
     // "takes a –10-foot circumstance penalty to its Speeds" (batch 121): all of its Speeds.
-    const speeds = /\btakes? an? [–-](\d+)-foot (status|circumstance|item)? ?penalty to (?:its|their|all(?: of)?(?: its| their)?) Speeds\b(?! until (?:it|they) leaves?\b)/i.exec(htmlToPlainText(String(text ?? "")));
-    if (!match && speeds) return [{ selector: "all-speeds", value: -Number(speeds[1]), type: speeds[2]?.toLowerCase() ?? "untyped", duration: readDuration(htmlToPlainText(String(text ?? ""))) }];
+    const speeds = /\btakes? an? [–-](\d+)-foot (status|circumstance|item)? ?penalty to (?:its|their|all(?: of)?(?: its| their)?) (Speeds?)\b(?! until (?:it|they) leaves?\b)/i.exec(htmlToPlainText(String(text ?? "")));
+    // (Batch 127: "… to its Speed", its land Speed.)
+    if (!match && speeds) return [{ selector: /s$/i.test(speeds[3]) ? "all-speeds" : "land-speed", value: -Number(speeds[1]), type: speeds[2]?.toLowerCase() ?? "untyped", duration: readDuration(htmlToPlainText(String(text ?? ""))) }];
     if (!match) return [];
     // "Perception and Will saves" → the saves word belongs to the last of them.
     const names = match[3].replace(/,? and /g, ", ").split(/,\s*/).map((name) => name.trim()).filter(Boolean);

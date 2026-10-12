@@ -711,7 +711,8 @@ async function activityCard(message, pending, { actor, strike, target, targetTok
     if (!rider) return;
     const sourceToken = message.token ?? pending.token ?? null;
     if (rider.plan) await activityResults(message, pending, rider, { actor, strike, target, targetToken, context, sourceToken });
-    if (rider.save && fitsSize(target.actor.size, rider.size)) await postCard({ plan: rider.save, item: pending.item, sourceActor: actor, sourceToken, tokens: [target], rider: { strikeName: strike.name, cost: "activity" } });
+    // (Batch 127, Clobber: its save only against an off-guard target — a line for the GM.)
+    if (rider.save && fitsSize(target.actor.size, rider.size)) await postCard({ plan: rider.save, item: pending.item, sourceActor: actor, sourceToken, tokens: [target], rider: { strikeName: strike.name, cost: "activity" }, ...(rider.saveIf === "off-guard" ? { warning: "Only if the target is off-guard." } : {}) });
     // A skill action after the hit (batch 35: Terrifying Charge's Demoralize): PF2e's basic action, its card on the creature hit.
     const follow = rider.follow ? basics()[rider.follow] : null;
     if (follow && target?.actor) await postCard({ plan: follow, item: pending.item, sourceActor: actor, sourceToken, tokens: [target], rider: { strikeName: strike.name, cost: "activity" } });

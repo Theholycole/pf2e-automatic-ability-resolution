@@ -2454,3 +2454,14 @@ test("Demoralize at every foe around it, in more words (2026-10-12, batch 126)",
     // (Not a choice after a move.)
     assert.equal(compile("The test marshal Strides and then either Interacts to reload a crossbow or makes an Intimidation check to Demoralize a foe."), null);
 });
+
+test("Strike activities in more words, a Speed penalty after a save (2026-10-12, batch 127)", () => {
+    const compile = (description, actions = 1, type = "action") => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    const clobber = compile("The test brute makes a club Strike. On a hit, if the target is Off-Guard, the target must succeed at a @Check[fortitude|dc:20] save or be Stunned 1.");
+    assert.deepEqual([clobber?.strike, clobber?.onHit?.saveIf, clobber?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["club", "off-guard", "stunned"]);
+    assert.deepEqual(compile("The test cultist attempts a Strike with a sickle. On a hit, she inflicts an additional @Damage[1d6[bleed]] damage.")?.onHit?.damage, ["1d6[bleed]"]);
+    const cut = compile("The test barber attempts a razor Strike against an adjacent target. If he hits, the blade cuts deep and creates a grievous wound. In addition to the normal damage caused by the attack, the creature struck takes @Damage[2d6[bleed]] damage and becomes Wounded 1 (or increases the value of an existing wounded condition by 1, to a maximum of Wounded 4).", 2);
+    assert.deepEqual([cut?.onHit?.damage, cut?.onHit?.conditions?.[0]?.slug], [["2d6[bleed]"], "wounded"]);
+    const volley = compile("Each creature in a @Template[type:burst|distance:20] within 60 feet must attempt a @Check[fortitude|dc:20] saving throw. On a failure, a creature takes a –10-foot circumstance penalty to its Speed for 1 minute.", 2);
+    assert.deepEqual(volley?.resolution?.outcomes?.failure?.modifiers?.[0]?.selector, "land-speed");
+});

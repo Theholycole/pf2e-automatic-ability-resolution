@@ -628,7 +628,8 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     const pull = pulled?.kind === "pull" ? pulled : null;
     const dies = /^\s*(?:(?:it|they|the (?:creature|target)) )?(?:instantly |immediately )?(?:die|dies|be (?:instantly )?(?:killed|slain))\b/i.test(htmlToPlainText(failure));
     // "…save or take a –1 status penalty to attack rolls until the end of its next turn".
-    const penalties = /^\s*(?:take|takes|be|suffer)\b/i.test(htmlToPlainText(failure)) ? readPenalties(failure) : [];
+    // (Batch 127: after its subject too, "On a failure, a creature takes a –10-foot circumstance penalty to its Speed for 1 minute".)
+    const penalties = /^\s*(?:(?:an?|the|that|each) (?:creature|target) )?(?:take|takes|be|suffer)\b/i.test(htmlToPlainText(failure)) ? readPenalties(failure) : [];
     if (!failEffects.length && !failDamage.length && !before && !shoved && !pull && !dies && !penalties.length && !(riders && (critDamage.length || extraDamage.length || (critical && (read(critical).length || /\bpush|\bshove/i.test(critical)))))) return null;
     const row = (effects, damage, multiplier) => ({
         damage: before ? { mode: "shared", multiplier, sourceComponentIds: components.map((component) => component.id) } : damage.length ? { mode: "formulas", formulas: damage, rollScope: "outcome" } : { mode: "none", multiplier: 0, sourceComponentIds: [] },
@@ -667,12 +668,15 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
     const pushed = (outcome, distance = shoved?.[1]) => (distance ? { ...outcome, forcedMovement: { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } } : outcome);
     // A pull toward the monster: farther on a critical failure when its bracket says so ("(15 feet on a critical failure)").
     const pulling = (outcome, critical = false) => (pull && !outcome.forcedMovement ? { ...outcome, forcedMovement: { ...pull, distance: Number((critical && farther?.[1]) || pull.distance) } } : outcome);
-    const ending = (outcome) => ({ ...(dies ? { ...outcome, terminal: { kind: "death" } } : outcome), ...(penalties.length ? { modifiers: structuredClone(penalties) } : {}) });
+    // (Batch 127: "on a critical failure, … and the penalty to Speed lasts for 1 minute" — the critical failure's penalty for that long.)
+    const penaltyLasts = critical ? /\bthe penalty(?: to [\w ]+?)? lasts for ((?:\d+|one|ten) (?:round|minute|hour)s?)\b/i.exec(htmlToPlainText(critical)) : null;
+    const critPenalties = penaltyLasts ? penalties.map((penalty) => ({ ...penalty, duration: readDuration(`for ${penaltyLasts[1]}`) })) : penalties;
+    const ending = (outcome, criticalRow = false) => ({ ...(dies ? { ...outcome, terminal: { kind: "death" } } : outcome), ...(penalties.length ? { modifiers: structuredClone(criticalRow ? critPenalties : penalties) } : {}) });
     return {
         criticalSuccess: row([], [], regardless ? 1 : 0),
         success: before && !negates ? row(successEffects, [], regardless ? 1 : 0.5) : row(successEffects, [], 0),
         failure: ending(pulling(pushed(row(failEffects, failDamage, 1)))),
-        criticalFailure: ending(pulling(pushed(row(critEffects, critFormulas, regardless ? 1 : 2), pull ? critShoved?.[1] ?? shoved?.[1] : farther?.[1] ?? critShoved?.[1] ?? shoved?.[1]), true))
+        criticalFailure: ending(pulling(pushed(row(critEffects, critFormulas, regardless ? 1 : 2), pull ? critShoved?.[1] ?? shoved?.[1] : farther?.[1] ?? critShoved?.[1] ?? shoved?.[1]), true), true)
     };
 }
 
@@ -739,7 +743,10 @@ function openingParts(text) {
     let plain = text
         .replace(/^It make an? /, "It makes a ")
         .replace(/, making (?:an?|one) ((?:[\w' -]+? )?Strike)\b/i, " and makes a $1")
-        .replace(/\b(makes|attempts) an? (?:melee |ranged )?Strike with (?:its|his|her|their) ([a-z][\w' -]*?)(?=[.,]| against\b)/i, "$1 a $2 Strike")
+        // (Batch 127: "attempts a Strike with a falchion", "makes a ranged Strike with the dagger with the range increment to 30 feet".)
+        .replace(/ with the range increment (?:to|of) \d+ feet(?=\.$)/i, "")
+        // (Not "a Strike with a voidglass weapon": a kind of weapon, its best Strike as before.)
+        .replace(/\b(makes|attempts) an? (?:melee |ranged )?Strike with (its|his|her|their|an?|the) ([a-z][\w' -]*?)(?=[.,]| against\b)/i, (whole, verb, owner, name) => (/^an?$/i.test(owner) && /\bweapon$/i.test(name) ? whole : `${verb} a ${name} Strike`))
         .replace(/\b((?:[\w' -]+? )?)strike gaining an? \+(\d+) (?:status|circumstance) bonus to the damage roll(?=\.$)/, (_all, name, value) => {
             damageBonus += Number(value);
             return `${name}Strike`;
@@ -930,6 +937,19 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^If it hits, the creature is pushed (\d+) feet(?=\.$)/i, "If it hits, the target is pushed $1 feet")
             .replace(/^If the target is wearing metal armor, its armor also takes the damage, which bypasses \d+ of the armor's Hardness\.$/i, "[gm]")
             .replace(/^The Strike ignores the Concealed condition, lesser cover, and standard cover, and reduces greater cover to standard cover\.$/i, "[gm]")
+            // (Batch 127: Clobber's "On a hit, if the target is Off-Guard, the target must succeed at …" — its save only against an off-guard
+            // target; Go for the Eyes' critical hit making the save one degree worse and Throw Shadow Blade's dagger losing its magic, the GM's;
+            // Grievous Cut's "If he hits, the blade cuts deep …. In addition to the normal damage caused by the attack, the creature struck takes
+            // … and becomes Wounded 1 (or increases …)"; "(double damage on a critical success)", as any rider's damage.)
+            .replace(/^On a hit, if the target is Off-Guard, (?=the target must succeed)/i, () => {
+                activity.onHit.saveIf = "off-guard";
+                return "On a hit, ";
+            })
+            .replace(/^If the Strike was a critical hit, the target's save result is one degree of success worse\.$|^The [\w' -]+? loses its [\w' -]+? magic as soon as the attack is resolved\.$/i, "[gm]")
+            .replace(/^If (?:it|he|she|they) hits, the (?:blade|weapon|claw|jaws|bite) (?:cuts|bites|tears) deep and creates a grievous wound\.$/i, "[told]")
+            .replace(/^In addition to the normal damage caused by the attack, the creature struck takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage and becomes Wounded (\d)(?: \(or increases the value of an existing wounded condition by 1, to a maximum of Wounded 4\))?\.$/i, "If it hits, the creature struck takes $1 damage and becomes Wounded $2.")
+            .replace(/ \(double damage on a critical (?:success|hit)\)/i, "")
+            .replace(/^On a hit, (?:it|he|she|they) inflicts? an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage(?=\.$)/i, "If it hits, it deals an additional $1 damage")
             // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
             .replace(/\bStrikes with (?:its|their|his|her) ([\w' -]+?) at an? ([-\u2013\u2212]\d+) circumstance penalty(?=\.$)/i, "makes a $1 Strike with a $2 circumstance penalty to its attack roll")
             // (Stunning Strike's "makes a weapon Strike against the foe": the foe its requirement hit.)
@@ -956,7 +976,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
             activity.damageBonus += lead?.damageBonus ?? 0;
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
-        if (/^\[grab time\]\.?$/.test(text)) continue;
+        if (/^\[grab time\]\.?$/.test(text) || text === "[told]") continue;
         // (Batch 112: what the GM handles, kept as a note.)
         if (text === "[gm]") {
             (activity.notes ??= []).push(htmlToPlainText(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim());

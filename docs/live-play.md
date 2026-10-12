@@ -1369,3 +1369,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** a GM line on use with the notes, and "if the first Strike hits, the target is off-guard against the second Strike"; checked in pftest with the myrucarx and Nishkiv.
 - **Simulator:** as before (the off-guard after a first hit and the both-hit riders were already played).
 
+## Strike activities in more words (2026-10-12, batch 127)
+
+- **Compiled:** "On a hit, if the target is Off-Guard, the target must succeed at a … save or be Stunned 2" → `onHit.saveIf: "off-guard"`; "attempts a Strike with a falchion"; "makes a ranged Strike with the dagger with the range increment to 30 feet"; "On a hit, he inflicts an additional 2d6 bleed damage"; Grievous Cut's "In addition to the normal damage caused by the attack, the creature struck takes 4d6 bleed damage and becomes Wounded 1 (…)"; the critical hit's worse save, a weapon's magic lost → notes. "a Strike with a voidglass weapon" stays its best Strike.
+- **Live:** the save card after the Strike hits says "Only if the target is off-guard."; checked in pftest with the Black Whale guard.
+- **Simulator:** the save only when the target is off-guard (B130).
+
