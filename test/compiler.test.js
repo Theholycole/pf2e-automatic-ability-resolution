@@ -2740,3 +2740,10 @@ test("a long-limbed Strike that grabs or trips on a hit (2026-10-12, batch 148)"
     const lash = ability("<p>The test wyrm makes a lash Strike against a creature within 40 feet; on a success, it can also try to Trip it with a +1 circumstance bonus.</p>");
     assert.deepEqual([lash.strike, lash.onHit.follow, lash.notes], ["lash", "trip", ["Its reach is 40 feet for this Strike.", "+1 circumstance bonus to the Trip."]]);
 });
+
+test("a turn to water against energy or physical damage, staying up at 1 Hit Point, a lowercase effect in a trigger (2026-10-12, batch 149)", () => {
+    const reaction = (text) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: text } } }, { basicActions: {} });
+    // (Made-up wordings; two Battlezoo dragons' reactions say the same in their own words.)
+    assert.deepEqual(reaction("<p><strong>Trigger</strong> The test eel is the target of an attack or a spell able to deal sonic or physical damage</p><hr /><p><strong>Effect</strong> The test eel goes slick as oil. It gains resistance 7 to sonic and all physical damage against it.</p>"), { builtin: "resist-damage", value: 7, on: ["sonic", "physical"], types: ["sonic", "physical"] });
+    assert.deepEqual(reaction("<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> An attack or another effect would bring the test drake down to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test drake grits its fangs. It stays on its feet with 1 Hit Point. It then uses the Test Second Wind ability.</p>"), { builtin: "ferocity", hp: 1, wounded: false, uses: 1 });
+});

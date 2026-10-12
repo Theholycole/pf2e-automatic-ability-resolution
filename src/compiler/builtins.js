@@ -808,6 +808,16 @@ function readResistDamage(text, trigger, effect) {
         on = phrase.trim() ? damageTypesIn(phrase) : null;
         if (phrase.trim() && !on) return null;
         foe = true;
+    } else if ((match = new RegExp(String.raw`^${self} (?:is targeted by a Strike or spell that could deal|is the target of an attack or a spell able to deal) ([a-z]+) or physical damage(?: to (?:it|them|him|her))?$`).exec(said)) && damageTypesIn(match[1])) {
+        // (Batch 149, a Battlezoo dragon's turn to water: an attack or a spell of one energy or physical damage aimed at it — read as that
+        // damage on it; "against the triggering effect, … resistance N to <that energy> and to all physical damage".)
+        on = [...damageTypesIn(match[1]), "physical"];
+        const both = new RegExp(String.raw`^(?:Against the triggering effect, )?(?:they|it|he|she) gains? resistance (\d+) to ${match[1]} and(?: to)? all physical damage(?: against (?:it|the triggering effect))?\.$`, "i");
+        const parts = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
+        const last = both.exec(parts.at(-1) ?? "");
+        const told = (sentence) => !/\d|\b(?:damage|resistance|Strikes?|Steps?|Strides?|teleports?|Fl(?:y|ies)|attack rolls?|saves?|checks?|penalty|bonus)\b/i.test(sentence);
+        if (last && parts.slice(0, -1).every(told)) return { builtin: "resist-damage", value: Number(last[1]), on, types: [match[1].toLowerCase(), "physical"] };
+        return null;
     } else return null;
     // Its effect: the resistance, perhaps after a sentence that only tells it; an AC that drops for a day ("cannot be reduced below 16").
     const T = DAMAGE_WORDS;
@@ -1210,7 +1220,8 @@ export function readReaction(item, text) {
     if (below) return { builtin: "reaction-strike", triggers: ["approach"], strike: below[1].toLowerCase(), penalty: 0, disrupts: false, while: "flying" };
     // (Batch 145: a riposte's trigger with no "Effect" label, "Trigger A creature within your reach critically fails to Strike you. A clever parry …".)
     text = text.replace(/^Trigger (A creature within your reach critically fails (?:a melee Strike against|to Strike) you)\.\s+(?!Effect\b)/i, "Trigger $1 Effect ");
-    const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
+    // (Batch 149: the labels as written, capitalised — "An attack or effect would …" in a trigger isn't its Effect.)
+    const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/.exec(text)?.[1] ?? "", /\bEffect (.+)$/.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
     // (Batch 86: Counterspell's kin — a spell or effect that sets it off, and an attempt to counteract it: "Trigger The nullifier is the target
@@ -1260,13 +1271,16 @@ export function readReaction(item, text) {
     // wounded value increases by 1" or "… regains 4d10 Hit Points …" (a Mythic Point), Indomitable Beast's "… remains at 1 HP, then can
     // make a stinger Strike against a creature in its reach", Never Fall's "He remains standing with 25 Hit Points" (the first time a
     // day) → { builtin: "ferocity", hp (1, "half", a number or a formula), wounded, uses?, strike?, mythic?, free? }.
-    const downed = /^(?:The )?[^.]+? (?:would be reduced to 0 (?:Hit Points|HP)(?: but not immediately killed)?|is reduced to 0 (?:Hit Points|HP))\.?$|^(?:The )?[^.]+?['’]s Hit Points are reduced to 0 for the first time that day\.?$/i.test(trigger.trim().replace(/\s*Requirements? (?:The )?[^.]+? is not Wounded 3\.?$/i, ""));
+    // (Batch 149, a Battlezoo dragon's will to stay up as it would drop to 0: it keeps 1 Hit Point and uses another ability of its own — that
+    // one the GM's.)
+    const downed = /^(?:The )?[^.]+? (?:would be reduced to 0 (?:Hit Points|HP)(?: but not immediately killed)?|is reduced to 0 (?:Hit Points|HP))\.?$|^(?:The )?[^.]+?['’]s Hit Points are reduced to 0 for the first time that day\.?$|^An attack or (?:an(?:other)? )?effect would (?:reduce|bring) (?:the [\w' -]+?|it|them) (?:down )?to 0 (?:Hit Points|HP)\.?$/i.test(trigger.trim().replace(/\s*Requirements? (?:The )?[^.]+? is not Wounded 3\.?$/i, ""));
     if (downed) {
         const said = effect.trim().replace(/@Damage\[(\d+)\[healing\]\](?:\{[^}]*\})?/gi, "$1").replace(/@Damage\[\(?([\dd+ ]+?)\)?\[healing\]\](?:\{[^}]*\})?/gi, "$1").replace(/\s*When it is Wounded 3, it can no longer use this ability\.$/i, "");
         const told = said.split(/(?<=\.)\s+(?=[A-Z])/);
         const body = told.length > 1 && !/\d|\b(?:Hit Points?|HP|knocked out|wounded|Strike)\b/i.test(told[0]) ? told.slice(1).join(" ") : said;
         const stays = /^(?:The )?[^.]+? avoids being knocked out and (?:remains at (1|half its maximum) (?:Hit Points?|HP)|regains (\d+d\d+(?:\s*[+-]\s*\d+)?|\d+) Hit Points)(?:,? (?:and|but) (?:her|his|its|their) (?:Wounded condition|wounded value) increases by 1|, then can make an? ([\w' -]+?) Strike against a creature in (?:its|their|his|her) reach)?\.$/i.exec(body)
-            ?? /^(?:They|He|She|It|The [\w' -]+?) remains? standing with (\d+) Hit Points\.$/i.exec(body);
+            ?? /^(?:They|He|She|It|The [\w' -]+?) remains? standing with (\d+) Hit Points\.$/i.exec(body)
+            ?? /^(?:They|He|She|It|The [\w' -]+?) (?:remains? at (1) Hit Point and stays standing|stays? on (?:its|their) feet with (1) Hit Point)\.(?: (?:They|He|She|It|The [\w' -]+?) then (?:immediately )?uses (?:the )?[A-Z][\w' -]+? ability\.)?$/i.exec(body);
         if (stays) {
             const wounded = /\bwounded\b/i.test(body);
             const hp = /^half/i.test(stays[1] ?? "") ? "half" : stays[2] ?? Number(stays[1]);
