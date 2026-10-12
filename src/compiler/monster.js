@@ -3326,6 +3326,32 @@ function clingBite(item, actor) {
     return triggered ? { ...triggered, notes: [...(triggered.notes ?? []), ...notes] } : null;
 }
 
+// A grab on the creature that missed it (2026-10-12, batch 246, Robe Tangle): "Trigger An adjacent creature misses the Iroran mummy with a melee Strike
+// Effect The mummy swaps positions with the attacker, and the attacker becomes Grabbed by the mummy's animated sash. The Escape DC is 29, the Force
+// Open DC is 27, and a creature can sever the sash by hitting AC 27 and dealing at least 20 slashing damage. The mummy can't use this reaction again
+// until they've Interacted to reclaim the sash." → Grabbed on the attacker; the swap, the DCs and the sash, notes. null otherwise.
+function grabOnMiss(item, actor) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (trigger?.event !== "hit-by" || !trigger.missed) return null;
+    const sentences = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    if (!/^(?:The )?[^.]+? swaps positions with the attacker, and the attacker becomes Grabbed by (?:the [\w' -]+?['’]s|its|their) [\w' -]+?\.$/i.test(sentences[0] ?? "")) return null;
+    const notes = ["It swaps places with the attacker first."];
+    for (const sentence of sentences.slice(1)) {
+        const dcs = /^The Escape DC is (\d+), the Force Open DC is (\d+), and a creature can sever the ([\w' -]+?) by hitting AC (\d+) and dealing at least (\d+) slashing damage\.$/i.exec(sentence);
+        if (dcs) notes.push(`Escape DC ${dcs[1]}, Force Open DC ${dcs[2]}; a hit against AC ${dcs[4]} dealing ${dcs[5]} or more slashing damage cuts the ${dcs[3]}.`);
+        else if (/^(?:The )?[^.]+? can(?:'t|not) use this reaction again until (?:it|they)(?:['’]ve| have) Interacted to reclaim the [\w' -]+?\.$/i.test(sentence)) notes.push("It can't use this again until it Interacts to take it back.");
+        else return null;
+    }
+    const rewritten = withDescription(item, `<p><strong>Trigger</strong> ${split[1].trim()}</p><hr /><p><strong>Effect</strong> The attacker becomes @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}.</p>`);
+    const plan = automaticEffect(rewritten, actor);
+    const triggered = plan ? reactionTrigger(rewritten, plan, actor) : null;
+    return triggered ? { ...triggered, notes: [...(triggered.notes ?? []), ...notes] } : null;
+}
+
 function areaExposure(item, actor) {
     if (item.system?.actionType?.value === "reaction") return exposureReaction(item, actor);
     if (item.system?.actionType?.value !== "action") return null;
@@ -4632,7 +4658,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -4687,6 +4713,9 @@ export function readReactionTrigger(text) {
     if (escaping) return { event: "escape-failed", reaction: true, ...(/^critically/i.test(escaping[1]) ? { critical: true } : {}) };
     // (Batch 225, Serrated Teeth: "A creature Grabbed or Restrained by the allosaurus's jaws succeeds at an Escape check" — one it held getting free.)
     if (new RegExp(String.raw`^An? creature (?:Grabbed|grabbed)(?: or Restrained)? by ${SELF}(?:['’]s [\w' -]+?)? succeeds at an? (?:Escape check|(?:skill )?check to Escape)$`).test(trigger)) return { event: "escaped", reaction: true };
+    // (Batch 246, Robe Tangle: "An adjacent creature misses the Iroran mummy with a melee Strike" — a miss on it: hit-by with missed.)
+    const missing = new RegExp(String.raw`^An? (adjacent )?(?:creature|enemy|foe) (critically )?misses ${SELF} with an? (melee )?(?:Strike|attack)$`).exec(trigger);
+    if (missing) return { event: "hit-by", reaction: true, missed: true, melee: Boolean(missing[1] || missing[3]), ...(missing[2] ? { critical: true } : {}), ...(missing[1] ? { within: 5 } : {}) };
     // A foe's mishap near it (batch 57, Jeer at Failure): "A foe within 90 feet becomes Prone or critically fails on a Strike".
     const mishap = /^An? (?:foe|enemy) within (\d+) feet becomes Prone or critically fails on a Strike$/i.exec(trigger);
     if (mishap) return { event: "foe-mishap", reaction: true, within: Number(mishap[1]) };

@@ -157,3 +157,11 @@ test("offer buttons: a creature brought back, a healing at its least, resistance
 test("a teleport after the creature's action: its follow offer says so (2026-10-12, batch 242)", () => {
     assert.equal(followMove({ move: "Teleport", within: 60 }).note, "After the creature's action, it teleports up to 60 feet to a space beside it: move its token there.");
 });
+
+test("a miss on it sets off a missed trigger, not a hit (2026-10-12, batch 246)", () => {
+    const missed = { event: "hit-by", reaction: true, missed: true, melee: true, within: 5 };
+    assert.equal(hitSetsOff(missed, { outcome: "failure", distance: 5 }), true);
+    assert.equal(hitSetsOff(missed, { outcome: "success", distance: 5 }), false);
+    assert.equal(hitSetsOff({ ...missed, critical: true }, { outcome: "failure", distance: 5 }), false);
+    assert.equal(hitSetsOff({ ...missed, critical: true }, { outcome: "criticalFailure", distance: 5 }), true);
+});

@@ -1047,6 +1047,9 @@ export function readSweep(text) {
     let noMomentum = false;
     const notes = [];
     const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(stated, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "")
+        // (Batch 246, Tomorrow's Fury: "… makes claw attacks against any number of targets within reach. The claw attacks count against the morrowkin's
+        // multiple attack penalty, but don't apply the penalty until after all attacks have been made.")
+        .replace(/^((?:The )?[^.]+?) makes ([\w' -]+?) attacks against any number of targets within reach\. The \2 attacks count against (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, but (?:don't|do not) apply the penalty until after all attacks have been made\./i, "$1 makes a $2 Strike against each creature within its reach. These attacks count toward its multiple attack penalty, but the multiple attack penalty doesn't increase until after all the attacks.")
         .replace(/^((?:The )?[^.]+?) Strides(?:, Climbs,? or Swims)? up to (?:its|their|his|her) Speed(?: in a straight line)? and then makes? an? ([\w' -]+?) Strike (?:at all creatures within reach at the end of (?:its|their|his|her) movement|against every creature in (?:its|their|his|her) reach once (?:it|they|he|she) stops?)\./i, (_all, who, name) => {
             strides = 1;
             notes.push("It moves up to its Speed in a straight line first (Stride, Climb or Swim).");
@@ -2161,7 +2164,13 @@ export function readReaction(item, text) {
     if (breaking) return { builtin: "reactive-strike", note: `Against a creature casting an ${breaking[1].toLowerCase()} spell: a hit disrupts the spell unless it succeeds at a DC ${breaking[2] ?? breaking[3]} flat check; a critical hit always does.` };
     // Undying Myth (batch 41): "Cost all the creature's Mythic Points Trigger The creature would die and has at least 1 Mythic Point Effect
     // The creature remains standing and conscious, and recovers 50% of its maximum Hit Points."
-    const undying = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious, and recovers (\d+)% of (?:its|their|his|her) maximum Hit Points\.?$/i.exec(text.trim());
+    // (Batch 246: "recovers @Damage[(floor(…hp.max/2))[healing]]{50% of its maximum Hit Points}" — its label; Verex's "and 50% of its maximum Hit
+    // Points" with no verb; the Oliphaunt's "When … would die, as long as it has at least 1 Mythic Point, it immediately expends all remaining Mythic
+    // Points it has, remains standing …".)
+    const undyingText = text.trim().replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\]\{(\d+% of (?:its|their|his|her) maximum Hit Points)\}/g, "$1")
+        .replace(/\bEffect When [^,.]+? would die, as long as (?:it|they|he|she) (?:has|have) at least 1 Mythic Point, (?:it|they|he|she) immediately expends? all remaining Mythic Points (?:it|they|he|she) (?:has|have), (remains)/i, "Effect It $1")
+        .replace(/\b(remains (?:standing and )?conscious, and) (\d+% of)/i, "$1 recovers $2");
+    const undying = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious, and recovers (\d+)% of (?:its|their|his|her) maximum Hit Points\.?$/i.exec(undyingText);
     if (undying && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", fraction: Number(undying[1]) / 100 };
     const undyingHp = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious,? and recovers (\d+) Hit Points\.?$/i.exec(text.trim().replace(/@Damage\[(\d+)\[healing\]\](?:\{[^}]*\})?/g, "$1"));
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };

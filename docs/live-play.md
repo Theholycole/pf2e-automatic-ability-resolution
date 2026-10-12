@@ -2390,3 +2390,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a creature starting its turn in the monster's reach gets the Strike offer ("started its turn in its reach"), a free action's not spending its reaction.
 - **Simulator:** see B245 in its ability decisions.
 
+## Undying Myth, Tomorrow's Fury, Robe Tangle (2026-10-12, batch 246)
+
+- **Compiled:**
+  - **Undying Myth** in two more wordings (War of Immortals) → `mythic` `undying` with `fraction: 0.5`:
+    - its healing as `@Damage[(floor(…hp.max/2))[healing]]{50% of its maximum Hit Points}`;
+    - "When … would die, as long as it has at least 1 Mythic Point, it immediately expends all remaining Mythic Points …".
+  - **Claw attacks at any number of creatures in reach** (Tomorrow's Fury) → `multi-strike` at each creature in reach, at one multiple attack penalty.
+  - **A grab on a creature that missed it** (Robe Tangle): the trigger "An adjacent creature misses … with a melee Strike" → `hit-by` with `missed: true`. The attacker is Grabbed; the swap, the DCs and taking the sash back are notes.
+- **Live:** a melee miss on the monster offers its card (`hitSetsOff` reads `missed`, and a critical miss when `critical`).
+- **Simulator:** see B246 in its ability decisions.
+

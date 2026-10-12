@@ -56,8 +56,9 @@ export const reactionRounds = (position, current) => (position > current ? 0 : 1
 // within the thoqqua's reach hits the thoqqua with a melee Strike"; a passive's too, batch 19): does this attack roll set it
 // off? distance: the attacker's, in feet (null when unknown).
 export function hitSetsOff(trigger, { outcome, ranged = false, unarmed = false, distance = null }) {
-    if (trigger?.event !== "hit-by" || !["success", "criticalSuccess"].includes(outcome)) return false;
-    if (trigger.critical && outcome !== "criticalSuccess") return false;
+    // (Batch 246, Robe Tangle: a miss on it instead — missed, a critical one with critical.)
+    if (trigger?.event !== "hit-by" || !(trigger.missed ? ["failure", "criticalFailure"] : ["success", "criticalSuccess"]).includes(outcome)) return false;
+    if (trigger.critical && outcome !== (trigger.missed ? "criticalFailure" : "criticalSuccess")) return false;
     if (trigger.melee && ranged) return false;
     if (trigger.unarmed && !unarmed) return false;
     return !(trigger.within && Number.isFinite(distance) && distance > trigger.within);
