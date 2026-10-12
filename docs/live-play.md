@@ -1968,7 +1968,11 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - The resistance offer gives back half the damage for "half".
   - For "triggering" it gives back up to 5 of the type it took most of, and the lasting effect is resistance to that type.
   - The save bonus is offered only for its Reflex save, with the area a note.
-  - Not run in pftest.
+- **Live check (pftest, 2026-10-12):** done with Monster Core 2 creatures beside Valeros.
+  - **Runic Resistance:** Valeros's 16 slashing → the offer "Resistance 5 to slashing … for 10 rounds … 5 HP back". Use: 74 → 79 HP, and a 10-round effect of Resistance 5 to slashing, which PF2e lists.
+  - **Shadow Siphon:** Ezren's Force Barrage for 5 → "Half this damage, only from a spell or magical effect … 2 HP back". Use: 210 → 212 HP, no lasting effect. The offer named Valeros, whose turn it was, as the attacker: resistance offers take the turn's creature as the source.
+  - **Scatter:** 25 Reflex saves against DC 27. Only a failure by 1 (26) was offered: "+2 to the save turns a failure into a success. Only against an area effect …". Failures by more got nothing. Two Will saves that also missed by 2 or less got no offer.
+  - **Frightening Flurry** (batch 213): the GM's whisper "the target becomes Frightened with a value equal to the number of its Strikes that hit it".
 - **Simulator (B214):**
   - `resistReaction` halves the damage after resistances for "half", a spell's only with `magical`.
   - `"triggering"` resists the largest type, kept by `lasts`.
