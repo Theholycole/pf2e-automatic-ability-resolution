@@ -772,6 +772,119 @@ export function readCritUpgrade(text) {
     return match ? { builtin: "crit-upgrade", perDay: 1, ...(match[1] ? { ferocityRecharges: true } : {}), free: true } : null;
 }
 
+// More reaction Strikes and maneuvers (2026-10-11, batch 105), each in its own words:
+// - Clawed Feet: "Trigger The gargoyle is Flying, and a creature moves into an adjacent square below it. Effect The gargoyle makes a claw
+//   Strike against the triggering creature." → triggers ["approach"], while "flying" (or "swimming"; the GM checks it).
+// - Quick Capture: "Trigger A creature hits or touches the flytrap. Effect The flytrap makes a leaf Strike against the triggering creature.
+//   If it hits, the creature is Grabbed in that leaf." → ["hit"], grab.
+// - Reflexive Grab: "Trigger A creature leaves a square within the gylou's reach using a move action or attempts a melee Strike against the
+//   gylou Effect The gylou lashes out with a tentacle, attempting to Grapple the triggering creature. …" → ["leave", "attacked"], skill
+//   "grapple", melee, release (the attacker may let go of its weapon to make the Grapple fail).
+// - Clutching Armor: "Trigger A creature attempts to move away from the graveknight Effect The graveknight's armor animates and attempts to
+//   Grab the triggering creature. It makes an Athletics check to Grapple using the graveknight's Athletics modifier – 2. …" → ["leave"],
+//   skill "grapple", penalty 2.
+// - Wrappings Lash: "Trigger A creature within reach of the morrigna's web wrappings uses an action to Strike or attempt a skill check Effect
+//   The morrigna makes a web wrappings Strike against the triggering creature. If the strike is a critical hit, the triggering action is
+//   disrupted." → ["strike", "skill"], disrupts "critical".
+// - Retaliating Strike: "Trigger The carnivorous blob takes damage from any source Effect The blob makes a pseudopod Strike against an
+//   adjacent target. If an adjacent creature dealt the triggering damage, that creature is the target …" → ["damaged-by"] (the attacker
+//   when it's beside it, else another beside it).
+// - Deadly Cleave: "Trigger The redcap reduces a creature to 0 Hit Points with a halberd Strike Effect The redcap makes another halberd
+//   Strike against a different creature, using the same multiple attack penalty as the halberd Strike that triggered this reaction. …" →
+//   ["downs"], sameMap.
+function readMoreReactionStrikes(trigger, effect) {
+    const it = String.raw`(?:the [\w' -]+?|it|them|him|her|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*)`;
+    const sentences = effect.split(/(?<=\.)\s+(?=[A-Z])/);
+    const back = (sentence) => /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the triggering creature\.$/i.exec(sentence ?? "");
+    // (The kapoacinth's "is Swimming": while: "swimming".)
+    const above = new RegExp(String.raw`^${it} is (Flying|Swimming), and a creature moves into an adjacent square below ${it}$`, "i").exec(trigger);
+    if (above) {
+        const struck = sentences.length === 1 ? back(sentences[0]) : null;
+        if (struck) return { builtin: "reaction-strike", triggers: ["approach"], strike: struck[1].toLowerCase(), penalty: 0, disrupts: false, while: above[1].toLowerCase() };
+    }
+    if (new RegExp(String.raw`^A creature hits or touches ${it}$`, "i").test(trigger)) {
+        const struck = back(sentences[0]);
+        if (struck && sentences.length === 2 && /^If it hits, the creature is Grabbed(?: in that [\w' -]+?)?\.$/i.test(sentences[1])) return { builtin: "reaction-strike", triggers: ["hit"], strike: struck[1].toLowerCase(), penalty: 0, disrupts: false, grab: true };
+    }
+    if (new RegExp(String.raw`^A creature leaves a square within (?:the [\w' -]+?['’]s|its|their) reach using a move action or attempts a melee Strike against ${it}$`, "i").test(trigger)
+        && /^(?:The )?[^.]+? (?:lashes out with [^,.]+, )?attempting to Grapple the triggering creature\.$/i.test(sentences[0] ?? "")
+        && sentences.slice(1).every((sentence) => /^If the triggering Strike was with a melee weapon, the attacking creature can Release the weapon to cause [^.]+? to automatically fail the Athletics check\.$/i.test(sentence))) {
+        return { builtin: "reaction-strike", triggers: ["leave", "attacked"], strike: null, skill: "grapple", penalty: 0, disrupts: false, melee: true, ...(sentences.length > 1 ? { release: true } : {}) };
+    }
+    if (new RegExp(String.raw`^A creature attempts to move away from ${it}$`, "i").test(trigger) && /^(?:The )?[^.]+? attempts? to Grab the triggering creature\.$/i.test(sentences[0] ?? "")) {
+        const check = /^(?:It|They) makes? an Athletics check to Grapple using (?:the [\w' -]+?['’]s|its|their) Athletics modifier(?: [-–−] ?(\d+))?\.$/i.exec(sentences[1] ?? "");
+        const rest = sentences.slice(2).every((sentence) => /^The [\w' -]+? can continue to Grapple the creature normally\.$|^Since the [\w' -]+? is grappling the creature, [^.]+? doesn't need a free hand to do so\.$/i.test(sentence));
+        if (check && rest) return { builtin: "reaction-strike", triggers: ["leave"], strike: null, skill: "grapple", penalty: Number(check[1]) || 0, disrupts: false };
+    }
+    if (new RegExp(String.raw`^A creature within reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+? uses an action to Strike or attempt a skill check$`, "i").test(trigger)) {
+        const struck = back(sentences[0]);
+        if (struck && sentences.length <= 2 && (sentences.length === 1 || /^If the strike is a critical hit, the triggering action is disrupted\.$/i.test(sentences[1]))) return { builtin: "reaction-strike", triggers: ["strike", "skill"], strike: struck[1].toLowerCase(), penalty: 0, disrupts: sentences.length === 2 ? "critical" : false };
+    }
+    if (new RegExp(String.raw`^${it} takes damage from any source$`, "i").test(trigger)) {
+        const struck = /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against an adjacent (?:target|creature)\.$/i.exec(sentences[0] ?? "");
+        if (struck && sentences.length === 2 && /^If an adjacent creature dealt the triggering damage, that creature is the target of this [\w' -]+?\.$/i.test(sentences[1])) return { builtin: "reaction-strike", triggers: ["damaged-by"], strike: struck[1].toLowerCase(), penalty: 0, disrupts: false };
+    }
+    const downed = new RegExp(String.raw`^${it} reduces a creature to 0 Hit Points with an? ([\w' -]+?) Strike$`, "i").exec(trigger);
+    if (downed) {
+        const name = downed[1].toLowerCase();
+        const again = new RegExp(String.raw`^(?:The )?[^.]+? makes another ${name} Strike against a different creature, using the same multiple attack penalty as the ${name} Strike that triggered this reaction\.$`, "i").test(sentences[0] ?? "");
+        if (again && sentences.slice(1).every((sentence) => /^This counts toward (?:its|their|his|her) multiple attack penalty(?: as normal)?\.$/i.test(sentence))) return { builtin: "reaction-strike", triggers: ["downs"], strike: name, penalty: 0, disrupts: false, sameMap: true };
+    }
+    return null;
+}
+
+// A reaction that takes an ally's damage, or keeps an ally from dropping (2026-10-11, batch 106):
+// - Human Shield: "Trigger The toady's boss takes damage from an attack, and the toady is adjacent to them Effect The toady takes the damage
+//   instead, along with any secondary effects of attack. This damage can't be reduced in any way." → { builtin: "intercept", ward: "boss",
+//   share: 1, unreduced }.
+// - Mortal Shield: "Trigger The thrall's master would take damage from a Strike or spell attack and is in an adjacent square Effect … taking
+//   half the damage of the attack (before applying any weaknesses or resistances). The thrall's master takes the remaining damage, …" →
+//   { intercept, ward: "master", share: 0.5 }.
+// - Interposition: "Trigger A ward within the guloval's reach would take damage from a Strike, and the guloval is within the attacker's
+//   reach Effect … taking the triggering attack's damage. The ward takes no damage." → { intercept, ward: "ward", share: 1, strikes };
+//   "Trigger An ally within 15 feet of the guard would take damage Effect The guard Strides. … switches places with the ally, taking all
+//   damage and associated effects instead of the ally." → { intercept, ward: "ally", share: 1, within: 15, swap }.
+// - You Don't Have My Permission to Die!: "Trigger An allied creature within 30 feet would be reduced to 0 Hit Points Effect … The creature
+//   avoids being knocked out and remains at 1 HP. The creature is then temporarily immune for 24 hours." → { builtin: "rescue", within,
+//   hp: 1, oncePerTarget }.
+// - Soul Anchor: "A creature within 60 feet would drop to 0 Hit Points Effect … The creature remains at 1 Hit Point, becomes Doomed 2, and
+//   gains fast healing equal to the dragon's level for 1 minute. The creature becomes temporarily immune …" → { rescue, within, hp: 1,
+//   doomed, fastHealing: "level", oncePerTarget }.
+// - Recall the Fallen: "Frequency once per day Trigger An allied creature within 60 feet who isn't a construct or undead is reduced to 0 Hit
+//   Points and their Dying value is 2 or less Effect The valkyrie restores 5d10 Hit Points to the target." → { rescue, within, heal, living,
+//   perDay }.
+export function readGuardian(text) {
+    const body = String(text).trim().replace(/@Damage\[\(?([^\]\[]+?)\)?\[healing\]\](?:\{[^}]*\})?/g, "$1").replace(/\s*Effect: [^.]+$/i, "");
+    const split = /^(?:Frequency (once per day) )?(?:Trigger )?(.+?)\.? Effect (.+)$/.exec(body);
+    if (!split) return null;
+    const [, perDay, trigger, effect] = split;
+    const said = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    const who = String.raw`(?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*)`;
+    const boss = new RegExp(String.raw`^${who}['’]s (boss|master|liege) takes damage from an attack, and ${who} is adjacent to (?:them|it|him|her)$`, "i").exec(trigger);
+    if (boss && said.length === 2 && /^(?:The )?[^.]+? takes the damage instead, along with any secondary effects of (?:the )?attack\.$/i.test(said[0]) && /^This damage can't be reduced in any way\.$/i.test(said[1])) return { builtin: "intercept", ward: boss[1].toLowerCase(), share: 1, unreduced: true };
+    const master = new RegExp(String.raw`^${who}['’]s (master|boss) would take damage from a Strike or spell attack and is in an adjacent square$`, "i").exec(trigger)
+        ?? new RegExp(String.raw`^(?:[^.]+\. )?If ${who} is adjacent to ${who} when ${who} would take damage from a Strike or spell attack$`, "i").exec(trigger);
+    if (master && /\btaking half the damage of the attack \(before applying any weaknesses or resistances\)\./i.test(effect) && /\btakes the remaining damage, applying any weaknesses or resistances as normal\.$/i.test(effect)) return { builtin: "intercept", ward: "master", share: 0.5, attacks: true };
+    if (new RegExp(String.raw`^A ward within (?:the [\w' -]+?['’]s|its|their) reach would take damage from a Strike, and ${who} is within the attacker's reach$`, "i").test(trigger)
+        && said.length === 2 && /^(?:The )?[^.]+? blocks the attack with (?:their|its|his|her) own body, taking the triggering attack's damage\.$/i.test(said[0]) && /^The ward takes no damage\.$/i.test(said[1])) return { builtin: "intercept", ward: "ward", share: 1, strikes: true };
+    const near = new RegExp(String.raw`^An ally within (\d+) feet of ${who} would take damage$`, "i").exec(trigger);
+    if (near && /^(?:The )?[^.]+? Strides\. This movement does not trigger reactions, and [^.]+? must end the Stride in a space adjacent to the ally\. (?:The )?[^.]+? then switches places with the ally, taking all damage and associated effects instead of the ally\.$/i.test(effect.trim())) return { builtin: "intercept", ward: "ally", share: 1, within: Number(near[1]), swap: true };
+    const dropping = /^An allied creature within (\d+) feet would be reduced to 0 Hit Points$|^A creature within (\d+) feet would drop to 0 Hit Points$/i.exec(trigger);
+    if (dropping) {
+        const stays = said.findIndex((sentence) => /\b(?:avoids being knocked out and )?remains at 1 (?:HP|Hit Point)\b/i.test(sentence));
+        if (stays < 0) return null;
+        const doomed = /\bbecomes Doomed (\d+)\b/i.exec(said[stays])?.[1];
+        const healing = /\bgains fast healing equal to (?:the [\w' -]+?['’]s|its|their) level for 1 minute\b/i.test(said[stays]);
+        const rest = said.every((sentence, index) => index === stays || /\btemporarily immune\b/i.test(sentence) || (index === 0 && !/\d/.test(sentence)));
+        if (!rest) return null;
+        return { builtin: "rescue", within: Number(dropping[1] ?? dropping[2]), hp: 1, ...(doomed ? { doomed: Number(doomed) } : {}), ...(healing ? { fastHealing: "level" } : {}), oncePerTarget: true, ...(dropping[2] ? { anyone: true } : {}) };
+    }
+    const fallen = /^An allied creature within (\d+) feet who isn't a construct or undead is reduced to 0 Hit Points and their dying value is 2 or less$/i.exec(trigger);
+    const restores = fallen ? /^(?:The )?[^.]+? restores (\d+d\d+(?:\s*\+\s*\d+)?) Hit Points to the target\.$/i.exec(effect.trim()) : null;
+    if (restores) return { builtin: "rescue", within: Number(fallen[1]), heal: restores[1].replace(/\s+/g, ""), living: true, ...(perDay ? { perDay: 1 } : {}) };
+    return null;
+}
+
 // A reaction the simulator plays, or null.
 //   Trigger … targets the wererat with an attack … Effect … +2 circumstance bonus to AC against the triggering attack.
 //   Trigger The dragon is targeted by an attack; Effect … The attacker rolls the triggering attack twice and uses the worse result.
@@ -788,7 +901,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a
@@ -796,6 +909,10 @@ export function readReaction(item, text) {
     if (/^If an? (?:[\w' -]+ )?ally ends a move action adjacent to [^,]+, (?:the [\w' -]+?|it|they|he|she) can use (?:its|their|his|her) reaction to Step\.$/i.test(text.trim())) return { builtin: "no-effect" };
     const bite = /^When a creature within (?:the )?reach of (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?) attacks one of (?:its|their|the [\w' -]+?['’]s) allies, (?:the [\w' -]+?|it|they) can spend (?:its|their) reaction to make an? ([\w' -]+?) Strike against that creature\.$/i.exec(text.trim());
     if (bite) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: bite[2].toLowerCase(), penalty: 0, disrupts: false };
+    // (Batch 105, Clawed Feet in older words: "If the gargoyle is flying and a creature moves into an adjacent square below them, the gargoyle
+    // can use their reaction to make a claw Strike against that creature.")
+    const below = /^If (?:the )?[\w' -]+? is flying and a creature moves into an adjacent square below (?:it|them|him|her), (?:the )?[\w' -]+? can use (?:its|their|his|her) reaction to make an? ([\w' -]+?) Strike against that creature\.$/i.exec(text.trim());
+    if (below) return { builtin: "reaction-strike", triggers: ["approach"], strike: below[1].toLowerCase(), penalty: 0, disrupts: false, while: "flying" };
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/i.exec(text)?.[1] ?? "", /Effect (.+)$/i.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
@@ -964,6 +1081,8 @@ export function readReaction(item, text) {
         const rest = said.slice(1).every((sentence) => /^Demoralize loses the auditory trait and gains the visual trait\b[^.]*\.$|^If the Intimidation check critically succeeds, [^.]*disrupts? the triggering action\.$/i.test(sentence));
         if (glance && rest) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, melee: true };
     }
+    const more = readMoreReactionStrikes(trigger.trim().replace(/\.$/, ""), effect.trim());
+    if (more) return more;
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
     const told = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
     const lastOnly = answered === "targeted" || (told.length > 1 && told.slice(0, -1).every((sentence) => !/\d|@|\b(?:damage|save|check|bonus|penalty|Strikes?|Grab\w*|Prone|Hit Points|condition)\b/i.test(sentence)));

@@ -35,7 +35,7 @@ import { isActiveGM, postCard, postEffectCard, postSkillCard, targetedEvent, tar
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade"]);
+const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue"]);
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -188,7 +188,17 @@ async function onMove(token, movement) {
             const radius = approach.plan.within ?? Math.max(5, ...strikes.map((strike) => strike.reach));
             const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= radius);
             if (strikes.length && !insides[0] && insides.some(Boolean)) {
-                await offer({ kind: "strike", item: approach.item, monster, actor, target: token, strikes, penalty: approach.plan.penalty ?? 0, trigger: `came within ${radius} feet`, note: approach.plan.disrupts ? "If it Pushes the creature, the move is disrupted." : null });
+                // (Batch 105, Clawed Feet: only while it flies or swims, at a creature below it.)
+                await offer({ kind: "strike", item: approach.item, monster, actor, target: token, strikes, penalty: approach.plan.penalty ?? 0, trigger: `came within ${radius} feet`, note: approach.plan.disrupts ? "If it Pushes the creature, the move is disrupted." : approach.plan.while ? `Only while it's ${approach.plan.while}, at a creature that moved below it.` : null });
+                continue;
+            }
+        }
+        // (Batch 105: Reflexive Grab, Clutching Armor — a creature leaving its reach, its Grapple.)
+        const grip = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.skill && plan.triggers?.includes("leave"));
+        if (grip) {
+            const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= provokeRadius(actor));
+            if (leftReach(insides)) {
+                await offer({ kind: "skill", item: grip.item, monster, actor, target: token, trigger: "moved away from it", skill: { slug: grip.plan.skill, shift: (grip.plan.bonus ?? 0) - (grip.plan.penalty ?? 0) }, note: squares === 1 ? "If this was a Step, check that its trigger allows it." : null });
                 continue;
             }
         }
@@ -303,12 +313,12 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             // (Batch 88: a basic maneuver in place of the Strike, at a creature in its reach.)
             if (plan.skill) {
                 if (distance > provokeRadius(actor)) continue;
-                await offer({ kind: "skill", item, monster, actor, target: attacker, trigger: why, skill: { slug: plan.skill, shift: (plan.bonus ?? 0) - (plan.penalty ?? 0) } });
+                await offer({ kind: "skill", item, monster, actor, target: attacker, trigger: why, skill: { slug: plan.skill, shift: (plan.bonus ?? 0) - (plan.penalty ?? 0) }, note: plan.release ? "If the Strike was with a melee weapon, the attacker can let go of it to make the Grapple fail." : null });
                 break;
             }
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
             if (!strikes.length) continue;
-            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.ward ? "Only if the creature attacked is the one it guards." : plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
+            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.grab ? "If it hits, the creature is Grabbed." : plan.disrupts === "critical" ? "On a critical hit, the triggering action is disrupted." : plan.ward ? "Only if the creature attacked is the one it guards." : plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
             break;
         }
     }
@@ -627,6 +637,10 @@ async function onDowned(actor) {
         const mine = reactors(scene, combat).find((entry) => entry.actor.uuid === source.actor);
         const entry = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "downs");
         if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: null, trigger: `downed ${token.name}`, free: !!entry.plan.trigger.free });
+        // (Batch 105, Deadly Cleave: another Strike with that weapon at a different creature, at the same multiple attack penalty.)
+        const cleave = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("downs"));
+        const strikes = cleave ? meleeStrikes(mine.actor, `(${cleave.plan.strike} only)`) : [];
+        if (strikes.length) await offer({ kind: "strike", item: cleave.item, monster: mine.token, actor: mine.actor, target: null, strikes, trigger: `downed ${token.name}`, note: `Only if its ${cleave.plan.strike} Strike downed it. At a different creature (target it first), at the same multiple attack penalty as that Strike; it counts toward the penalty.` });
     }
 }
 
@@ -676,6 +690,17 @@ async function onDown(actor) {
         const scene = token.parent;
         const combat = scene && runningCombat(scene);
         if (!combat) continue;
+        // (Batch 106: You Don't Have My Permission to Die!, Soul Anchor, Recall the Fallen — an ally within its distance keeps it up.)
+        const grid = gridOf(scene);
+        for (const { token: friend, actor: friendActor, reactions } of reactors(scene, combat)) {
+            if (friend.id === token.id || friend.disposition !== token.disposition) continue;
+            const entry = reactions.find(({ plan }) => plan.builtin === "rescue");
+            const left = Number(entry?.item.system?.frequency?.value);
+            if (!entry || (entry.plan.perDay && Number.isFinite(left) && left <= 0) || distanceFeet(box(friend, grid.size), box(token, grid.size), grid) > (entry.plan.within ?? 30)) continue;
+            if (entry.plan.living && ["undead", "construct"].some((trait) => actor.traits?.has?.(trait))) continue;
+            const note = [entry.plan.heal ? `It regains ${entry.plan.heal} Hit Points.` : "It stays at 1 HP.", entry.plan.doomed ? `It becomes Doomed ${entry.plan.doomed}${entry.plan.fastHealing ? ` and gains fast healing equal to ${friend.name}'s level for 1 minute` : ""}.` : null, entry.plan.oncePerTarget ? "Not again on this creature for 24 hours." : null].filter(Boolean).join(" ");
+            await offer({ kind: "rescue", item: entry.item, monster: friend, actor: friendActor, target: token, trigger: "is reduced to 0 HP", note, survive: { hp: entry.plan.heal ?? 1, wounded: false, doomed: entry.plan.doomed ?? 0, perDay: !!entry.plan.perDay } });
+        }
         const mine = reactors(scene, combat, { atZero: true }).find((entry) => entry.token.id === token.id);
         if (!mine) continue;
         for (const { item, plan } of mine.reactions) {
@@ -747,7 +772,7 @@ async function onDamaged(actor, amount) {
             const near = attacker && attacker.id !== token.id && attacker.parent?.id === scene.id && isFoe(token, attacker) && distanceFeet(box(token, gridOf(scene).size), box(attacker, gridOf(scene).size), gridOf(scene)) <= 5;
             const foe = !flail.plan.random && near ? attacker : null;
             const strikes = (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(flail.plan.strike)).map((action) => ({ slug: action.slug, label: action.label }));
-            const note = [`Only if it was ${(flail.plan.damageTypes ?? []).join(" or ")} damage.`, flail.plan.random ? "At a random creature within its reach: target it first." : foe ? null : "At a creature beside it: target it first.", flail.plan.persistentFire ? "If it has persistent fire damage, it also attempts a DC 15 flat check to remove it." : null].filter(Boolean).join(" ");
+            const note = [flail.plan.damageTypes?.length ? `Only if it was ${flail.plan.damageTypes.join(" or ")} damage.` : null, flail.plan.random ? "At a random creature within its reach: target it first." : foe ? null : "At a creature beside it: target it first.", flail.plan.persistentFire ? "If it has persistent fire damage, it also attempts a DC 15 flat check to remove it." : null].filter(Boolean).join(" ");
             if (strikes.length) await offer({ kind: "strike", item: flail.item, monster: token, actor, target: foe, strikes, trigger: foe ? `damaged it (${amount})` : `It took ${amount} damage`, note });
         }
         if (!attacker || attacker.id === token.id || attacker.parent?.id !== scene.id) continue;
@@ -778,6 +803,13 @@ async function onDamaged(actor, amount) {
         }
         for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
             if (monster.id === token.id || monster.disposition !== token.disposition || !isFoe(monster, attacker)) continue;
+            // (Batch 106: Human Shield, Mortal Shield, Interposition — its ward's damage taken in its place, all of it or half.)
+            const guard = reactions.find(({ plan }) => plan.builtin === "intercept");
+            if (guard && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) <= (guard.plan.within ?? 5)) {
+                const taken = guard.plan.share >= 1 ? amount : Math.floor(amount / 2);
+                const ward = { boss: "its boss", master: "its master", liege: "its liege", ward: "its ward" }[guard.plan.ward] ?? null;
+                await offer({ kind: "intercept", item: guard.item, monster, actor: monsterActor, target: attacker, trigger: `damaged ${token.name} (${amount})`, note: [ward ? `Only if ${token.name} is ${ward}.` : null, guard.plan.strikes ? "Only a Strike's damage." : guard.plan.attacks ? "Only a Strike's or a spell attack's damage." : null, guard.plan.swap ? "It Strides beside the ally and they switch places: move both tokens." : null].filter(Boolean).join(" ") || null, retribution: { ally: { actorUuid: actor.uuid, name: token.name }, restore: taken, taken, unreduced: !!guard.plan.unreduced } });
+            }
             const entry = reactions.find(({ plan }) => plan.builtin === "retributive-strike");
             if (!entry) continue;
             const distance = (other) => distanceFeet(box(monster, grid.size), box(other, grid.size), grid);
@@ -900,6 +932,30 @@ async function use(message, action, slug) {
         const left = Number(item?.system?.frequency?.value);
         if (item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
         return settle(message, state, "used", `${state.ability.name}: the hit is a critical hit; roll its critical damage from the attack card.`);
+    } else if (state.kind === "intercept") {
+        // (Batch 106: the ward's Hit Points back, the damage on the guard.)
+        const ward = await fromUuid(state.retribution.ally.actorUuid);
+        const hp = ward?.system?.attributes?.hp;
+        if (hp) await ward.update({ "system.attributes.hp.value": Math.min(hp.max, hp.value + state.retribution.restore) });
+        await actor.applyDamage({ damage: state.retribution.taken, token: monster, skipIWR: !!state.retribution.unreduced });
+        result = `${state.monster.name} takes ${state.retribution.taken} damage in place of ${state.retribution.ally.name}.`;
+    } else if (state.kind === "rescue") {
+        // (Batch 106: the ally back up — 1 HP or the Hit Points it restores — its unconscious and dying gone; doomed where it says so.)
+        const ally = state.target ? (await fromUuid(state.target.tokenUuid))?.actor : null;
+        if (!ally) throw new Error(`${state.target?.name ?? "The ally"} isn't there any more.`);
+        const rule = state.survive ?? { hp: 1 };
+        const max = Number(ally.system?.attributes?.hp?.max) || 1;
+        const hp = typeof rule.hp === "string" ? (await new Roll(rule.hp).evaluate()).total : Number(rule.hp) || 1;
+        await ally.update({ "system.attributes.hp.value": Math.max(1, Math.min(max, hp)) });
+        for (const slug of ["unconscious", "dying"]) if (ally.hasCondition?.(slug)) await ally.decreaseCondition(slug, { forceRemove: true }).catch(() => null);
+        if (ally.statuses?.has?.("dead")) await Promise.resolve(ally.toggleStatusEffect?.("dead", { active: false })).catch(() => null);
+        if (rule.doomed) await ally.increaseCondition("doomed", { value: rule.doomed }).catch(() => null);
+        const combatant = game.combat?.combatants.find((entry) => entry.tokenId === state.target.tokenUuid.split(".").pop());
+        if (combatant?.defeated) await combatant.update({ defeated: false });
+        const item = await fromUuid(state.ability.uuid);
+        const left = Number(item?.system?.frequency?.value);
+        if (rule.perDay && item && Number.isFinite(left)) await item.update({ "system.frequency.value": Math.max(0, left - 1) });
+        result = `${state.target.name} is back at ${ally.system?.attributes?.hp?.value ?? 1} HP.`;
     } else if (state.kind === "move") {
         // (Batch 98: where it goes is the GM's.)
         result = `${state.monster.name} uses ${state.ability.name}: ${state.note ?? "move its token."}`;

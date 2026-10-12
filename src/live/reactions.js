@@ -124,6 +124,9 @@ export function offerHTML(state) {
         // (Batch 100: "Use it: recharge Hellfire Breath", "Use it: a critical hit".)
         if (state.kind === "recharge") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.move?.label ?? "recharge")}</button>`);
         if (state.kind === "upgrade") buttons.push(`<button type="button" data-aar-reaction="use">Use it: a critical hit</button>`);
+        // (Batch 106: "Use it: take 12 damage", "Use it: keep it up".)
+        if (state.kind === "intercept") buttons.push(`<button type="button" data-aar-reaction="use">Use it: take ${escape(state.retribution?.taken ?? 0)} damage</button>`);
+        if (state.kind === "rescue") buttons.push(`<button type="button" data-aar-reaction="use">Use it: keep it up</button>`);
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
