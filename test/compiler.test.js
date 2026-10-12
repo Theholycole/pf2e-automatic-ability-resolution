@@ -3108,3 +3108,11 @@ test("a rope swing with a Strike along the way, behind a requirement the GM chec
     const plan = compileMonsterAbility({ type: "action", name: "Test Swing", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: "<p><strong>Requirements</strong> The test pirate is on the deck of a ship.</p><hr /><p><strong>Effect</strong> The test pirate swings from a nearby rope, moving up to twice its Speed and ignoring any terrain or lack of surface beneath it. It can make a cutlass Strike at any point during this movement.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.strides, plan.strike, plan.requires, plan.notes.length], ["strike-activity", 2, "cutlass", "requirement", 1]);
 });
+
+test("a Strike only after boarding a boat; Strikes at different creatures with a teleport before each (2026-10-12, batch 185)", () => {
+    const compile = (actions, html) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } }, { basicActions: {} });
+    const board = compile(2, "<p>The test deckhand swings on a rope or Strides, moving up to double their Speed. If the deckhand boarded or disembarked a boat during this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit.</p>");
+    assert.deepEqual([board.builtin, board.strides, board.requires, board.extraWeaponDice], ["strike-activity", 2, "requirement", 1]);
+    const blink = compile(3, "<p>The test drake flickers about. The test drake teleports up to 30 feet to a space adjacent to a creature and makes a tail Strike against that creature. The test drake can do this up to three times, teleporting to a different creature each time. Each attack counts toward its multiple attack penalty, but the penalty does not increase until all attacks have been made.</p>");
+    assert.deepEqual([blink.builtin, blink.strikes, blink.each, blink.max, blink.sameMap], ["multi-strike", ["tail"], true, 3, true]);
+});

@@ -1621,3 +1621,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Halyard Swing → a Strike activity with two Strides, its tentacle Strike and a note for the rope swing. Its requirement (a ship's deck) is `requires: "requirement"`. A Strike activity with Strides and no rider, but behind such a requirement and with a note, is now kept rather than left to the charge reader.
 - **Live:** no new live code: the Strike activity's card and note. Not run in pftest.
 - **Simulator:** nothing new; a plan behind a requirement isn't planned.
+
+## Boarding a boat; a teleport before each Strike (2026-10-12, batch 185)
+
+- **Compiled:** Boarding Action → a Strike activity with two Strides and the extra weapon die, `requires: "requirement"` (only after boarding or leaving a boat), and a note. Blinking Barrage → a multi-Strike at different creatures (up to four, or any number), at the same penalty, its teleports and its later teleportation limit as notes.
+- **Live:** no new live code. Not run in pftest.
+- **Simulator:** Boarding Action isn't planned (its requirement). Blinking Barrage plays as a multi-Strike at the creatures in its melee.

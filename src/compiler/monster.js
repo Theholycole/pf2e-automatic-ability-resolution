@@ -892,6 +892,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 184, Halyard Swing: "swings from a nearby rope, moving up to twice its Speed and ignoring any terrain or lack of surface beneath it. It
         // can make a tentacle Strike at any point during this movement." — two Strides and the Strike; its requirement, a ship's deck, the GM's.)
         .replace(/\b((?:The )?[\w' -]+?) swings from a nearby rope, moving up to twice (?:its|their|his|her) Speed and ignoring any terrain or lack of surface beneath (?:it|them|him|her)\. (?:It|They|He|She) can make an? ([\w' -]+?) Strike at any point during this movement\./i, "$1 Strides twice and makes a $2 Strike. [rope swing]")
+        // (Batch 185, Boarding Action: "swings on a rope or Strides, moving up to double their Speed. If the rigger boarded or disembarked a boat during
+        // this movement, they can make a melee Strike at the end of their movement that deals one extra damage die on a hit." — two Strides and the
+        // Strike with its extra die, only after boarding or leaving a boat, the GM's.)
+        .replace(/\b((?:The )?[\w' -]+?) swings on a rope or Strides, moving up to double (?:its|their|his|her) Speed\. If (?:the [\w' -]+?|it|they|he|she) boarded or disembarked a boat during this movement, (?:it|they|he|she) can make a melee Strike at the end of (?:its|their|his|her) movement that deals one extra damage die on a hit\./i, "$1 Strides twice and makes a melee Strike that deals one additional weapon damage die. [boat boarding]")
         // (Batch 174, the diabolic messenger's Hidden Blade: "draws a weapon and then Strikes with it The target of the Strike is …" — its stop missing.)
         .replace(/\b(Strikes with it) (?=The target of the Strike is\b)/, "$1. ")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
@@ -1319,6 +1323,12 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
         if (/^\[grab time\]\.?$/.test(text) || text === "[told]") continue;
+        // (Batch 185, Boarding Action's boat: only then, the GM's.)
+        if (text === "[boat boarding]") {
+            activity.requires = "requirement";
+            (activity.notes ??= []).push("The Strike only if it boarded or left a boat during this movement (it can swing on a rope instead of Striding).");
+            continue;
+        }
         // (Batch 184, Halyard Swing's rope.)
         if (text === "[rope swing]") {
             (activity.notes ??= []).push("It swings on a rope, ignoring any terrain beneath it; the Strike at any point along the way.");
