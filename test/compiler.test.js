@@ -2297,3 +2297,15 @@ test("Strike activities' openings: at the creature it holds, at an adjacent crea
     const shot = compile("<p>The test archer makes a ranged Strike and deals an additional @Damage[2d6[piercing]] damage on a hit.</p>");
     assert.deepEqual(shot?.onHit?.damage, ["2d6[piercing]"]);
 });
+
+test("Strike activities: a bonus to the attack roll or a status bonus to damage, a Step first, a push told of the creature, what the GM keeps (2026-10-12, batch 112)", () => {
+    const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    const aim = compile("<p>The test lookout aims carefully. They make a ranged weapon Strike with a +2 circumstance bonus. The Strike ignores the Concealed condition, lesser cover, and standard cover, and reduces greater cover to standard cover.</p>");
+    assert.deepEqual([aim?.strike, aim?.attackBonus, aim?.notes?.length], ["ranged", 2, 1]);
+    const blast = compile("<p>The test warden makes a melee or ranged elemental blast Strike with a +3 status bonus to damage.</p>");
+    assert.deepEqual([blast?.strike, blast?.damageBonus], ["elemental blast", 3]);
+    const kick = compile("<p><strong>Requirements</strong> The test monk has both hands free</p><hr /><p><strong>Effect</strong> The test monk Steps, then makes a melee Strike at a –1 penalty.</p>", 1);
+    assert.deepEqual([kick?.requires, kick?.attackBonus], ["free-hand", -1]);
+    const swing = compile("<p>The test laborer makes a sledge Strike against a creature. If it hits, the creature is pushed 5 feet. If the target is wearing metal armor, its armor also takes the damage, which bypasses 5 of the armor's Hardness.</p>");
+    assert.deepEqual([swing?.strike, swing?.onHit?.push, swing?.notes?.length], ["sledge", 5, 1]);
+});

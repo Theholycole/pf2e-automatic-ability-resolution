@@ -748,6 +748,23 @@ function openingParts(text) {
         attack -= Number(value);
         return "";
     });
+    // (Batch 112: Sentry's Aim's "a ranged weapon Strike with a +1 circumstance bonus" (to its attack roll); Empowered Blast's "a melee or
+    // ranged elemental blast Strike with a +4 status bonus to damage"; Handspring Kick's "Steps, then makes a melee Strike at a –1 penalty"
+    // — the Step the GM's.)
+    plain = plain
+        .replace(/\bmakes an? (?:ranged weapon|melee weapon|melee or ranged) ([\w' -]+? )?Strike\b/i, (_all, name) => `makes a ${name ?? ""}Strike`.replace(/a Strike$/, "a Strike"))
+        .replace(/(Strike) with an? \+(\d+) circumstance bonus(?=\.$)/i, (_all, word, value) => {
+            attack += Number(value);
+            return word;
+        })
+        .replace(/(Strike) with an? \+(\d+) status bonus to damage(?=\.$)/i, (_all, word, value) => {
+            damageBonus += Number(value);
+            return word;
+        })
+        .replace(/^(?:The )?([^.]+?) Steps, then makes (an? [\w' -]*?Strike) at an? [-\u2013\u2212](\d+) penalty(?=\.$)/i, (_all, who, strike, value) => {
+            attack -= Number(value);
+            return `${who} makes ${strike}`;
+        });
     plain = plain.replace(/, and (?:it|they|he|she) gains? an? \+(\d+) circumstance bonus to (?:the|its|their|his|her) attack roll(?=\.$)/i, (_all, value) => {
         attack += Number(value);
         return "";
@@ -906,6 +923,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/ or until the creature is fully healed(?=\.$)/i, "")
             // (Batch 83, Portal Strike: "makes a claw Strike against a creature within 120 feet" — the distance the GM's.)
             .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy|target) within \d+ feet(?=\.$)/i, "$1")
+            // (Batch 112, Demolishing Swing: "makes a maul Strike against a creature"; "If it hits, the creature is pushed 10 feet"; "If the target
+            // is wearing metal armor, its armor also takes the damage, which bypasses 5 of the armor's Hardness." — the armor the GM's; Sentry's
+            // Aim's "The Strike ignores the Concealed condition, lesser cover, and standard cover, …" — the GM's too.)
+            .replace(/\b(makes an? [\w' -]+? Strike) against an? (?:creature|foe|enemy)(?=\.$)/i, "$1")
+            .replace(/^If it hits, the creature is pushed (\d+) feet(?=\.$)/i, "If it hits, the target is pushed $1 feet")
+            .replace(/^If the target is wearing metal armor, its armor also takes the damage, which bypasses \d+ of the armor's Hardness\.$/i, "[gm]")
+            .replace(/^The Strike ignores the Concealed condition, lesser cover, and standard cover, and reduces greater cover to standard cover\.$/i, "[gm]")
             // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
             .replace(/\bStrikes with (?:its|their|his|her) ([\w' -]+?) at an? ([-\u2013\u2212]\d+) circumstance penalty(?=\.$)/i, "makes a $1 Strike with a $2 circumstance penalty to its attack roll")
             // (Stunning Strike's "makes a weapon Strike against the foe": the foe its requirement hit.)
@@ -933,6 +957,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
             if (lead?.damage) activity.onHit.damage.push(lead.damage);
         };
         if (/^\[grab time\]\.?$/.test(text)) continue;
+        // (Batch 112: what the GM handles, kept as a note.)
+        if (text === "[gm]") {
+            (activity.notes ??= []).push(htmlToPlainText(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim());
+            continue;
+        }
         // (Batch 110: Combat Grab's Grab on a hit.)
         if (/^If it hits, the target is Grabbed\.$/i.test(text)) {
             activity.onHit.conditions.push({ slug: "grabbed", value: null, duration: null });
@@ -944,7 +973,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // A free hand: not while it holds a creature (the grab uses the hand). Held weapons aren't tracked.
             if (/(?:has|must have) (?:a creature|an enemy|a foe) Grabbed|is grabbing a creature/i.test(match[1])) activity.requires = "grabbed";
             // (Batch 44, Snagging Strike: "has one hand free, and its target is within reach of that hand".)
-            else if (/has (?:a|one) (?:free )?hand(?: free)?/i.test(match[1])) activity.requires = "free-hand";
+            else if (/has (?:a|one) (?:free )?hand(?: free)?|has both hands free/i.test(match[1])) activity.requires = "free-hand";
             // (Batch 45, Impaling Charge: "doesn't have a creature impaled on their horn": not while it holds one.)
             else if (/(?:doesn't|does not) have a creature impaled on (?:its|their|his|her) horn/i.test(match[1])) activity.requires = "free-hand";
             // (Batch 81, Stunning Strike: "hit a foe earlier this turn with a weapon Strike": at a foe it hit this turn.)
@@ -1093,6 +1122,9 @@ function strikeActivity(item, actor, { after = null } = {}) {
         } else return reject(text);
     }
     const rider = activity.onHit;
+    // (Batch 112: "a ranged weapon Strike" — any of its ranged Strikes, as "a ranged Strike"; "a melee weapon Strike" — any melee one.)
+    if (/^ranged weapon$/i.test(activity.strike ?? "")) activity.strike = "ranged";
+    if (/^melee weapon$/i.test(activity.strike ?? "")) activity.strike = null;
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
     const bare = !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage;
