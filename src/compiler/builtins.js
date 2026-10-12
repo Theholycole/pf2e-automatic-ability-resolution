@@ -734,6 +734,32 @@ export function readReaction(item, text) {
     // (Batch 63: the Strike rolled twice, the better kept, a fortune effect → fortune.)
     const backAt = answered ? /^(?:The )?[^.]+? (?:makes|attempts) an? ([\w' -]+?) Strike (?:at|against) (?:the (?:triggering )?creature|that creature|the attacker)(, regardless of range)?(, rolling the attack roll twice and taking the better result; this is a fortune effect)?\.$/i.exec(lastOnly ? told.at(-1) : effect.trim()) : null;
     if (backAt && (answered === "targeted") === Boolean(backAt[2])) return { builtin: "reaction-strike", triggers: [answered], strike: backAt[1].toLowerCase(), penalty: 0, disrupts: false, ...(backAt[3] ? { fortune: true } : {}) };
+    // (Batch 88: a basic maneuver back in place of the Strike — Ripping Disarm's "Trigger A creature rolls a critical failure on a melee
+    // weapon Strike against the Tree that Weeps Effect … attempts to Disarm the creature.", Bully's Push's "… misses the thug with a melee
+    // Strike … attempts to Shove the triggering creature at a -2 penalty", Absorb Weapon's "A creature hits the omox with a melee weapon",
+    // Unholy Rebuke's "takes damage from a melee attack … attempts to Demoralize the triggering creature", Snagging Catch's "is attacked by
+    // a melee weapon … attempts to Disarm the triggering weapon, gaining a +1 circumstance bonus" → { builtin: "reaction-strike", triggers,
+    // skill, penalty }. Sentences after it with no numbers of their own (a weapon kept, the creature not Strided after) are the GM's.)
+    const skillTrigger = answered ?? [
+        [new RegExp(String.raw`^A creature (?:hits ${its} with a melee (?:weapon|Strike|attack)|(?:within ${reachOf} )?hits ${its} with a melee (?:weapon )?Strike)$|^(?:The )?[^.]+? is hit by a melee attack$`, "i"), "hit"],
+        [new RegExp(String.raw`^A creature (?:rolls a critical failure on a (?:melee )?(?:weapon )?Strike against|critically fails an? (?:melee )?(?:weapon )?Strike against) ${its}$`, "i"), "critical-miss"],
+        [new RegExp(String.raw`^(?:A creature|An adjacent enemy|A creature within ${reachOf}) misses ${its} with (?:an? )?melee (?:weapon )?(?:Strike|attack)$|^A creature makes a melee (?:weapon )?Strike against ${its} and misses$`, "i"), "missed"],
+        [new RegExp(String.raw`^(?:The )?[^.]+? is attacked by a melee weapon$`, "i"), "attacked"],
+        [new RegExp(String.raw`^(?:The )?[^.]+? takes damage from (?:a melee attack|an adjacent creature)$`, "i"), "damaged-adjacent"]
+    ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
+    if (skillTrigger && !/\bRequirements?\b/.test(text)) {
+        const plain = effect.trim().replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()));
+        const said = plain.split(/(?<=\.)\s+(?=[A-Z])/);
+        const at = said.findIndex((sentence) => /\battempts? (?:an Athletics check )?to (?:Disarm|Shove|Trip|Grapple|Demoralize)\b/.test(sentence));
+        const move = at >= 0 ? /^(?:After the attack's result is resolved, )?(?:The )?(?:(?!\bStrikes?\b)[^.])+? (?:promises [^.]+? and )?(?:attempts? (?:an Athletics check )?to) (Disarm|Shove|Trip|Grapple|Demoralize) (?:the (?:triggering (?:creature|weapon)|creature(?: that (?:hit|damaged) it)?|attacker(?: of the triggering weapon)?|weapon used in the triggering Strike)|them|it)(?: (?:at|with) an? [-\u2013\u2212](\d+) (?:circumstance )?penalty)?(?:, gaining an? \+(\d+) circumstance bonus)?\.$/i.exec(said[at]) : null;
+        const rest = said.filter((_sentence, index) => index !== at);
+        const CONDITIONS_SAID = /\b(?:Prone|Grabbed|Restrained|Immobilized|Frightened|Off-Guard|Stunned|Slowed|Sickened|Clumsy|Enfeebled|Dazzled|Blinded|Deafened|Fleeing|Confused|Paralyzed)\b/i;
+        const quietRest = rest.every((sentence) => !/\d|@|\b(?:damage|save|Strikes?|bonus|penalty|Hit Points)\b/i.test(sentence) && !CONDITIONS_SAID.test(sentence));
+        if (move && quietRest) {
+            const once = rest.some((sentence) => /\bis destroyed after this action\b/i.test(sentence));
+            return { builtin: "reaction-strike", triggers: [skillTrigger], strike: null, skill: move[1].toLowerCase(), penalty: Number(move[2]) || 0, ...(move[3] ? { bonus: Number(move[3]) } : {}), disrupts: false, ...(once ? { uses: 1 } : {}) };
+        }
+    }
     // Telekinetic Defense, Wing Rebuff (batch 54): "Trigger A creature approaches within 10 feet of the poltergeist", "A creature moves from
     // beyond the reach of the roc's wing to within the reach of the roc's wing", "A creature moves into the reach of the frost roc's wing";
     // "Effect The poltergeist makes a telekinetic object Strike against the triggering creature." (and "If the roc Pushes the creature, it

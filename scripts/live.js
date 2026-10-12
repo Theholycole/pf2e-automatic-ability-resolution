@@ -119,6 +119,15 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
     });
 }
 
+// A basic maneuver a reaction answers with (batch 88: Ripping Disarm's Disarm, Absorb Weapon's): PF2e's action as a card on that creature,
+// its penalty or bonus on the check.
+export async function postSkillCard({ skill, shift = 0, item, sourceActor, sourceToken, tokens }) {
+    const basic = basics()?.[skill];
+    if (!basic?.resolution?.check) return null;
+    const plan = shift ? { ...basic, resolution: { ...basic.resolution, check: { ...basic.resolution.check, bonus: { value: (Number(basic.resolution.check.bonus?.value) || 0) + shift, type: "circumstance" } } } } : basic;
+    return postCard({ plan, item, sourceActor, sourceToken, tokens, cause: "reaction" });
+}
+
 // A PF2e effect a reaction gives (batch 82: Brutal Rally to its allies, Curl Up to itself): its effect card on those creatures, with
 // the GM's Apply.
 export async function postEffectCard({ plan, item, sourceActor, sourceToken, tokens }) {

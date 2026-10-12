@@ -28,7 +28,7 @@ import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOf
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
-import { isActiveGM, postCard, postEffectCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
+import { isActiveGM, postCard, postEffectCard, postSkillCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const FLAG = "reaction";
@@ -256,6 +256,8 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             const why = triggers.includes(skill ? "skill" : "strike") ? (skill ? "attempted an attack check in its reach" : "made a Strike in its reach")
                 : !skill && triggers.includes("ally-attacked") && onAlly ? "attacked its ally"
                 : !skill && triggers.includes("critical-hit") && onIt && context.outcome === "criticalSuccess" ? "critically hit it"
+                // (Batch 88: a melee hit on it, Absorb Weapon's.)
+                : !skill && triggers.includes("hit") && onIt && ["success", "criticalSuccess"].includes(context.outcome) && !(context.options ?? []).includes("item:ranged") ? "hit it with a melee Strike"
                 // (Batch 57: Cutting Rebuke, Bite Back; Opportune Bite, Gnawing Retort.)
                 : !skill && triggers.includes("attacked") && onIt ? "made a Strike against it"
                 : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it"
@@ -265,6 +267,12 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
                 : !skill && triggers.includes("concealed-miss") && onIt && (actor.hasCondition?.("concealed") || actor.hasCondition?.("hidden")) ? "attacked it while it's concealed" : null;
             if (!why) continue;
             const distance = distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid);
+            // (Batch 88: a basic maneuver in place of the Strike, at a creature in its reach.)
+            if (plan.skill) {
+                if (distance > provokeRadius(actor)) continue;
+                await offer({ kind: "skill", item, monster, actor, target: attacker, trigger: why, skill: { slug: plan.skill, shift: (plan.bonus ?? 0) - (plan.penalty ?? 0) } });
+                break;
+            }
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
             if (!strikes.length) continue;
             await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
@@ -677,7 +685,7 @@ async function onDamaged(actor, amount) {
 }
 
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -696,6 +704,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         retribution,
         ...(negate ? { negate } : {}),
         ...(survive ? { survive } : {}),
+        ...(skill ? { skill } : {}),
         ...(free ? { free: true } : {}),
         status: "open",
         result: null
@@ -769,6 +778,13 @@ async function use(message, action, slug) {
         }
         if (action === "strike") lines.push(await rollStrike(state, actor, slug));
         result = lines.join(" ") || "Nothing to resist.";
+    } else if (state.kind === "skill") {
+        // (Batch 88: PF2e's maneuver as a card on the creature, its penalty or bonus on the check.)
+        const item = await fromUuid(state.ability.uuid);
+        const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
+        if (!item || !target) throw new Error("The creature or the ability is gone.");
+        await postSkillCard({ skill: state.skill.slug, shift: state.skill.shift ?? 0, item, sourceActor: actor, sourceToken: monster, tokens: [target.object ?? target] });
+        result = `${state.ability.name}: its ${state.skill.slug.replace(/^\w/, (letter) => letter.toUpperCase())} card is posted.`;
     } else if (state.kind === "card") {
         // Its card: on the attacker, the creatures in its emanation, or the GM's targets.
         const item = await fromUuid(state.ability.uuid);

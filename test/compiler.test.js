@@ -2051,3 +2051,15 @@ test("a teleport and a Strike; two weapons and a Disarm when both hit; a Strike 
     assert.deepEqual(reaction("The test spy is about to attempt a saving throw", "The test spy touches their holy symbol and gains a +2 circumstance bonus to the triggering save."), { builtin: "save-bonus-reaction", value: 2 });
     assert.deepEqual(reaction("An opponent casts a spell that targets the test beast and requires a saving throw", "The test beast gains a +4 circumstance bonus to the saving throw. If they critically succeed at the save, they can choose another creature within 30 feet to target instead."), { builtin: "save-bonus-reaction", value: 4, against: "spell" });
 });
+
+test("a basic maneuver back in place of a Strike (2026-10-11, batch 88)", () => {
+    const reaction = (trigger, effect, requirements = null) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: `<p><strong>Trigger</strong> ${trigger}</p>${requirements ? `<p><strong>Requirements</strong> ${requirements}</p>` : ""}<hr /><p><strong>Effect</strong> ${effect}</p>` } } }, { basicActions: {} });
+    const answer = (triggers, skill, penalty = 0, extra = {}) => ({ builtin: "reaction-strike", triggers, strike: null, skill, penalty, disrupts: false, ...extra });
+    assert.deepEqual(reaction("A creature rolls a critical failure on a melee weapon Strike against the test tree", "The test tree attempts to Disarm the creature."), answer(["critical-miss"], "disarm"));
+    assert.deepEqual(reaction("A creature within the test thug's reach misses the test thug with a melee Strike.", "The test thug attempts to [[/act shove]] the triggering creature at a -2 penalty. If the test thug rolls a critical failure, it gets a failure instead."), answer(["missed"], "shove", 2));
+    assert.deepEqual(reaction("A creature hits the test slime with a melee weapon", "The test slime attempts to Disarm the creature. On a critical success, the weapon sinks into the slime rather than falling to the ground."), answer(["hit"], "disarm"));
+    assert.deepEqual(reaction("The test cleric takes damage from a melee attack", "The test cleric swears revenge and attempts to Demoralize the triggering creature."), answer(["damaged-adjacent"], "demoralize"));
+    // Not with a condition it adds, a requirement, or a choice of a Strike.
+    assert.equal(reaction("A creature hits the test bruiser with a melee Strike", "The test bruiser attempts to Shove the creature. On a success or a critical success, the target is also knocked Prone."), null);
+    assert.equal(reaction("A creature makes a melee weapon Strike against the test ape and misses", "The test ape attempts to Disarm the attacker of the triggering weapon.", "The test ape is benefiting from its Defensive Slam"), null);
+});
