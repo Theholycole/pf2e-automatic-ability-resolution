@@ -2374,6 +2374,12 @@ export function readReaction(item, text) {
         const rest = said.slice(1).every((sentence) => /^Demoralize loses the auditory trait and gains the visual trait\b[^.]*\.$|^If the Intimidation check critically succeeds, [^.]*disrupts? the triggering action\.$/i.test(sentence));
         if (glance && rest) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, melee: true };
     }
+    // (Batch 236, Swift Claw: "Trigger The athach hits a creature with two fist Strikes Effect The athach makes a claw Strike with no multiple attack penalty
+    // against the creature it hit with its fist Strikes. This claw attack does not increase the athach's multiple attack penalty." — its claw at that
+    // creature after the second fist hit this turn, outside its multiple attack penalty: triggers ["two-hits"], after (the Strike that hit).)
+    const pair = /^(?:The )?[^.]+? hits a creature with two ([\w' -]+?) Strikes$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const swift = pair ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike with no multiple attack penalty against the creature (?:it|they) hit with (?:its|their) [\w' -]+? Strikes\.(?: This [\w' -]+? attack does not increase (?:the [\w' -]+?['’]s|its|their) multiple attack penalty\.)?$/i.exec(effect.trim()) : null;
+    if (swift) return { builtin: "reaction-strike", triggers: ["two-hits"], strike: swift[1].toLowerCase(), after: pair[1].toLowerCase(), penalty: 0, disrupts: false };
     // (Batch 228, Battlezoo: a Strike at it in its reach answered with its own Strike first, its AC lower against the triggering Strike — selfAcPenalty; a
     // later use only after another of its abilities, a note.)
     if (/^A creature within (?:the [\w' -]+?['’]s|its) reach makes a Strike against (?:it|them|the [\w' -]+?),?$|^A creature (?:within|in) (?:the [\w' -]+?['’]s|its) reach Strikes at (?:it|them)$/i.test(trigger.trim().replace(/\.$/, ""))) {

@@ -660,6 +660,8 @@ async function defend(message, context, scene, combat, attacker) {
 
 // Its own Strike that hits or critically hits (Pin Prey, Storm Smite, Go For the Eyes; batch 18): the Strike its trigger
 // names, a creature no bigger than it says.
+// (Batch 236, Swift Claw: its hits this turn by Strike and target — the second with the Strike it names sets it off.)
+const turnHits = new Map();
 async function ownStrike(message, context, scene, combat, token) {
     if (!["success", "criticalSuccess"].includes(context.outcome)) return;
     const mine = reactors(scene, combat).find((entry) => entry.token.id === token.id);
@@ -667,6 +669,14 @@ async function ownStrike(message, context, scene, combat, token) {
     const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
     const target = context.target?.token ? await fromUuid(context.target.token) : null;
     if (!strike || !target?.actor || !isFoe(mine.token, target)) return;
+    const when = `${combat?.round ?? 0}:${combat?.turn ?? 0}`;
+    const key = `${mine.token.id}|${target.id}|${String(strike.name ?? "").toLowerCase()}`;
+    const seen = turnHits.get(key);
+    const count = seen?.when === when ? seen.count + 1 : 1;
+    turnHits.set(key, { when, count });
+    const swift = count === 2 ? mine.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("two-hits") && String(strike.name ?? "").toLowerCase().includes(plan.after ?? "")) : null;
+    const swiftStrikes = swift ? meleeStrikes(mine.actor, `(${swift.plan.strike} only)`) : [];
+    if (swiftStrikes.length) await offer({ kind: "strike", item: swift.item, monster: mine.token, actor: mine.actor, target, strikes: swiftStrikes, trigger: `was hit twice by its ${strike.name}`, note: "No multiple attack penalty on this Strike, and it doesn't add to it: roll it as its first attack." });
     for (const { item, plan } of mine.reactions) {
         const trigger = plan.trigger;
         if (!trigger?.reaction || trigger.event !== "own-strike" || !trigger.on?.includes(context.outcome)) continue;

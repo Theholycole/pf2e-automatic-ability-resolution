@@ -2262,3 +2262,9 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **Checked in pftest (2026-10-12):** a Terra-Cotta Garrison's Raise Shields put a +2 AC effect on it until the start of its next turn. A Charau-ka Butcher's Blood Fury posted PF2e's own card (its linked effect and healing roll).
 - **Simulator:** unchanged.
 
+## A claw after two fist hits (2026-10-12, batch 236)
+
+- **Compiled:** Swift Claw → `reaction-strike` with the trigger `two-hits` and `after: "fist"`: its claw Strike at a creature it has hit with two fist Strikes this turn, with no multiple attack penalty.
+- **Live:** its hits this turn are counted by Strike and target. The second with the named Strike offers the claw Strike, with a note to roll it as its first attack.
+- **Simulator:** see B236 in its ability decisions.
+

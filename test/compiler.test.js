@@ -3796,3 +3796,8 @@ test("a troop's attack by actions with icon counts, on the enemies in its square
     assert.deepEqual([tonic.resolution.native.healing.components[0].formula, tonic.notes.at(-1)], ["2d6+4", "It also gains a +1 item bonus on saves against poison for 1 minute."]);
     assert.deepEqual(plan("<p>The test kite folds flat and lies still. It gets an automatic result of 27 on Deception checks and DCs to pass as plain paper until it next acts.</p>"), { builtin: "no-effect" });
 });
+
+test("a claw after two fist hits this turn, outside its multiple attack penalty (2026-10-12, batch 236)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test giant hits a creature with two fist Strikes</p><hr /><p><strong>Effect</strong> The test giant makes a claw Strike with no multiple attack penalty against the creature it hit with its fist Strikes. This claw attack does not increase the test giant's multiple attack penalty.</p>" } } }, { basicActions: {} });
+    assert.deepEqual(plan, { builtin: "reaction-strike", triggers: ["two-hits"], strike: "claw", after: "fist", penalty: 0, disrupts: false });
+});
