@@ -74,6 +74,7 @@ export function readMultiStrike(text) {
 //   "… makes three claw Strikes against a single creature within reach. His multiple attack penalty doesn't increase
 //   until after he makes all three Strikes."
 // A Strike with no name ("two unarmed Strikes", "two Strikes") is null: the creature's best melee Strike.
+const BOTH_CONDITIONS = "Prone|Grabbed|Slowed|Stunned|Off-Guard|Frightened|Sickened|Enfeebled|Clumsy|Dazzled|Blinded|Deafened|Immobilized|Restrained";
 export function readMultiStrikes(text) {
     // "Frequency once per turn Effect The bruiser makes …": once a turn; a longer frequency or a requirement: not read.
     // (Links as their labels, batch 23: "can attempt to @UUID[…]{Grab} the target" read as "Grab".)
@@ -116,6 +117,11 @@ export function readMultiStrikes(text) {
         // Strike or temple bell Strike", "two unarmed Strikes, or one unarmed Strike and a dueling pistol Strike": its best melee
         // Strikes; "thrashes wildly with its wings, making wing Strikes against up to three adjacent foes".)
         .replace(/, applying (?:its|their|his|her) multiple attack penalty as normal(?=\.$)/i, "")
+        // (Batch 80: "They make two hoof Strikes against the same target", "… two claw Strikes at the same target, each using her current
+        // multiple attack penalty".)
+        .replace(/^(They|You) make (?=(?:up to )?(?:a|an|one|two|three|four) )/, "$1 makes ")
+        .replace(/ at the same (target|creature)(?=[,.])/i, " against the same $1")
+        .replace(/, each using (?:its|their|his|her|the [\w' -]+?['’]s) current multiple attack penalty(?=\.$)/i, "")
         .replace(/, each of which must be an? [\w' -]+? Strike or (?:an? )?[\w' -]+? Strike(?=\.$)/i, "")
         .replace(/(Strikes), or one [\w' -]+? Strike and an? [\w' -]+? Strike(?=\.$)/i, "$1")
         .replace(/, making ([\w' -]+? Strikes against )/i, " and makes $1")
@@ -191,6 +197,7 @@ export function readMultiStrikes(text) {
     // What may follow: the order, the attack penalty, damage combined against resistances, who it's against.
     let secondOffGuard = null;
     let countsAs = null;
+    let bothHit = null;
     for (const sentence of sentences) {
         if (/^(?:It|They|He|She) can make (?:these|the|them|those)(?: (?:Strikes|attacks))?(?: in any order)?\.$/i.test(sentence)) continue;
         // (Twin Feint, batch 43: "The target is automatically Off-Guard against the second attack.")
@@ -212,6 +219,22 @@ export function readMultiStrikes(text) {
         if (/\bmultiple attack penalty\b[^.]*\b(?:as normal|normally)\b|\bcount(?:s)? toward (?:its|their|his|her|the [\w' -]+?'s) multiple attack penalty(?: as normal)?\.$|^Apply the multiple attack penalty to these Strikes normally\.$/i.test(sentence)) continue;
         // Damage combined against resistances, and nothing more ("…, and the creature must succeed at a save" isn't).
         if (/\bcombine(?:s|d)? (?:their|the) damages?\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
+        // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round", "If both attacks hit, the target is
+        // also knocked Prone", "If both hit, the creature takes 2d10 bleed …", "If both attacks hit, the target is also dealt 1d8 persistent
+        // bleed damage" → bothHit { conditions, damage }; on the creature both Strikes hit.)
+        const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+        if (both) {
+            const said = both[1].replace(/-stuck between the doors\b/i, "");
+            const damage = [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].map((tag) => tag[1].split("|")[0]);
+            const rest = said.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?/g, "").trim();
+            const conditions = [...rest.matchAll(new RegExp(String.raw`\b(${BOTH_CONDITIONS})(?: (\d+))?(?: for (\d+) rounds?)?\b`, "gi"))].map((found) => ({ slug: found[1].toLowerCase().replace(/^knocked /, ""), value: found[2] ? Number(found[2]) : null, rounds: found[3] ? Number(found[3]) : null }));
+            // (Nothing else in it: not an exposure to a poison, a Disarm, temporary Hit Points.)
+            const left = rest.replace(new RegExp(String.raw`\b(?:${BOTH_CONDITIONS})(?: \d+)?(?: for \d+ rounds?)?\b`, "gi"), "").replace(/\b(?:and|also|knocked|is|the target|becomes|dealt|takes)\b|[,\s]/gi, "");
+            if ((conditions.length || damage.length) && !left) {
+                bothHit = { conditions, damage };
+                continue;
+            }
+        }
         if (/^Each (?:Strike|attack) must target a different creature\.$/i.test(sentence)) {
             each = true;
             continue;
@@ -256,7 +279,7 @@ export function readMultiStrikes(text) {
         return null;
     }
     // (A Strike at each of several creatures: in turn, a different one at each when it names several, batch 43.)
-    return { strikes, sameMap, sameTarget, oncePerTurn, ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}) };
+    return { strikes, sameMap, sameTarget: sameTarget || Boolean(bothHit), oncePerTurn, ...(bothHit ? { bothHit } : {}), ...(secondOffGuard ? { secondOffGuard } : {}), ...(countsAs !== null ? { countsAs } : {}), ...(each ? { each: true, max: strikes.length } : {}), ...(grab ? { grab: true } : {}), ...(penalty ? { penalty } : {}), ...(requires ? { requires } : {}), ...(after.length ? { after } : {}) };
 }
 
 // One attack roll against several foes' AC (Swipe, Wide Swing; 2026-10-10): "The veteran makes a melee Strike and compares the
@@ -1118,7 +1141,7 @@ export function compileBuiltin(item, slug) {
     if (type !== "action") return null;
     const actions = Number(item.system?.actions?.value) || 1;
     const multi = readMultiStrikes(text);
-    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}) };
+    if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}) };
     const sweep = readSweep(text);
     if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
@@ -1447,6 +1470,7 @@ function readStrikeOnly(text) {
     // Trip their opponent instead of making a Strike", "If the weapon has the disarm, shove, or trip trait, the guard can use the
     // corresponding action instead of a Strike": the GM's.)
     const sentences = String(text).trim().replace(/^Frequency once per (?:turn|round) Effect /i, "").replace(/([^.])$/, "$1.").split(/(?<=\.)\s+(?=[A-Z])/)
+        .filter((sentence, index) => index === 0 || !/^If it hits, in addition to dealing damage, (?:the [\w' -]+?|it) Strides up to \d+ feet, dragging the (?:enemy|creature|target) along\.$/i.test(sentence))
         .filter((sentence, index) => index === 0 || !/^(?:(?:The [\w' -]+?|They|It|He|She) can (?:choose to )?(?:Trip|Disarm|Shove)(?: or (?:Trip|Disarm|Shove))?(?: (?:their|its|his|her) opponent)? instead of (?:making )?a Strike|If the weapon has the [\w, ]+ trait, (?:the [\w' -]+?|it|they|he|she) can use the corresponding action instead of a Strike)\.$/i.test(sentence));
     // (A first sentence that only tells what it does; batch 42: "The hunter's feet and weapons move in tandem.")
     if (sentences.length === 2 && !/\b(?:damage|bonus|penalty|save|check|DC|Hit Points|HP|Grab|Prone)\b|\d/.test(sentences[0])) sentences.shift();
@@ -1463,5 +1487,8 @@ function readStrikeOnly(text) {
     const reach = new RegExp(String.raw`${who} (?:makes a Strike with (?:his|her|its|their) [\w' -]+? and increases (?:his|her|its|their) reach by \d+ feet for this Strike|(?:lunges [^,.]+, making|makes) an? (?:[\w' -]+? )?Strike with an? (?:extended )?reach of \d+ feet|makes a Strike with (?:a melee weapon|(?:his|her|its|their|the) [\w' -]+?), (?:increasing|extending) (?:the reach of the Strike|(?:his|her|its|their) reach) by \d+ feet(?: for (?:that|this|the) Strike)?)\.$`, "i");
     // (Batch 42, Skirmish Strike: "The hunter can Step and then Strike, or Strike and then Step.")
     const skirmish = new RegExp(String.raw`${who} (?:can )?(?:either )?Steps? and then Strikes?,? or Strikes? and then Steps?\.$`, "i");
-    return [draw, reload, returning, reach, skirmish].some((pattern) => pattern.test(sentence));
+    // (Batch 80, Drag: "makes a jaws Strike against a Prone enemy. If it hits, in addition to dealing damage, the hyaenodon Strides up to 10
+    // feet, dragging the enemy along." — the drag the GM's.)
+    const prone = new RegExp(String.raw`${who} makes an? (?:[\w' -]+? )?Strike against an? Prone (?:enemy|creature|foe)\.$`, "i");
+    return [draw, reload, returning, reach, skirmish, prone].some((pattern) => pattern.test(sentence));
 }

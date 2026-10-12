@@ -229,6 +229,8 @@ async function cardForAbility(message) {
         return;
     }
     // Twin Feint (batch 43): its Strikes from the sheet; the second against an off-guard target, for the GM to give.
+    // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round" — for the GM to apply.)
+    if (plan?.builtin === "multi-strike" && plan.bothHit) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: if both Strikes hit the same creature, ${bothHitText(plan.bothHit)}.`]);
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan)) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
@@ -1227,6 +1229,13 @@ async function forcedMove(state, target, token, change) {
     const result = await mover.forcedMove(token, { point, direction: change.kind === "pull" ? "toward" : "away", feet: change.distance, stopAt: change.kind === "pull" ? source : null, reason: state.ability.name });
     if (!result.moved) return `${target.name} couldn't be moved (${result.stoppedBy ?? result.reason}).`;
     return result.stoppedBy && result.stoppedBy !== "occupied" ? `${target.name} was stopped by ${result.stoppedBy === "wall" ? "a wall" : result.stoppedBy === "edge" ? "the scene's edge" : "a creature"}.` : null;
+}
+
+// What both hits bring, in words: "it is Slowed 1 for 1 round and takes 1d8[persistent,bleed] damage".
+function bothHitText(rider) {
+    const conditions = (rider.conditions ?? []).map((entry) => `${entry.slug.replace(/^\w/, (letter) => letter.toUpperCase())}${Number.isFinite(entry.value) ? ` ${entry.value}` : ""}${entry.rounds ? ` for ${entry.rounds} round${entry.rounds === 1 ? "" : "s"}` : ""}`);
+    const damage = (rider.damage ?? []).map((formula) => `${formula} damage`);
+    return [conditions.length ? `it is ${conditions.join(" and ")}` : null, damage.length ? `it takes ${damage.join(" and ")}` : null].filter(Boolean).join(", and ");
 }
 
 // A condition at least at this value (PF2e's conditions take the higher value, not the sum).

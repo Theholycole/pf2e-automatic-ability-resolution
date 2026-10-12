@@ -293,7 +293,8 @@ test("Strike activities: a Strike (after Strides) with more on a hit", { skip: !
     assert.deepEqual(rhino.onHit.save.resolution.outcomes.failure.effects.map((e) => e.slug), ["prone"]);
     assert.equal(ability("Ifrit", "Combat Grab").requires, "free-hand");
     assert.deepEqual([ability("Arboreal Warden", "Shield Push").onHit.push, ability("Skeletal Hulk", "Massive Rush").damageBonus], [10, 4]);
-    assert.equal(ability("Hyaenodon", "Drag"), null, "dragging the enemy along isn't read");
+    // (Batch 80: the Strike at a Prone enemy, its drag the GM's.)
+    assert.deepEqual(ability("Hyaenodon", "Drag"), { builtin: "no-effect", strikeOnly: true }, "dragging the enemy along is the GM's");
 });
 
 test("Engulf: a Reflex save for creatures in its path; a failure engulfs, with the listed Escape DC and Rupture", { skip: !available && "PF2e's packs not found" }, async () => {
@@ -1908,4 +1909,20 @@ test("a reaction's save whose trigger names a Strike, read or not; more hit and 
 test("a rage whose text says whom it attacks first and after, allies among them (2026-10-11, batch 79)", () => {
     const plan = compileMonsterAbility({ type: "action", name: "Test Rage", system: { slug: null, actionType: { value: "free" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test berserker is 50 Hit Points or below and takes damage.</p><hr /><p><strong>Effect</strong> The test berserker becomes enraged. It gains 10 temporary Hit Points and a +2 status bonus to damage rolls, and takes a –1 penalty to AC. It attacks the nearest creature first and then any others, allies included, until the fight ends.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan?.builtin, plan?.trigger, plan?.model?.tempHp, plan?.model?.modifiers], ["self-effect", { kind: "hp-at-most", value: 50 }, 10, [{ on: "damage", type: "status", value: 2 }, { on: "ac", type: "untyped", value: -1 }]]);
+});
+
+test("two Strikes and what both hits bring; Terrifying Smite, Pierce Armor, Drag (2026-10-11, batch 80)", () => {
+    const action = (description, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } });
+    const compile = (description, actions) => compileMonsterAbility(action(description, actions), { basicActions: {} });
+    assert.deepEqual(compile("The test oni makes two fist Strikes targeting the same creature. If they both hit, the target becomes @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} for 1 round."), { builtin: "multi-strike", actions: 1, strikes: ["fist", "fist"], sameTarget: true, bothHit: { conditions: [{ slug: "slowed", value: 1, rounds: 1 }], damage: [] } });
+    assert.deepEqual(compile("The test centaur kicks wildly. They make two hoof Strikes against the same target. The test centaur's multiple attack penalty doesn't increase until after it makes both attacks. If both attacks hit, the target is also knocked Prone.", 2)?.bothHit, { conditions: [{ slug: "prone", value: null, rounds: null }], damage: [] });
+    assert.deepEqual(compile("Test Okoa makes two claw Strikes at the same target, each using her current multiple attack penalty. If both attacks hit, the target is also dealt @Damage[1d8[persistent,bleed]] damage.")?.bothHit, { conditions: [], damage: ["1d8[persistent,bleed]"] });
+    // Not one that brings more than it reads (an exposure to a poison).
+    assert.equal(compile("The test daemon makes two claw Strikes against the same creature. If both hit, the creature takes @Damage[2d10[bleed]] and is exposed to test venom.")?.bothHit, undefined);
+    // An enemy with one of its allies beside it; the armor it breaks the GM's; a drag the GM's.
+    const smite = compile("The test rekhep makes a Strike against an enemy that has one of the test rekhep's allies within its reach. On a hit, the target takes an additional 2d8 mental damage and is Frightened 2. The extra damage and frightened value are doubled on a critical hit.", 2);
+    assert.deepEqual([smite?.builtin, smite?.requires, smite?.onHit?.conditions?.[0]?.value, smite?.onHit?.critical?.[0]?.value], ["strike-activity", "ally-adjacent", 2, 4]);
+    const pierce = compile("The test smilodon makes a fangs Strike against a creature that's Grabbed or Restrained. If the attack hits, the creature is knocked Prone; if the creature is wearing armor with hardness 10 or lower, the armor is Broken. If this Strike breaks a creature's armor or damages a creature who is unarmored or wearing broken armor, the creature also takes @Damage[2d6[bleed]]. This Strike doesn't further damage armor that's already broken.");
+    assert.deepEqual([pierce?.requires, pierce?.onHit?.conditions?.[0]?.slug, pierce?.onHit?.damage], ["grabbed", "prone", ["2d6[bleed]"]]);
+    assert.deepEqual(compile("The test hyena makes a jaws Strike against a Prone enemy. If it hits, in addition to dealing damage, the test hyena Strides up to 10 feet, dragging the enemy along."), { builtin: "no-effect", strikeOnly: true });
 });

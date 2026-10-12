@@ -1154,3 +1154,10 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 
 - **The reading:** batch 33's triggered rage (its Hit Points at or below a number as it takes damage) when its text also has a sentence that only says whom it attacks first and whom after — its allies among them. That sentence is set aside (the GM's); the rest reads as before: temporary Hit Points, a status bonus to damage, a penalty to AC, no concentrate actions. 8 Battlezoo dragons.
 - The simulator and live play: batch 33's rage, as it takes damage at or below that number.
+
+## Two Strikes that both hit; more Strike activities (2026-10-11, batch 80)
+
+- **What both hits bring** (batch 13's multi-Strike): "If they both hit, the target becomes Slowed 1 for 1 round" (Chilling Combo), "If both attacks hit, the target is also knocked Prone" (Hoof Avalanche), "If both hit, the creature is Grabbed …" (Slam Doors), "If both attacks hit, the target is also dealt 1d8 persistent bleed damage" (Vicious Flurry) → { bothHit: { conditions, damage } }, on one creature. Not one with more than that (an exposure to a poison, a Disarm, temporary Hit Points). Its first sentence in more words: "They make two hoof Strikes against the same target", "… at the same target, each using her current multiple attack penalty" (also Claw Feint, batch 43's off-guard second Strike).
+- **Strike activities:** Terrifying Smite's "against an enemy that has one of the rekhep's allies within its reach" (requires "ally-adjacent"; its extra damage and Frightened 2, doubled on a critical hit, as batch 27 read); Pierce Armor's prone on a hit and 2d6 bleed (the armor it breaks: the GM's; with hardness 10 or lower it breaks on the hit that brings the bleed); Drag's Strike at a Prone enemy (batch 37's Strike-only; its drag the GM's).
+- **The simulator** (B104): the rider when every Strike hits the same creature; Terrifying Smite only at a foe in the same Melee as one of its allies.
+- **Live play:** the multi-Strike as before (the GM rolls the Strikes); a note to the GM as it's used: "if both Strikes hit the same creature, it is Slowed 1 for 1 round". The activity cards as batch 10's.

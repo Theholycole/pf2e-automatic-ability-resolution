@@ -838,6 +838,13 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/ or until (?:it|the target|the creature) (?:leaves (?:the [\w' -]+?'s|its|their|his|her) reach|is no longer within the reach of (?:the [\w' -]+?'s|its|their|his|her) hand), whichever comes first(?=\.$)/i, "")
             // (Batch 60, Savage Jaws: "makes a single Strike with its jaws" as "makes a jaws Strike".)
             .replace(/\bmakes a single Strike with (?:its|his|her|their) ([\w' -]+?)(?=\.$)/i, "makes a $1 Strike")
+            // (Batch 80, Pierce Armor: the armor it breaks is the GM's.)
+            .replace(/; if the (?:creature|target) is wearing armor with hardness \d+ or lower, the armor is [Bb]roken(?=\.$)/, "")
+            // (Batch 80, Terrifying Smite: "against an enemy that has one of the rekhep's allies within its reach": an ally beside it.)
+            .replace(/ against an? (?:enemy|foe|creature) that has one of (?:its|their|his|her|the [\w' -]+?['’]s) allies within its reach(?=\.$)/i, () => {
+                activity.requires = "ally-adjacent";
+                return "";
+            })
             // (Batch 47, Power Attack: "makes a melee Strike that counts as two attacks when calculating their multiple attack penalty".)
             .replace(/ that counts as (two|three) attacks when calculating (?:its|their|his|her|the) multiple attack penalty(?=\.$)/i, (_all, number) => {
                 activity.countsAs = { two: 2, three: 3 }[number.toLowerCase()];
@@ -916,6 +923,11 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 37: "This Strike gains the fatal d12 trait", "… the deadly d4 trait for this attack"; "The Strike deals half damage".)
         else if ((match = /^(?:This|The) (?:[\w' -]+? )?(?:Strike|strike) gains the (fatal|deadly) d(\d+) trait(?: for this attack)?\.$/i.exec(text))) activity[match[1].toLowerCase()] = Number(match[2]);
         else if (/^The Strike deals half damage\.$/i.test(text)) activity.halfDamage = true;
+        // (Batch 80, Pierce Armor: "If this Strike breaks a creature's armor or damages a creature who is unarmored or wearing broken armor, the
+        // creature also takes 2d6 bleed." — with the armor broken on a hit, any hit; "This Strike doesn't further damage armor that's already
+        // broken.")
+        else if (/^If this Strike breaks a creature's armor or damages a creature who is unarmored or wearing broken armor, the creature also takes @D(?: damage)?\.$/i.test(text.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?|\b\d+d\d+ bleed\b/g, "@D")) && inlineTags(sentence, "Damage").length === 1) activity.onHit.damage.push(readDamage(inlineTags(sentence, "Damage")[0]));
+        else if (/^This Strike (?:doesn't|does not) further damage armor that's already broken\.$/i.test(text)) continue;
         // "This Strike ignores their multiple attack penalty and doesn't count toward that penalty."
         else if (/^This Strike (?:ignores|doesn't use) (?:its|their|his|her|the) multiple attack penalty(?:,)? and (?:doesn't|does not) count toward (?:that|the|its|their) penalty\.$/i.test(text)) activity.noMap = true;
         // "This counts as two attacks for his multiple attack penalty."
