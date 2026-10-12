@@ -856,6 +856,10 @@ function strikeActivity(item, actor, { after = null } = {}) {
     // kobold egg guardian moves, …" — one save sentence, its "until" the GM's.)
     const sentences = html.replace(/<\/?p[^>]*>|<hr\s*\/?>/gi, " ")
         .replace(/(If (?:the Strike|it|the attack) hits, the target must) attempt (an? @Check\[(?:fortitude|reflex|will)[^\]]*\](?:\{[^}]*\})?) save\. On a failure, the creature is (?:@UUID\[[^\]]*\]\{(\w+)\}|(\w+)) until ([^.]+)\./i, (_all, lead, check, linked, plain, until) => `${lead} succeed at ${check} save or be ${linked ?? plain}. The creature stays ${linked ?? plain} until ${until}.`)
+        // (Batch 130, Hammerhead: "makes a bone crest Strike; on a hit, the mjolgat deals an extra die of damage. This counts as two attacks when
+        // calculating the mjolgat's multiple attack penalty" — its own sentence, and the last one's period.)
+        .replace(/(Strike); on a hit, (?:the [\w' -]+?|it|he|she|they) deals an extra die of damage\./i, "$1. If it hits, it deals an extra die of weapon damage.")
+        .replace(/(multiple attack penalty)(\s*(?:<\/p>)?\s*)$/i, "$1.$2")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
     let opened = false;
@@ -979,6 +983,35 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^If successful, after taking the normal damage from the Strike, (the target must succeed at .+? save or become [^.]+?)(?: as it becomes [a-z][^.@]*)?(?=\.$)/i, "If it hits, $1")
             .replace(/^(?:The )?([^.]+?) Strikes with (?:its|their|his|her) (?![^.]* at an? [-\u2013\u2212]?\d)([\w' -]+?)(?=\.$)/i, "$1 makes a $2 Strike")
             .replace(/^If (?:it|he|she|they) hits?, the target is (\w+)( until [^(.]+?)? \((@Check\[(?:fortitude|reflex|will)[^\]]*\](?:\{[^}]*\})?) negates\)(?=\.$)/i, "If it hits, the target must succeed at a $3 save or be $1$2")
+            // (Batch 130: Point Blank's "… against an adjacent enemy; unlike most ranged Strikes, this Strike doesn't provoke reactions" and "If
+            // successful, the attack deals an additional 4d8 precision damage"; Disembowel's "that creature becomes Drained 1 (or increases its drained
+            // value by 1, to a maximum of 4)"; Felling Blow's "…, increasing his reach by 5 feet for that Strike" and Attack from Above's "… with its
+            // reach increased to 15 feet" (notes); Deadly Aim's "at a –2 penalty" and "deals 4 additional damage with this Strike".)
+            .replace(/\b(makes an? [\w' -]+? Strike) against an adjacent (?:enemy|creature|foe); unlike most ranged Strikes, this Strike (?:doesn't|does not) provoke reactions(?=\.$)/i, (_all, made) => {
+                (activity.notes ??= []).push("This ranged Strike at an adjacent creature doesn't provoke reactions.");
+                return made;
+            })
+            .replace(/^If successful, the attack deals an (additional|extra) (.+?) damage(?=\.$)/i, "If it hits, it deals an $1 $2 damage")
+            .replace(/^If the Strike hits, that creature becomes Drained (\d)(?: \(or increases its drained value by \1, to a maximum of 4\))?(?=\.$)/i, "If it hits, the target is Drained $1")
+            .replace(/\b(makes a Strike with (?:its|his|her|their) [\w' -]+?), increasing (?:its|his|her|their) reach by (\d+) feet for that Strike(?=\.$)/i, (_all, made, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet longer for this Strike.`);
+                return made;
+            })
+            .replace(/\b(makes an? [\w' -]+? Strike) with its reach increased to (\d+) feet(?=\.$)/i, (_all, made, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike.`);
+                return made;
+            })
+            .replace(/\b(makes an? [\w' -]+? Strike) to (?:rip|tear|bite|slash|strike) (?:at |into )?[a-z][^.@\d]*(?=\.$)/i, "$1")
+            // (Not Handspring Kick's "Steps, then makes … at a –1 penalty": the opening reads that.)
+            .replace(/\b(makes an? (?:ranged |melee )?(?:[\w' -]+? )?Strike)(?: against (?:its|their|his|her) target)? at an? [-\u2013\u2212](\d+) penalty(?=\.$)/i, (whole, made, value, _at, sentence) => {
+                if (/\bSteps, then makes\b/i.test(sentence)) return whole;
+                activity.attackBonus -= Number(value);
+                return made;
+            })
+            .replace(/^(?:The )?[\w' -]+? deals (\d+) additional damage with this Strike\.$/i, (_all, value) => {
+                activity.damageBonus += Number(value);
+                return "[told]";
+            })
             .replace(/^On a hit, (?:it|he|she|they) inflicts? an additional (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage(?=\.$)/i, "If it hits, it deals an additional $1 damage")
             // (Batch 82, Berserk Slam: "Strikes with its fist at a -1 circumstance penalty" as a fist Strike with that penalty.)
             .replace(/\bStrikes with (?:its|their|his|her) ([\w' -]+?) at an? ([-\u2013\u2212]\d+) circumstance penalty(?=\.$)/i, "makes a $1 Strike with a $2 circumstance penalty to its attack roll")

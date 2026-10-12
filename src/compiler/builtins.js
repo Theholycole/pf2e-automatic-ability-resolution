@@ -80,6 +80,10 @@ export function readMultiStrikes(text) {
     // (Links as their labels, batch 23: "can attempt to @UUID[…]{Grab} the target" read as "Grab".)
     let body = String(text).replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").trim();
     let oncePerTurn = false;
+    // (Batch 130, Twin Butchery: "Frequency once per round; Requirement the hill giant butcher is wielding …" — its semicolon.)
+    body = body.replace(/^(Frequency once per (?:turn|round));\s*(Requirements?) (?:the|The) /i, "$1 $2 The ");
+    // (Batch 130, Haphazard Hack: "Requirements Rekarek is adjacent to two or more enemies Effect" — what its Strikes need anyway.)
+    body = body.replace(/^Requirements? (?:The )?[^.]+? is adjacent to two or more enemies\.? Effect /i, "");
     // (Batch 42: what it wields, "Requirements The test slayer is wielding two melee weapons, each in a different hand Effect".)
     body = body.replace(/(^|Frequency once per (?:turn|round) )Requirements? (?:The |You )?[^.]+? (?:is wielding|are wielding|wields) two melee weapons, each in a different hand\.? Effect /i, (_all, before) => (before ? `${before}Effect ` : ""));
     // (Batch 129, Double Stab: "Requirements Ralso is wielding two piercing weapons Frequency once per round Effect …" — what it wields, then its
@@ -152,6 +156,8 @@ export function readMultiStrikes(text) {
             return "";
         })
         .replace(/, each of which must target a different (?:foe|creature|enemy|target)(?: within (?:its |their )?reach)?(?=\.$)/i, ", each against a different creature")
+        // (Haphazard Hack: "…, two of which must be against different enemies" — its choice of targets.)
+        .replace(/, two of which must be against different (?:enemies|foes|creatures)(?=\.$)/i, "")
         // (Batch 124, Twisting Reach: "…, ignoring the target's cover" — the GM's, a note.)
         .replace(/,? ignoring the target's cover(?=\.$)/i, () => {
             notes.push("The Strikes ignore the target's cover.");
@@ -274,7 +280,7 @@ export function readMultiStrikes(text) {
         // (Thrash, batch 47: "The remorhaz Strikes once with its jaws and once with its tail, each targeting a different creature.")
         strikes.push(named(match[1]), named(match[2]));
         each = true;
-    } else if ((match = /^(?:(?:The )?[^.]+? makes?|Make) two Strikes against (?:(?:its|their|his|her|your) (?:hunted prey|target)|a creature|[^.]+?'s hunted prey), one with each of the required weapons\.$/i.exec(first))) {
+    } else if ((match = /^(?:(?:The )?[^.]+? makes?|Make) two Strikes against (?:(?:its|their|his|her|your) (?:hunted prey|menaced prey|target)|a creature|[^.]+?'s hunted prey), one with each of the required weapons\.$/i.exec(first))) {
         // (Twin Takedown, batch 42: "They make two Strikes against their hunted prey, one with each of the required weapons": its best
         // melee Strikes, at one creature.)
         strikes.push(null, null);
@@ -321,6 +327,16 @@ export function readMultiStrikes(text) {
             continue;
         }
         if (/\bmultiple attack penalty\b[^.]*\b(?:as normal|normally)\b|\bcount(?:s)? toward (?:its|their|his|her|the [\w' -]+?'s) multiple attack penalty(?: as normal)?\.$|^Apply the multiple attack penalty to these Strikes normally\.$/i.test(sentence)) continue;
+        // (Batch 130, Haphazard Hack: "These attacks count toward her multiple attack penalty, but only after all three Strikes have been made.")
+        if (/^These attacks count toward (?:its|their|his|her) multiple attack penalty, but only after all (?:two|three|four) Strikes have been made\.$/i.test(sentence)) {
+            sameMap = true;
+            continue;
+        }
+        // (… and "After taking this activity, Rekarek is Off-Guard until the beginning of her next turn.")
+        if (/^After taking this activity, (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) (?:is|are) Off-Guard until the (?:beginning|start) of (?:its|their|his|her) next turn\.$/i.test(sentence)) {
+            after.push({ slug: "off-guard", value: null, until: "own-turn-start" });
+            continue;
+        }
         // Damage combined against resistances, and nothing more ("…, and the creature must succeed at a save" isn't).
         if (/\bcombine(?:s|d)? (?:their|the|both Strikes'|both attacks') damages?\b|\bdamage is combined\b/i.test(sentence) && !/\b(?:save|must|condition|additional|extra|takes?|Grabbed|Prone|Stunned)\b/i.test(sentence.replace(/\bapply (?:resistances|weaknesses)[^.]*/i, ""))) continue;
         // (Batch 80: what both hits bring — "If they both hit, the target becomes Slowed 1 for 1 round", "If both attacks hit, the target is
@@ -328,13 +344,15 @@ export function readMultiStrikes(text) {
         // bleed damage" → bothHit { conditions, damage }; on the creature both Strikes hit.)
         // (Batch 113, Bloody Flurry: "If the kholo outrider hits the same enemy with both Strikes, that enemy takes an additional … damage.")
         sentence = sentence.replace(/^If (?:the [\w' -]+?|it|they) hits? the same (?:enemy|creature|target) with both (?:Strikes|attacks), that (?:enemy|creature|target) /i, "If both Strikes hit the same target, the target ")
+            // (Batch 130, Twin Butchery: "In addition, if both Strikes hit, the menaced prey is Off-Guard until …".)
+            .replace(/^In addition, if both (Strikes|attacks) hit, the (?:menaced |hunted )?prey is /i, "If both $1 hit, the target is ")
             // (Batch 124, Scorching Maul: "A creature hit by both claw Strikes also takes 1d4 persistent fire damage.")
             .replace(/^An? (?:creature|target|enemy) hit by both (?:[\w' -]+? )?(?:Strikes|attacks) (?:also )?takes /i, "If both Strikes hit the same target, the target takes ");
         const both = /^If (?:they )?both (?:Strikes |attacks )?hit(?: the same (?:creature|target))?(?: and deal damage)?, (?:the (?:target|creature) (?:becomes|is (?:also )?(?:knocked )?)|the (?:target|creature) (?:also )?(?:takes|is (?:also )?dealt) )(.+?)\.$/i.exec(sentence.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
         if (both) {
             // (Batch 124, Barbed Limbs: "… is Grabbed until the end of the mantis's next turn" — for a round.)
-            const untilNext = /\buntil the end of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i.test(both[1]);
-            const said = both[1].replace(/-stuck between the doors\b/i, "").replace(/\s*\buntil the end of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i, untilNext ? " for 1 round" : "");
+            const untilNext = /\buntil the (?:end|start|beginning) of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i.test(both[1]);
+            const said = both[1].replace(/-stuck between the doors\b/i, "").replace(/\s*\buntil the (?:end|start|beginning) of (?:the [\w' -]+?['’]s|its|their|his|her) next turn\b/i, untilNext ? " for 1 round" : "");
             const damage = [...said.matchAll(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g)].map((tag) => tag[1].split("|")[0]);
             const rest = said.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?(?: damage)?/g, "").trim();
             const conditions = [...rest.matchAll(new RegExp(String.raw`\b(${BOTH_CONDITIONS})(?: (\d+))?(?: for (\d+) rounds?)?\b`, "gi"))].map((found) => ({ slug: found[1].toLowerCase().replace(/^knocked /, ""), value: found[2] ? Number(found[2]) : null, rounds: found[3] ? Number(found[3]) : null }));

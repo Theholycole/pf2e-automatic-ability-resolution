@@ -2491,3 +2491,15 @@ test("multi-Strikes and sweeps in more words (2026-10-12, batch 129)", () => {
     assert.deepEqual(compile("The test monk makes a single Strike and compares the result to the AC of all creatures within its reach, dealing damage to each creature hit.")?.max, 8);
     assert.deepEqual(compile("<strong>Requirements</strong> Each of the test brute's four hands wields a club.</p><hr /><p><strong>Effect</strong> The test brute Strides up to half his speed, then makes four club Strikes, applying his multiple attack penalty as normal.", 3)?.strides, 1);
 });
+
+test("Strikes in more words: an adjacent shot, a penalty and its damage, a crest's extra die, two weapons at its prey (2026-10-12, batch 130)", () => {
+    const compile = (description, actions = 1) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions: {} });
+    const blank = compile("The test sniper makes a crossbow Strike against an adjacent enemy; unlike most ranged Strikes, this Strike doesn't provoke reactions. If successful, the attack deals an additional 2d6 precision damage.", 2);
+    assert.deepEqual([blank?.onHit?.damage, blank?.notes?.length], [["2d6[precision]"], 1]);
+    const aim = compile("The test archer makes a ranged Strike at a –2 penalty. The test archer deals 3 additional damage with this Strike.");
+    assert.deepEqual([aim?.attackBonus, aim?.damageBonus], [-2, 3]);
+    const crest = compile("The test beast rears up. The test beast makes a horn Strike; on a hit, the test beast deals an extra die of damage. This counts as two attacks when calculating the test beast's multiple attack penalty", 2);
+    assert.deepEqual([crest?.extraWeaponDice, crest?.countsAs], [1, 2]);
+    const butcher = compile("<strong>Frequency</strong> once per round; <strong>Requirement</strong> the test butcher is wielding two melee weapons, each in a different hand</p><hr /><p><strong>Effect</strong> It makes two Strikes against its menaced prey, one with each of the required weapons. In addition, if both Strikes hit, the menaced prey is Off-Guard until the start of the test butcher's next turn.");
+    assert.deepEqual(butcher?.bothHit?.conditions, [{ slug: "off-guard", value: null, rounds: 1 }]);
+});
