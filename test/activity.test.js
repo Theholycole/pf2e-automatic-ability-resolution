@@ -225,3 +225,10 @@ test("a self-effect's time when its plan gives none: its model's rounds (2026-10
     // Raise Shields: +2 AC until its next turn, as an effect.
     assert.deepEqual(strikeBuffEffect(plan({ rounds: 1 }), { name: "Test Shields" }).system.duration, { value: 1, unit: "rounds", expiry: "turn-start", sustained: false });
 });
+
+test("a Strike buff against creatures of one trait only: its DamageDice predicated on the target's trait (2026-10-12, batch 241)", () => {
+    const plan = { builtin: "self-effect", actions: 1, model: { name: "Test Bless", rounds: 1 }, damage: ["1d6[spirit]"], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, vsTrait: "unholy" };
+    const effect = strikeBuffEffect(plan, { name: "Test Bless", strikes: [] });
+    assert.deepEqual(effect.system.rules, [{ key: "DamageDice", selector: "strike-damage", diceNumber: 1, dieSize: "d6", damageType: "spirit", label: "Test Bless", predicate: ["target:trait:unholy"] }]);
+    assert.match(effect.system.description.value, /against unholy creatures/);
+});

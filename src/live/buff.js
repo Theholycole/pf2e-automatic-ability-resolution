@@ -54,7 +54,8 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
     const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
     if (plan.damage?.length && !toggles.length && !selector) return null;
     const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
-        : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name)),
+        // (Batch 241, Imbue Righteousness: damage only against unholy creatures — the target's trait as its predicate.)
+        : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)).map((rule) => (rule && plan.vsTrait ? { ...rule, predicate: [`target:trait:${plan.vsTrait}`] } : rule)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name)),
             ...(plan.model?.resistances ?? []).map((entry) => ({ key: "Resistance", type: entry.type, value: Number(entry.value), ...(entry.exceptions?.length ? { exceptions: [...entry.exceptions] } : {}) })),
             ...(plan.model?.tempHp ? [{ key: "TempHP", value: Number(plan.model.tempHp) }] : [])];
     if (rules.some((rule) => !rule)) return null;
@@ -62,7 +63,7 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
     const which = plan.strike ? `its ${plan.strike} Strikes` : plan.melee ? "its melee Strikes" : "its Strikes";
     const notes = (plan.notes ?? []).map((note) => `<p>${escape(note)}</p>`).join("");
-    const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " ")),
+    const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage${plan.vsTrait ? ` against ${plan.vsTrait} creatures` : ""}.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " ")),
         ...(plan.model?.resistances ?? []).map((entry) => `Resistance ${entry.value} to ${entry.type.replace(/-/g, " ")}${entry.exceptions?.length ? ` (except ${entry.exceptions.join(", ").replace(/-/g, " ")})` : ""}.`),
         plan.model?.tempHp ? `${plan.model.tempHp} temporary Hit Points.` : null].filter(Boolean).join(" ");
     return {

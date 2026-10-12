@@ -1989,7 +1989,7 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     // One of several modes picked by the monster's state ("its attack depends on its current form").
     if (/\bdepending on (?:its|their|the [\w' -]+?'s) (?:[\w-]+ )?(?:attunement|form|stance|mode|aspect)\b/i.test(htmlToPlainText(html))) return null;
     // Damage by the number of actions spent ("The damage depends on the number of actions"): not one plan.
-    if (/\bdepends on the number of actions\b|\bfor each additional action\b/i.test(htmlToPlainText(html))) return null;
+    if (/\bdepends? on the number of actions\b|\bfor each additional action\b/i.test(htmlToPlainText(html))) return null;
     // An effect picked from a roll on a list ("Roll on the alchemical chambers list to determine which one shatters"): the GM's.
     if (/\broll on (?:the|a|an|its) [^.]*?\b(?:list|table)\b|\broll [^.]*? to determine which\b/i.test(htmlToPlainText(html))) return null;
     // A save its terrain sets off later ("The first time each round a creature takes piercing damage from these splintered bones, it
@@ -2450,7 +2450,8 @@ function wickedBite(item) {
 // count's (the core's planWithActions; live play asks how many actions, the simulator picks). null otherwise.
 function actionCountSave(item, actor) {
     const html = item.system?.description?.value ?? "";
-    const phrase = /\bdepends on the number of actions\b/i.exec(html);
+    // (Batch 241: also "The damage and additional effects depend on the number of actions".)
+    const phrase = /\bdepends? on the number of actions\b/i.exec(html);
     if (!phrase) return null;
     const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry.save && entry.dc);
     if (!check?.basic) return null;
@@ -2459,10 +2460,13 @@ function actionCountSave(item, actor) {
     // (Batch 234, Battlezoo: the count in a "pf2-icon" span.)
     const markers = [...masked.matchAll(/<span class="(?:action-glyph|pf2-icon)">([123])<\/span>|(?<![\w\u0000])([123])(?=\s*\u0000)/g)];
     const variants = {};
+    const extras = {};
     markers.forEach((marker, index) => {
         const segment = masked.slice(marker.index + marker[0].length, markers[index + 1]?.index ?? masked.length);
         const found = [...segment.matchAll(/\u0000(\d+)\u0000/g)].map((match) => tags[Number(match[1])]).filter((raw) => !/\bhealing\b/i.test(raw));
         if (found.length) variants[marker[1] ?? marker[2]] = found.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null }));
+        const extra = countConditions(segment.replace(/\u0000\d+\u0000/g, ""));
+        if (extra) extras[marker[1] ?? marker[2]] = extra;
     });
     const counts = Object.keys(variants).map(Number).sort((a, b) => a - b);
     // Every count with the same parts, so the rows' damage ids stay the same.
@@ -2478,6 +2482,20 @@ function actionCountSave(item, actor) {
     const template = inlineTags(before, "Template").map(readTemplate).find(Boolean) ?? (around ? { type: "emanation", value: Number(around), foes: true } : undefined);
     const range = readRange(plain);
     const recharge = readRecharge(html);
+    const outcomes = withRiders(basicRows(components.map((component) => component.id)), before, components);
+    // (Batch 241: each count's own conditions, its rows — the core's byActions[n].rows; "The DC to Escape … is 26" a
+    // note on the rows that grab or restrain.)
+    const escape = Number(/\[\[\/act escape dc=(\d+)\]\]/i.exec(html)?.[1] ?? /\bDC to Escape\b[^.]*? is (\d+)\b/i.exec(htmlToPlainText(html))?.[1]) || null;
+    const rowsFor = (count) => {
+        const extra = extras[count];
+        if (!extra) return outcomes;
+        const rows = structuredClone(outcomes);
+        for (const degree of ["failure", "criticalFailure"]) {
+            rows[degree].effects = [...(rows[degree].effects ?? []), ...extra[degree]];
+            if (escape && extra[degree].some((effect) => ["grabbed", "restrained"].includes(effect.slug))) rows[degree].manualInstructions = [`The DC to Escape is ${escape}.`];
+        }
+        return rows;
+    };
     return {
         ...base(item, { time: String(counts[0]) }),
         targeting: { target: template ? null : "each enemy in reach", range: range && !around ? `${range} feet` : template ? null : "touch", area: template ?? null },
@@ -2486,10 +2504,25 @@ function actionCountSave(item, actor) {
             kind: "save",
             check: { roll: "save", statistic: check.statistic, basic: true, against: { dc: "fixed", value: check.dc } },
             sharedDamage: { rollOnce: true, components },
-            outcomes: withRiders(basicRows(components.map((component) => component.id)), before, components),
-            native: { byActions: Object.fromEntries(counts.map((count) => [count, { sharedDamage: { components: variants[count] } }])) }
+            outcomes: rowsFor(counts[0]),
+            native: { byActions: Object.fromEntries(counts.map((count) => [count, { sharedDamage: { components: variants[count] }, ...(extras[count] ? { rows: rowsFor(count) } : {}) }])) }
         }
     };
+}
+
+// The conditions one action count adds after its damage (batch 241): "(plus Grabbed for 1 round on a critical
+// failure)", "(plus grabbed for 1 round on a failure or Restrained for 1 round on a critical failure)", "plus Grabbed"
+// (a failed save's and worse). { failure, criticalFailure } effects, or null.
+function countConditions(segment) {
+    const plus = /\bplus\s+([\s\S]+?)\)?\s*$/i.exec(htmlToPlainText(segment).trim())?.[1]?.replace(/[.)]+$/, "").trim();
+    if (!plus) return null;
+    const read = (text) => readConditions(text, { plain: STAGE_CONDITIONS }).map(({ recipient, ...effect }) => effect);
+    const both = /^(.+?) on a failure,? or (.+?) on a critical failure$/i.exec(plus);
+    const critOnly = both ? null : /^(.+?) on a critical failure$/i.exec(plus);
+    const failure = both ? read(both[1]) : critOnly ? [] : /\bon a\b/i.test(plus) ? null : read(plus);
+    const criticalFailure = both ? read(both[2]) : critOnly ? read(critOnly[1]) : failure;
+    if (!failure || !criticalFailure?.length) return null;
+    return { failure, criticalFailure };
 }
 
 // What the text may call the monster ("toward the kun"): its name, its token's, without "(Young)", and its last word
@@ -3600,7 +3633,11 @@ function variedManeuver(item, basicActions = {}) {
     const extra = [];
     let fixed = null;
     let statistic = null;
-    const told = plain.replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? must have two free hands or be wielding an? [\w' -]+?\.? Effect /i, "")
+    // (Batch 241, Drag: "Requirements The experienced hound is adjacent to a Prone creature" — at that creature only, a requirement.)
+    const proneOnly = /^Requirements? (?:The )?[^.]+? (?:is|are) adjacent to a Prone creature\.? Effect /i.test(plain);
+    // (Batch 241, Down to Our Level: "Frequency once per round Effect …" — its frequency PF2e's; "all creatures in or adjacent to their space" — an
+    // emanation of 5 feet.)
+    const told = plain.replace(/^Frequency once per (?:round|turn) Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? (?:is|are) wielding an? (?:melee )?weapon\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? (?:is|are) adjacent to a Prone creature\.? Effect /i, "").replace(/^Requirements? (?:The )?[^.]+? must have two free hands or be wielding an? [\w' -]+?\.? Effect /i, "")
         .replace(/\b(to Grapple) with a \+(\d) circumstance bonus\./i, "$1 a creature, with a +$2 circumstance bonus.")
         // (Batch 156: Telekinetic Interference's "The haunt attempts to Trip a living creature within 60 feet with a bonus of +8." — that modifier
         // of its own; living creatures only, a note.)
@@ -3673,7 +3710,7 @@ function variedManeuver(item, basicActions = {}) {
     // (Batch 126: "all living creatures within 60 feet that can hear the durnolith", "all enemies within 30 feet", "… and applies the result to
     // every opponent within 30 feet".)
     // (Batch 126: "all living creatures within 60 feet that can hear the minotaur but not see them" — those it can't see, a note; "up to 4 creatures".)
-    const whom = String.raw`(an? (?:creature|foe|enemy|target)(?: within (\d+) feet)?|the nearest creature|(?:each|all|every) (?:enem(?:y|ies)|foes?|(?:living )?creatures?|opponents?) (?:within|in) (\d+) feet(?: (?:that|who) can hear (?:the [\w' -]+?|it|them|him|her)( but not (?:clearly )?see (?:it|them|him|her)(?: \([^)]*\))?)?)?|all non-allied creatures within (\d+) feet|up to (\d|two|three|four) creatures)`;
+    const whom = String.raw`(an? (?:creature|foe|enemy|target)(?: within (\d+) feet)?|the nearest creature|the prone creature|all creatures in or adjacent to (?:its|their|his|her) space|(?:each|all|every) (?:enem(?:y|ies)|foes?|(?:living )?creatures?|opponents?) (?:within|in) (\d+) feet(?: (?:that|who) can hear (?:the [\w' -]+?|it|them|him|her)( but not (?:clearly )?see (?:it|them|him|her)(?: \([^)]*\))?)?)?|all non-allied creatures within (\d+) feet|up to (\d|two|three|four) creatures)`;
     // (Shove and Run: "… and then Strides with a +20-foot circumstance bonus to Speed" — the Stride the GM's, a note.)
     // (Batch 126: "attempt to" (a troop's), "makes an Intimidation check to Demoralize", "He Demoralizes all enemies within 30 feet, rolling once and
     // comparing the result to each target's Will DC", "…; these Demoralize attempts don't take any penalty for not sharing a language".)
@@ -3713,6 +3750,7 @@ function variedManeuver(item, basicActions = {}) {
             continue;
         }
         // (Batch 126: no penalty for an unshared language, however it's said; Demoralize's own immunity said again; one roll for all.)
+        if (/^They roll one Athletics check and compare the result to the (?:Reflex|Fortitude) DC of each target\.$/i.test(sentence)) continue;
         if (/^These checks take no penalty for not sharing a language\.$|^This Intimidation check (?:doesn't|does not) take the [–-]4 circumstance penalty for [^.]+? not speaking a language\.$|^As usual for Demoralize, affected (?:enemies|creatures) are then temporarily immune for 10 minutes\.$|^Roll once and apply the results? to all (?:creatures|targets)\.$/i.test(sentence)) continue;
         // (Batch 141: Condemn's "On a success, the target is Stunned with a value equal to its Frightened condition." — Stunned 1, or 2 on a critical
         // success (Demoralize's Frightened); Stampeding Shove's "If the Shove succeeds, the target takes 2d10 bludgeoning damage (double damage on a
@@ -3732,6 +3770,11 @@ function variedManeuver(item, basicActions = {}) {
         }
         if (/^The target can remove this condition by taking an Interact action\.$/i.test(sentence)) {
             extra.push(sentence);
+            continue;
+        }
+        // (Batch 241, Drag: a Step away after, the grabbed creature moved along with it — the GM's.)
+        if (slug === "grapple" && /^(?:The [\w' -]+?|It|They|He|She) can then Step away from the target; if the target is Grabbed by (?:the [\w' -]+?|it|them|him|her), it is moved into (?:the [\w' -]+?['’]s|its|their|his|her) previous square and remains grabbed\.$/i.test(sentence)) {
+            extra.push("Then it can Step away; a creature it Grabbed moves into the square it left, still grabbed.");
             continue;
         }
         if (slug === "demoralize" && /^On a success, the target is Stunned with a value equal to its Frightened condition\.$/i.test(sentence)) {
@@ -3756,13 +3799,35 @@ function variedManeuver(item, basicActions = {}) {
     if (bonus) plan.resolution.check = { ...plan.resolution.check, bonus: { value: (Number(plan.resolution.check.bonus?.value) || 0) + bonus, type: "circumstance" } };
     if (fixed !== null) plan.resolution.check = { ...plan.resolution.check, modifier: fixed };
     if (statistic) plan.resolution.check = { ...plan.resolution.check, statistic };
-    const radius = Number(first[8] ?? first[10]) || 0;
+    const radius = Number(first[8] ?? first[10]) || (/^all creatures in or adjacent to /i.test(first[6] ?? "") ? 5 : 0);
     const reach = Number(first[7]) || null;
     const many = first[11] ? { one: 1, two: 2, three: 3, four: 4 }[String(first[11]).toLowerCase()] ?? Number(first[11]) : null;
     const targeting = radius ? { ...plan.targeting, target: null, range: null, area: { type: "emanation", value: radius } } : many ? { ...plan.targeting, target: `up to ${many} creatures` } : reach ? { ...plan.targeting, range: `${reach} feet` } : plan.targeting;
     const immunity = immune ? readImmunity(html, [item.name]) : null;
-    const notes = [...(first[9] ? ["Only creatures that can hear it but not see it."] : []), ...extra, ...(first[13] ? [`Then it${first[13].replace(/^ and then/, "")}.`] : [])];
-    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}) };
+    const notes = [...(proneOnly ? ["Only at a Prone creature beside it."] : []), ...(first[9] ? ["Only creatures that can hear it but not see it."] : []), ...extra, ...(first[13] ? [`Then it${first[13].replace(/^ and then/, "")}.`] : [])];
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}), ...(proneOnly ? { requires: "requirement" } : {}) };
+}
+
+// A Stride, then one of two maneuvers at many (2026-10-12, batch 241, Thunder of Hooves): "Strides. At the end of their movement, the cavalry
+// can either attempt an Athletics check to Trip each adjacent enemy or an Intimidation check to Demoralize each enemy within 30 feet. Roll only
+// once and compare …" → { builtin: "modes" }: each way PF2e's maneuver at the foes in that emanation (variedManeuver), the Stride a note.
+// null otherwise.
+function strideThenEither(item, basicActions = {}) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
+    const WAY = String.raw`an? (Athletics|Intimidation) check to (Trip|Shove|Demoralize|Grapple) (each adjacent enemy|each enemy within \d+ feet)`;
+    const either = new RegExp(String.raw`^(?:Frequency once per (?:round|turn) Effect )?((?:The )?[\w' -]+?) Strides\. At the end of (?:its|their|his|her) movement, (?:the [\w' -]+?|it|they|he|she) can either attempt ${WAY} or ${WAY}\. Roll only once and compare the result to each enemy['’]s (?:Reflex|Fortitude|Will) DC \(for \w+\) or (?:Reflex|Fortitude|Will) DC \(for \w+\)\.$`, "i").exec(plain);
+    if (!either) return null;
+    const way = (skill, act, whom) => {
+        const within = /\bwithin (\d+) feet\b/i.exec(whom)?.[1] ?? "5";
+        const plan = variedManeuver(withDescription(item, `<p>${either[1]} attempts an ${skill} check to ${act} each enemy within ${within} feet.</p>`), basicActions);
+        if (!plan?.targeting?.area) return null;
+        plan.targeting.area = { ...plan.targeting.area, foes: true };
+        return { name: act, plan: { ...plan, notes: ["It Strides first; one roll for every enemy.", ...(plan.notes ?? [])] } };
+    };
+    const modes = [way(either[2], either[3], either[4]), way(either[5], either[6], either[7])];
+    if (modes.some((mode) => !mode)) return null;
+    return { builtin: "modes", actions: Number(item.system?.actions?.value) || 1, modes };
 }
 
 // A move and then a basic maneuver (2026-10-12, batch 134): "The gurgist Strides twice and then attempts to Grapple a creature. On a success, the
@@ -4351,7 +4416,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     }
     if (slug === "engulf") return engulf(item, actor);
     // Used in one of several ways (two breath weapons): a plan for each.
-    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor });
+    const modes = wickedBite(item) ?? compileModes(item, { basicActions, actor }) ?? strideThenEither(item, basicActions);
     if (modes) return modes;
     // Damage by the number of actions spent (a troop's attacks): one plan, the damage for each count.
     const byActions = actionCountSave(item, actor);

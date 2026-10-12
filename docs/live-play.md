@@ -2308,3 +2308,23 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **Counterspell's kin** also takes a trigger naming a "damage type" now (`damage` was refused before).
 - **Live / simulator:** the GM's, as before.
 
+## NPC Core troops, riders and maneuvers (2026-10-12, batch 241)
+
+- **Compiled** (9 new in PF2e):
+  - **A troop's attack whose conditions depend on the actions spent** (Seize Them!, Incinerating Grasp): "The damage and additional effects depend on the number of actions" is read like "The damage depends on …". Each count's conditions after its damage become that count's rows (`native.byActions[n].rows`, which the core's `planWithActions` now lays over the plan's own outcomes):
+    - "(plus Grabbed for 1 round on a critical failure)": the critical failure's only;
+    - "(plus grabbed … on a failure or Restrained … on a critical failure)": each its own;
+    - "plus Grabbed": a failure's and a critical failure's.
+    - "The DC to Escape … is 26" becomes a note on the rows that grab or restrain.
+  - **A flight with two Strikes** (Rocketing Strafe) → `multi-strike` at different creatures, a flight first (`strides: 1`). The one pistol Strike it may make instead is a note. "Any Strike made as part of … deals an additional 2d6 damage" becomes `extraDamage: ["2d6[untyped]"]`, the Strike's own type.
+  - **A Stride, then one of two maneuvers at many** (Thunder of Hooves) → `modes`: a Trip at each enemy within 5 feet, or a Demoralize at each enemy within 30 feet. Each is PF2e's action, one roll for all, with the Stride first as a note.
+  - **Extra damage against unholy creatures only** (Imbue Righteousness) → `self-effect` with `vsTrait: "unholy"`.
+  - **A Grapple at a prone creature beside it** (Drag) → PF2e's Grapple, `requires: "requirement"`. The Step away, dragging a grabbed creature, is a note.
+  - **A Trip at every creature in or beside its space** (Down to Our Level) → PF2e's Trip in a 5-foot emanation. A leading "Frequency once per round" is now read past.
+  - **Reactive Strike that can break an arcane spell** (Spellbreaking Reactive Strike) → `reactive-strike`, with the flat check (and a critical hit's sure disruption) as a note.
+- **Live:**
+  - the troop's card applies that count's conditions once the GM picks the actions;
+  - the unholy-only damage is a DamageDice rule predicated on `target:trait:unholy`;
+  - Thunder of Hooves gives a GM button for each way.
+- **Simulator:** see B241 in its ability decisions.
+

@@ -3843,3 +3843,30 @@ test("states the simulator can't see in Battlezoo dragons: its own snares' victi
     assert.deepEqual(plan("<p>The test drake perceives magical auras within 60 feet as a precise sense until the end of its turn.</p>"), gm);
     assert.deepEqual(react("A creature within 60 feet casts a spell of the test drake's current energy, its damage type", "The test drake tries to stop that spell with a counteract check (modifier +20)."), { builtin: "no-effect" });
 });
+
+test("NPC Core: a troop's conditions by the number of actions, a flight with two Strikes, a Stride then one of two maneuvers, damage against unholy creatures only, a prone creature dragged, an area Trip, an arcane spell broken (2026-10-12, batch 241)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (html, actions = 1, type = "action") => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: actions }, traits: { value: [] }, description: { value: html } } }, { basicActions });
+    const glyph = (count) => `<span class="action-glyph">${count}</span>`;
+    const troop = compile(`<p>${glyph(1)} to ${glyph(3)}</p><hr /><p>The test watch jab with poles. Each enemy in a @Template[type:emanation|distance:5] must attempt a @Check[reflex|dc:20|basic] save. The damage and additional effects depend on the number of actions. The DC to @UUID[Compendium.pf2e.actionspf2e.Item.SkZAQRkLLkmBQNB9]{Escape} any of the following conditions is 24 ([[/act escape dc=24]]).</p><p>${glyph(1)} @Damage[1d6[bludgeoning]] damage (plus @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} for 1 round on a critical failure)</p><p>${glyph(2)} @Damage[2d6[bludgeoning]] damage (plus grabbed for 1 round on a failure or @UUID[Compendium.pf2e.conditionitems.Item.VcDeM8A5oI6VqhbM]{Restrained} for 1 round on a critical failure)</p><p>${glyph(3)} @Damage[3d6[bludgeoning]] damage plus grabbed</p>`);
+    const slugs = (rows) => [rows.failure.effects.map((effect) => effect.slug), rows.criticalFailure.effects.map((effect) => effect.slug)];
+    assert.deepEqual(slugs(troop.resolution.outcomes), [[], ["grabbed"]]);
+    assert.deepEqual(slugs(troop.resolution.native.byActions[2].rows), [["grabbed"], ["restrained"]]);
+    assert.deepEqual(slugs(troop.resolution.native.byActions[3].rows), [["grabbed"], ["grabbed"]]);
+    assert.deepEqual(troop.resolution.native.byActions[2].rows.failure.manualInstructions, ["The DC to Escape is 24."]);
+    assert.equal(troop.resolution.native.byActions[2].sharedDamage.components[0].formula, "2d6[bludgeoning]");
+    const strafe = compile("<p>The test flier Flies and makes two melee Strikes at any point during that movement. Each Strike must target a different creature. The test flier can forgo the melee Strikes to instead make one hand cannon Strike at any point during that movement and Interact to select the next loaded chamber of their hand cannon; they can do these in either order. Any Strike made as part of a Test Run deals an additional 2d6 damage and takes the normal multiple attack penalty.</p>", 2);
+    assert.deepEqual([strafe?.builtin, strafe?.strikes?.length, strafe?.extraDamage, strafe?.strides], ["multi-strike", 2, ["2d6[untyped]"], 1]);
+    const hooves = compile("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test rider Strides. At the end of their movement, the rider can either attempt an Athletics check to [[/act trip]] each adjacent enemy or an Intimidation check to [[/act demoralize]] each enemy within 30 feet. Roll only once and compare the result to each enemy's Reflex DC (for Trip) or Will DC (for Demoralize).</p>");
+    assert.deepEqual(hooves?.modes?.map((mode) => [mode.name, mode.plan.targeting.area]), [["Trip", { type: "emanation", value: 5, foes: true }], ["Demoralize", { type: "emanation", value: 30, foes: true }]]);
+    const imbue = compile("<p>The test knight blesses a blade they hold. Until the start of their next turn, their Strikes with that weapon gain the holy trait and deal an additional 1d6 spirit damage to unholy creatures.</p>");
+    assert.deepEqual([imbue?.builtin, imbue?.damage, imbue?.vsTrait, imbue?.duration?.expiry], ["self-effect", ["1d6[spirit]"], "unholy", "turn-start"]);
+    const drag = compile("<p><strong>Requirements</strong> The test dog is adjacent to a @UUID[Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60]{Prone} creature</p><hr /><p><strong>Effect</strong> The test dog attempts an Athletics check to [[/act grapple]] the prone creature. The test dog can then Step away from the target; if the target is @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} by the dog, it is moved into the dog's previous square and remains grabbed.</p>");
+    assert.deepEqual([drag?.resolution?.check?.statistic, drag?.requires, drag?.notes?.length], ["athletics", "requirement", 2]);
+    const trip = compile("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test mob scrambles about underfoot. The test mob attempts to [[/act trip]] all creatures in or adjacent to their space. They roll one Athletics check and compare the result to the Reflex DC of each target.</p>", 2);
+    assert.deepEqual(trip?.targeting?.area, { type: "emanation", value: 5 });
+    const breaker = compile("<p>As @UUID[Compendium.pf2e.bestiary-ability-glossary-srd.Item.W7SbTykXrNwxDzJc]{Reactive Strike}, but if it was triggered by a creature casting an arcane spell, the target must succeed at a @Check[flat|dc:11] or the spell is disrupted. If the Strike was a critical hit, the spell is disrupted automatically.</p>", null, "reaction");
+    assert.equal(breaker?.builtin, "reactive-strike");
+    assert.equal(breaker?.requires, undefined);
+    assert.match(breaker?.note ?? "", /DC 11 flat check/);
+});

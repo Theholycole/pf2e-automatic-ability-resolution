@@ -298,6 +298,19 @@ export function readMultiStrikes(text) {
     });
     // (Batch 212, Battlezoo: a Stride up to its Speed, then up to so many Strikes on the way, in a sentence of their own; so many Strikes "times"
     // with one weapon, each at its own creature.)
+    // (Batch 241, Rocketing Strafe: "Flies and makes two melee Strikes at any point during that movement. Each Strike must target a different
+    // creature." — a flight first; the one ranged Strike it may make instead a note; "Any Strike made as part of … deals an additional 2d6 damage"
+    // — the Strike's own damage type.)
+    body = body.replace(/^((?:The )?[^.]+?) Flies and makes two (melee |ranged )?Strikes at any point during (?:that|its|their|the) movement\. Each Strike must target a different creature\./i, (_all, who, kind) => {
+        movesFirst = 1;
+        earlyNotes.push("It Flies, making the Strikes at any point along the way.");
+        return `${who} makes two ${kind ?? ""}Strikes, each against a different target.`;
+    })
+        .replace(/ (?:The [\w' -]+?|It|They|He|She) can forgo the (melee|ranged) Strikes to instead make one ([\w' -]+?) Strike at any point during that movement and Interact to select the next loaded chamber of (?:their|its|his|her) \2; (?:they|it|he|she) can do these in either order\./i, (_all, kind, other) => {
+            earlyNotes.push(`Or, instead of the ${kind} Strikes, one ${other} Strike (and an Interact to ready its next chamber).`);
+            return "";
+        })
+        .replace(/ Any Strike made as part of an? [A-Z][\w' -]+? deals an additional (\d+d\d+) damage and takes the normal multiple attack penalty\./i, (_all, dice) => ` These attacks deal an additional @Damage[${dice}[untyped]] damage.`);
     body = body.replace(/^((?:The )?[^.]+?) Strides up to (?:its|their|his|her) Speed\. (?:It|They|He|She) can make up to (two|three|four) ([\w' -]+?) Strikes at any point during (?:its|their|his|her|the|that) movement\./i, (_all, who, number, name) => {
         movesFirst = 1;
         earlyNotes.push("It Strides up to its Speed, making the Strikes at any point along the way.");
@@ -2089,6 +2102,11 @@ export function readReaction(item, text) {
     // Attack of Opportunity, but both the bunyip and the triggering creature must be in water." — Reactive Strike behind a state the GM checks.)
     const kin = /^As (?:Reactive Strike|Attack of Opportunity), but (.+?)\.?$/i.exec(text.trim());
     if (kin && /\b(?:only (?:if|while|when)|must be)\b/i.test(kin[1])) return { builtin: "reactive-strike", requires: "requirement", note: `${kin[1][0].toUpperCase()}${kin[1].slice(1)}.` };
+    // (Batch 241, Spellbreaking Reactive Strike: "…, but if it was triggered by a creature casting an arcane spell, the target must succeed at a DC 11
+    // flat check or the spell is disrupted. If the Strike was a critical hit, the spell is disrupted automatically." — Reactive Strike, the spell's
+    // disruption a note.)
+    const breaking = kin ? /^if it was triggered by a creature casting an? (arcane|divine|occult|primal) spell, the target must succeed at a (?:@Check\[(?:type:)?flat\|dc:(\d+)[^\]]*\](?:\{[^}]*\})?|DC (\d+) flat check) or the spell is disrupted\. If the Strike was a critical hit, the spell is disrupted automatically$/i.exec(kin[1]) : null;
+    if (breaking) return { builtin: "reactive-strike", note: `Against a creature casting an ${breaking[1].toLowerCase()} spell: a hit disrupts the spell unless it succeeds at a DC ${breaking[2] ?? breaking[3]} flat check; a critical hit always does.` };
     // Undying Myth (batch 41): "Cost all the creature's Mythic Points Trigger The creature would die and has at least 1 Mythic Point Effect
     // The creature remains standing and conscious, and recovers 50% of its maximum Hit Points."
     const undying = /\bTrigger (?:The )?[^.]+? would die and has at least 1 Mythic Point\.? Effect (?:The )?[^.]+? remains (?:standing and )?conscious, and recovers (\d+)% of (?:its|their|his|her) maximum Hit Points\.?$/i.exec(text.trim());
@@ -2967,6 +2985,9 @@ export function readStrikeBuff(item) {
         .replace(/\bAll of (the [\w' -]+?['’]s) melee unarmed attacks deal an (additional|extra) ((?:\u0001\d+\u0001|\d+d\d+ [a-z]+)) damage until (?:the [\w' -]+?['’]s|its|their) rage ends\./, "Until its rage ends, $1 melee Strikes deal an $2 $3 damage.")
         // (Batch 166, Trick Attack: "The next attack with that weapon this turn deals an additional 2d6 precision damage." — its next Strike only.)
         .replace(/\bThe next attack with that weapon(?: this turn)? deals an (?:extra|additional) (\d+d\d+) precision damage\./, "Until the end of its turn, its Strikes deal an additional $1 precision damage. Next Strike only.")
+        // (Batch 241, Imbue Righteousness: "Until the start of their next turn, their Strikes with that weapon gain the holy trait and deal an additional
+        // 1d6 spirit damage to unholy creatures." — its Strikes, the damage only against those creatures: vsTrait.)
+        .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) (?:next )?turn), (?:its|their|his|her) Strikes with that weapon gain the ([a-z]+) trait and deal an (additional|extra) (\d+d\d+ [a-z]+) damage to (holy|unholy) creatures\./, "$1, its Strikes deal an $3 $4 damage and gain the $2 trait. Only against $5 creatures.")
         // (Batch 200, Local Poison: "Until the end of their turn, Strikes with their dagger deal an additional 2 persistent poison damage.")
         .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) (?:next )?turn), Strikes with (?:its|their|his|her) ([\w' -]+?) deal an (additional|extra) /, "$1, their $2 Strikes deal an $3 ")
         // (Batch 233, Charge Chain: "… chooses to make their next Strike with the chain this turn either deal an additional 4d6 void damage or have 120-foot
@@ -3047,7 +3068,7 @@ export function readStrikeBuff(item) {
     const notes = [];
     for (const [at, sentence] of sentences.entries()) {
         if (at === index) continue;
-        if (sentence === "Next Strike only.") continue;
+        if (sentence === "Next Strike only." || /^Only against (?:holy|unholy) creatures\.$/.test(sentence)) continue;
         if (at < index && !/\u0001|\d|\b(?:damage|bonus|penalty|save|check|Hit Points|HP|Strikes?|resistance|weakness|immun\w*)\b/i.test(sentence)) continue;
         if (/^Effect: /.test(sentence)) continue;
         notes.push(readableText(sentence.replace(/\u0001(\d+)\u0001/g, (_all, mark) => `@Damage[${formulas[Number(mark)]}]`)));
@@ -3056,6 +3077,7 @@ export function readStrikeBuff(item) {
     if (other) notes.unshift(other[0].toUpperCase() + other.slice(1) + ".");
     if (sentences.includes("Next Strike only.")) notes.unshift("Only its next attack with that weapon (this turn): remove the effect after it.");
     const name = found[6] && !/^(?:weapon|unarmed)$/i.test(found[6]) ? found[6].toLowerCase() : null;
+    const vsTrait = sentences.map((sentence) => /^Only against (holy|unholy) creatures\.$/.exec(sentence)?.[1]).find(Boolean) ?? null;
     return {
         builtin: "self-effect",
         actions: item.system?.actionType?.value === "reaction" ? 0 : Number(item.system?.actions?.value) || (item.system?.actionType?.value === "free" ? 0 : 1),
@@ -3067,6 +3089,7 @@ export function readStrikeBuff(item) {
         ...(stance ? { stance: true } : {}),
         ...(castFirst ? { requires: "after-cast", ...(castFirst[1] ? { nonCantrip: true } : {}) } : enraged ? { requires: "raging" } : {}),
         ...(sentences.includes("Next Strike only.") ? { nextStrike: true } : {}),
+        ...(vsTrait ? { vsTrait } : {}),
         ...(notes.length ? { notes } : {})
     };
 }
