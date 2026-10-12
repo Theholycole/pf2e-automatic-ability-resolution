@@ -3052,3 +3052,16 @@ test("Reactive Strike for its allies of a trait until its own next turn ends, on
     const plan = compileMonsterAbility({ type: "action", name: "Test Rally", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p>Each kobold within @Template[emanation|distance:20]{20 feet} of the test chief gains the Reactive Strike reaction until the end of the test chief's next turn. Once a kobold has used this Reactive Strike, that kobold is temporarily immune to the same test chief's Test Rally for 10 minutes.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.within, plan.trait, plan.reaction, plan.until, plan.usedOnce], ["grant-aoo", 20, "kobold", "Reactive Strike", "source", true]);
 });
+
+test("a rune detonated on the attacker, creatures that come as it falls, a Strike before it's destroyed (2026-10-12, batch 177)", () => {
+    const item = (name, type, html) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const detonating = item("Detonating Rune", "passive", "<p>Its Strikes can leave a detonating rune. A second rune detonates the first, dealing @Damage[3d6[untyped]] damage to the target.</p>");
+    const retort = item("Test Retort", "reaction", "<p><strong>Trigger</strong> A creature within 10 feet damages the test drake</p><hr /><p><strong>Effect</strong> With a burst of runic magic, the test drake uses their detonating rune ability on the triggering creature and immediately causes the rune to detonate if it didn't automatically do so.</p>");
+    const actor = { items: [detonating, retort] };
+    const plan = compileMonsterAbility(retort, { basicActions: {}, actor });
+    assert.deepEqual([plan.targeting.target, plan.trigger.reaction, plan.resolution.outcomes.success.damage.formulas[0].formula], ["the attacker", true, "3d6[untyped]"]);
+    const horn = compileMonsterAbility(item("Test Horn", "reaction", "<p><strong>Trigger</strong> The test captain is reduced to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test captain sounds a horn as it falls. The call summons reinforcements, raising [[/r 1d6 #Corpses]]{1d6 corpses} in a @Template[emanation|distance:100] as zombies.</p>"), { basicActions: {} });
+    assert.equal(horn.builtin, "no-effect");
+    const spite = compileMonsterAbility(item("Test Spite", "reaction", "<p>When the test ghoul is reduced to 0 Hit Points, they can use their reaction to make a Strike before being destroyed. They don't gain any Hit Points from ghoul hunger on this Strike.</p>"), { basicActions: {} });
+    assert.deepEqual(spite, { builtin: "death-strike", strike: null });
+});

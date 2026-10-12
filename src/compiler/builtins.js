@@ -1560,6 +1560,9 @@ export function readReaction(item, text) {
     // dying.")
     const frenzy = /^When (?:the )?[\w' -]+? is reduced to 0 hit points,? (?:it|they|he|she) can spend this reaction to make an? ([\w' -]+?) Strike before dying\.$/i.exec(text.trim());
     if (frenzy) return { builtin: "death-strike", strike: frenzy[1].toLowerCase() };
+    // (Batch 177, the Menace Under Otari wight's Final Spite: "When the wight is reduced to 0 Hit Points, they can use their reaction to make a Strike
+    // before being destroyed. They don't gain any Hit Points from corrupting spite on this Strike." — its best Strike; no Hit Points it would gain.)
+    if (/^When (?:the )?[\w' -]+? is reduced to 0 Hit Points, (?:it|they|he|she) can use (?:its|their|his|her) reaction to make a Strike before being destroyed\.(?: (?:It|They|He|She) (?:doesn't|don't|does not|do not) gain any Hit Points from [\w' -]+? on this Strike\.)?$/i.test(text.trim())) return { builtin: "death-strike", strike: null };
     const bite = /^When a creature within (?:the )?reach of (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?) attacks one of (?:its|their|the [\w' -]+?['’]s) allies, (?:the [\w' -]+?|it|they) can spend (?:its|their) reaction to make an? ([\w' -]+?) Strike against that creature\.$/i.exec(text.trim());
     if (bite) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: bite[2].toLowerCase(), penalty: 0, disrupts: false };
     // (Batch 105, Clawed Feet in older words: "If the gargoyle is flying and a creature moves into an adjacent square below them, the gargoyle
@@ -1572,6 +1575,10 @@ export function readReaction(item, text) {
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/.exec(text)?.[1] ?? "", /\bEffect (.+)$/.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
+    // (Batch 177: creatures that come as it falls — Final Spite's "blows a battered war horn before being destroyed. The unnerving blast summons
+    // reinforcements, raising 1d4 corpses … as Wights.", the cobbled bruiser's "A Cobbleswarm spawns in the space …" — the GM's, as summons are
+    // (the user's choice of 2026-10-11).)
+    if (/\bsummons reinforcements, raising [^.]*? corpses\b/i.test(effect) || /^An? (?:Weakened )?[A-Z][\w'-]+ spawns in the space (?:the [\w' -]+?|it) previously occupied\b/.test(effect.trim())) return { builtin: "no-effect" };
     // (Batch 86: Counterspell's kin — a spell or effect that sets it off, and an attempt to counteract it: "Trigger The nullifier is the target
     // of a spell Effect The nullifier attempts to counteract the triggering spell …", "Trigger A creature within 30 feet casts a divine spell
     // … attempts to counteract the triggering spell …". The GM's, as Counterspell is (the user's choice of 2026-10-11).)

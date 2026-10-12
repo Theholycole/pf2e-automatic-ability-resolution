@@ -1573,3 +1573,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Call to Arms → `grant-aoo` with `reaction: "Reactive Strike"`, `until: "source"`, `usedOnce`.
 - **Live:** the grant-aoo effect as in batch 167, named for Reactive Strike. PF2e times it a round from this turn, which is exactly "until the end of its next turn". The GM note says so and that an ally that uses it is immune to it for 10 minutes. Not run in pftest: only names and note text differ from batch 167's run.
 - **Simulator:** the grant ends at the end of the granter's next turn. An ally that makes the Attack of Opportunity is never granted it by that creature again (B176).
+
+## A rune detonated on the attacker; creatures that come as it falls (2026-10-12, batch 177)
+
+- **Compiled:** Retributive Rune → a reaction card when a creature within 15 feet damages it: an automatic hit at the attacker for the damage written in the creature's own Detonating Rune, with notes for its type (the dragon's current Shifting Rune, the GM's) and the archdragon's extra reaction. Final Spite's raised reinforcements and the cobbled bruiser's swarms are the GM's (`no-effect`), as summons are by the user's choice of 2026-10-11. The Menace Under Otari wight's unlabeled Final Spite → `death-strike`.
+- **Live:** no new live code: the hit-by offer and its card at the attacker, as before. Not run in pftest.
+- **Simulator:** nothing new. The card plays as an answer to being hit, and the death Strike as before (B177).

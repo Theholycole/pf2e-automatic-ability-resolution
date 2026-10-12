@@ -2521,6 +2521,34 @@ function fling(item) {
     };
 }
 
+// A rune detonated on the creature that hurt it (2026-10-12, batch 177, Retributive Rune): "Trigger A creature within 15 feet damages the rune
+// dragon Effect With a burst of runic magic, the rune dragon uses their detonating rune ability on the triggering creature and immediately causes
+// the rune to detonate if it didn't automatically do so." (or "creates a detonating rune on …") → its Detonating Rune's damage at the attacker, its
+// type the dragon's current Shifting Rune's (the GM's); the archdragon's extra reaction for it a note.
+function retributiveRune(item, actor) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const trigger = split ? readReactionTrigger(split[1].trim()) : null;
+    if (!trigger) return null;
+    const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+    if (!/^With a burst of runic magic, (?:the [\w' -]+?|it) (?:uses (?:their|its) detonating rune ability on|creates a detonating rune on) the triggering creature and immediately causes (?:the rune|it) to detonate if it didn't automatically do so\.$/i.test(said[0] ?? "")) return null;
+    const extra = said.slice(1);
+    if (extra.length > 1 || (extra.length && !/^(?:The [\w' -]+?|It) gains an additional reaction at the beginning of each of (?:their|its) turns that (?:they|it) can use only for (?:a )?[\w' -]+?\.$/i.test(extra[0]))) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const rune = (owner?.items?.contents ?? owner?.items ?? []).find((entry) => entry !== item && /^detonating rune$/i.test(String(entry.name ?? "")));
+    const formula = rune ? inlineTags(String(rune.system?.description?.value ?? ""), "Damage").map(readDamage).find(Boolean) : null;
+    if (!formula) return null;
+    const success = { damage: { mode: "formulas", formulas: [{ formula }], rollScope: "outcome" }, effects: [] };
+    return {
+        ...base(item, { time: "reaction" }),
+        targeting: { target: "the attacker", range: "touch", area: null },
+        trigger: { ...trigger, reaction: true },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } },
+        notes: ["Its damage type is that of the dragon's current Shifting Rune (the GM's).", ...(extra.length ? ["It gains an extra reaction at the start of each of its turns, only for this."] : [])]
+    };
+}
+
 // Healing itself or an ally it touches (2026-10-12, batch 161, Dero Medicine): "Requirements The dero is wearing a cytillesh toolkit and has a hand
 // free Effect The dero excises damaged flesh and crudely stitches wounds shut, healing themself or an ally in reach for 2d8 Hit Points. For 1 hour,
 // the target has slashing weakness 2 and is immune to Dero Medicine." → that healing on itself or an ally in its reach; the hour after, a note
@@ -3733,7 +3761,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? healTouch(item) ?? retributiveRune(item, actor) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
