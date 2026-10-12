@@ -1733,3 +1733,14 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** Use puts an effect on the monster with PF2e's Resistance rules (exceptions kept) and a TempHP rule, for the plan's time. The effect's text says what it gives and when it ends. Osseous Defense instead turns on its own PF2e switch, which holds its resistance and Strikes. Not run in pftest: the same path as batch 39's AC bonuses.
 - **Simulator:** see B196 in its ability decisions.
 
+## Multi-Strikes on the move; a Strike as it grabs (2026-10-12, batch 197)
+
+- **Compiled:**
+  - Unstoppable Charge → a multi-Strike with two claws and a jaws Strike at different creatures, after two Strides.
+  - Claw Storm → four claw Strikes at different creatures after a Stride, with extra electricity damage and the same multiple attack penalty; its other sentences are notes.
+  - Flurry of Strands → six strand Strikes at different creatures, with a note for those Immobilizing.
+  - Ravenous Embrace → four arm Strikes; the beak Strike after is a note.
+  - Deadly Mandibles → `reaction-strike` with trigger `grabs`, and a note for the pull.
+- **Live:** when a monster's card grabs a creature and the monster has Deadly Mandibles, the GM gets a note: its mandibles Strike at that creature, to roll from its sheet. The multi-Strikes are cards as before. Not run in pftest.
+- **Simulator:** see B197 in its ability decisions.
+

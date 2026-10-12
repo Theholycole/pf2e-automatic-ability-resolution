@@ -168,6 +168,36 @@ export function readMultiStrikes(text) {
     // targets"; a blog creature's "Strides and then makes two X Strikes at a single target"; Dead Shot's "makes two ranged Strikes, one with each of the
     // firearms, each using …'s current multiple attack penalty" — a move first where there is one.)
     let strideFirst = false;
+    // (Batch 197: Unstoppable Charge's "Strides twice in a straight line. It can make up to two claw Strikes during this movement and one jaws Strike at
+    // the end of its movement. It can't Strike the same creature more than once."; Claw Storm's "Strides up to its Speed, during which it can walk on air
+    // …. It can make up to four claw Strikes at any point during this movement, each against a different target within reach, and it deals an extra …
+    // damage with each Strike. …" (its other sentences notes); Flurry of Strands' "makes a strand Strike with each of its strands (except those that are
+    // Immobilizing creatures). Each attack must be against a different target." (six strands); Ravenous Embrace's arm Strikes, then a beak Strike at
+    // one it Grabbed — the beak a note.)
+    let movesFirst = 0;
+    const earlyNotes = [];
+    body = body.replace(/^((?:The )?[^.]+?) Strides twice in a straight line\. (?:It|They) can make up to (two|three) ([\w' -]+?) Strikes during this movement and one ([\w' -]+?) Strike at the end of (?:its|their) movement\. (?:It|They) can(?:'t|not) Strike the same creature more than once\./i, (_all, who, count, one, last) => {
+        movesFirst = 2;
+        earlyNotes.push(`It Strides twice in a straight line, the ${one} Strikes during the movement and the ${last} Strike at its end.`);
+        return `${who} makes ${count.toLowerCase()} ${one} Strikes and a ${last} Strike, each against a different target.`;
+    })
+        .replace(/^((?:The )?[^.]+?) Strides up to (?:its|their) Speed, during which (?:it|they) can walk on air as if it were solid ground, ascending or descending at up to a 45-degree angle\. (?:It|They) can make up to (two|three|four) ([\w' -]+?) Strikes at any point during this movement, each against a different target within reach, and (?:it|they) deals? an extra (@Damage\[(?:[^[\]]|\[[^\]]*\])*\]) damage with each Strike\./i, (_all, who, count, name, damage) => {
+            movesFirst = 1;
+            earlyNotes.push("It Strides up to its Speed, walking on air, making the Strikes at any point along the way.");
+            return `${who} makes ${count.toLowerCase()} ${name} Strikes, each against a different target. These attacks deal an extra ${damage} damage.`;
+        })
+        .replace(/\b(These attacks count toward (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, but the multiple attack penalty doesn't increase until after (?:the [\w' -]+?|it|they) makes? all of (?:its|their) attacks\.)((?: If (?:the [\w' -]+?|it|they) moves? half (?:its|their) Speed or less during an? [A-Z][\w' -]+?, that movement doesn't trigger reactions\.)?(?: (?:The [\w' -]+?|It|They) can(?:'t|not) use [A-Z][\w' -]+? if (?:it|they) (?:has|have) a creature wrapped in (?:its|their) coils\.)?(?: At the end of [A-Z][\w' -]+?, (?:it|they) drifts? downward [^.]+\.)?(?: If (?:it|they) descends? further than \d+ feet, [^.]+\.)?)$/i, (_all, _same, rest) => {
+            earlyNotes.push(...rest.trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
+            return "These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.";
+        })
+        .replace(/^((?:The )?[^.]+?) makes an? ([\w' -]+?) Strike with each of (?:its|their) \2s \(except those that are Immobilizing creatures\)\. Each attack must be against a different target\./i, (_all, who, name) => {
+            earlyNotes.push(`Not with a ${name} that is Immobilizing a creature.`);
+            return `${who} makes six ${name} Strikes, each against a different target.`;
+        })
+        .replace(/^((?:The )?[^.]+?) makes up to (two|three|four) ([\w' -]+?) Strikes, each with a different \3 and against a different target\. (?:The [\w' -]+?|It|They) then makes an? ([\w' -]+?) Strike against one creature that (?:it|they) Grabbed during [A-Z][\w' -]+?\. Each \3 Strike counts separately for (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, but the penalty doesn't increase until (?:the [\w' -]+?|it|they) (?:has|have) made all of (?:its|their) \3 Strikes; the \4 Strike uses the multiple attack penalty as normal\./i, (_all, who, count, limb, beak) => {
+            earlyNotes.push(`Then a ${beak} Strike at one creature it Grabbed with them, at its multiple attack penalty as normal.`);
+            return `${who} makes ${count.toLowerCase()} ${limb} Strikes, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
+        });
     body = body.replace(/^((?:The )?[^.]+?) Flies and Strikes twice with (?:its|their|his|her) ([\w' -]+?) at any points? during (?:its|their|his|her) movement\./i, (_all, who, weapon) => `${who} Strides once and makes two ${weapon.replace(/s$/i, "")} Strikes at any point along its movement.`)
         .replace(/^(?:The )?([^.,]+?) [^.,]+?, Striding and making two Strikes against different targets during the movement\./i, (_all, who) => {
             strideFirst = true;
@@ -212,13 +242,14 @@ export function readMultiStrikes(text) {
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
     let penalty = 0;
     const notes = [];
+    notes.push(...earlyNotes);
     if (strideBetween) notes.push("Between the Strikes it Strides (no reactions) to another space beside the creature; the second Strike only if it gets there.");
     if (preyOnly) notes.push("Only at its prey.");
     if (swimAfter) notes.push("Then it Swims up to its swim Speed; that Swim triggers no reactions.");
     let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
-    let strides = strideFirst ? 1 : 0;
+    let strides = movesFirst || (strideFirst ? 1 : 0);
     if (held) sameTarget = true;
     first = first.trim().replace(/([^.])$/, "$1.")
         // (Batch 152, Fan of Daggers: "…, each against a separate target; he ignores the multiple attack penalty until after making all three
@@ -2178,6 +2209,10 @@ export function readReaction(item, text) {
     if (/^An? (?:[\w' -]+ )?ally ends a move action adjacent to [^.]+\.?$/.test(trigger.trim()) && /^(?:The )?[^.]+? Steps\.$/.test(effect.trim())) return { builtin: "no-effect" };
     // Fast Swallow (2026-10-10, batch 38): "Trigger The worm Grabs a creature (with its maw); Effect The worm uses Swallow Whole."
     if (/^(?:The )?[^.]+? Grabs a creature(?: (?:with|in) (?:its|their|his|her) [\w' -]+?)?;?\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? uses Swallow Whole\.?$/i.test(effect.trim())) return { builtin: "fast-swallow" };
+    // (Batch 197, Deadly Mandibles: "Trigger The giant mantis Grabs a creature with its leg. Effect The mantis pulls the creature adjacent to it, then makes
+    // a mandibles Strike against the creature." — its Strike at the creature it grabbed, once the action ends; the pull a note.)
+    const grabbing = /^(?:The )?[^.]+? Grabs a creature(?: (?:with|in) (?:its|their|his|her) [\w' -]+?)?;?\.?$/i.test(trigger.trim()) ? /^(?:The )?[^.]+? pulls the creature adjacent to (?:it|them), then makes an? ([\w' -]+?) Strike against the creature\.$/i.exec(effect.trim()) : null;
+    if (grabbing) return { builtin: "reaction-strike", triggers: ["grabs"], strike: grabbing[1].toLowerCase(), penalty: 0, disrupts: false, note: "It pulls the creature adjacent to it first." };
     // (Batch 64: "attempts to move away from it during a move action it's using", and "targets it with a ranged attack" too → "ranged";
     // a Trip it may add on a critical hit, a note for live play.)
     // (Batch 137, Tail Trip: "A creature carrying a metal item attempts to move out of a square within reach of the rust monster's tail" —

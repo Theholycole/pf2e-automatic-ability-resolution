@@ -1024,6 +1024,7 @@ async function applyCard(message) {
     lines.push(...(await grantImmunity(state)));
     // Fast Swallow (batch 38): a creature it just Grabbed: its Swallow Whole's card, as its reaction.
     await fastSwallow(state, result.changes);
+    await grabStrike(state, result.changes);
     // "It can't use it again for 1d4 rounds": rolled now.
     const recharge = state.plan?.trigger?.recharge?.formula;
     if (recharge && state.ability.uuid) {
@@ -1057,6 +1058,20 @@ async function fastSwallow(state, changes) {
         const token = target?.tokenUuid ? await fromUuid(target.tokenUuid) : null;
         if (token) await postCard({ plan: swallow.plan, item: swallow.item, sourceActor: actor, sourceToken, tokens: [token.object ?? token], cause: `${fast.item.name} (its reaction)` });
     }
+}
+
+// (Batch 197, Deadly Mandibles: a creature its card just grabbed — its reaction Strike at it, a note for the GM to roll from its sheet.)
+async function grabStrike(state, changes) {
+    const grabbed = changes.filter((change) => change.op === "condition" && ["grabbed", "restrained"].includes(change.slug) && change.target !== "source");
+    if (!grabbed.length || !state.source?.actorUuid) return;
+    const actor = await fromUuid(state.source.actorUuid);
+    if (!actor || !["npc", "hazard"].includes(actor.type)) return;
+    await ready;
+    const answer = actor.itemTypes.action.map((item) => ({ item, plan: compile(item) })).find(({ plan }) => plan?.builtin === "reaction-strike" && plan.triggers?.includes("grabs"));
+    if (!answer) return;
+    const sourceToken = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
+    const names = grabbed.map((change) => state.targets.find((entry) => entry.id === change.target)?.name).filter(Boolean);
+    await noteToGM(actor, sourceToken, [`<strong>${answer.item.name}</strong> (its reaction): ${answer.plan.note ? `${answer.plan.note} ` : ""}Then its ${answer.plan.strike} Strike at ${names.join(", ") || "the creature it grabbed"}: roll it from its sheet.`]);
 }
 
 async function grantImmunity(state) {
