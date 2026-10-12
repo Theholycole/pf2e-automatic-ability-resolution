@@ -859,6 +859,8 @@ function strikeActivity(item, actor, { after = null } = {}) {
         // (Batch 130, Hammerhead: "makes a bone crest Strike; on a hit, the mjolgat deals an extra die of damage. This counts as two attacks when
         // calculating the mjolgat's multiple attack penalty" — its own sentence, and the last one's period.)
         .replace(/(Strike); on a hit, (?:the [\w' -]+?|it|he|she|they) deals an extra die of damage\./i, "$1. If it hits, it deals an extra die of weapon damage.")
+        // (Batch 140, Punishing Strike: "He Strikes; if he hits, he increases the number of damage dice by one and adds Push to the effect.")
+        .replace(/\b(He|She|It|They) Strikes?; if (?:he|she|it|they) hits?, (?:he|she|it|they) increases? the number of damage dice by one and adds? (?:@UUID\[[^\]]*\]\{Push\}|Push) to the effect\./i, "$1 makes a Strike. If it hits, it deals an extra die of weapon damage. If it hits, the target is pushed 5 feet.")
         .replace(/(multiple attack penalty)(\s*(?:<\/p>)?\s*)$/i, "$1.$2")
         .split(/(?<=[.\]])\s+(?=[A-Z@<[])/).map((sentence) => sentence.trim()).filter(Boolean);
     const activity = { builtin: "strike-activity", actions: Number(item.system?.actions?.value) || 1, strides: 0, strike: null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null } };
@@ -978,6 +980,21 @@ function strikeActivity(item, actor, { after = null } = {}) {
             .replace(/^On a successful hit, the target is pushed back (\d+) feet, with the effects of a successful Shove(?=\.$)/i, "If it hits, the target is pushed $1 feet")
             .replace(/^On a hit, (?:the [\w' -]+?|it|they) automatically Grabs the (?:creature|target)(?=\.$)/i, "If it hits, the target is Grabbed")
             .replace(/^Whether or not (?:it|they|he|she) hits?, (?:the [\w' -]+?|it|they) then Strides\.$|^If (?:it|they) (?:has|have) a creature grabbed, the creature moves with (?:the [\w' -]+?|it|them)\.$/i, "[gm]")
+            // (Batch 140: what it does to itself — Defensive Slam's "Strikes once and gains a +2 circumstance bonus to AC until the start of their
+            // next turn", Punishing Strike's "… in a reckless attack that makes him Off-Guard until the start of his next turn", "The skelm is
+            // Off-Guard until the start of his next turn" → selfAfter, a note live.)
+            .replace(/^((?:The )?[^.]+?) Strikes once and gains a \+(\d) circumstance bonus to AC until the start of (?:its|their|his|her) next turn(?=\.$)/i, (_all, who, value) => {
+                (activity.selfAfter ??= []).push({ ac: Number(value), type: "circumstance" });
+                (activity.notes ??= []).push(`After the Strike, it gains a +${value} circumstance bonus to AC until the start of its next turn.`);
+                return `${who} makes a Strike`;
+            })
+            // (Defensive Slam's "Effect: Defensive Slam": PF2e's effect for that bonus.)
+            .replace(/^Effect: [\w' -]+$/, (link) => (activity.selfAfter?.some((entry) => entry.ac) ? "[told]" : link))
+            .replace(/^(?:The )?[^.]+? (?:is Off-Guard|in a reckless attack that makes (?:him|her|it|them) Off-Guard) until the start of (?:its|their|his|her) next turn\.$/i, () => {
+                (activity.selfAfter ??= []).push({ slug: "off-guard", until: "own-turn-start" });
+                (activity.notes ??= []).push("It's Off-Guard until the start of its next turn.");
+                return "[told]";
+            })
             // (Batch 139: Skewer's "Strikes with its rapier, and gains a +1 circumstance bonus to the attack roll" and "A creature damaged by the
             // attack takes 1d6 bleed"; Big Swing's "The target is Pushed up to 10 feet on a hit or up to 20 feet on a critical hit" and its
             // collision (the GM's).)
@@ -1236,7 +1253,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     if (/^melee weapon$/i.test(activity.strike ?? "")) activity.strike = null;
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    const bare = !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage;
+    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage;
     // (Batch 90, Feathered Charge: every sentence read, and only a Stride and a Strike for as many actions — terrain it ignores, a fall the
     // GM's: nothing more than its Strike.)
     if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };
@@ -3077,7 +3094,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
@@ -3298,6 +3315,19 @@ function selfCondition(item) {
 // requires? } (requires: its requirements, which the simulator can't check). Its other sentences are notes for the GM when
 // they're only words; not one that also heals or harms others, or heals only sometimes ("If …", "for each enemy …").
 const HEALS_ITSELF = /^(?:(?:The |An? )?[\w' -]+?|It|They|He|She)(?:,? [^,.]*?,)? (?:regains?|restores?|heals?)\s+\u0000(?: (?:Hit Points|HP))?(?: to (?:itself|himself|herself|themselves|themself))?(?:,? (?:gaining|with) any excess (?:healing )?as temporary (?:Hit Points|HP)[^.]*)?\.$|,? (?:restoring|regaining) \u0000 (?:Hit Points|HP)(?: to (?:itself|himself|herself|themselves|themself))?\.$/;
+// Hit Points back as it downs a creature (2026-10-12, batch 140, Absorb Sin): "Trigger The atrixyl reduces a creature it can smell with its
+// true sin scent to 0 Hit Points Effect The atrixyl regains 6d6 Hit Points." → the self-heal, set off by downing a creature; which creature
+// counts, a note for the GM.
+function downsHeal(item) {
+    if (!["free", "reaction"].includes(item.system?.actionType?.value)) return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const parts = /^Trigger (?:The )?[\w' -]+? reduces a creature (it can smell with its true sin scent )?to 0 (?:HP|Hit Points)\.? Effect (.+)$/i.exec(plain);
+    if (!parts) return null;
+    const heal = selfHeal(withDescription({ ...item, system: { ...item.system, actionType: { value: "action" } } }, `<p>${parts[2]}</p>`));
+    if (!heal) return null;
+    return { ...heal, ...base(item), trigger: { event: "downs", reaction: true, ...(item.system?.actionType?.value === "free" ? { free: true } : {}), ...(parts[1] ? { note: "Only a creature it can smell with its true sin scent." } : {}) } };
+}
+
 function selfHeal(item) {
     if (!["action", "free"].includes(item.system?.actionType?.value) || /<strong>\s*Trigger\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return null;
     const html = String(item.system?.description?.value ?? "");

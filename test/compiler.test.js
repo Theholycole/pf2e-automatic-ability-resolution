@@ -2627,3 +2627,18 @@ test("Strike activities and multi-Strikes in more words; a reaction to initiativ
     const charm = ability("<p><strong>Trigger</strong> The test showman rolls initiative using Deception or Performance</p><hr /><p><strong>Effect</strong> The test showman can attempt to [[/act demoralize]] one creature they can see.</p>", "free");
     assert.deepEqual([charm.trigger.event, charm.trigger.skills, charm.resolution.check.statistic], ["initiative", ["deception", "performance"], "intimidation"]);
 });
+
+test("what a Strike leaves on itself, a sweep in a frenzy, a dodge against a Strike or spell, Hit Points back on downing a foe (2026-10-12, batch 140)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const ability = (description, type = "action", actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions });
+    const slam = ability("<p>The test brute braces its shield arm while attacking. The test brute Strikes once and gains a +2 circumstance bonus to AC until the start of its next turn.</p>");
+    assert.deepEqual([slam.builtin, slam.selfAfter], ["strike-activity", [{ ac: 2, type: "circumstance" }]]);
+    const reckless = ability("<p>The test bruiser swings wildly in a reckless attack that makes him Off-Guard until the start of his next turn.</p><p>He Strikes; if he hits, he increases the number of damage dice by one and adds Push to the effect. This counts as two attacks for his multiple attack penalty.</p>", "action", 1);
+    assert.deepEqual([reckless.selfAfter, reckless.extraWeaponDice, reckless.onHit.push, reckless.countsAs], [[{ slug: "off-guard", until: "own-turn-start" }], 1, 5, 2]);
+    const tide = ability("<p><strong>Requirements</strong> The test captain is in a blood frenzy.</p><hr /><p><strong>Effect</strong> The test captain unleashes a storm of blows against its foes, making a single melee Strike with its fists or horns against each opponent within reach.</p>");
+    assert.deepEqual([tide.builtin, tide.each, tide.requires], ["multi-strike", true, "requirement"]);
+    const dodge = ability("<p><strong>Trigger</strong> The test wraith is targeted by a Strike or spell</p><hr /><p><strong>Effect</strong> The test wraith gains a +2 circumstance bonus to AC and resistance 5 to cold damage against the triggering attack.</p>", "reaction");
+    assert.deepEqual([dodge.builtin, dodge.value, dodge.notes.length], ["ac-reaction", 2, 2]);
+    const absorb = ability("<p><strong>Trigger</strong> The test glutton reduces a creature it can smell with its true sin scent to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test glutton regains @Damage[4d6[healing]] Hit Points.</p>", "free");
+    assert.deepEqual([absorb.trigger.event, absorb.trigger.free, absorb.targeting.target, absorb.resolution.kind], ["downs", true, "self", "healing"]);
+});

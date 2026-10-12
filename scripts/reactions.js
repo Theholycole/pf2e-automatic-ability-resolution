@@ -700,7 +700,8 @@ async function onDowned(actor) {
         if (!combat) continue;
         const mine = reactors(scene, combat).find((entry) => entry.actor.uuid === source.actor);
         const entry = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "downs");
-        if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: null, trigger: `downed ${token.name}`, free: !!entry.plan.trigger.free });
+        // (Batch 140, Absorb Sin: which creature counts, a note.)
+        if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: null, trigger: `downed ${token.name}`, free: !!entry.plan.trigger.free, note: entry.plan.trigger.note ?? null });
         // (Batch 105, Deadly Cleave: another Strike with that weapon at a different creature, at the same multiple attack penalty.)
         const cleave = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("downs"));
         const strikes = cleave ? meleeStrikes(mine.actor, `(${cleave.plan.strike} only)`) : [];

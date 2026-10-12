@@ -1410,3 +1410,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Skewer → a Strike activity with +1 to hit and 1d6 bleed on damage; Big Swing → `onHit.push: 10, criticalPush: 20` and the collision as a note; Rapid Rake, Whirling Frenzy (`each`), Team Attack (`each`), Mangling Rend (`bothHit` with 2d6 and Off-Guard, the Speeds a note), Circling Attack (its flights a note) → multi-strike; Daunting Charisma → `trigger: { event: "initiative", skills: ["deception", "performance"], free }`.
 - **Live:** the encounter starting offers Daunting Charisma with "Only if it rolled initiative with Deception or Performance."; "Use it" posts its Demoralize card; checked in pftest.
 - **Simulator:** the initiative reaction is played as if it rolled with that skill (B138).
+
+## What a Strike leaves on itself; Hit Points back on downing a foe (2026-10-12, batch 140)
+
+- **Compiled:** Punishing Strike → a Strike activity with an extra weapon die, a 5-foot push and `selfAfter: [{ slug: "off-guard", until: "own-turn-start" }]`, counted as two attacks; Defensive Slam → `selfAfter: [{ ac: 2, type: "circumstance" }]` (PF2e's linked effect is the bonus); Hateful Tide → a sweep with `requires: "requirement"`; Ghost Dodge → `ac-reaction` with its notes; Absorb Sin → the self-heal with `trigger: { event: "downs", free, note }`.
+- **Live:** the Strike activities' notes go to the GM when used ("It's Off-Guard until the start of its next turn.", "After the Strike, it gains a +2 circumstance bonus to AC until the start of its next turn."); Absorb Sin is offered as batch 52's downs reactions are, now with its note ("Only a creature it can smell with its true sin scent."). Not run in pftest: the only live change is that note on an existing offer.
+- **Simulator:** the Off-Guard or the guard after the Strike, until its next turn, and the planner weighs it (B139); the self-heal when it downs a foe, only when it's hurt (B140).

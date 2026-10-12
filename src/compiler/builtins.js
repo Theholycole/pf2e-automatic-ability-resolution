@@ -567,8 +567,12 @@ export function readSweep(text) {
     // attack" — what it wields; sweep's bonus left out.)
     // (Batch 102: another requirement, "The golem is uncontrollable", "is holding six spirit blades": a state the module doesn't play, the
     // GM's — requires "requirement".)
-    const required = !/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i.test(text.trim()) && /^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?) Effect /i.test(text.trim());
-    const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(/^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?) Effect /i, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 140, Hateful Tide: "Requirements The sea devil baron is in a blood frenzy" — the same; "… unleashes a whirlwind of attacks against
+    // its foes, making a single melee Strike with its claws or jaws against each opponent within reach" — its best melee Strike at each.)
+    const stated = /^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?|in a (?:blood )?frenzy)\.? Effect /i;
+    const required = !/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i.test(text.trim()) && stated.test(text.trim());
+    const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(stated, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "")
+        .replace(/^((?:The )?[^.]+?) unleashes [^,.]+, making (a single (?:melee )?Strike) with (?:its|their|his|her) [\w' -]+?(?: or [\w' -]+?)? against each opponent within reach\./i, "$1 makes $2 against each enemy within reach.").split(/(?<=\.)\s+(?=[A-Z])/);
     // (Batch 102: "makes three jaws Strikes, each against a different target", "makes up to six longsword Strikes, each against a different
     // target" → that many, each at a different creature in its reach.)
     const COUNTS = { two: 2, three: 3, four: 4, five: 5, six: 6 };
@@ -1605,6 +1609,9 @@ function acDodge(text, trigger, effect) {
         if (!parts) return null;
         [trigger, effect] = [parts[1], parts[2]];
     }
+    // (Batch 140, Ghost Dodge: "is targeted by a Strike or spell" — the Strike's part; against a spell and its resistances, notes.)
+    const spellToo = /^(?:The )?[\w' -]+? is targeted by a Strike or spell$/i.test(trigger.trim());
+    if (spellToo) trigger = trigger.replace(/ or spell$/i, "");
     // "The oath dragon or a bonded companion within 15 feet is targeted": its own part.
     const own = trigger.replace(/ or (?:a|an|one of its) [\w' -]+? within \d+ feet(?= (?:is|are) targeted)/i, "");
     const shared = own !== trigger;
@@ -1621,7 +1628,8 @@ function acDodge(text, trigger, effect) {
     // (Not the PF2e effect it links: "… Effect: Shielding Wing".)
     const plain = effect.trim().replace(/\s*\bEffect: [^.]+$/, "");
     const only = /^[^.]*?\+\d+ circumstance bonus to (?:its |their |his |her )?(?:AC|Armor Class)(?: against (?:the|that) triggering (?:attack|Strike))?\.?$/i.test(plain);
-    return { builtin: "ac-reaction", value: Number(bonus[1]), when: hit ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(only ? {} : { notes: [plain] }) };
+    const notes = [...(only ? [] : [plain]), ...(spellToo ? ["A spell aimed at it sets it off too."] : [])];
+    return { builtin: "ac-reaction", value: Number(bonus[1]), when: hit ? "hit" : "targeted", ...(melee !== ranged ? { against: melee ? "melee" : "ranged" } : {}), ...(notes.length ? { notes } : {}) };
 }
 
 // A condition the monster always has (2026-10-10, batch 21): "The zombie is permanently Slowed 1 and can't use reactions" (Slow),
