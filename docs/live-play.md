@@ -2268,3 +2268,9 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** its hits this turn are counted by Strike and target. The second with the named Strike offers the claw Strike, with a note to roll it as its first attack.
 - **Simulator:** see B236 in its ability decisions.
 
+## A parry with claws (2026-10-12, batch 237)
+
+- **Compiled:** Sharp Riposte → `resist-damage` against a melee attack from an adjacent creature (`melee`), with `retort`: the attacker takes the damage written when the attack hits. The damage is a note on the offer.
+- **Live:** the resistance offer as before, with "Only a melee attack from a creature beside it" and the damage back.
+- **Simulator:** see B237 in its ability decisions.
+

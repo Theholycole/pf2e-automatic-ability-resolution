@@ -3801,3 +3801,8 @@ test("a claw after two fist hits this turn, outside its multiple attack penalty 
     const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test giant hits a creature with two fist Strikes</p><hr /><p><strong>Effect</strong> The test giant makes a claw Strike with no multiple attack penalty against the creature it hit with its fist Strikes. This claw attack does not increase the test giant's multiple attack penalty.</p>" } } }, { basicActions: {} });
     assert.deepEqual(plan, { builtin: "reaction-strike", triggers: ["two-hits"], strike: "claw", after: "fist", penalty: 0, disrupts: false });
 });
+
+test("resistance against a melee attack from beside it, and damage back on a hit (2026-10-12, batch 237)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> An adjacent creature targets the test lion with a melee attack</p><hr /><p><strong>Effect</strong> The test lion parries with its claws. The test lion gains resistance 3 to physical damage from the attack, and if the attack hits, the attacker takes @Damage[(1d6+2)[slashing]] damage.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.value, plan.on, plan.melee, plan.retort], ["resist-damage", 3, ["physical"], true, "(1d6+2)[slashing]"]);
+});

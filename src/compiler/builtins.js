@@ -1337,6 +1337,15 @@ function readResistDamage(text, trigger, effect) {
         const gains = /^(?:The )?[^.]+?, gaining resistance to damage from spells equal to the triggering spell['’]s rank until the (?:beginning|start) of (?:its|their) next turn\.$/i.test(effect.trim().replace(/\s*Effect: [\w' -]+$/, ""));
         return gains ? { builtin: "resist-damage", value: "rank", spell: true, on: null, types: ["spells"], lasts: 1, until: "turn-start" } : null;
     }
+    // (Batch 237, Sharp Riposte: "Trigger An adjacent creature targets the paaridar with a melee attack Effect The paaridar blocks the attack with their
+    // claws. The paaridar gains resistance 5 to physical damage from the attack, and if the attack hits, the attacker takes 1d8+4 slashing damage." —
+    // resistance to that melee attack's physical damage, and that damage back at the attacker: retort.)
+    if (/^An adjacent creature targets (?:the [\w' -]+?|it|them) with a melee attack$/i.test(trigger.trim().replace(/\.$/, ""))) {
+        const said = effect.trim().replace(/\s*Effect: [\w' -]+$/, "").split(/(?<=\.)\s+(?=[A-Z])/);
+        const told = said.length === 2 && !/\d|@|\b(?:damage|resistance|bonus|penalty)\b/i.test(said[0]);
+        const riposte = /^(?:The )?[^.]+? gains? resistance (\d+) to physical damage from the attack, and if the attack hits, the attacker takes @Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})? damage\.$/i.exec(said.at(-1) ?? "");
+        if ((said.length === 1 || told) && riposte) return { builtin: "resist-damage", value: Number(riposte[1]), on: ["physical"], types: ["physical"], attack: true, foe: true, melee: true, retort: riposte[2], note: `If the attack hits, the attacker takes ${riposte[2].replace(/^\((.*)\)\[(\w+)\]$/, "$1 $2").replace(/\[(\w+)\]$/, " $1")} damage.` };
+    }
     const said = trigger.trim().replace(/\.$/, "").replace(/,? or with a spell that has the [\w ,]+? traits?$/i, "");
     const self = String.raw`(?!An? |Any |One )(?:The )?[^.]+?`;
     let on = null;
