@@ -2911,3 +2911,12 @@ test("area saves in other words, a Strike that pushes and then knocks Prone (202
     const strike = ability("<p>The test brute makes a melee Strike and, if the attack hits, it can push the creature back 5 feet (10 feet on a critical hit). The target must succeed at a @Check[fortitude|dc:21] save or be knocked Prone by this attack.</p>");
     assert.deepEqual([strike.builtin, strike.onHit.push, strike.onHit.criticalPush, strike.onHit.save.resolution.check.statistic], ["strike-activity", 5, 10, "fortitude"]);
 });
+
+test("a betraying touch with another ability's save, a secret pried loose (2026-10-12, batch 160)", () => {
+    const item = (name, description, actions = 1) => ({ type: "action", name, system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } });
+    const humors = item("Test Humors", "<p>A creature the test hag touches must succeed at a @Check[fortitude|dc:20] save or become Enfeebled 1.</p>");
+    const touch = compileMonsterAbility(item("Test Betrayal", "<p>The test hag touches a creature that doesn't realize she is an enemy. The betrayed creature is affected by her test humors and takes a -4 circumstance penalty to their saving throw against that effect.</p>"), { basicActions: {}, actor: { items: [humors] } });
+    assert.deepEqual([touch.resolution.check.against.value, touch.requires, touch.targeting.range], [24, "requirement", "touch"]);
+    const secret = compileMonsterAbility(item("Test Secret", "<p>The test drake delves into the mind of a creature within 30 feet, learning something they'd find embarrassing or shameful unless they succeed at a @Check[will|dc:25] save. The target becomes Frightened 1 and cannot reduce their frightened condition for 1 minute or until the test drake reveals the secret.</p>", 2), { basicActions: {} });
+    assert.deepEqual([secret.resolution.check.statistic, secret.resolution.outcomes.failure.effects[0].slug, secret.notes], ["will", "frightened", ["It can't reduce that Frightened for 1 minute (or until the secret is revealed)."]]);
+});

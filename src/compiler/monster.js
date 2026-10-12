@@ -2397,6 +2397,42 @@ function moveUsesAbility(item, actor, options) {
     };
 }
 
+// A touch that brings another of its abilities with a harder save (2026-10-12, batch 160, Betraying Touch): "The green hag touches a creature that
+// doesn't realize the hag is an enemy. The betrayed creature is affected by the hag's enfeebling humors and takes a -4 circumstance penalty to
+// their saving throw against that effect.", "… is affected by soporific strike with a –4 circumstance penalty to their saving throw." (its
+// Soporific Touch) → that ability's save at a creature it touches, the DC 4 higher; only at a creature that doesn't know it's a foe (requires,
+// the GM's live, not played by the simulator).
+function betrayingTouch(item, actor, options) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[\w' -]+? touches a creature that (?:doesn't|does not) realize (?:the [\w' -]+?|it|she|he|they) (?:is|are) an enemy\. The betrayed creature is affected by (?:the [\w' -]+?['’]s |its |her |his |their )?([a-z][\w' -]+?)(?: and takes an? [–-](\d) circumstance penalty to (?:their|its) saving throw against that effect| with an? [–-](\d) circumstance penalty to (?:their|its) saving throw)\.$/i.exec(plain);
+    if (!match) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const items = (owner?.items?.contents ?? owner?.items ?? []).filter((entry) => entry !== item && entry.type === "action");
+    const wanted = match[1].toLowerCase();
+    // (Its name, or its first word with another — "soporific strike" for its Soporific Touch.)
+    const other = items.find((entry) => String(entry.name ?? "").toLowerCase() === wanted) ?? items.find((entry) => String(entry.name ?? "").toLowerCase().split(/\s+/)[0] === wanted.split(/\s+/)[0]);
+    if (!other) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(other, { ...options, actor: owner });
+    } catch {
+        plan = null;
+    }
+    const penalty = Number(match[2] ?? match[3]);
+    if (plan?.resolution?.kind !== "save" || plan.resolution.check?.against?.dc !== "fixed" || !Number.isFinite(plan.resolution.check.against.value)) return null;
+    return {
+        ...plan,
+        source: base(item).source,
+        activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] },
+        targeting: { target: "1 creature", range: "touch", area: null },
+        trigger: { event: "use" },
+        requires: "requirement",
+        resolution: { ...plan.resolution, check: { ...plan.resolution.check, against: { ...plan.resolution.check.against, value: plan.resolution.check.against.value + penalty } } },
+        notes: [...(plan.notes ?? []), `Only at a creature that doesn't realize it's an enemy; its save takes a –${penalty} penalty (the DC here is ${penalty} higher).`]
+    };
+}
+
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
 function ownAffliction(item, actor, phrase) {
     const owner = actor ?? item.actor ?? item.parent;
@@ -3301,12 +3337,23 @@ function unmarkedBasic(item) {
 // An area save in other words (2026-10-12, batch 159), rewritten as the save reading takes it: Stomp's "…, causing all creatures within 10 feet to
 // fall Prone (Reflex save negates)", Gravechoke's "… that targets all living creatures within a 30-foot emanation. Creatures in this area that
 // fail a Fortitude save become Sickened 1 (Sickened 2 on a critical failure)." → "… must succeed at a … save or …". null when neither.
-function rewordedSave(item) {
+function rewordedSave(item, actor = null) {
     const html = String(item.system?.description?.value ?? "");
+    const notes = [];
     const reworded = html
+        // (Batch 160, Unveil Secret: "delves into the mind of a creature within 60 feet, learning something they'd find embarrassing or shameful
+        // unless they succeed at a Will save. The target becomes Frightened 1 and cannot reduce their frightened condition for 1 minute … As a
+        // reaction …, the dragon can reveal their secret …" — the save and the Frightened; the rest notes.)
+        .replace(/^<p>((?:The )?[\w' -]+?) delves into the mind of a creature within (\d+) feet(?: to scour for secrets)?, learning something (?:they'd|the creature would) find embarrassing or shameful unless they succeed(?: at)? a (@Check\[[^\]]*\]) save\. The target becomes (@UUID\[[^\]]*\]\{Frightened \d\}|Frightened \d) and (?:cannot|can't) reduce their frightened condition for 1 minute or until [^.]+\.(?: As a reaction when the affected creature attempts a check, [^.]+?, requiring them to roll twice and take the lower result; this is a misfortune effect\.)?<\/p>/i, (all, who, feet, check, frightened) => {
+            notes.push("It can't reduce that Frightened for 1 minute (or until the secret is revealed).");
+            if (/misfortune/.test(all)) notes.push("Later, as a reaction when that creature attempts a check, it can reveal the secret: the creature rolls the check twice and takes the lower result.");
+            return `<p>${who} delves into the mind of a creature within ${feet} feet. The creature must succeed at a ${check} save or become ${frightened}.</p>`;
+        })
         .replace(/, causing all creatures within (@Template\[[^\]]*\](?:\{[^}]*\})?) to fall (@UUID\[[^\]]*\]\{Prone\}|Prone) \((@Check\[[^\]]*\]) save negates\)\./i, ". All creatures within $1 must succeed at a $3 save or be knocked $2.")
         .replace(/ that targets all (living )?creatures within (an? @Template\[[^\]]*\](?:\{[^}]*\})?)\. Creatures in this area that fail an? (@Check\[[^\]]*\]) save become ([^.]+)\./i, (_all, living, area, check, result) => `. Each ${living ?? ""}creature within ${area} must succeed at a ${check} save or become ${result}.`);
-    return reworded === html ? null : withDescription(item, reworded);
+    if (reworded === html) return null;
+    const plan = inlineSave(withDescription(item, reworded), actor);
+    return plan && notes.length ? { ...plan, notes: [...(plan.notes ?? []), ...notes] } : plan;
 }
 
 // Scattershot (2026-10-11, batch 56): "The dragon exhales a cloud of small balls of pure energy that deal @Damage[(11d4+11)[force]] damage in
@@ -3551,7 +3598,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? rewordedSave(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? maneuverThenStrike(item, actor, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions, actor) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? rewordedSave(item, actor) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // (Batch 154, Exit Stage: once per mask it carries, each use breaking one — the masks on its sheet; with no creature given, the GM counts.)
     if (plan?.builtin === "ferocity" && plan.perMask) {
         delete plan.perMask;
@@ -3564,7 +3611,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 
