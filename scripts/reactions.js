@@ -848,6 +848,15 @@ async function onInitiative(combat) {
         const skills = plan.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1));
         await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value, ...(plan.within ? { within: plan.within } : {}) }, note: [`Only if it rolled initiative with ${skills.join(" or ")}, and for the allies ${plan.within ? `within ${plan.within} feet` : "that can hear or see it"}.`, ...(plan.notes ?? [])].join(" ") });
     }
+    // (Batch 199, Uncanny Pounce: a Stride and its Strike as it rolls initiative, free; the skill it names in its note.)
+    for (const monster of scene.tokens) {
+        const actor = monster.actor;
+        if (!actor || actor.type !== "npc" || monster.hidden || !taking.has(monster.id) || actor.isDead) continue;
+        const item = (actor.itemTypes?.action ?? []).find((entry) => compile(entry)?.builtin === "strike-activity" && compile(entry)?.initiative);
+        const plan = item ? compile(item) : null;
+        const strikes = plan ? meleeStrikes(actor, `(${plan.strike} only)`) : [];
+        if (strikes.length) await offer({ kind: "strike", item, monster, actor, target: null, strikes, trigger: "rolls initiative", free: true, note: plan.notes?.join(" ") || null });
+    }
 }
 
 // Reduced to 0 HP: Ferocity, or Death Frenzy's last Strike.

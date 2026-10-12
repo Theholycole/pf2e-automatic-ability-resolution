@@ -1755,3 +1755,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** Gory Rend's note to the GM now names the affliction ("it is exposed to piscovenom (its card from the sheet)"). The rest are cards and notes as before. Not run in pftest.
 - **Simulator:** see B198 in its ability decisions.
 
+## A Stride and a Strike as it rolls initiative (2026-10-12, batch 199)
+
+- **Compiled:** Uncanny Pounce → a Strike activity with `actions: 0`, one Stride, its claw (or jaws) and `initiative: true`, with a note naming the Lore it rolls.
+- **Live:** as the encounter starts, a siktempora in it brings a free Strike offer with its named Strike. The note names the Lore it rolls for initiative and says it Strides once, before or after the Strike. Not run in pftest: the same path as batch 170's initiative offers.
+- **Simulator:** see B199 in its ability decisions.
+

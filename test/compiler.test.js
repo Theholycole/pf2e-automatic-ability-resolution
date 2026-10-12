@@ -3260,3 +3260,10 @@ test("both hits with an affliction; Strikes at a grabbed creature with wounds, v
     const bite = compileMonsterAbility(item("<p><strong>Requirements</strong> The test eel has a creature Grabbed</p><hr /><p><strong>Effect</strong> The test eel makes a fang Strike against the grabbed creature. If it hits, it injects additional poison, causing its venom to gain the virulent trait.</p>"), {});
     assert.deepEqual([bite.strike, bite.requires, bite.notes.length], ["fang", "grabbed", 1]);
 });
+
+test("a Stride and a Strike as it rolls initiative (2026-10-12, batch 199)", () => {
+    const item = { type: "action", name: "Test", system: { slug: null, actionType: { value: "free" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test lynx rolls Forest Lore for initiative</p><hr /><p><strong>Effect</strong> The test lynx Strides once and makes a claw Strike, in either order.</p>" } } };
+    const pounce = compileMonsterAbility(item, {});
+    assert.deepEqual([pounce.builtin, pounce.actions, pounce.strides, pounce.strike, pounce.initiative], ["strike-activity", 0, 1, "claw", true]);
+    assert.match(pounce.notes[0], /with Forest Lore/);
+});

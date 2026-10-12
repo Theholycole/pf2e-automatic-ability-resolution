@@ -1652,6 +1652,16 @@ export function readHealSiphon(text) {
     return { builtin: "heal-siphon", within: Number(split[1]), ...(temp ? { tempHp: temp[1], tempRounds: Number(temp[2]) } : {}) };
 }
 
+// A Stride and a Strike as it rolls initiative (2026-10-12, batch 199, Uncanny Pounce): "Trigger The love siktempora rolls Dimension of Time Lore
+// for initiative Effect The love siktempora Strides once and makes a claw Strike, in either order." → a Strike activity with initiative: true (a
+// free action; the skill it names a note).
+export function readInitiativeStrike(text) {
+    const split = /^Trigger (?:The )?[^.]+? rolls (?:([A-Z][\w' -]+? Lore|Stealth|Perception|Deception|Athletics|Acrobatics|Survival) )?(?:for )?initiative\.? Effect (?:The )?[^.]+? Strides once and makes an? ([\w' -]+?) Strike, in either order\.$/i.exec(String(text).trim().replace(/\s*Effect: [^.]+$/i, ""));
+    if (!split) return null;
+    const strike = split[2].toLowerCase();
+    return { builtin: "strike-activity", actions: 0, strides: 1, strike, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null }, initiative: true, notes: [`As it rolls initiative${split[1] ? ` with ${split[1]}` : ""}: it Strides once and makes its ${strike} Strike, in either order.`] };
+}
+
 export function readRedirect(text) {
     const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
     // (Batch 191, Hop-Dodge: "Trigger The cauthooj is the target of a melee Strike and is adjacent to another enemy that is also within the reach of the
@@ -1718,7 +1728,7 @@ export function readReaction(item, text) {
     if (undyingHp && /^Cost all (?:of )?[^.]*?Mythic Points\b/i.test(text.trim())) return { builtin: "mythic", kind: "undying", amount: Number(undyingHp[1]) };
     // (Counterspell, Read the Cards: the GM's, the user's choice of 2026-10-11.)
     if (readGmSpellcasting(text)) return { builtin: "no-effect" };
-    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readAuraReroll(text, item) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text) ?? readHealSiphon(text);
+    const withdraw = readWithdraw(text) ?? readFollow(text) ?? readCritRecharge(text) ?? readCritUpgrade(text) ?? readGuardian(text) ?? readAllySave(text) ?? readAuraReroll(text, item) ?? readSaveSkill(text) ?? readInitiativeWarning(text, item) ?? readRedirect(text) ?? readHealSiphon(text) ?? readInitiativeStrike(text);
     if (withdraw) return withdraw;
     // (Batch 40, with no labels: "If a goblin ally ends a move action adjacent to the goblin warrior, the warrior can use their reaction
     // to Step"; "When a creature within the reach of the warg's bite attacks one of its allies, the warg can spend its reaction to make a
