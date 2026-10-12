@@ -14,7 +14,7 @@
 //   (Challenge Fate), reaction-strike on a move (Twisting Tail), death-strike (Death Frenzy)
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
-import { readableText } from "./inline.js";
+import { inlineTags, readDamage, readableText } from "./inline.js";
 
 const NUMBERS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
 // "four", "4" → 4; 0 when it isn't a number (batch 43: "up to six claw Strikes", "up to 12 jaws Strikes").
@@ -812,7 +812,7 @@ export function readWithdraw(text) {
         else if (/^(?:The )?[\w' -]+? is attacked with a melee weapon$/i.test(trigger)) [on, melee] = ["attacked", true];
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
-        else if (new RegExp(`^An? (?:creature|enemy|foe) (?:enters ${subject}['’]s space or an adjacent square|moves into an adjacent space)$`, "i").test(trigger)) [on, enters] = ["approach", true];
+        else if (new RegExp(`^An? (?:creature|enemy|foe) (?:enters ${subject}['’]s space or an adjacent square|moves into an adjacent space|moves adjacent to ${subject})$`, "i").test(trigger)) [on, enters] = ["approach", true];
         else if (new RegExp(`^A dazzled or blinded creature, or a creature with light blindness, ends its move(?:ment)? adjacent to ${subject}$`, "i").test(trigger)) [on, foe] = ["approach", ["dazzled", "blinded"]];
     }
     if (!on) return null;
@@ -823,6 +823,9 @@ export function readWithdraw(text) {
     else {
         // ("… takes a step after the effects of the triggering attack are resolved.")
         if (/^(?:The )?[\w' -]+? takes a step after the effects of the triggering attack are resolved\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Steps.";
+        // (Batch 133, Slip: "… teleports to a clear space adjacent to another creature she can see within 30 feet" — away, triggering no reactions.)
+        const slip = /^(?:The )?[\w' -]+? teleports to a clear space adjacent to another creature (?:it|she|he|they) can see within (\d+) feet\.$/i.exec(sentences[0] ?? "");
+        if (slip && sentences.length === 1) return { builtin: "withdraw", on, ...(enters ? { enters } : {}), move: "Teleport", feet: Number(slip[1]), safe: true };
         const first = /^(?:After resolving the attack, )?(?:The )?[\w' -]+? (?:quickly takes advantage of the attacker['’]s error and )?(Steps(?: or Strides)?|Strides(?:,? (?:Climbs|Swims),? or (?:Climbs|Swims)| or (?:Climbs|Swims))?|Climbs or Strides|Flies)(?: (?:up to )?(\d+) feet)?(?: \((?:or (?:up to )?(?:the relevant|its|his|her|their) Speed)[^)]*\))?(?: away(?: from (?:the source of the Strike|the triggering creature))?)?\.$/i.exec(sentences.shift() ?? "");
         if (!first) return null;
         move = /^Steps/i.test(first[1]) ? "Step" : /^Flies/i.test(first[1]) ? "Fly" : "Stride";
@@ -1375,6 +1378,11 @@ export function readReaction(item, text) {
         if (/^The result of the saving throw is improved (?:by )?one degree\.(?: (?:The )?[^.]+? can(?:'t|not) [\w' -]+? for \d+d\d+ rounds\.)?$|^(?:The )?[^.]+? treats a critical failure as a failure,? or a failure as a success\.$/i.test(plain)) return { builtin: "save-boost", ...(wait ? { recharge: wait } : {}), ...once, ...free };
         if (ownSave[1].toLowerCase() === "critically fails" && /^The critical failure becomes a (?:normal )?failure\.$/i.test(plain)) return { builtin: "save-boost", criticalOnly: true, ...free };
     }
+    // (Batch 133, Gardener's Resolve: "Trigger The worm prophet rolls a failure (but not a critical failure) on a Will save against an effect with the
+    // mental or fear trait Requirements … features are obscured by a mask or hood Effect The worm prophet takes 3d8 mental damage, and the saving
+    // throw is a success." → its failed save (only a failure, that save, those traits) made a success, the damage on itself; the mask the GM's.)
+    const resolve = /\bTrigger (?:The )?[^.]+? rolls a failure \(but not a critical failure\) on an? (Fortitude|Reflex|Will) save against an effect with the (\w+)(?: or (\w+))? trait(?: Requirements? (?:The )?[^.]+? features are obscured by a mask or hood)? Effect (?:The )?[^.]+? takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage, and the saving throw is a success\.$/i.exec(String(text).trim());
+    if (resolve) return { builtin: "save-boost", failureOnly: true, save: resolve[1].toLowerCase(), against: [resolve[2], resolve[3]].filter(Boolean).map((trait) => trait.toLowerCase()), selfDamage: readDamage(inlineTags(resolve[4], "Damage")[0]), ...(/\bmask or hood\b/i.test(text) ? { notes: ["Only while its features are obscured by a mask or hood."] } : {}) };
     const luck = /^(?:The )?[^.]+? fails or critically fails an? (Fortitude|Reflex|Will) saving throw\.?(?: Frequency once per day\.?)?$/i.exec(trigger.trim());
     if (luck && /^(?:(?:The )?[^.]+? rerolls (?:the|that) (?:saving throw|save) and takes the better result|Reroll that saving throw and take the better result)\.$/i.test(effect.trim())) return { builtin: "save-reroll", save: luck[1].toLowerCase() };
     // A trap that summons a creature (batch 50; the user's choice: the GM's): "Effect The trap summons a Cockatrice. The cockatrice rolls

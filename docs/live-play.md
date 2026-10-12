@@ -1381,3 +1381,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** a reaction to damage on itself is offered only when the latest damage roll's types include one it names (slashing no longer offers Electric Reflexes); "Use it" posts the Grapple card on the attacker when it's beside it (otherwise the GM targets); checked in pftest with a flesh golem: a critical success dealt 6d6 electricity and Restrained the goblin.
 - **Simulator:** "an adjacent creature" — the creature that set it off when it's in its Melee, else another foe there (B131).
 
+## A teleport away; a failed Will save made a success at a cost (2026-10-12, batch 133)
+
+- **Compiled:** Slip → `{ builtin: "withdraw", on: "approach", enters: true, move: "Teleport", feet: 30, safe: true }`; Gardener's Resolve → `{ builtin: "save-boost", failureOnly: true, save: "will", against: ["mental", "fear"], selfDamage: "3d8[mental]", notes }`.
+- **Live:** Slip's offer reads "Teleport away" ("It teleports to a clear space beside another creature it can see within 30 feet: move its token") — the approach detection is batch 98's (token movement couldn't be exercised in pftest this time: every token update was refused in that world, cause unknown). Gardener's Resolve: offered on its own failed Will save carrying a mental or fear trait, with the damage and the mask as the GM's lines; not on a critical failure, another save or a fire effect; checked in pftest.
+- **Simulator:** the boost only on a failure of that save against those traits, then 3d8 mental damage on itself (B132).
+

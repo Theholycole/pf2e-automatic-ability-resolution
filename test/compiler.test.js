@@ -2521,3 +2521,10 @@ test("a Grapple as a reaction to damage of a type, at a creature beside it (2026
     const plan = compile("<p><strong>Trigger</strong> The test golem takes cold damage and a creature is adjacent to it.</p><hr /><p><strong>Effect</strong> The test golem lashes out and tries to grab a nearby creature. The test golem attempts an Athletics check to [[/act grapple]] an adjacent creature. The creature also takes @Damage[2d6[cold]] damage on a success, or @Damage[4d6[cold]] damage on a critical success.</p>");
     assert.deepEqual([plan?.trigger, plan?.targeting?.target, plan?.resolution?.outcomes?.success?.damage?.formulas?.[0]?.formula, plan?.resolution?.outcomes?.success?.effects?.[0]?.slug], [{ event: "damaged", reaction: true, damageTypes: ["cold"] }, "an adjacent creature", "2d6[cold]", "grabbed"]);
 });
+
+test("a teleport away from a creature that comes beside it; a failed Will save made a success at a cost (2026-10-12, batch 133)", () => {
+    const compile = (description) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    assert.deepEqual(compile("<p><strong>Trigger</strong> A creature moves adjacent to the test sprite</p><hr /><p><strong>Effect</strong> The test sprite teleports to a clear space adjacent to another creature it can see within 20 feet.</p>"), { builtin: "withdraw", on: "approach", enters: true, move: "Teleport", feet: 20, safe: true });
+    const resolve = compile("<p><strong>Trigger</strong> The test agent rolls a failure (but not a critical failure) on a Will save against an effect with the mental or fear trait</p><p><strong>Requirements</strong> The test agent's features are obscured by a mask or hood</p><hr /><p><strong>Effect</strong> The test agent takes @Damage[2d8[mental]] damage, and the saving throw is a success.</p>");
+    assert.deepEqual([resolve?.builtin, resolve?.failureOnly, resolve?.save, resolve?.against, resolve?.selfDamage], ["save-boost", true, "will", ["mental", "fear"], "2d8[mental]"]);
+});

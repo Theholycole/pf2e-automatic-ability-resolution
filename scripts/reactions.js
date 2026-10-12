@@ -651,6 +651,9 @@ async function saveAnswers(message, context, scene, combat, saver) {
             if (!self && (token.disposition !== saver.disposition || (plan.within && distanceFeet(box(token, grid.size), box(saver, grid.size), grid) > plan.within))) continue;
             // (Batch 65: only a critical failure, Reality Twist's; once a day, Stubborn Resolve's.)
             if (plan.criticalOnly && context.outcome !== "criticalFailure") continue;
+            // (Batch 133, Gardener's Resolve: only a failure, of its Will save, against a mental or fear effect; its damage on itself.)
+            if ((plan.failureOnly && context.outcome !== "failure") || (plan.save && plan.save !== statistic) || (plan.against?.length && !plan.against.some((trait) => effectTraits.has(trait)))) continue;
+            if (plan.selfDamage) return offer({ kind: "boost", item, monster: token, actor, target: null, trigger: "failed a saving throw", note: [`The save becomes ${better}: apply that result instead.`, `It takes ${plan.selfDamage.replace(/\[(\w+)\]/, " $1")} damage: roll and apply it.`, ...(plan.notes ?? [])].join(" "), free: !!plan.free });
             const left = Number(item.system?.frequency?.value);
             if (self && plan.uses && Number.isFinite(left) && left <= 0) continue;
             return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: `The save becomes ${better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}`, free: !!plan.free });

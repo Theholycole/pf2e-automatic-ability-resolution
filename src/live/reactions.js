@@ -92,6 +92,8 @@ export function damageNote(trigger) {
 
 // A reaction that moves it off (batch 98: Skitter, Scurry, Flit Back): its button and what the GM does. plan: { move, feet, safe, on }.
 export function withdrawMove(plan) {
+    // (Batch 133, Slip: a teleport beside another creature within its distance.)
+    if (plan?.move === "Teleport") return { label: "Teleport away", note: `It teleports to a clear space beside another creature it can see within ${plan.feet ?? 30} feet: move its token.` };
     const verb = { Step: "Step", Fly: "Fly", Stride: "Stride" }[plan?.move] ?? "Stride";
     const how = plan?.feet ? `up to ${plan.feet} feet` : verb === "Step" ? "5 feet" : "up to its Speed";
     return {
