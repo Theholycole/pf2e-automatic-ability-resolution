@@ -1045,12 +1045,13 @@ function basicSaveDamage(html) {
     return tags ? tags.map((raw, id) => ({ id: String(id), formula: readDamage(raw), type: null, category: null })) : null;
 }
 
-// A reaction or free action whose trigger reads (batch 69).
+// A reaction or free action with a trigger and an effect (batch 69; batch 78: whether or not its trigger reads — one that doesn't is the GM's
+// to use, as its card).
 function readsTrigger(item) {
     if (!["reaction", "free"].includes(item.system?.actionType?.value)) return false;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
     const text = /\bTrigger\s+(.+?)\s*(?:\bEffect\b|\bRequirements?\b|\bFrequency\b|$)/s.exec(plain)?.[1];
-    return Boolean(text && /\bEffect\b/.test(plain) && readReactionTrigger(text));
+    return Boolean(text && /\bEffect\b/.test(plain));
 }
 
 function inlineSave(item, actor = null, { afterHit = false } = {}) {
@@ -2404,12 +2405,13 @@ export function readReactionTrigger(text) {
     // Attacked, before the roll: "A hostile creature targets the jinxer with a melee Strike", "A creature Chafkhem can see makes a
     // melee Strike against Chafkhem", "Adma is targeted with a Strike by a creature within 30 feet".
     own = new RegExp(String.raw`^(?:An?|Any) (?:adjacent |hostile )?(?:creature|foe|enemy)(?: within (\d+) feet)?(?: (?:that )?${SELF} can see)? (?:targets ${SELF} with an? (melee |ranged )?(?:Strike|attack)|makes an? (melee |ranged )?(?:Strike|attack) against ${SELF})$`).exec(trigger)
-        ?? new RegExp(String.raw`^${SELF} is targeted (?:with|by) an? (melee |ranged )?(?:Strike|attack)(?: by (?:a creature|an enemy) within (\d+) feet)?$`).exec(trigger);
+        ?? new RegExp(String.raw`^${SELF} is targeted (?:with|by) an? (melee or ranged |melee |ranged )?(?:Strike|attack)(?: by (?:a creature|an enemy) within (\d+) feet)?$`).exec(trigger);
     if (own) {
         const words = own.slice(1).join(" ");
         const within = Number(/\b(\d+)\b/.exec(own.slice(1).filter((part) => /^\d+$/.test(part ?? "")).join(" "))?.[1]) || null;
-        if (/\branged\b/.test(words)) return null;
-        return { event: "attacked", reaction: true, melee: /\bmelee\b/.test(words) || /^An? adjacent/.test(trigger), ...(within ? { within } : {}) };
+        // (Batch 78: "with a melee or ranged Strike": any.)
+        if (/\branged\b/.test(words) && !/\bmelee or ranged\b/.test(words)) return null;
+        return { event: "attacked", reaction: true, melee: (/\bmelee\b/.test(words) && !/\bmelee or ranged\b/.test(words)) || /^An? adjacent/.test(trigger), ...(within ? { within } : {}) };
     }
     // A creature starting its turn near it: "A creature within 30 feet that the basilisk can see starts its turn", "A living
     // creature within 30 feet that the bodak can perceive with its Lifesense starts its turn".
@@ -2435,6 +2437,11 @@ export function readReactionTrigger(text) {
         // ("Damages it" is a hit that deals damage.)
         return found;
     }
+    // (Batch 78: "A creature lands a critical hit with a melee Strike against the vitalia"; a melee Strike that "succeeds" against it, a hit.)
+    match = new RegExp(String.raw`^(?:An?|Any) (?:creature|foe|enemy) (?:lands|scores) a critical hit with an? (melee )?Strike against ${SELF}$`).exec(trigger);
+    if (match) return hit({ critical: true, how: match[1] ? " with a melee Strike" : "" });
+    match = new RegExp(String.raw`^(?:An?|Any) (?:creature|foe|enemy) succeeds at an? (melee )?Strike against ${SELF}$`).exec(trigger);
+    if (match) return hit({ critical: false, how: match[1] ? " with a melee Strike" : "" });
     // "A creature scores a critical hit on the firehoof minotaur" (batch 18).
     match = new RegExp(String.raw`^(?:An?|Any) (?:creature|foe|enemy) scores a critical hit (?:on|against) ${SELF}\b(.*)$`).exec(trigger);
     if (match) return hit({ critical: true, how: match[1] });

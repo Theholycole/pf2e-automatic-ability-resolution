@@ -1143,3 +1143,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 
 - **"Must attempt a … save to avoid becoming"** (18): batch 76's wording when the save is only attempted — Stunning Despair ("Creatures within 30 feet must attempt a … save to avoid becoming Stunned 1 (Stunned 3 on a critical failure)"), Muddle Mind (3), Mindwarp Ink (2), Decaying Touch, Tickle, Enticing Charade, Green Glow, Command Zombie, and haunts' and hazards' We've Been Here Forever, The Sky Breathes Smoke, They're All Around Us!, Moment of Glory, Bow Before Your God, Cyclone of Hair, Reminders of Life.
 - **A critical failure's longer time with words after it:** "Paralyzed for 1 round (or 1 minute on a critical failure, with a new save at the end of their turn to recover)" — the critical failure's minute (the new save is the GM's); Soul Reflection's "(or 1 minute on a critical failure, as …)" too.
+
+## A reaction's save whose trigger names a Strike (2026-10-11, batch 78)
+
+- **The guard:** batch 69 let a reaction's save read from its Effect when its trigger read; now for any reaction or free action with a Trigger and an Effect. One whose trigger the module can't read is a card for the GM to use (as 737 reactions already were): Savvy Joinin' Me Crew? (3), No Prey, No Pay (3), Grizzly Arrival (2), Peel Face, Retributive Suplex, and Battlezoo reactions (7).
+- **New triggers:** "A creature lands a critical hit with a melee Strike against the vitalia" (hit-by, melee, critical: Blood Eruption at the attacker), a melee Strike that "succeeds" against it (hit-by, melee), "The artist is targeted with a melee or ranged Strike by a creature within 15 feet" (attacked within 15 feet, any Strike: Flick Ink).
+- Live play and the simulator: batch 16's and batch 47's offers and reactions.

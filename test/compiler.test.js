@@ -1894,3 +1894,13 @@ test("a save to avoid a condition that must only be attempted; a critical failur
     assert.deepEqual(rows("The test governor sobs. Creatures within 30 feet must attempt a @Check[will|dc:29] save to avoid becoming Stunned 1 (Stunned 3 on a critical failure)."), [[["stunned", 1, null, null]], [["stunned", 3, null, null]]]);
     assert.deepEqual(rows("All living creatures within 30 feet must attempt a @Check[will|dc:26] save to avoid becoming Paralyzed for 1 round (or 1 minute on a critical failure, with a new save at the end of their turn to recover)."), [[["paralyzed", null, 1, "rounds"]], [["paralyzed", null, 1, "minutes"]]]);
 });
+
+test("a reaction's save whose trigger names a Strike, read or not; more hit and attack triggers (2026-10-11, batch 78)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    assert.deepEqual(readReactionTrigger("A creature lands a critical hit with a melee Strike against the test vitalia"), { event: "hit-by", reaction: true, melee: true, critical: true });
+    assert.deepEqual(readReactionTrigger("A creature succeeds at a melee Strike against the test mat"), { event: "hit-by", reaction: true, melee: true });
+    assert.deepEqual(readReactionTrigger("The test artist is targeted with a melee or ranged Strike by a creature within 15 feet"), { event: "attacked", reaction: true, melee: false, within: 15 });
+    // A trigger it can't read that names a Strike: its save still reads, as a card for the GM to use.
+    const plan = compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: "<p><strong>Trigger</strong> The test ghost reduces a living creature to 0 Hit Points with a melee Strike</p><hr /><p><strong>Effect</strong> The creature must succeed at a @Check[will|dc:25] save or become @UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 2}.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan?.trigger?.event, plan?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["use", "frightened"]);
+});
