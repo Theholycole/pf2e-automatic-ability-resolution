@@ -2315,7 +2315,7 @@ test("multi-Strikes: a Step between, more damage when both hit the same enemy, a
     const compile = (description, actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
     assert.deepEqual(compile("<p>The test raider Strikes, Steps, then Strikes again. If the test raider hits the same enemy with both Strikes, that enemy takes an additional @Damage[1d4[persistent,bleed]] damage.</p>"), { builtin: "multi-strike", actions: 2, strikes: [null, null], sameTarget: true, bothHit: { conditions: [], damage: ["1d4[persistent,bleed]"] } });
     assert.deepEqual(compile("<p>The test rogue can Step, attempt a melee knife Strike, and attempt a ranged knife Strike, taking the actions in any order. Both Strikes count toward the test rogue's multiple attack penalty, but it doesn't increase until after both attacks.</p>"), { builtin: "multi-strike", actions: 2, strikes: ["knife", "knife"], sameMap: true });
-    assert.deepEqual(compile("<p><strong>Requirements</strong> The test brawler is raging</p><hr /><p><strong>Effect</strong> The test brawler attempts two fist Strikes, each against a different creature.</p>", 1), { builtin: "multi-strike", actions: 1, strikes: ["fist", "fist"], each: true, max: 2, requires: "requirement" });
+    assert.deepEqual(compile("<p><strong>Requirements</strong> The test brawler is raging</p><hr /><p><strong>Effect</strong> The test brawler attempts two fist Strikes, each against a different creature.</p>", 1), { builtin: "multi-strike", actions: 1, strikes: ["fist", "fist"], each: true, max: 2, requires: "raging" });
 });
 
 test("a poison gas breathed over an area: its own poison's stages there, the recharge (2026-10-12, batch 114)", () => {
@@ -2824,4 +2824,15 @@ test("a stay at 1 HP with a teleport once per mask, a heal that swaps masks, ano
     assert.equal(abandon?.resolution?.kind, "healing");
     assert.deepEqual(ability("<p><strong>Trigger</strong> A creature within 10 feet deals damage to the test husk</p><hr /><p><strong>Effect</strong> The test husk makes a claw Strike against the triggering creature.</p>", "reaction"), { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: "claw", penalty: 0, disrupts: false });
     assert.deepEqual(ability("<p><strong>Trigger</strong> A creature moves from beyond the reach of the test lizard's tail to within the reach of the test lizard's tail</p><hr /><p><strong>Effect</strong> The test lizard makes a tail Strike against the triggering creature and can use Improved Knockdown if the attack hits, even if it isn't the test lizard's turn.</p>", "reaction").note, "If it hits, it can use Improved Knockdown even on another creature's turn.");
+});
+
+test("while its rage lasts: a charge into a sweep, extra fire on its Strikes; a resistance that lashes back (2026-10-12, batch 155)", () => {
+    const ability = (description, type = "action", actions = 2) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } }, { basicActions: {} });
+    // (Made-up wordings; the Battlezoo dragons' own say more, read the same way.)
+    const charge = ability("<p><strong>Requirements</strong> The test drake is enraged</p><hr /><p><strong>Effect</strong> The test drake Strides up to its Speed and then makes a talon Strike against every creature in its reach once it stops. Its multiple attack penalty doesn't increase until after all the attacks. These Strikes don't set off its Draconic Momentum.</p>");
+    assert.deepEqual([charge.builtin, charge.strikes, charge.each, charge.sameMap, charge.strides, charge.requires, charge.noMomentum], ["multi-strike", ["talon"], true, true, 1, "raging", true]);
+    const fire = ability("<p><strong>Requirements</strong> The test drake is enraged</p><hr /><p><strong>Effect</strong> All of the test drake's melee unarmed attacks deal an extra 1d4 cold damage until the test drake's rage ends.</p>");
+    assert.deepEqual([fire.builtin, fire.damage, fire.melee, fire.requires, fire.duration.unit], ["self-effect", ["1d4[cold]"], true, "raging", "unlimited"]);
+    const lash = ability("<p><strong>Trigger</strong> A foe within 5 feet is about to damage the test drake with physical damage</p><hr /><p><strong>Effect</strong> The test drake gains resistance 5 to physical damage against the incoming damage. In addition, it attacks the triggering foe with a +12 modifier. On a hit, the attacker takes the resisted damage back.</p>", "reaction");
+    assert.deepEqual([lash.builtin, lash.value, lash.on, lash.foe, lash.lashBack], ["resist-damage", 5, ["physical"], true, { bonus: 12 }]);
 });

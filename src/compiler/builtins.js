@@ -121,9 +121,12 @@ export function readMultiStrikes(text) {
     // (Batch 113: a requirement that names its own state — Drunken Flailing's "The drunkard is raging" — the GM's live, not planned by the
     // simulator: requires "requirement".)
     let stated = false;
+    // (Batch 155: "is raging", "is enraged" — while its rage lasts, which the simulator knows: requires "raging".)
+    let raging = false;
     // (Batch 153, Tail Thrash: "The soulrider is attached to a creature's soul" — the same.)
-    body = body.replace(/^Requirements? (?:The )?[\w' -]+? is (?:raging|enraged|berserk|in [\w' -]+? stance|affected by [A-Z][\w' -]+?|attached to a creature's soul)\.? Effect /i, () => {
+    body = body.replace(/^Requirements? (?:The )?[\w' -]+? is (raging|enraged|berserk|in [\w' -]+? stance|affected by [A-Z][\w' -]+?|attached to a creature's soul)\.? Effect /i, (_all, state) => {
         stated = true;
+        raging = /^(?:raging|enraged)$/i.test(state);
         return "";
     })
         // (Batch 138: Sanguine Mauling's "The vrykolakas ancient's last action was to Drink Blood", Spirit Shot's "The duskwalker has designated
@@ -152,7 +155,7 @@ export function readMultiStrikes(text) {
     // "against a creature it has Grabbed" (a requirement), "attempts", no final period.)
     let penalty = 0;
     const notes = [];
-    let requires = held ? "grabbed" : stated ? "requirement" : null;
+    let requires = held ? "grabbed" : raging ? "raging" : stated ? "requirement" : null;
     // (Batch 152: Haunting Assault's "…, then Demoralizes that creature" — its basic action at the creature after the Strikes.)
     let then = null;
     let strides = 0;
@@ -657,9 +660,32 @@ export function readSweep(text) {
     // GM's — requires "requirement".)
     // (Batch 140, Hateful Tide: "Requirements The sea devil baron is in a blood frenzy" — the same; "… unleashes a whirlwind of attacks against
     // its foes, making a single melee Strike with its claws or jaws against each opponent within reach" — its best melee Strike at each.)
-    const stated = /^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?|in a (?:blood )?frenzy)\.? Effect /i;
+    // (Batch 155: "is enraged" — while its rage lasts: requires "raging"; a Battlezoo rage dragon's rush that ends in a Strike at everyone it can
+    // reach — one Stride first; its Draconic Momentum left out, a note.)
+    const stated = /^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?|in a (?:blood )?frenzy|enraged|raging)\.? Effect /i;
     const required = !/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i.test(text.trim()) && stated.test(text.trim());
+    const raging = required && /^Requirements? (?:The )?[\w' -]+? is (?:enraged|raging)\.? Effect /i.test(text.trim());
+    let strides = 0;
+    let noMomentum = false;
+    const notes = [];
     const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(stated, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "")
+        .replace(/^((?:The )?[^.]+?) Strides(?:, Climbs,? or Swims)? up to (?:its|their|his|her) Speed(?: in a straight line)? and then makes? an? ([\w' -]+?) Strike (?:at all creatures within reach at the end of (?:its|their|his|her) movement|against every creature in (?:its|their|his|her) reach once (?:it|they|he|she) stops?)\./i, (_all, who, name) => {
+            strides = 1;
+            notes.push("It moves up to its Speed in a straight line first (Stride, Climb or Swim).");
+            return `${who} makes a ${name} Strike against all creatures within reach.`;
+        })
+        .replace(/(?<=\. )The multiple attack penalties for these attacks (?:don't|do not) apply until after resolving the attacks(, and (?:the [\w' -]+?|it|they) can(?:'t|not) benefit from draconic momentum from these attacks)?\./i, (_all, momentum) => {
+            if (momentum) {
+                noMomentum = true;
+                notes.push("These Strikes don't recharge its Breath Weapon through Draconic Momentum.");
+            }
+            return "Its multiple attack penalty doesn't increase until after all the attacks.";
+        })
+        .replace(/(?<=\. )(?:These Strikes|They) (?:don't|do not) set off (?:its|their) Draconic Momentum\./i, () => {
+            noMomentum = true;
+            notes.push("These Strikes don't recharge its Breath Weapon through Draconic Momentum.");
+            return "";
+        })
         .replace(/^((?:The )?[^.]+?) unleashes [^,.]+, making (a single (?:melee )?Strike) with (?:its|their|his|her) [\w' -]+?(?: or [\w' -]+?)? against each opponent within reach\./i, "$1 makes $2 against each enemy within reach.")
         // (Batch 150, Whirlwind Strike: "Ordulf Strikes each enemy within his reach.")
         .replace(/^((?:The )?[^.]+?) Strikes each (enemy|creature|foe) within (?:its|their|his|her) reach\./i, "$1 makes a Strike against each $2 within reach.").split(/(?<=\.)\s+(?=[A-Z])/);
@@ -716,7 +742,7 @@ export function readSweep(text) {
     const said = counted ? counted[2] : match[1];
     const name = said && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(said.trim()) ? said.trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
     const max = counted ? COUNTS[counted[1].toLowerCase()] ?? Number(counted[1]) : null;
-    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: "requirement" } : {}) };
+    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: raging ? "raging" : "requirement" } : {}), ...(strides ? { strides } : {}), ...(noMomentum ? { noMomentum } : {}), ...(notes.length ? { notes } : {}) };
 }
 
 // "X Flies up to double its fly Speed and then makes a talon Strike." and other moves before one Strike (2026-10-10):
@@ -927,9 +953,20 @@ function readResistDamage(text, trigger, effect) {
     if (clot && sentences.length === 1) return { builtin: "resist-damage", value: Number(clot[1]), on, types: null, ...(attack ? { attack: true } : {}) };
     const at = sentences.findIndex((sentence) => resist.test(sentence));
     if (at < 0) return null;
-    const told = (sentence) => !/\d|\b(?:damage|resistance|Strikes?|Steps?|Strides?|teleports?|Fl(?:y|ies)|attack rolls?|saves?|checks?|penalty|bonus)\b/i.test(sentence);
+    // (Batch 155: a sentence about its body turning soft to dodge the blow only tells it.)
+    const told = (sentence) => !/\d|\b(?:damage|resistance|Strikes?|Steps?|Strides?|teleports?|Fl(?:y|ies)|attack rolls?|saves?|checks?|penalty|bonus)\b/i.test(sentence.replace(/\bto avoid damage\b/i, ""));
     if (!sentences.slice(0, at).every(told)) return null;
-    if (!sentences.slice(at + 1).every((sentence) => /^(?:The [\w' -]+?['’]s|Its|Their) AC can(?:not|'t) be reduced below \d+ in this way\.$/i.test(sentence))) return null;
+    // (Batch 155, a Battlezoo dragon's turn to protoplasm: after its resistance, an attack roll at the attacker with its own modifier; a hit deals
+    // the damage it resisted back, of that type (and some of its own type when the attack carried it, up to 10) — lashBack { bonus }, the rest a
+    // note.)
+    let lashBack = null;
+    const after = sentences.slice(at + 1);
+    const lash = /^In addition, (?:the [\w' -]+?|it|they) (?:makes? an attack roll against|attacks) the triggering (?:enemy|creature|foe) with a \+(\d+) modifier\.$/i.exec(after[0] ?? "");
+    if (lash && /^On a (?:success|hit), (?:the [\w' -]+?|it|they) deals? an amount of damage of the same type equal to the amount of physical damage (?:it|they) resisted that way\.$|^On a hit, the attacker takes the resisted damage back\.$/i.test(after[1] ?? "") && after.slice(2).every((sentence) => /^Additionally, if the attack would have dealt damage of (?:the [\w' -]+?['’]s|its|their) associated type\b[^.]*\bto a maximum of (\d+) damage\.$/i.test(sentence))) {
+        lashBack = { bonus: Number(lash[1]) };
+        after.length = 0;
+    }
+    if (!after.every((sentence) => /^(?:The [\w' -]+?['’]s|Its|Their) AC can(?:not|'t) be reduced below \d+ in this way\.$/i.test(sentence))) return null;
     const read = resist.exec(sentences[at]);
     const named = read[1] ?? read[3] ?? read[4] ?? read[5] ?? null;
     const frequency = /\bFrequency (once|twice) per day\b/i.exec(text)?.[1];
@@ -946,6 +983,7 @@ function readResistDamage(text, trigger, effect) {
         ...(read[7] ? { shift: true } : {}),
         // (Batch 152, Overcharge: Quickened for 1d4 rounds after it.)
         ...(read[8] ? { quickened: read[8] } : {}),
+        ...(lashBack ? { lashBack, note: `Then it attacks the attacker (+${lashBack.bonus}): on a hit, that creature takes as much damage, of the same type, as it resisted (plus up to 10 of its own damage type if the attack carried that type).` } : {}),
         ...(frequency ? { uses: frequency.toLowerCase() === "twice" ? 2 : 1 } : {})
     };
 }
@@ -2027,6 +2065,8 @@ export function readStrikeBuff(item) {
         // saber deals an additional 1d4 spirit damage" — that weapon's Strikes.)
         .replace(/(['’]s|\bits|\btheir) Strikes gain the ([a-z]+) trait and deal an (additional|extra) ([^;.]+?) damage; (this damage increases to [^.]+)\./, "$1 Strikes deal an $3 $4 damage and gain the $2 trait, and $5.")
         .replace(/(, (?:the [\w' -]+?|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)['’]s) ([a-z][\w -]+?) deals an (additional|extra) /, (all, owner, weapon, more) => (/\bStrikes?\b/i.test(weapon) ? all : `${owner} ${weapon} Strikes deal an ${more} `))
+        // (Batch 155: a Battlezoo rage dragon's extra fire on its natural attacks for as long as its fury lasts — its melee Strikes while it rages.)
+        .replace(/\bAll of (the [\w' -]+?['’]s) melee unarmed attacks deal an (additional|extra) ((?:\u0001\d+\u0001|\d+d\d+ [a-z]+)) damage until (?:the [\w' -]+?['’]s|its|their) rage ends\./, "Until its rage ends, $1 melee Strikes deal an $2 $3 damage.")
         // (Batch 152, Demon-Touched Weapon: "Until the end of her next turn, Shenga deals 1d6 bleed damage with her melee Strikes.")
         .replace(/\b(Until the (?:start|end) of (?:its|their|his|her) next turn), (?:the [\w' -]+?|[A-Z][\w'-]+|it|they|he|she) deals? (\d+d\d+(?:\s*[+-]\s*\d+)? [a-z]+) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./, "$1, its $3Strikes deal an additional $2 damage.")
         .replace(/\beach of ((?:the [\w' -]+?|[A-Z][\w'-]+)['’]s|its|their) (?:[\w' -]+?, ){2,}(?:and )?[\w' -]+? Strikes gains the effects of (an? [\w' -]+? property rune) and deals an additional ([^.]+)\./i, (_all, owner, rune, rest) => `${owner} melee Strikes deal an additional ${rest}. The Strikes gain the effects of ${rune}.`);
@@ -2034,11 +2074,13 @@ export function readStrikeBuff(item) {
     // Effect …" — straight after a spell: requires "after-cast".)
     const castFirst = /\bRequirements? (?:the |The )?[\w' -]+?['’]s? most recent action (?:this turn )?was to (?:cast an?|Cast an?) (non-cantrip )?spell\.? (?=Effect\b)/i.exec(text)
         ?? /\bTrigger (?:the |The )?[\w' -]+? finishes Casting a Spell(?: using one of (?:its|their|his|her) (?:arcane|divine|occult|primal) spell slots)?()\.? (?=Effect\b)/.exec(text);
-    const unrequired = castFirst ? text.replace(castFirst[0], "") : text;
+    // (Batch 155: "Requirements The dragon is enraged" — while its rage lasts: requires "raging".)
+    const enraged = /\bRequirements? (?:the |The )?[\w' -]+? is (?:enraged|raging)\.? (?=Effect\b)/.exec(text);
+    const unrequired = (castFirst ? text.replace(castFirst[0], "") : text).replace(enraged?.[0] ?? "\u0002", "");
     if (/^(?:Trigger|Requirements?)\b|\b(?:Trigger|Requirements?) [A-Z]/.test(unrequired)) return null;
     const body = unrequired.replace(/^Frequency [^.]*?(?=\s+Effect\b)\s+Effect\s+/, "").replace(/^Effect\s+/, "");
     const sentences = body.split(/(?<=\.)\s+(?=[A-Z])/).map((sentence) => sentence.trim()).filter(Boolean);
-    const lead = String.raw`(Until the (start|end) of ${BUFF_OWNER.replace("(?:all )?", "")}(next )?turn|For the next minute|For (\d+|one) minutes?|While in this stance|While in (?:its|their|his|her) [\w' -]+? form)`;
+    const lead = String.raw`(Until the (start|end) of ${BUFF_OWNER.replace("(?:all )?", "")}(next )?turn|For the next minute|For (\d+|one) minutes?|While in this stance|While in (?:its|their|his|her) [\w' -]+? form|Until its rage ends)`;
     const key = new RegExp(String.raw`^(?:${lead},? )?${BUFF_OWNER}(?:(melee|ranged) )?(?:([\w' -]+?) )??Strikes? deals? an? (?:additional|extra) ${BUFF_PART}(?: damage)?(?:,? (?:and|plus) (?:an? (?:additional|extra) )?${BUFF_PART}(?: damage)?)?((?: on a successful attack, or [^.]+? on a critical (?:hit|success))?(?:,? and gains? the [a-z]+ trait)?(?:, and [^.]+)?)\.$`, "i");
     let found = null;
     let index = -1;
@@ -2075,7 +2117,8 @@ export function readStrikeBuff(item) {
     let duration;
     let rounds;
     let stance = false;
-    if (/^Until/i.test(leadText)) {
+    if (/rage ends$/i.test(leadText)) [duration, rounds] = [{ value: -1, unit: "unlimited", expiry: null }, null];
+    else if (/^Until/i.test(leadText)) {
         if (/start/i.test(edge)) [duration, rounds] = [{ value: 1, unit: "rounds", expiry: "turn-start" }, 1];
         else if (next) [duration, rounds] = [{ value: 1, unit: "rounds", expiry: "turn-end" }, 2];
         else [duration, rounds] = [{ value: 0, unit: "rounds", expiry: "turn-end" }, 0];
@@ -2110,7 +2153,7 @@ export function readStrikeBuff(item) {
         melee: /^melee$/i.test(found[5] ?? ""),
         duration,
         ...(stance ? { stance: true } : {}),
-        ...(castFirst ? { requires: "after-cast", ...(castFirst[1] ? { nonCantrip: true } : {}) } : {}),
+        ...(castFirst ? { requires: "after-cast", ...(castFirst[1] ? { nonCantrip: true } : {}) } : enraged ? { requires: "raging" } : {}),
         ...(notes.length ? { notes } : {})
     };
 }
@@ -2208,7 +2251,7 @@ export function compileBuiltin(item, slug) {
     const flourish = (item.system?.traits?.value ?? []).includes("flourish");
     if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(flourish ? { flourish: true } : {}), ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}), ...(multi.critical ? { critical: multi.critical } : {}), ...(multi.extraDamage ? { extraDamage: multi.extraDamage } : {}), ...(multi.then ? { then: multi.then } : {}), ...(multi.strides ? { strides: multi.strides } : {}), ...(multi.oncePerFight ? { oncePerFight: true } : {}) };
     const sweep = readSweep(text);
-    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}) };
+    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
     const swipe = readSwipe(text);
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };

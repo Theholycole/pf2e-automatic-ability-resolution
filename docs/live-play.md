@@ -1483,3 +1483,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Exit Stage → `ferocity` with `hp: 1`, `wounded: false`, `uses` (the masks on its sheet) and a note; Change Characters and Abandon Body → healing on itself, their other words notes; Exhale Miasma → the creature's own Enfeebling Humors plan with this action's cone, cost and recharge; Tail Sweep, Mutually Assured, Watch over Evil → reaction Strikes (approach, damaged-adjacent, cast).
 - **Live:** the ferocity offer now carries its plan's note ("It then teleports to an empty space within 30 feet: move its token. One of its masks stays behind, broken."); Stay at 1 HP left Taljjae at 1. Exhale Miasma posts its DC 20 Fortitude card for the creatures in the cone ("Only living creatures in the area."). Checked in pftest.
 - **Simulator:** nothing new: ferocity's uses, area saves and reaction Strikes as before.
+
+## While its rage lasts; a resistance that lashes back (2026-10-12, batch 155)
+
+- **Compiled:** sweeps and multi-Strikes behind "is enraged" or "is raging" → `requires: "raging"` (a sweep after a Stride with `strides: 1`, `noMomentum`); a Strike buff behind it → `requires: "raging"`, unlimited (until its rage ends); `resist-damage` with `lashBack: { bonus }` and a note.
+- **Live:** the resistance offer now carries its plan's note (the lash back, for the GM to roll); the rest as before (multi-Strike notes, the buff's effect). Not run in pftest: the only live change is that note line.
+- **Simulator:** `isRaging` (a rage on itself that keeps it from concentrating) gates what needs it; the lash back rolls d20 + its modifier against the attacker's AC and deals what it resisted, of that type; Strikes marked `noMomentum` don't recharge its Breath Weapon (B155).
