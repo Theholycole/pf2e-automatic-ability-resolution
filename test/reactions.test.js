@@ -135,3 +135,9 @@ test("a skill check for a save: its button rolls that skill (2026-10-12, batch 1
     assert.match(html, /data-aar-reaction="use">Use it: roll Performance</);
     assert.match(html, /data-aar-reaction="decline"/);
 });
+
+test("a boost's own label: a success (2026-10-12, batch 169)", () => {
+    const state = { kind: "boost", ability: { name: "Test Insight" }, monster: { name: "Seer" }, target: null, trigger: "failed a saving throw", note: "The save becomes a success: apply that result instead.", status: "open" };
+    assert.match(offerHTML({ ...state, attack: { label: "a success" } }), /data-aar-reaction="use">Use it: a success</);
+    assert.match(offerHTML(state), /data-aar-reaction="use">Use it: one degree better</);
+});

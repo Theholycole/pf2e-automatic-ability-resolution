@@ -2972,3 +2972,8 @@ test("a skill check as it or its allies save, the higher result kept (2026-10-12
     const own = compile("<strong>Trigger</strong> Test Singer attempts a Fortitude saving throw <strong>Effect</strong> Test Singer hums. She rolls a @Check[performance] check. She can use the higher result between her Performance check and her Fortitude saving throw to resolve the effects against the attack that triggered her Fortitude saving throw.");
     assert.deepEqual([own.builtin, own.save, own.ally], ["save-skill", "fortitude", undefined]);
 });
+
+test("a success instead of rolling, once a day: its failed save made a success (2026-10-12, batch 169)", () => {
+    const plan = compileMonsterAbility({ type: "action", name: "Test Insight", system: { slug: null, actionType: { value: "free" }, actions: { value: null }, traits: { value: ["divination"] }, description: { value: "<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> The test seer is about to roll a d20.</p><hr /><p><strong>Effect</strong> The test seer glimpses what is to come. It gets a success (but not a critical success) instead of rolling.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([plan.builtin, plan.toSuccess, plan.uses, plan.free], ["save-boost", true, 1, true]);
+});

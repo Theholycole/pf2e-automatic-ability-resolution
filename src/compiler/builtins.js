@@ -1729,6 +1729,16 @@ export function readReaction(item, text) {
     // degree better ("The result of the saving throw is improved one degree. … can't Fortune's Friend for 1d4 rounds.", "treats a
     // critical failure as a failure, or a failure as a success"), or only a critical failure made a failure ("The critical failure becomes
     // a normal failure"). A frequency of once a day, a minute or an hour: one use a fight. A first sentence that only tells it is left out.
+    // (Batch 169, Flash of Insight: "Frequency once per day Trigger The cyclops is about to roll a d20. Effect The cyclops peers into an occluded
+    // spectrum of possible futures. It gets a success (but not a critical success) on the roll instead of rolling." → its failed save made a
+    // success, once a day (save-boost toSuccess); any other d20 roll, the GM's.)
+    if (/^(?:The )?[^.]+? is about to roll a d20\.?$/i.test(trigger.trim().replace(/\s*Frequency once per (?:day|minute|hour)\.?$/i, ""))) {
+        const said = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
+        const flavour = said.slice(0, -1).every((sentence) => !/\d|@|\b(?:saves?|saving throws?|checks?|rolls?|results?|failure|success|damage|bonus|penalty)\b/i.test(sentence));
+        if (said.length <= 2 && flavour && /^(?:The )?[\w' -]+? gets? a success \(but not a critical success\) (?:on the roll instead of rolling|instead of rolling|without rolling)\.$/i.test(said.at(-1))) {
+            return { builtin: "save-boost", toSuccess: true, ...(/\bFrequency once per (?:day|minute|hour)\b/i.test(text) ? { uses: 1 } : {}), ...(item?.system?.actionType?.value === "free" ? { free: true } : {}), notes: ["Or a success on another d20 roll it's about to make, instead of rolling (the GM's)."] };
+        }
+    }
     const ownSave = /^(?:The )?[^.]+? (critically fails|fails or critically fails|fails) (?:a save|a saving throw|a skill check or a saving throw|a check)\.?$/i.exec(trigger.trim().replace(/\s*Frequency once per (?:day|minute|hour)\.?$/i, ""));
     if (ownSave && !/^An? (?:ally|creature|foe|enemy)\b/i.test(trigger.trim())) {
         const rolled = effect.trim().replace(/\[\[\/\w+ ([^\]#]+?)(?: #[^\]]*)?\]\](?:\{([^}]*)\})?/g, (_all, roll, label) => label ?? roll);

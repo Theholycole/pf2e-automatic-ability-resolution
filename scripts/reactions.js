@@ -704,7 +704,8 @@ async function saveAnswers(message, context, scene, combat, saver) {
             if (plan.selfDamage) return offer({ kind: "boost", item, monster: token, actor, target: null, trigger: "failed a saving throw", note: [`The save becomes ${better}: apply that result instead.`, `It takes ${plan.selfDamage.replace(/\[(\w+)\]/, " $1")} damage: roll and apply it.`, ...(plan.notes ?? [])].join(" "), free: !!plan.free });
             const left = Number(item.system?.frequency?.value);
             if (self && plan.uses && Number.isFinite(left) && left <= 0) continue;
-            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: `The save becomes ${better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}`, free: !!plan.free });
+            // (Batch 169, Flash of Insight: a success, whatever it rolled — "Use it: a success".)
+            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: [`The save becomes ${plan.toSuccess ? "a success" : better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}`, ...(plan.notes ?? [])].join(" "), free: !!plan.free, ...(plan.toSuccess ? { attack: { label: "a success" } } : {}) });
         }
     }
 }

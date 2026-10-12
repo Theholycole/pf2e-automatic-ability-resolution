@@ -1525,3 +1525,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** Drowning Drone, Cautionary Tale, Focusing Drone → `save-skill` with `skill`, `save` (one kind of save), `against` (the effect's traits), `ally` and `within` (its allies' saves too), `allyTrait` (only allies of that trait benefit).
 - **Live:** a failed save it covers (its own, or an ally's within that distance, of that trait, against those traits) brings an offer, "Use it: roll Performance". The button rolls PF2e's check against the save's DC and says whether its total beats the save's and what the save becomes, for the GM to apply. For an area effect, the note says the one check counts for each ally in the area. Like the other save reactions, it's offered after the roll, on a failure. Run in pftest: a boggard warrior's failed sonic Will save brought the swampseer's offer. A Performance roll that beat the save at the same degree said so. One that beat it at a better degree turned a critical failure into a success. With its reaction already used that round, there was no offer.
 - **Simulator:** its reaction on the first save it covers. One d20 + its skill for that effect, that round, is kept for each such save where it beats the save's total (B168).
+
+## A success instead of rolling (2026-10-12, batch 169)
+
+- **Compiled:** Flash of Insight → `save-boost` with `toSuccess`, `uses: 1`, `free`, and a note that any other d20 roll is the GM's.
+- **Live:** its failed save brings the boost offer as before, its button "Use it: a success", its note "The save becomes a success: apply that result instead." with the GM's other rolls; a use of its frequency spent. Not run in pftest: the offer's label and note on the boost offer that batches 53 and 65 ran.
+- **Simulator:** its first failed save (a failure or a critical failure) becomes a success, once a fight, without its reaction (B169).
