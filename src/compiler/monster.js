@@ -2492,6 +2492,60 @@ function variedManeuver(item, basicActions = {}) {
     return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting, ...(immunity ? { trigger: { ...(plan.trigger ?? { event: "use" }), immunity } } : {}), ...(notes.length ? { notes } : {}) };
 }
 
+// A move and then a basic maneuver (2026-10-12, batch 134): "The gurgist Strides twice and then attempts to Grapple a creature. On a success, the
+// target is also knocked Prone.", Bushwhack's "Strides up to 10 feet and attempts to Grapple a creature they're Undetected by. If they succeed,
+// they also deal fist damage to that creature.", Startling Grasp's "… the creature is Frightened 1, or Frightened 2 if the bugbear critically
+// succeeds …", Mosh's "Leaps to a square adjacent to a creature, then Shoves that creature. If Gulzash rolls a success on the Shove, he gets a
+// critical success instead.", Sliding Earth's "Strides up to twice its normal Speed in a straight line, then attempts to Trip a creature in its
+// reach. If a creature falls Prone from this Trip, it takes 1d4 … for every 10 feet …" (that damage the GM's) → PF2e's maneuver with what its
+// successes add, approach: { strides } (the move first), a note for the move; at an unseen creature only: a requirement.
+function maneuverAfterMove(item, actor, basicActions = {}) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/\[\[\/act (\w+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/^\w/, (letter) => letter.toUpperCase())).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim().replace(/(Grapple|Trip|Shove): Athletics\b/g, "$1");
+    const sentences = plain.split(/(?<=\.)\s+(?=[A-Z])/);
+    const first = /^(?:The )?[\w' -]+? (Strides twice|Strides up to (?:10|15|20) feet|Strides up to twice its (?:normal )?Speed(?: in a straight line)?|Leaps to a square adjacent to a creature),? (?:and )?(?:then )?(?:attempts to (Grapple|Trip|Shove) a creature(?: in its reach)?( that can't see them and doesn't know where they are| (?:they're|she's|he's|it's) [Uu]ndetected by)?|(Shoves) that creature)\.$/i.exec(sentences[0] ?? "");
+    if (!first) return null;
+    const slug = (first[2] ?? first[4]).toLowerCase().replace(/^shoves$/, "shove");
+    const basic = basicActions[slug];
+    if (!basic?.resolution?.outcomes) return null;
+    const plan = structuredClone(basic);
+    const rows = plan.resolution.outcomes;
+    const strides = /twice/i.test(first[1]) ? 2 : 1;
+    const notes = [`It ${/^Leaps/i.test(first[1]) ? "Leaps beside the creature" : `${first[1].replace(/^Strides/i, "Strides")}`} first: move its token.`];
+    for (const sentence of sentences.slice(1)) {
+        if (/^On a success, the target is also knocked Prone\.$/i.test(sentence)) {
+            for (const degree of ["success", "criticalSuccess"]) rows[degree].effects = [...rows[degree].effects, { kind: "condition", slug: "prone", value: null, duration: null }];
+            continue;
+        }
+        if (/^If (?:the [\w' -]+?|they|she|he|it) succeeds?, (?:they|she|he|it) also deals? (?:damage from (?:their|its|his|her) )?fist(?: Strike)? damage to that creature\.$/i.test(sentence)) {
+            const fist = (actor?.items ?? []).find?.((entry) => entry.type === "melee" && /^fist$/i.test(entry.name));
+            const roll = fist ? Object.values(fist.system?.damageRolls ?? {})[0] : null;
+            if (!roll?.damage) return null;
+            const formula = { formula: `(${roll.damage})[${roll.damageType ?? "bludgeoning"}]` };
+            for (const degree of ["success", "criticalSuccess"]) rows[degree].damage = rows[degree].damage?.mode === "formulas" ? { ...rows[degree].damage, formulas: [...rows[degree].damage.formulas, formula] } : { mode: "formulas", formulas: [formula], rollScope: "target" };
+            continue;
+        }
+        const scared = /^If (?:they|she|he|it) succeeds?, the creature is Frightened (\d), or Frightened (\d) if (?:the [\w' -]+?|they|she|he|it) critically succeeds at (?:their|its|his|her) Athletics check to (?:Grapple|Trip|Shove)\.$/i.exec(sentence);
+        if (scared) {
+            rows.success.effects = [...rows.success.effects, { kind: "condition", slug: "frightened", value: Number(scared[1]), duration: null }];
+            rows.criticalSuccess.effects = [...rows.criticalSuccess.effects, { kind: "condition", slug: "frightened", value: Number(scared[2]), duration: null }];
+            continue;
+        }
+        if (/^If (?:the [\w' -]+?|[A-Z][\w'-]+) rolls a success on the Shove, (?:he|she|it|they) gets? a critical success instead\.$/i.test(sentence)) {
+            rows.success = structuredClone(rows.criticalSuccess);
+            continue;
+        }
+        if (/^If a creature falls Prone from this Trip, it takes @?[^.]*? damage for every 10 feet the [\w' -]+? moved\.$/i.test(sentence)) {
+            notes.push(readableText(sentence));
+            continue;
+        }
+        return null;
+    }
+    const unseen = Boolean(first[3]);
+    if (unseen) notes.push("Only at a creature it's undetected by.");
+    return { ...plan, ...base(item, { traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.traits ?? [])])] }), targeting: { ...plan.targeting, target: "1 creature", range: "touch" }, approach: { strides }, notes, ...(unseen ? { requires: "requirement" } : {}) };
+}
+
 // A Grapple as a reaction to damage of a type (2026-10-12, batch 132, Electric Reflexes): "Trigger The golem takes electricity damage and a
 // creature is adjacent to it" (or "would be affected by an effect with the electricity trait and a creature is in its reach") "Effect The golem
 // lashes out and tries to grab a nearby creature. The golem attempts an Athletics check to Grapple an adjacent creature. The creature also takes
@@ -2926,7 +2980,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     if (after) return after;
     // Poisons, diseases and curses with stages, delivered by the Strikes that list them.
     if (/<strong>\s*Stage\s+1\s*<\/strong>/i.test(item.system?.description?.value ?? "")) return compileAffliction(item, base(item));
-    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
+    const plan = compileBuiltin(withHeads(item, actor), slug) ?? (item.system?.actionType?.value === "action" ? focusedAssault(item, actor) ?? strikeActivity(item, actor) : null) ?? ownStrikeSkill(item, basicActions) ?? otherSkillManeuver(item, basicActions) ?? variedManeuver(item, basicActions) ?? damagedManeuver(item, basicActions) ?? maneuverAfterMove(item, actor, basicActions) ?? provokedSkill(item, basicActions) ?? provokedStrike(item) ?? downsDemoralize(item, basicActions) ?? trapFall(item) ?? trapDrop(item) ?? stokeFlames(item) ?? teleportFoe(item) ?? noSaveArea(item) ?? inlineSave(unmarkedBasic(item) ?? item, actor) ?? compileSkillAction(item, { actor }) ?? effectAbility(item) ?? automaticEffect(item, actor);
     // A save or check whose result is a PF2e effect it links ("…save or take a –1 status penalty to attack rolls …
     // Effect: Downcast"): that effect, on the rows that apply nothing else (a failure, or a check's success).
     if (plan?.resolution?.outcomes) linkedEffect(plan, item.system?.description?.value ?? "");

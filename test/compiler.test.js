@@ -2528,3 +2528,15 @@ test("a teleport away from a creature that comes beside it; a failed Will save m
     const resolve = compile("<p><strong>Trigger</strong> The test agent rolls a failure (but not a critical failure) on a Will save against an effect with the mental or fear trait</p><p><strong>Requirements</strong> The test agent's features are obscured by a mask or hood</p><hr /><p><strong>Effect</strong> The test agent takes @Damage[2d8[mental]] damage, and the saving throw is a success.</p>");
     assert.deepEqual([resolve?.builtin, resolve?.failureOnly, resolve?.save, resolve?.against, resolve?.selfDamage], ["save-boost", true, "will", ["mental", "fear"], "2d8[mental]"]);
 });
+
+test("a move first, then a basic maneuver with what its successes add (2026-10-12, batch 134)", { skip: !available && "PF2e's packs not found" }, async () => {
+    const basicActions = compileBasicActions((await readPack("actions")).filter((doc) => doc.collection === "items"));
+    const compile = (description, actions = 2, actor = null) => compileMonsterAbility({ type: "action", name: "Test", system: { slug: null, actionType: { value: "action" }, actions: { value: actions }, traits: { value: [] }, description: { value: `<p>${description}</p>` } } }, { basicActions, actor });
+    const tackle = compile("The test brute Strides twice and then attempts to Grapple a creature. On a success, the target is also knocked Prone.");
+    assert.deepEqual([tackle?.approach, tackle?.resolution?.outcomes?.success?.effects?.map((effect) => effect.slug)], [{ strides: 2 }, ["grabbed", "prone"]]);
+    const mosh = compile("The test punk Leaps to a square adjacent to a creature, then Shoves that creature. If the test punk rolls a success on the [[/act shove]], he gets a critical success instead.", 1);
+    assert.deepEqual(mosh?.resolution?.outcomes?.success, mosh?.resolution?.outcomes?.criticalSuccess);
+    const actor = { items: [{ type: "melee", name: "Fist", system: { damageRolls: { a: { damage: "1d6+2", damageType: "bludgeoning" } } } }] };
+    const ambush = compile("The test lurker Strides up to 10 feet and attempts to Grapple a creature they're Undetected by. If they succeed, they also deal fist damage to that creature.", 1, actor);
+    assert.deepEqual([ambush?.requires, ambush?.resolution?.outcomes?.success?.damage?.formulas], ["requirement", [{ formula: "(1d6+2)[bludgeoning]" }]]);
+});
