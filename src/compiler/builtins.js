@@ -1171,6 +1171,8 @@ export function readWithdraw(text) {
         else if (/^(?:The )?[\w' -]+? is hit (?:with|by) a melee (?:attack|Strike)$/i.test(trigger)) [on, melee] = ["hit", true];
         else if (new RegExp(`^An? (?:creature|enemy|foe) ends its move(?:ment)? (?:in a space )?adjacent to ${subject}(?: or within ${subject}['’]s space)?$`, "i").test(trigger)) on = "approach";
         else if (new RegExp(`^An? (?:creature|enemy|foe) (?:enters ${subject}['’]s space or an adjacent square|moves into an adjacent space|moves adjacent to ${subject})$`, "i").test(trigger)) [on, enters] = ["approach", true];
+        // (Batch 191, Skittering Reposition: "A creature that starts its move outside the gogiteth's reach moves into its reach.")
+        else if (new RegExp(`^An? (?:creature|enemy|foe) that starts its move outside ${subject}['’]s reach moves into (?:its|their) reach$`, "i").test(trigger)) [on, enters] = ["approach", true];
         else if (new RegExp(`^A dazzled or blinded creature, or a creature with light blindness, ends its move(?:ment)? adjacent to ${subject}$`, "i").test(trigger)) [on, foe] = ["approach", ["dazzled", "blinded"]];
     }
     if (!on) return null;
@@ -1181,6 +1183,8 @@ export function readWithdraw(text) {
     else {
         // ("… takes a step after the effects of the triggering attack are resolved.")
         if (/^(?:The )?[\w' -]+? takes a step after the effects of the triggering attack are resolved\.$/i.test(sentences[0] ?? "")) sentences[0] = "It Steps.";
+        // (Batch 191, Skittering Reposition: "The gogiteth moves 10 feet." — a Stride that far.)
+        if (/^(?:The )?[\w' -]+? moves \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*moves (\d+) feet\.$/i, "It Strides up to $1 feet.");
         // (Batch 136, Crumble: "… crumbles into the ground, Burrowing down 10 feet." — a Burrow.)
         if (/^(?:The )?[\w' -]+? crumbles into the ground, Burrowing down \d+ feet\.$/i.test(sentences[0] ?? "")) sentences[0] = sentences[0].replace(/^.*Burrowing down (\d+) feet\.$/i, "It Burrows $1 feet.");
         // (Batch 133, Slip: "… teleports to a clear space adjacent to another creature she can see within 30 feet" — away, triggering no reactions.)
@@ -1194,7 +1198,7 @@ export function readWithdraw(text) {
     let safe = move === "Step";
     let recharge = null;
     for (const sentence of sentences) {
-        if (/^This (?:movement|Burrowing) (?:doesn't|does not) trigger reactions\.$/i.test(sentence)) safe = true;
+        if (/^This (?:movement |Burrowing )?(?:doesn't|does not) trigger reactions\.$/i.test(sentence)) safe = true;
         // (Crumble: "The living landslide can't Crumble again for 1d4 rounds.")
         else if (/^(?:The [\w' -]+?|It|They) can(?:'t|not) [\w' -]+? again for (?:\[\[\/\w+ (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.test(sentence)) recharge = /(\d+d\d+)/.exec(sentence)[1];
         else if (!/^(?:It|He|She|They) must end (?:its|his|her|their|this) movement in a (?:location|space) that (?:isn't|is not) (?:within 5 feet of|adjacent to) (?:a foe|an enemy)\.$/i.test(sentence)) return null;
@@ -1578,6 +1582,15 @@ export function readInitiativeWarning(text, item = null) {
 // to him …"; Deflective Dodge's "can choose to either Step or redirect the attack …" → { builtin: "redirect-attack", step }.)
 export function readRedirect(text) {
     const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(String(text).trim());
+    // (Batch 191, Hop-Dodge: "Trigger The cauthooj is the target of a melee Strike and is adjacent to another enemy that is also within the reach of the
+    // melee Strike. Effect The cauthooj nimbly hops aside, redirecting the triggering Strike against the adjacent enemy. The cauthooj Strides up to half
+    // its Speed, and this movement does not trigger reactions." → as it's targeted, the Strike sent at that enemy; the Stride a note.)
+    if (split && /^(?:The )?[\w' -]+? is the target of a melee Strike and is adjacent to another enemy that is also within the reach of the melee Strike$/i.test(split[1])) {
+        const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+        if (/^(?:The )?[\w' -]+? [^.]*?redirecting the triggering Strike against the adjacent enemy\.$/i.test(said[0] ?? "") && said.slice(1).every((sentence) => /^(?:The [\w' -]+?|It) Strides up to half (?:its|their) Speed, and this movement (?:does not|doesn't) trigger reactions\.$/i.test(sentence))) {
+            return { builtin: "redirect-attack", when: "targeted", melee: true, ...(said.length > 1 ? { note: "Then it Strides up to half its Speed; that movement triggers no reactions." } : {}) };
+        }
+    }
     if (!split || !/^(?:The attack roll for a Strike targeting|A Strike targeting|An attack roll to Strike) [\w' -]+? fails or critically fails$/i.test(split[1])) return null;
     const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
     if (!/^The attacker (?:then )?rerolls the Strike['’]s attack roll against the new target\.$/i.test(said.at(-1) ?? "")) return null;
@@ -2985,6 +2998,11 @@ function readNoCombatEffect(text) {
     if (/^(?:Frequency once per round Effect )?(?:The )?[^.]+? uses Change Formation\.(?: An? [^.]+? typically knows the [\w ]+ formations\.)?$/i.test(said)) return true;
     if (/^Requirements? (?:The )?[^.]+? is in dim light Effect (?:The )?[^.]+? Strides\. (?:He|She|It|They) (?:has|have) a \+10-foot status bonus to (?:his|her|its|their) Speed during this Stride\. The DC from shadow blending increases to [^.]+ during this Stride, and (?:the [\w' -]+?|he|she|it|they) remains? Concealed by dim light until the end of the movement, even if (?:he|she|it|they) leaves? dim light during the Stride\.$/i.test(said)) return true;
     if (/\bpermanently befouls \d+ cubic feet of liquid\b/i.test(said)) return true;
+    // (Batch 191: allies' Steps only — Bark Orders' "Any allies who hear and understand this order can use a reaction to Step.", Encircling Command's
+    // "Each caligni skulker within 30 feet of the skulker can Step. Each skulker can benefit from Encircling Command only once per round." — no change
+    // to a fight's numbers.)
+    if (/^(?:[^.]+\. )?Any allies who hear and understand this order can use a reaction to Step\.$/i.test(said)) return true;
+    if (/^Each [\w' -]+? within (?:@Template\[[^\]]*\]\{)?\d+ feet\}? of (?:the [\w' -]+?|it) can Step\. Each [\w' -]+? can benefit from [\w' -]+? only once per round\.$/i.test(said)) return true;
     // (Batch 93: allies that may only take a Step or a Stride toward it, after a sentence that only tells it.)
     if (/^(?:Frequency once per (?:round|turn) Effect )?(?:[^.]+\. )?Each ally (?:in|within) \d+ feet [^.]*?can immediately (?:use a )?Step or Stride(?: action)?; (?:this|the) (?:movement|move) must (?:move|bring) them closer to [^.]+\.$/i.test(said)) return true;
     // (Batch 92: Fancy Footwork's "Steps and Strides in any order"; Coiled Leap's "Leaps up to 10 feet vertically or 30 feet horizontally".)

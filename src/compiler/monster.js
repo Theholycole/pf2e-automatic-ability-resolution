@@ -967,7 +967,21 @@ function strikeActivity(item, actor, { after = null } = {}) {
             // (Batch 190: Towering Bite's "… making a jaws Strike with a reach of 60 feet. If the Strike hits, its target is Grabbed and pulled to an empty
             // space adjacent to the plated python. The python can attack through any material it can burrow through, …"; Masterful Engagement's "It Steps
             // and Strikes, in any order.")
-            .replace(/\b((?:makes|attempts|making) an? [\w' -]+? Strike) with a reach of (\d+) feet(?=\.$)/i, (_all, made, feet) => {
+            // (Batch 191: Lunging Strike's "with an extended reach of 20 feet"; Shadow Chain's "Shadows extend the giant's chain as they make a spiked chain
+            // Strike, increasing their reach to 60 feet for that Strike." and its teleport on a failed save, a note; Lunging Strike's Capturing Grab after.)
+            .replace(/^Shadows extend (?:the [\w' -]+?['’]s|its|their) [\w' -]+? as (?:they|it) makes? an? ([\w' -]+?) Strike, increasing (?:their|its) reach to (\d+) feet for that Strike\.$/i, (_all, weapon, feet) => {
+                (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike.`);
+                return `It makes a ${weapon} Strike.`;
+            })
+            .replace(/^If this hits, the target must succeed at an? (@Check\[[^\]]*\]) save or be teleported to an empty space within (?:the [\w' -]+?['’]s|its|their) normal reach\.$/i, (_all, check) => {
+                (activity.notes ??= []).push(`On a hit, a ${/dc:(\d+)/.exec(check)?.[1] ? `DC ${/dc:(\d+)/.exec(check)[1]} ` : ""}${/^@Check\[(\w+)/.exec(check)[1].replace(/^\w/, (letter) => letter.toUpperCase())} save or the target is teleported to a space within its normal reach.`);
+                return "[told]";
+            })
+            .replace(/^If it hits, (?:the [\w' -]+?|it) can use ([A-Z][\w' -]+?) after the Strike even if the creature is out of reach\.$/i, (_all, other) => {
+                (activity.notes ??= []).push(`If it hits, it can use ${other} after it, even out of reach.`);
+                return "[told]";
+            })
+            .replace(/\b((?:makes|attempts|making) an? [\w' -]+? Strike) with an? (?:extended )?reach of (\d+) feet(?=\.$)/i, (_all, made, feet) => {
                 (activity.notes ??= []).push(`Its reach is ${feet} feet for this Strike.`);
                 return made;
             })

@@ -3169,3 +3169,14 @@ test("an ability used three times; flying and leaping multi-Strikes; one roll at
     const bite = compileMonsterAbility(item("Test Bite", 2, "<p>The test snake lunges, making a jaws Strike with a reach of 30 feet. If the Strike hits, its target is Grabbed and pulled to an empty space adjacent to the test snake.</p>"), {});
     assert.deepEqual([bite.strike, bite.onHit.conditions.map((entry) => entry.slug), bite.notes.length], ["jaws", ["grabbed"], 2]);
 });
+
+test("a redirect as it's targeted; a move as a creature closes; allies' Steps; a long chain's teleport (2026-10-12, batch 191)", () => {
+    const item = (type, html, actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const hop = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> The test hopper is the target of a melee Strike and is adjacent to another enemy that is also within the reach of the melee Strike.</p><hr /><p><strong>Effect</strong> The test hopper springs away, redirecting the triggering Strike against the adjacent enemy. The test hopper Strides up to half its Speed, and this movement does not trigger reactions.</p>"), {});
+    assert.deepEqual([hop.builtin, hop.when, hop.melee], ["redirect-attack", "targeted", true]);
+    const skitter = compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature that starts its move outside the test crawler's reach moves into its reach.</p><hr /><p><strong>Effect</strong> The test crawler moves 15 feet. This does not trigger reactions.</p>"), {});
+    assert.deepEqual([skitter.builtin, skitter.on, skitter.move, skitter.feet, skitter.safe], ["withdraw", "approach", "Stride", 15, true]);
+    assert.deepEqual(compileMonsterAbility(item("action", "<p>The test boss yells. Any allies who hear and understand this order can use a reaction to Step.</p>"), {}), { builtin: "no-effect" });
+    const chain = compileMonsterAbility(item("action", "<p>Shadows extend the test giant's whip as they make a whip Strike, increasing their reach to 40 feet for that Strike. If this hits, the target must succeed at a @Check[will|dc:25] save or be teleported to an empty space within the test giant's normal reach.</p>", 2), {});
+    assert.deepEqual([chain.strike, chain.notes.length], ["whip", 2]);
+});

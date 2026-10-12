@@ -1660,3 +1660,9 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** "uses X three times. None of the bursts can overlap." → X's plan with this action's cost, its other areas a note (Bathygenic Barrage). Multi-Strikes with a move first: flying (Aerial Attack), jumping (Spring Forward, with a note for its Knockdown), striding (Quickening Jolt, a blog creature's). Dead Shot is two ranged Strikes at one creature, with notes for the range increment and the precision once; its requirement after its frequency is now read. Lightning Blade → a Strike at each creature in reach, with its penalty, extra damage and "counts as two", one roll a note. Towering Bite → its jaws Strike with a reach note, Grabbed and a pull note on a hit. Masterful Engagement → its Strike with a Step note.
 - **Live:** no new live code. Not run in pftest.
 - **Simulator:** nothing new.
+
+## A redirect as it's targeted; a move as a creature closes (2026-10-12, batch 191)
+
+- **Compiled:** Hop-Dodge → `redirect-attack` with `when: "targeted"`, `melee` and a note for its Stride. Skittering Reposition → `withdraw` as a creature comes into its reach ("moves 10 feet. This does not trigger reactions."). Bark Orders and Encircling Command → `no-effect`, only allies' Steps. Shadow Chain → its Strike, with notes for its 60-foot reach and the teleport on a failed save. Lunging Strike → a plain Strike (its reach and Capturing Grab after are the GM's).
+- **Live:** for `when: "targeted"`, batch 171's redirect offer comes on any melee Strike at it, while a creature in the encounter is beside it. It says the Strike goes to that creature instead, so the attacker rolls it against that one and its first result doesn't count. Not run in pftest: a second wording on batch 171's offer.
+- **Simulator:** before the roll, its reaction sends the melee Strike at another of the attacker's side in both their melees, at the same penalty (B191).
