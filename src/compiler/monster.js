@@ -10,6 +10,7 @@
 // - Skill-check abilities written like basic actions ("Athletics check against
 //   the target's Reflex DC"): compiled as basic actions are.
 
+import { gmFallback } from "./gm-fallback.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -3740,7 +3741,9 @@ export function compileMonsterAbility(source, options = {}) {
         stackConditions(read.resolution.outcomes, html);
         if (escalation) escalateConditions(read.resolution.outcomes, escalation);
     }
-    return read;
+    // (2026-10-12, the user's choice: what no reading plays, behind a state the simulator can't see, out of combat, or a one-off adventure
+    // creature's — the GM's.)
+    return read ?? gmFallback(modernItem(source), options);
 }
 
 function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {

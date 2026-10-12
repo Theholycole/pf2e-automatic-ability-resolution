@@ -1327,7 +1327,8 @@ test("mythic abilities, Quickened Casting, Spellstrike, Speed Surge, retreats, s
     const poisoner = item("Poison Weapon", "<p><strong>Requirements</strong> The test assassin is wielding a piercing or slashing weapon and has a free hand</p><p><strong>Effect</strong> The test assassin applies a poison to the weapon.</p>");
     const plan = compileMonsterAbility(poisoner, { actor: { items: [poisoner, venom] } });
     assert.deepEqual([plan?.builtin, plan?.poison?.name, plan?.doses, plan?.poison?.plan?.resolution?.check?.statistic], ["poison-weapon", "Test Venom", 2, "fortitude"]);
-    assert.equal(compileMonsterAbility(poisoner, { actor: { items: [poisoner] } })?.builtin, undefined, "not with no poison to apply");
+    // (With no poison to apply: the GM's, behind a free hand the simulator can't see — the user's choice of 2026-10-12.)
+    assert.deepEqual(compileMonsterAbility(poisoner, { actor: { items: [poisoner] } }), { builtin: "no-effect", gm: "state" }, "not with no poison to apply");
 });
 
 test("statues and feigned corpses, web descents, Running Reload, Skirmish Strike, Hunt Prey, Swipe, Flurry of Blows, Twin Takedown and Sudden Charge in more wordings (2026-10-11, batch 42)", () => {
@@ -3138,4 +3139,17 @@ test("a drawn weapon's Strike off-guard with extra bleed; a hit that grabs and p
 test("a shape that otherwise uses a spell's effects, cast through PF2e (2026-10-12, batch 188)", () => {
     const plan = compileMonsterAbility({ type: "action", name: "Test Shape", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: ["concentrate", "polymorph"] }, description: { value: "<p>The test sprout transforms into a Tiny shrub. This ability otherwise uses the effects of @UUID[Compendium.pf2e.spells-srd.Item.dileJ0Yxqg76LMvu]{One with Plants}.</p>" } } }, { basicActions: {} });
     assert.deepEqual([plan.builtin, plan.spell.name], ["cast-spell", "One with Plants"]);
+});
+
+test("what no reading plays: the GM's when behind an unseen state, out of combat, or a one-off adventure creature's (2026-10-12)", () => {
+    const item = (type, html, traits = []) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? 1 : null }, traits: { value: traits }, description: { value: html } } });
+    const odd = "<p>The test thing does something nobody has written a reading for, vividly.</p>";
+    assert.deepEqual(compileMonsterAbility(item("action", `<p><strong>Requirements</strong> The test eel is in water</p><hr />${odd}`), {}), { builtin: "no-effect", gm: "state" });
+    assert.deepEqual(compileMonsterAbility(item("reaction", `<p><strong>Requirements</strong> Initiative has not yet been rolled</p><p><strong>Trigger</strong> A creature comes close</p><p><strong>Effect</strong> The test spider wakes up and peers about.</p>`), {}), { builtin: "no-effect", gm: "state" });
+    assert.deepEqual(compileMonsterAbility(item("action", "<p>The test sage learns the name of every merchant within 1 mile.</p>"), {}), { builtin: "no-effect", gm: "out-of-combat" });
+    assert.deepEqual(compileMonsterAbility(item("action", odd, ["exploration"]), {}), { builtin: "no-effect", gm: "out-of-combat" });
+    assert.deepEqual(compileMonsterAbility(item("action", odd), { pack: "abomination-vaults-bestiary" }), { builtin: "no-effect", gm: "adventure" });
+    assert.deepEqual(compileMonsterAbility(item("action", odd), { actor: { _stats: { compendiumSource: "Compendium.pf2e.pfs-season-1-bestiary.Actor.abcdefghijklmnop" } } }), { builtin: "no-effect", gm: "adventure" });
+    assert.equal(compileMonsterAbility(item("action", odd), { pack: "pathfinder-monster-core" }), null, "a rulebook creature's stays uncovered");
+    assert.equal(compileMonsterAbility(item("passive", odd), { pack: "abomination-vaults-bestiary" }), null, "not a passive");
 });

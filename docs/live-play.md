@@ -1645,3 +1645,12 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Compiled:** "… otherwise uses the effects of" a linked spell is a cast-spell plan (a leshy's Change Shape, One with Plants).
 - **Live:** no new live code: the cast card. Not run in pftest.
 - **Simulator:** nothing new; a utility spell isn't cast.
+
+## The GM's, by choice (2026-10-12)
+
+- **Compiled:** `src/compiler/gm-fallback.js`, the last step of `compileMonsterAbility`. When no reading plays an action, reaction or free action, it compiles as `{ builtin: "no-effect", gm }` if one of these holds:
+  - its requirement names a state the simulator can't see (`"state"`);
+  - its words have no combat numbers and are out of combat or narrative, or it has the exploration or downtime trait (`"out-of-combat"`);
+  - the creature comes from a PF2e bestiary that isn't a rulebook's (`"adventure"`). The pack is the tool's `pack` option, or the actor's `_stats.compendiumSource` (`flags.core.sourceId`, `sourceId`).
+- **Live:** nothing changes in play: PF2e's own card, as for any `no-effect`. Run in pftest: Murschen, imported from the Abomination Vaults bestiary, kept its compendium source. His uncovered Red Ruin Stance compiled as the GM's (`adventure`), on the world actor and on an unlinked token's actor, while his Flurry of Blows stayed a multi-Strike.
+- **Simulator:** these aren't played, and the in-Foundry snapshot and the bestiary tool still list them among what the simulation leaves out.
