@@ -128,7 +128,8 @@ function meleeStrikes(actor, name) {
     const any = !only || /^(?:null|melee|weapon|melee weapon)$/.test(only);
     return (actor.system.actions ?? [])
         .filter((action) => action.type === "strike" && action.item?.isMelee !== false && !action.item?.isRanged)
-        .filter((action) => any || action.label.toLowerCase().includes(only))
+        // (Batch 104: "claws" for its "Claw", as the simulator's strikeNamed reads it.)
+        .filter((action) => any || action.label.toLowerCase().includes(only) || only.startsWith(action.label.toLowerCase()))
         .map((action) => ({ slug: action.slug, label: action.label, reach: Number(actor.getReach?.({ action: "attack", weapon: action.item })) || 5 }));
 }
 
@@ -231,8 +232,10 @@ async function onMessage(message) {
         // Superconductor (batch 57): an attack or a spell aimed at it, its Strike back at the attacker at any range.
         const attack = event.spell || event.traits.includes("attack") || ["attack-roll", "spell-attack-roll"].includes(context?.type);
         const conductor = mine && attack && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("targeted")) : null;
-        const strikes = conductor ? (mine.actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(conductor.plan.strike)).map((action) => ({ slug: action.slug, label: action.label })) : [];
-        if (strikes.length) await offer({ kind: "strike", item: conductor.item, monster: mine.token, actor: mine.actor, target: event.attacker, strikes, penalty: conductor.plan.penalty ?? 0, trigger: `aimed ${event.spell ? "a spell" : "an attack"} at it`, note: "At any range." });
+        // (Batch 104, Shoot First: "a firearm Strike", any firearm it has.)
+        const firearm = (action) => conductor.plan.strike === "firearm" && action.item?.isRanged && (action.item?.group === "firearm" || /\b(?:pistol|musket|rifle|arquebus|blunderbuss|pepperbox|firearm|gun)\b/i.test(action.label));
+        const strikes = conductor ? (mine.actor.system.actions ?? []).filter((action) => action.type === "strike" && (action.label.toLowerCase().includes(conductor.plan.strike) || firearm(action))).map((action) => ({ slug: action.slug, label: action.label })) : [];
+        if (strikes.length) await offer({ kind: "strike", item: conductor.item, monster: mine.token, actor: mine.actor, target: event.attacker, strikes, penalty: conductor.plan.penalty ?? 0, trigger: `aimed ${event.spell ? "a spell" : "an attack"} at it`, note: conductor.plan.disrupts === "critical" ? "Before the triggering action: on a critical hit, that action is disrupted (ignore its result)." : "At any range." });
     }
     // (Batch 65: a failed Escape from a monster that answers it; batch 81: one it makes harder. PF2e rolls the Escape with the best of
     // Acrobatics, Athletics and an unarmed attack: a skill check or an attack roll.)
@@ -257,6 +260,8 @@ async function onMessage(message) {
     if (context?.type === "skill-check" && (context.traits ?? []).map((trait) => trait?.name ?? trait).includes("attack")) await strikeAnswers(context, scene, combat, token, { skill: true });
     // A spell cast (its card, which PF2e 8.5 marks "spell-cast"; not its rolls), with the manipulate trait.
     const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
+    // (Batch 104, Spell Interception: any spell cast in its reach, its Strike; a hit disrupts the spell.)
+    if (castTraits) await castInterception(scene, combat, token);
     if (castTraits?.includes("manipulate")) {
         await reachTrigger(scene, combat, token, "cast a manipulate spell in its reach", "manipulate");
         await provokeTrigger(scene, combat, token, "manipulate", "cast a manipulate spell");
@@ -286,7 +291,8 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
                 // (Batch 88: a melee hit on it, Absorb Weapon's.)
                 : !skill && triggers.includes("hit") && onIt && ["success", "criticalSuccess"].includes(context.outcome) && !(context.options ?? []).includes("item:ranged") ? "hit it with a melee Strike"
                 // (Batch 57: Cutting Rebuke, Bite Back; Opportune Bite, Gnawing Retort.)
-                : !skill && triggers.includes("attacked") && onIt ? "made a Strike against it"
+                // (Batch 104, Knowing Glance: a melee Strike only.)
+                : !skill && triggers.includes("attacked") && onIt && !(plan.melee && (context.options ?? []).includes("item:ranged")) ? "made a Strike against it"
                 : !skill && triggers.includes("critical-miss") && onIt && context.outcome === "criticalFailure" ? "critically failed a Strike against it"
                 // (Batch 63: a failed or critically failed one.)
                 : !skill && triggers.includes("missed") && onIt && ["failure", "criticalFailure"].includes(context.outcome) ? `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it`
@@ -302,7 +308,7 @@ async function strikeAnswers(context, scene, combat, attacker, { skill = false }
             }
             const strikes = meleeStrikes(actor, `(${plan.strike} only)`).filter((strike) => distance <= strike.reach);
             if (!strikes.length) continue;
-            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
+            await offer({ kind: "strike", item, monster, actor, target: attacker, strikes, penalty: plan.penalty ?? 0, trigger: why, note: plan.ward ? "Only if the creature attacked is the one it guards." : plan.hinders ? `If the Strike hits, the triggering roll takes a –${plan.hinders} circumstance penalty: lower its result by ${plan.hinders}.` : plan.fortune ? "Roll the attack twice and take the better result (a fortune effect)." : triggers.includes("concealed-miss") ? "Only if the attack missed because of its concealment (a failed flat check)." : null });
             break;
         }
     }
@@ -414,6 +420,19 @@ async function reachTrigger(scene, combat, token, trigger, kind = null) {
             ? (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.label.toLowerCase().includes(entry.plan.strike)).map((action) => ({ slug: action.slug, label: action.label, reach: entry.plan.within }))
             : meleeStrikes(actor, entry.plan.builtin === "reaction-strike" ? `(${entry.plan.strike} only)` : entry.item.name)).filter((strike) => distance <= strike.reach);
         if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: token, strikes, trigger, note: entry.plan.criticalTrip ? CRITICAL_TRIP : null });
+    }
+}
+
+// A spell cast near it (batch 104: Spell Interception): its Strike offer at the caster, a hit disrupting the spell.
+async function castInterception(scene, combat, caster) {
+    const grid = gridOf(scene);
+    for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
+        if (!isFoe(monster, caster)) continue;
+        const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("cast"));
+        if (!entry) continue;
+        const distance = distanceFeet(box(monster, grid.size), box(caster, grid.size), grid);
+        const strikes = meleeStrikes(actor, `(${entry.plan.strike} only)`).filter((strike) => distance <= Math.max(10, strike.reach));
+        if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor, target: caster, strikes, trigger: "cast a spell near it", note: entry.plan.disrupts ? "If the Strike hits, the spell is disrupted." : null });
     }
 }
 
@@ -736,9 +755,26 @@ async function onDamaged(actor, amount) {
         // Wing Thrash (batch 54): an adjacent enemy (the one whose turn it is) that damages it, a Strike back (and one at another);
         // Squealed Outrage (batch 57): the Strike back only.
         const thrash = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("damaged-adjacent"));
-        if (thrash && isFoe(token, attacker) && distanceFeet(box(token, grid.size), box(attacker, grid.size), grid) <= 5) {
-            const strikes = meleeStrikes(actor, `(${thrash.plan.strike} only)`);
-            if (strikes.length) await offer({ kind: "strike", item: thrash.item, monster: token, actor, target: attacker, strikes, penalty: thrash.plan.penalty ?? 0, trigger: `damaged it (${amount})`, note: thrash.plan.second ? "It can make a second Strike at another adjacent creature." : null });
+        // (Batch 103: within its Strike's reach, Retaliatory Strike's tail.)
+        const thrashFrom = thrash ? distanceFeet(box(token, grid.size), box(attacker, grid.size), grid) : Infinity;
+        if (thrash && isFoe(token, attacker) && thrashFrom <= Math.max(5, ...meleeStrikes(actor, `(${thrash.plan.strike} only)`).map((strike) => strike.reach))) {
+            const strikes = meleeStrikes(actor, `(${thrash.plan.strike} only)`).filter((strike) => thrashFrom <= Math.max(5, strike.reach));
+            // (Batch 103, Retaliatory Strike: its extra dice on a hit.)
+            if (strikes.length) await offer({ kind: "strike", item: thrash.item, monster: token, actor, target: attacker, strikes, penalty: thrash.plan.penalty ?? 0, trigger: `damaged it (${amount})`, note: [thrash.plan.second ? "It can make a second Strike at another adjacent creature." : null, thrash.plan.extraDamage ? `If the Strike hits, add ${thrash.plan.extraDamage} damage.` : null].filter(Boolean).join(" ") || null });
+        }
+        // Vengeful Throw (batch 103): damage from a creature at least that far away, a ranged Strike back.
+        const throwBack = mine?.reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("damaged-far"));
+        if (throwBack && isFoe(token, attacker) && distanceFeet(box(token, grid.size), box(attacker, grid.size), grid) >= (throwBack.plan.from ?? 20)) {
+            const strikes = (actor.system.actions ?? []).filter((action) => action.type === "strike" && action.item?.isRanged && action.label.toLowerCase().includes(throwBack.plan.strike ?? "")).map((action) => ({ slug: action.slug, label: action.label }));
+            if (strikes.length) await offer({ kind: "strike", item: throwBack.item, monster: token, actor, target: attacker, strikes, trigger: `damaged it (${amount}) from afar`, note: "Only if the damage came from that creature." });
+        }
+        // Avenging Claws (batch 103): an enemy within its distance that damages its ally, a Step toward it and a Strike.
+        for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
+            if (monster.id === token.id || monster.disposition !== token.disposition || !isFoe(monster, attacker)) continue;
+            const entry = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("ally-damaged"));
+            if (!entry || distanceFeet(box(monster, grid.size), box(attacker, grid.size), grid) > (entry.plan.within ?? 5)) continue;
+            const strikes = meleeStrikes(monsterActor, `(${entry.plan.strike} only)`);
+            if (strikes.length) await offer({ kind: "strike", item: entry.item, monster, actor: monsterActor, target: attacker, strikes, trigger: `damaged ${token.name} (${amount})`, note: `Only if it was a melee attack.${entry.plan.step ? " It Steps toward the attacker first: move its token." : ""}` });
         }
         for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
             if (monster.id === token.id || monster.disposition !== token.disposition || !isFoe(monster, attacker)) continue;

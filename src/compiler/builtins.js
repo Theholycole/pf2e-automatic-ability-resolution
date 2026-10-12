@@ -399,13 +399,24 @@ export function chargeSentences(text) {
 export function readSweep(text) {
     // (Batch 90, Sweeping Axes: "Requirements The troll warleader is wielding two battle axes Effect … and the bonus from sweep applies to each
     // attack" — what it wields; sweep's bonus left out.)
-    const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 102: another requirement, "The golem is uncontrollable", "is holding six spirit blades": a state the module doesn't play, the
+    // GM's — requires "requirement".)
+    const required = !/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i.test(text.trim()) && /^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?) Effect /i.test(text.trim());
+    const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(/^Requirements? (?:The )?[\w' -]+? is (?:uncontrollable|holding [\w' -]+?) Effect /i, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "").split(/(?<=\.)\s+(?=[A-Z])/);
+    // (Batch 102: "makes three jaws Strikes, each against a different target", "makes up to six longsword Strikes, each against a different
+    // target" → that many, each at a different creature in its reach.)
+    const COUNTS = { two: 2, three: 3, four: 4, five: 5, six: 6 };
+    const counted = /^(?:The )?[^.]+? makes (?:up to )?(two|three|four|five|six|\d) ([\w' -]+?) Strikes, each against a dif+erent target\.$/i.exec(sentences[0] ?? "");
     // (Batch 47, Thrash: "attempts individual Strikes against each creature in its reach", "Strikes once against each creature in its reach".)
     // (Batch 83, Whirlwind of Hooks: "… against every creature within its reach", after a first sentence that only tells it.)
-    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:each|every) (?:creature|enemy|foe)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?reach)?\.$/i;
-    if (sentences.length > 1 && !SWEEP.test(sentences[0]) && SWEEP.test(sentences[1]) && !/\b(?:damage|bonus|penalty|save|check|DC|Strikes?)\b|\d/i.test(sentences[0])) sentences.shift();
-    const match = SWEEP.exec(sentences.shift() ?? "");
-    if (!match) return null;
+    // (Batch 102: "… against every creature in its reach, whether that creature is an ally or not" — Rampage, behind its requirement; "… a
+    // single pseudopod Strike against each target within range it hasn't already Grabbed" — not at those it holds.)
+    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes|attempts) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:each|every) (?:creature|enemy|foe|target)(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?(?:reach|range))?( it (?:hasn't already Grabbed|doesn't already have Grabbed))?(, whether that creature is an ally or not)?\.$/i;
+    if (!counted && sentences.length > 1 && !SWEEP.test(sentences[0]) && SWEEP.test(sentences[1]) && !/\b(?:damage|bonus|penalty|save|check|DC|Strikes?)\b|\d/i.test(sentences[0])) sentences.shift();
+    const match = counted ? null : SWEEP.exec(sentences[0] ?? "");
+    sentences.shift();
+    if (!match && !counted) return null;
+    if (match?.[3] && !required) return null;
     let sameMap = false;
     let penalty = 0;
     for (const sentence of sentences) {
@@ -440,8 +451,10 @@ export function readSweep(text) {
         return null;
     }
     // (Batch 83: "a single claw Strike": the claw's.)
-    const name = match[1] && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(match[1].trim()) ? match[1].trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
-    return { strike: name, sameMap, ...(penalty ? { penalty } : {}) };
+    const said = counted ? counted[2] : match[1];
+    const name = said && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(said.trim()) ? said.trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
+    const max = counted ? COUNTS[counted[1].toLowerCase()] ?? Number(counted[1]) : null;
+    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: "requirement" } : {}) };
 }
 
 // "X Flies up to double its fly Speed and then makes a talon Strike." and other moves before one Strike (2026-10-10):
@@ -909,6 +922,48 @@ export function readReaction(item, text) {
         // (Batch 94, Opportune Backstab: "A creature within Fayati's reach is hit by a melee Strike from one of her allies".)
         [new RegExp(String.raw`^A creature within (?:(?:the [\w' -]+?['’]s|[A-Z][\w'-]+(?: [A-Z][\w'-]+)*['’]s|its|their|his|her) )?(?:melee )?reach is hit by a melee (?:attack|Strike) from one of (?:its|their|his|her|the [\w' -]+?['’]s) allies$`, "i"), "ally-hit"]
     ].find(([pattern]) => pattern.test(trigger.trim().replace(/\.$/, "")))?.[1];
+    // (Batch 103: Retaliatory Strike — "Trigger A creature within reach of the frost drake's tail successfully damages the frost drake with a
+    // Strike Effect The frost drake attempts to Strike with their tail. If the Strike hits, it deals an additional 1d6 damage." → its tail
+    // Strike back, extraDamage on a hit.)
+    if (new RegExp(String.raw`^A creature within (?:the )?reach of ${its}['’]s? [\w' -]+? successfully damages ${its} with a Strike$`, "i").test(trigger.trim().replace(/\.$/, ""))) {
+        const back = /^(?:The )?[^.]+? attempts to Strike with (?:its|their|his|her) ([\w' -]+?)\.(?: If the Strike hits, it deals an additional (\d+d\d+) damage\.)?$/i.exec(effect.trim());
+        if (back) return { builtin: "reaction-strike", triggers: ["damaged-adjacent"], strike: back[1].toLowerCase(), penalty: 0, disrupts: false, ...(back[2] ? { extraDamage: back[2] } : {}) };
+    }
+    // (Batch 103: Avenging Claws — "Trigger A creature within 10 feet damages the feathered bear's ally with a melee attack Effect The
+    // feathered bear immediately Steps toward the triggering attacker and makes a claws Strike." → triggers ["ally-damaged"], within, step.)
+    const guarded = new RegExp(String.raw`^A creature within (\d+) feet damages ${its}['’]s? ally with a melee (?:attack|Strike)$`, "i").exec(trigger.trim().replace(/\.$/, ""));
+    const avenging = guarded ? /^(?:The )?[^.]+? (?:immediately )?Steps toward the triggering (?:attacker|creature) and makes an? ([\w' -]+?) Strike(?: against it)?\.$/i.exec(effect.trim()) : null;
+    if (avenging) return { builtin: "reaction-strike", triggers: ["ally-damaged"], strike: avenging[1].toLowerCase(), penalty: 0, disrupts: false, within: Number(guarded[1]), step: true };
+    // (Batch 103: Vengeful Throw — "Trigger The marauder takes damage from a creature 20 feet or further away Effect The marauder makes a
+    // ranged spear Strike against the triggering creature. This attack doesn't take a range increment penalty if the target is within the
+    // second range increment." → triggers ["damaged-far"], from (its least distance), a ranged Strike.)
+    const far = /^(?:The )?[^.]+? takes damage from a creature (\d+) feet or (?:further|farther) away$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const thrown = far ? /^(?:The )?[^.]+? makes a ranged ([\w' -]+?) Strike against the triggering creature\.(?: This attack doesn't take a range increment penalty if the target is within the second range increment\.)?$/i.exec(effect.trim()) : null;
+    if (thrown) return { builtin: "reaction-strike", triggers: ["damaged-far"], strike: thrown[1].toLowerCase(), penalty: 0, disrupts: false, from: Number(far[1]), ranged: true };
+    // (Batch 104: Bodyguard's Reprisal — "Trigger A creature attacks the subject of bodyguard's defense Effect The bodyguard makes a Strike
+    // against the triggering creature." → triggers ["ally-attacked"], its charge only (the GM's: a note), its best melee Strike.)
+    if (/^A creature attacks the subject of (?:the )?[\w' -]+?['’]s? defense$/i.test(trigger.trim().replace(/\.$/, "")) && /^(?:The )?[^.]+? makes a Strike against the triggering creature\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, ward: true };
+    // (Batch 104: Shoot First — "Trigger An attacker the duelist can see targets them with a Strike or spell Requirements The duelist is
+    // holding a loaded firearm Effect The duelist makes a firearm Strike against the triggering creature. On a critical hit, they disrupt the
+    // triggering action." → triggers ["targeted"], a firearm Strike, disrupts on a critical hit.)
+    if (/^An? (?:attacker|creature|foe|enemy) (?:the [\w' -]+? )?(?:can see )?targets (?:them|it|him|her|the [\w' -]+?) with a Strike or spell$/i.test(trigger.trim().replace(/\s*Requirements? .*$/i, "").replace(/\.$/, "")) && /\bRequirements? (?:The )?[^.]+? is holding a loaded firearm\b/i.test(text)) {
+        const shot = /^(?:The )?[^.]+? makes a firearm Strike against the triggering creature\.(?: On a critical hit, (?:it|they|he|she) disrupts? the triggering action\.)?$/i.exec(effect.trim());
+        if (shot) return { builtin: "reaction-strike", triggers: ["targeted"], strike: "firearm", penalty: 0, disrupts: /critical hit/i.test(effect) ? "critical" : false };
+    }
+    // (Batch 104: Spell Interception — "Trigger A creature within 10 feet of the mage killer Casts a Spell Effect The mage killer makes a melee
+    // Strike or thrown dagger Strike against the triggering creature. If it hits, the spell is disrupted." → triggers ["cast"], its best melee
+    // Strike, the spell disrupted on a hit.)
+    if (/^A creature within (?:10 feet of|(?:the [\w' -]+?['’]s|its) reach of) (?:the [\w' -]+?|it) Casts a Spell$/i.test(trigger.trim().replace(/\.$/, "")) && /^(?:The )?[^.]+? makes a melee Strike(?: or thrown [\w' -]+? Strike)? against the triggering creature\. If it hits, the spell is disrupted\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["cast"], strike: null, penalty: 0, disrupts: true };
+    // (Batch 104: Knowing Glance — "Trigger The enigmatic conspiracist is targeted by a melee Strike or touch spell Effect With an uncanny
+    // look, the enigmatic conspiracist [[/act demoralize]]{Demoralizes} the creature that targeted them. Demoralize loses the auditory trait
+    // and gains the visual trait, and … doesn't take a penalty if the creature doesn't understand their language. If the Intimidation check
+    // critically succeeds, … disrupts the triggering action." → its Demoralize at the attacker.)
+    if (/^(?:The )?[^.]+? is targeted by a melee Strike(?: or touch spell)?$/i.test(trigger.trim().replace(/\.$/, ""))) {
+        const said = effect.trim().replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug).split(/(?<=\.)\s+(?=[A-Z])/);
+        const glance = /^(?:With [^,]+, )?(?:the [\w' -]+?|it|they) Demoralizes the creature that targeted (?:it|them|him|her)\.$/i.test(said[0] ?? "");
+        const rest = said.slice(1).every((sentence) => /^Demoralize loses the auditory trait and gains the visual trait\b[^.]*\.$|^If the Intimidation check critically succeeds, [^.]*disrupts? the triggering action\.$/i.test(sentence));
+        if (glance && rest) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, melee: true };
+    }
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
     const told = effect.trim().split(/(?<=\.)\s+(?=[A-Z])/);
     const lastOnly = answered === "targeted" || (told.length > 1 && told.slice(0, -1).every((sentence) => !/\d|@|\b(?:damage|save|check|bonus|penalty|Strikes?|Grab\w*|Prone|Hit Points|condition)\b/i.test(sentence)));
@@ -1467,7 +1522,7 @@ export function compileBuiltin(item, slug) {
     const multi = readMultiStrikes(text);
     if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}) };
     const sweep = readSweep(text);
-    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}) };
+    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
     const swipe = readSwipe(text);
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true };

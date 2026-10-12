@@ -259,6 +259,8 @@ async function cardForAbility(message) {
     if (plan?.builtin === "multi-strike" && plan.penalties?.some(Boolean)) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.penalties.map((value, index) => `Strike ${index + 1} ${value ? `at −${value}` : "at its full bonus"}`).join(", ")}${plan.requires === "first-attack" ? "; only before any other attack this turn" : ""}.`]);
     // (Batch 82, Pike and Strike: the second Strike only after a hit, at the same penalty; or instead the move, the GM's choice.)
     if (plan?.builtin === "multi-strike" && plan.ifFirstHits) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: only if the ${plan.strikes?.[0] ?? "first"} Strike hits, the ${plan.strikes?.[1] ?? "second"} Strike at the same multiple attack penalty${plan.instead ? `, or instead ${plan.instead}` : ""}.`]);
+    // (Batch 102, Flurry of Pods: not at the creatures it holds.)
+    if (plan?.builtin === "multi-strike" && plan.notGrabbed) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: a Strike at each creature in its reach except those it already has Grabbed, at the same multiple attack penalty.`]);
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan, { targetProne: true })) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
