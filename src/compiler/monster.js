@@ -2433,6 +2433,31 @@ function betrayingTouch(item, actor, options) {
     };
 }
 
+// Fling (2026-10-12, batch 160): "Requirements A creature is Grabbed in the tyrannosaurus's jaws Effect The tyrannosaurus flings the creature into the
+// air up to 10 feet up from its mouth and 20 feet away. The creature falls 25 feet (…) and takes falling damage accordingly. If the flung creature
+// lands on another creature, the creature it lands on takes the same amount of bludgeoning damage. …", the mantis's "flings a Grabbed creature into
+// the air, up to 30 feet overhead and up to 30 feet away … (the creature takes damage from the fall as normal)" → on the creature it holds: let go,
+// half the fall as bludgeoning damage, Prone; the one it lands on, a note.
+function fling(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    if (!/\bflings (?:the creature|an? (?:Grabbed )?creature) into the air\b/i.test(plain)) return null;
+    const fall = Number(/\bfalls (\d+) feet\b/i.exec(plain)?.[1] ?? /\bup to (\d+) feet overhead\b/i.exec(plain)?.[1]);
+    if (!fall) return null;
+    const tagged = /@Damage\[(\d+)\[bludgeoning\][^\]]*\]/i.exec(html)?.[1];
+    const amount = Number(tagged ?? Math.floor(fall / 2));
+    const save = inlineTags(html, "Check").map(readCheck).find((check) => check?.save && check.dc);
+    const success = { damage: { mode: "formulas", formulas: [{ formula: `${amount}[bludgeoning]` }], rollScope: "outcome" }, effects: [{ kind: "end-condition", slugs: ["grabbed", "restrained"] }, { kind: "condition", slug: "prone", value: null, duration: null }] };
+    return {
+        ...base(item),
+        targeting: { target: "the creature it holds", range: "touch", area: null, grabbed: true },
+        trigger: { event: "use" },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } },
+        notes: [`It falls ${fall} feet and lands Prone, no longer held.`, ...(/\blands on another creature\b/i.test(plain) ? [`A creature it lands on takes the same bludgeoning damage${save ? ` (DC ${save.dc} basic Reflex save)` : ""}.`] : [])]
+    };
+}
+
 // The affliction with that name among its abilities (its "Stage 1"), compiled; null when it has none.
 function ownAffliction(item, actor, phrase) {
     const owner = actor ?? item.actor ?? item.parent;
@@ -3611,7 +3636,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? plan;
     return listedRider(item, actor, plan) ?? hitBy(item, plan) ?? targetedBy(item, plan) ?? ownStrikePassive(item, plan) ?? damagedPassive(item, plan) ?? grabTurn(item, plan) ?? reactionTrigger(item, plan, actor) ?? plan;
 }
 

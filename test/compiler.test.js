@@ -2920,3 +2920,9 @@ test("a betraying touch with another ability's save, a secret pried loose (2026-
     const secret = compileMonsterAbility(item("Test Secret", "<p>The test drake delves into the mind of a creature within 30 feet, learning something they'd find embarrassing or shameful unless they succeed at a @Check[will|dc:25] save. The target becomes Frightened 1 and cannot reduce their frightened condition for 1 minute or until the test drake reveals the secret.</p>", 2), { basicActions: {} });
     assert.deepEqual([secret.resolution.check.statistic, secret.resolution.outcomes.failure.effects[0].slug, secret.notes], ["will", "frightened", ["It can't reduce that Frightened for 1 minute (or until the secret is revealed)."]]);
 });
+
+test("Fling: the creature it holds falls and is let go (2026-10-12, batch 160)", () => {
+    const fling = compileMonsterAbility({ type: "action", name: "Test Fling", system: { slug: null, actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: "<p>The test mantis flings a Grabbed creature into the air, up to 20 feet overhead and up to 20 feet away from the test mantis (the creature takes damage from the fall as normal). If the flung creature lands on another creature, the creature it lands on takes the same amount of bludgeoning damage with a @Check[reflex|dc:22|basic] save.</p>" } } }, { basicActions: {} });
+    assert.deepEqual([fling.targeting.grabbed, fling.resolution.outcomes.success.damage.formulas, fling.resolution.outcomes.success.effects.map((effect) => effect.slug ?? effect.slugs?.join(","))], [true, [{ formula: "10[bludgeoning]" }], ["grabbed,restrained", "prone"]]);
+    assert.equal(fling.notes[1], "A creature it lands on takes the same bludgeoning damage (DC 22 basic Reflex save).");
+});
