@@ -216,8 +216,15 @@ async function cardForAbility(message) {
     // More damage on its own Strikes for a while (batch 37, Vocal Warm-Up): an effect on the monster with that damage, for its time;
     // not when the ability links PF2e's own effect (its card offers that).
     // (Batch 39: a bonus to its AC for a while, Dueling Parry; a plan with its own time only, not a rage's, whose PF2e effect is linked.)
-    if (plan?.builtin === "self-effect" && plan.duration && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+    // (Batch 235: with no time of its own, its model's rounds — Raise Shields, Blood Fury, a rage with no PF2e effect; its healing too.)
+    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
         await strikeBuff(item, plan, sourceToken);
+        if (Number(plan.heal) > 0) {
+            const actor = sourceToken?.actor ?? item.actor;
+            const hp = actor.system?.attributes?.hp;
+            if (hp) await actor.update({ "system.attributes.hp.value": Math.min(Number(hp.max) || Infinity, Number(hp.value) + Number(plan.heal)) });
+            await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: it regains ${Number(plan.heal)} Hit Points.`]);
+        }
         if (formula) await noteToGM(item.actor, sourceToken, [warning, await startRecharge({ actor: item.actor, item, formula, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
         return;
     }

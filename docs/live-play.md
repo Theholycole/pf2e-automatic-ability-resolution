@@ -2253,3 +2253,12 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** as for these kinds. Not run in pftest.
 - **Simulator:** nothing new (`area.foes` as in batch 229).
 
+## Self-effects with no time of their own, live (2026-10-12, batch 235)
+
+- **Live:**
+  - A `self-effect` whose plan gives no `duration` takes its time from its model's rounds (`selfEffectDuration`): 0 lasts to the end of its turn, N to the start of its turn N rounds on, 10 is a minute, and a stance lasts until it ends.
+  - Its healing (`heal`) is applied to it too.
+  - Before, about 40 PF2e and 10 Battlezoo self-effects did nothing when used: Raise Shields, Shielded Charge, rages and frenzies with no PF2e effect of their own, a Battlezoo rage dragon's Ignite Rage. Abilities that link PF2e's own effect (Blood Fury) still leave it to PF2e's card and inline roll.
+  - **Checked in pftest (2026-10-12):** a Terra-Cotta Garrison's Raise Shields put a +2 AC effect on it until the start of its next turn. A Charau-ka Butcher's Blood Fury posted PF2e's own card (its linked effect and healing roll).
+- **Simulator:** unchanged.
+

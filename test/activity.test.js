@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
-import { resistEffects, strikeBuffEffect } from "../src/live/buff.js";
+import { resistEffects, selfEffectDuration, strikeBuffEffect } from "../src/live/buff.js";
 import { CORE_FAMILIES, createRegistry, validateChanges } from "../../pf2e-resolution-core/src/index.js";
 
 const registry = createRegistry();
@@ -213,4 +213,15 @@ test("a resistance reaction to the triggering damage's own type for a minute; ha
     assert.deepEqual([lasting.system.rules, lasting.system.duration.value, lasting.system.description.value], [[{ key: "Resistance", type: "slashing", value: 5 }], 10, "<p>Resistance 5 to slashing.</p>"]);
     assert.deepEqual(resistEffects(runic, { name: "Test Runes" }), [], "none when the type wasn't known");
     assert.deepEqual(resistEffects({ builtin: "resist-damage", value: "half", on: null, types: null, magical: true }, { name: "Test Siphon" }), []);
+});
+
+test("a self-effect's time when its plan gives none: its model's rounds (2026-10-12, batch 235)", () => {
+    const plan = (model, extra = {}) => ({ builtin: "self-effect", actions: 1, model: { name: "Test", modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0, ...model }, ...extra });
+    assert.deepEqual(selfEffectDuration(plan({ rounds: 0 })), { value: 0, unit: "rounds", expiry: "turn-end" });
+    assert.deepEqual(selfEffectDuration(plan({ rounds: 1 })), { value: 1, unit: "rounds", expiry: "turn-start" });
+    assert.deepEqual(selfEffectDuration(plan({ rounds: 10 })), { value: 1, unit: "minutes", expiry: null });
+    assert.deepEqual(selfEffectDuration(plan({ rounds: null }, { stance: true })), { value: -1, unit: "unlimited", expiry: null });
+    assert.deepEqual(selfEffectDuration(plan({ rounds: 1 }, { duration: { value: 2, unit: "rounds", expiry: "turn-end" } })), { value: 2, unit: "rounds", expiry: "turn-end" });
+    // Raise Shields: +2 AC until its next turn, as an effect.
+    assert.deepEqual(strikeBuffEffect(plan({ rounds: 1 }), { name: "Test Shields" }).system.duration, { value: 1, unit: "rounds", expiry: "turn-start", sustained: false });
 });

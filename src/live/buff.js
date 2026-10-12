@@ -37,6 +37,17 @@ const modifierRule = (modifier, label) => (MODIFIER_SELECTORS[modifier.on] ? { k
 // The effect's data (PF2e's effect item), or null when it can't be made (no such Strike, a part it can't write). toggles: the
 // ability's own switch, when PF2e gives it one ([{ domain, option }] from its toggleable RollOption rules, batch 39: Hydraulic
 // Deflection's "hydraulic-deflection", whose FlatModifier waits on it): the effect turns that on instead, for its time.
+// A self-effect's time when its plan gives none (2026-10-12, batch 235: Raise Shields, Blood Fury, a rage with no PF2e effect of its own): its model's
+// rounds — 0 to the end of its turn, N to the start of its turn N rounds on — a stance until it ends, or else a minute.
+export function selfEffectDuration(plan) {
+    if (plan?.duration) return plan.duration;
+    const rounds = plan?.model?.rounds;
+    if (rounds === 0) return { value: 0, unit: "rounds", expiry: "turn-end" };
+    if (Number.isFinite(rounds) && rounds > 0) return rounds % 10 === 0 ? { value: rounds / 10, unit: "minutes", expiry: null } : { value: rounds, unit: "rounds", expiry: "turn-start" };
+    if (plan?.stance || rounds === null) return { value: -1, unit: "unlimited", expiry: null };
+    return { value: 1, unit: "minutes", expiry: null };
+}
+
 export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null, toggles = [] } = {}) {
     // (Batch 196: resistance and temporary Hit Points on itself too — Reef Armor, Shifting Form, Harden Chitin.)
     if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp)) return null;
@@ -47,7 +58,7 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
             ...(plan.model?.resistances ?? []).map((entry) => ({ key: "Resistance", type: entry.type, value: Number(entry.value), ...(entry.exceptions?.length ? { exceptions: [...entry.exceptions] } : {}) })),
             ...(plan.model?.tempHp ? [{ key: "TempHP", value: Number(plan.model.tempHp) }] : [])];
     if (rules.some((rule) => !rule)) return null;
-    const duration = plan.duration ?? { value: -1, unit: "unlimited", expiry: null };
+    const duration = selfEffectDuration(plan);
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
     const which = plan.strike ? `its ${plan.strike} Strikes` : plan.melee ? "its melee Strikes" : "its Strikes";
     const notes = (plan.notes ?? []).map((note) => `<p>${escape(note)}</p>`).join("");
