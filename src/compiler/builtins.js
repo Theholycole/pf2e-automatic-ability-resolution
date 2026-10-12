@@ -298,6 +298,12 @@ export function readMultiStrikes(text) {
     });
     // (Batch 212, Battlezoo: a Stride up to its Speed, then up to so many Strikes on the way, in a sentence of their own; so many Strikes "times"
     // with one weapon, each at its own creature.)
+    // (Batch 251, Flailing Thrash: "… makes two fist Strikes, with each Strike dealing an extra 1d6 damage against creatures grabbing or Grabbed or
+    // Restrained by the tikbalang." — the two Strikes; the extra damage only on those, a note.)
+    body = body.replace(/^((?:The )?[^.]+?) makes two ([\w' -]+?) Strikes, with each Strike dealing an extra @Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})? damage against creatures grabbing or Grabbed or Restrained by (?:the [\w' -]+?|it|them)\./i, (_all, who, name, damage) => {
+        earlyNotes.push(`Each deals ${damage.split("|")[0].replace(/\[untyped\]$/i, "").replace(/\[(\w+)\]$/, " $1")} more damage to a creature grabbing it, or one it has Grabbed or Restrained.`);
+        return `${who} makes two ${name} Strikes.`;
+    });
     // (Batch 243, Unstoppable Onslaught: "… transforms into pure energy and surges across the battlefield. They Fly up to their Speed, and during this
     // movement they have resistance 30 to all damage (except spirit damage). At any point during this movement, the dragon can make up to two claw
     // Strikes; each of these Strikes deals an additional 3d8+3 force damage." — a flight first, its resistance a note, the extra damage on each.)

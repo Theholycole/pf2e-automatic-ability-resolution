@@ -4013,3 +4013,13 @@ test("Monster Core 2: fires stoked for foes taking persistent fire, a Strike wit
     const winds = plan("<p>The test bird calls the wind. A target within 30 feet must succeed at a @Check[fortitude|dc:20] save or be pulled adjacent to the test bird, where they make a talon Strike against the target. If the target was pulled off the ground and can't fly, it then falls as normal.</p>", "action", 2);
     assert.deepEqual([winds?.resolution?.outcomes?.failure?.forcedMovement, winds?.notes?.length], [{ kind: "pull", distance: 30, upTo: true, optional: false, direction: "toward" }, 2]);
 });
+
+test("A follow-up save after a hit named only by its weapon, two Strikes with extra damage on the creatures it holds, what it rusted to the GM (2026-10-12, batch 251)", () => {
+    const item = (html, type = "action", actions = 1) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const cloud = plan("<p><strong>Requirements</strong> The test golem hit with a club Strike during its most recent action</p><hr /><p><strong>Effect</strong> The club bursts into dust. The creature the club hit and each creature in a @Template[type:emanation|distance:5] must succeed at a @Check[fortitude|dc:20] save or become @UUID[Compendium.pf2e.conditionitems.Item.xYTAsEpcJE1Ccni3]{Slowed 1} for 1 minute.</p>", "action", 2);
+    assert.deepEqual([cloud?.trigger?.followUp?.strike, cloud?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["club", "slowed"]);
+    const thrash = plan("<p>The test brute makes two fist Strikes, with each Strike dealing an extra @Damage[1d4[untyped]] damage against creatures grabbing or @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} or Restrained by the test brute. The multiple attack penalty doesn't increase until after both attacks.</p>", "action", 2);
+    assert.deepEqual([thrash?.builtin, thrash?.strikes, thrash?.sameMap, thrash?.notes?.length], ["multi-strike", ["fist", "fist"], true, 1]);
+    assert.deepEqual(plan("<p><strong>Requirements</strong> The test beast rusted a metal item with its tongue this turn</p><hr /><p><strong>Effect</strong> The test beast attempts a tongue Strike on the same target. If it hits, it heals @Damage[1d6[healing]] Hit Points.</p>"), { builtin: "no-effect", gm: "state" });
+});

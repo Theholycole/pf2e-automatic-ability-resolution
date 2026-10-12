@@ -3624,7 +3624,9 @@ export function followUpNeed(need) {
         if ((match = new RegExp(String.raw`^a hit against an? (?:adjacent )?(?:creature|target|foe|enemy) with (?:its|their|his|her) (?:(melee) )?(?:([\w' -]+?) )??Strike$`, "i").exec(rest))) return { ...name(match[1], match[2]), on: HIT_DEGREES };
         return null;
     }
-    match = new RegExp(String.raw`^(?:The |the )?[^,]*? (hit|damaged|struck|critically hit|made a successful Strike against) an? (?:living )?(?:creature|target|foe|enemy)(?: it is duplicating)? with (?:an?|its|their|his|her) (?:(melee) )?(?:([\w' -]+?) )??(?:Strike )?(?:on|in|during|with) (?:its|their|his|her) ${LAST_ACTION}$`, "i").exec(text);
+    match = new RegExp(String.raw`^(?:The |the )?[^,]*? (hit|damaged|struck|critically hit|made a successful Strike against) an? (?:living )?(?:creature|target|foe|enemy)(?: it is duplicating)? with (?:an?|its|their|his|her) (?:(melee) )?(?:([\w' -]+?) )??(?:Strike )?(?:on|in|during|with) (?:its|their|his|her) ${LAST_ACTION}$`, "i").exec(text)
+        // (Batch 251, Calcifying Cloud: "The kadamel hit with a stone axe Strike during its most recent action" — no creature named.)
+        ?? new RegExp(String.raw`^(?:The |the )?[^,]*? (hit|critically hit) with (?:an?|its|their|his|her) (?:(melee) )?(?:([\w' -]+?) )??Strike (?:on|in|during) (?:its|their|his|her) ${LAST_ACTION}$`, "i").exec(text);
     return match ? { ...name(match[2], match[3]), on: /critically/i.test(match[1]) ? ["criticalSuccess"] : HIT_DEGREES } : null;
 }
 

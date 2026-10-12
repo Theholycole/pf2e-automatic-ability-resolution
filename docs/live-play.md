@@ -2449,3 +2449,11 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **A pull, then a Strike** (Hungry Winds) → a save at one creature in range; a failure pulls it up to that far toward the harpy. The jaws Strike after and the fall are notes.
 - **Live / simulator:** as their kinds, nothing new.
 
+## Follow-ups named by the weapon, thrashes, rust (2026-10-12, batch 251)
+
+- **Compiled** (3 new in PF2e; 2 changed):
+  - **A follow-up named only by its weapon**: "The kadamel hit with a stone axe Strike during its most recent action" (no creature named) → `followUp` on that Strike's hit. Calcifying Cloud's save follows it. Megalodon's Savage and an adventure copy now carry their follow-up too (before, they were played at any creature).
+  - **Two Strikes with extra damage on the creatures it holds** (Flailing Thrash) → `multi-strike` at one multiple attack penalty; the extra damage is a note.
+  - **The GM's** (`gm: "state"`): a requirement that it rusted a metal item this turn (Lick Rust).
+- **Live / simulator:** as their kinds.
+

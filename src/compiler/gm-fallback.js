@@ -97,7 +97,8 @@ export function gmFallback(item, options = {}) {
     if (/\bcreates an auditory illusion\b/i.test(text) && !/@Damage|\bsave\b|@Check\[(?!(?:type:)?perception\b)/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 243: a requirement about a spell aimed at it last round (Reflexive Understanding) — a state the simulator doesn't keep; a boon offered for a
     // directive until the creature's next daily preparations (Inspire Envoy), another creature's thoughts read (Thought Whispers) — out of combat.)
-    if (requirement && /\bwas targeted by a spell\b[^.]*?\bin the last round\b/i.test(requirement)) return { builtin: "no-effect", gm: "state" };
+    // (Batch 251, Lick Rust: "rusted a metal item with its tongue this turn" — what it rusted, the GM's.)
+    if (requirement && /\bwas targeted by a spell\b[^.]*?\bin the last round\b|\brusted a metal item\b/i.test(requirement)) return { builtin: "no-effect", gm: "state" };
     if (/\boffers? (?:their|its|his|her) [\w' -]+? blessing in exchange for\b[^.]*\bdirective\b/i.test(text) || /\bseek (?:others['’]|other creatures['’]) thoughts\b[^.]*\bwith mind reading\b/i.test(text)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
     if (/\b(?:has|have) no effect (?:outside(?: of)?|out of) (?:the )?water\b|\bonly (?:works|functions) underwater\b/i.test(text)) return { builtin: "no-effect", gm: "state" };
