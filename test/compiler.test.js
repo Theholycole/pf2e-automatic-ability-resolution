@@ -3317,3 +3317,14 @@ test("Monster Core 2: two kinds of Strikes at different creatures, a weapon that
     assert.deepEqual([lunge.strike, lunge.onHit.damage, lunge.countsAs, lunge.notes.length], ["horn", ["1d6[piercing]"], 2, 1]);
     assert.deepEqual(compileMonsterAbility(item("<p>The test hound Strides three times, but it's Off-Guard until the start of its next turn.</p>"), {}), { builtin: "no-effect" });
 });
+
+test("Bestiaries: Strides with a Strike each, two spikes counted as one, a jump and two claws, a charge that grabs, a ward's guard (2026-10-12, batch 204)", () => {
+    const item = (type, html, actions = 2) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const skitter = compileMonsterAbility(item("action", "<p>The test spider Strides three times. Once per Stride, it can attempt a leg Strike against a creature in its reach at any point during the Stride; it must make each attack against a different creature, but it doesn't apply its multiple attack penalty until after making all its Strikes.</p>"), {});
+    assert.deepEqual([skitter.strikes, skitter.strides, skitter.sameMap], [["leg", "leg", "leg"], 3, true]);
+    const leap = compileMonsterAbility(item("action", "<p>The test burrower attempts a High Jump or Long Jump. If it's adjacent to an enemy at the apex of its High Jump or at the end of its Long Jump, it can make a talon Strike against the enemy at that moment. If the test burrower jumps at least 5 feet vertically or at least 20 feet horizontally, it can attempt two talon Strikes instead of one. The test burrower's multiple attack penalty doesn't increase until it has made all the talon Strikes that are part of its Test Leap.</p>"), {});
+    assert.deepEqual([leap.strikes, leap.sameTarget, leap.strides], [["talon", "talon"], true, 1]);
+    const charge = compileMonsterAbility(item("action", "<p>The test whale Swims twice and makes a horn Strike. If it moved at least 20 feet from its starting position, the test whale deals an extra 1d8 damage on this Strike.</p><p>A target damaged by Test Charge is Grabbed until the start of the test whale's next turn unless it Escapes before then (DC 18).</p><p>The test whale can't Grapple to extend the duration of this grab.</p>"), {});
+    assert.deepEqual([charge.strides, charge.onHit.damage, charge.onHit.conditions[0].slug, charge.notes.length], [2, ["1d8"], "grabbed", 2]);
+    assert.deepEqual(compileMonsterAbility(item("reaction", "<p><strong>Trigger</strong> A creature within the test spirit's reach attacks the test spirit's ward</p><hr /><p><strong>Effect</strong> The test spirit makes a claw Strike against the triggering creature.</p>"), {}).triggers, ["ally-attacked"]);
+});

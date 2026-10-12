@@ -27,6 +27,8 @@ const CASTS = [
     new RegExp(String.raw`\bwith the area effects? of\s+${LEAD}\u0001`, "i"),
     // (Batch 188, a leshy's Change Shape: "The leshy transforms into a Small plant. This ability otherwise uses the effects of One with Plants.")
     new RegExp(String.raw`\b(?:otherwise )?uses the effects? of\s+${LEAD}\u0001`, "i"),
+    // (Batch 204, a banshee's Wail: "The banshee unleashes a soul-chilling Wails of the Damned (… save, … damage)".)
+    new RegExp(String.raw`\bunleashes (?:an? )?(?:[\w-]+ )?\u0001`, "i"),
     new RegExp(String.raw`\bsame effects? as\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bas\s+(?:the|an?)\s+(?:${ORDINAL}\s+)?\u0001 spell\b`, "i"),
     new RegExp(String.raw`\bas per\s+\u0001`, "i"),
@@ -49,7 +51,8 @@ const PLAIN_TAIL = /^[\s,.;]*(?:(?:spell|at will|as an? (?:\w+ )?(?:innate )?(?:
 const SAVE_CHECK = /@Check\[(?:type:)?(?:fortitude|reflex|will)\b/i;
 
 // Inline rolls as their labels: "[[/gmr 1d4 #Recharge]]{1d4 rounds}" → "1d4 rounds".
-const rolls = (html) => String(html).replace(/\[\[\/(?:r|gmr|br|roll|gmroll) [^\]]*\]\]\{([^}]*)\}/g, "$1");
+// (Batch 204: one with no label as its formula, "[[/gmr 1d4 #Recharge Wail]] rounds" → "1d4 rounds".)
+const rolls = (html) => String(html).replace(/\[\[\/(?:r|gmr|br|roll|gmroll) [^\]]*\]\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br|roll|gmroll) \{?([^\]#}]+?)\}?(?: #[^\]]*)?\]\](?!\{)/g, "$1");
 const ordinal = (text) => Number(/(\d+)(?:st|nd|rd|th)/.exec(text)?.[1]);
 
 export function castSpell(item, actor = null) {

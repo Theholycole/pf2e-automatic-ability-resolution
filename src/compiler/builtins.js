@@ -233,6 +233,28 @@ export function readMultiStrikes(text) {
             earlyNotes.push(`Its ${weapon} flies off: each Strike at a different creature within ${feet} feet.`, ...rest.trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
             return `${who} makes ${count.toLowerCase()} ${weapon} Strikes, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
         });
+    // (Batch 204, Leaping Charge: "attempts a High Jump or Long Jump. If it's adjacent to an enemy at the apex of its High Jump or at the end of its Long
+    // Jump, it can make a claw Strike against the enemy at that moment. If the bulette jumps at least 5 feet vertically or at least 20 feet horizontally,
+    // it can attempt two claw Strikes instead of one. The bulette's multiple attack penalty doesn't increase until it has made all the claw Strikes …" —
+    // a jump, then two claw Strikes at that enemy.)
+    body = body.replace(/^((?:The )?[^.]+?) attempts a High Jump or Long Jump\. If (?:it's|they're) adjacent to an enemy at the apex of (?:its|their) High Jump or at the end of (?:its|their) Long Jump, (?:it|they) can make an? ([\w' -]+?) Strike against the enemy at that moment\. If (?:the [\w' -]+?|it|they) jumps? at least (\d+) feet vertically or at least (\d+) feet horizontally, (?:it|they) can attempt two \2 Strikes instead of one\. (?:The [\w' -]+?['’]s|Its|Their) multiple attack penalty doesn't increase until (?:it|they) (?:has|have) made all the \2 Strikes that are part of (?:its|their) [A-Z][\w' -]+?\./i, (_all, who, name, up, across) => {
+        movesFirst = 1;
+        earlyNotes.push(`It High Jumps or Long Jumps; two ${name} Strikes only if it jumps at least ${up} feet up or ${across} feet across (else one).`);
+        return `${who} makes two ${name} Strikes against the same target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
+    });
+    // (Batch 204: Skittering Assault's "Strides three times. Once per Stride, it can attempt a leg Strike against a creature in its reach at any point
+    // during the Stride; it must make each attack against a different creature, but it doesn't apply its multiple attack penalty until after making all
+    // its Strikes. If any of the Strikes result in a critical failure, Skittering Assault ends."; Spike Volley's two spikes at two creatures within 20 feet
+    // of each other, counted as one Strike — its other way, both at one creature to pin it, a note.)
+    body = body.replace(/^((?:The )?[^.]+?) Strides (two|three) times\. Once per Stride, (?:it|they) can attempt an? ([\w' -]+?) Strike against a creature in (?:its|their) reach at any point during the Stride; (?:it|they) must make each attack against a different creature, but (?:it|they) (?:doesn't|don't) apply (?:its|their) multiple attack penalty until after making all (?:its|their) Strikes\.( If any of the Strikes result in a critical failure, [A-Z][\w' -]+? ends\.)?/i, (_all, who, count, name, ends) => {
+        movesFirst = count.toLowerCase() === "three" ? 3 : 2;
+        earlyNotes.push(`It Strides ${count.toLowerCase()} times, with one Strike during each Stride${ends ? "; a critical failure ends it" : ""}.`);
+        return `${who} makes ${count.toLowerCase()} ${name} Strikes, each against a different target. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all the attacks.`;
+    })
+        .replace(/^((?:The )?[^.]+?) flings up to two spikes from (?:its|their) tail, targeting either two different creatures or a single creature\. If (?:the [\w' -]+?|it|they) targets two different creatures, these creatures must be within (\d+) feet of one another, and (?:the [\w' -]+?|it|they) makes a separate Strike against each; this counts as only one Strike for (?:the [\w' -]+?['’]s|its|their) multiple attack penalty, and the penalty doesn't increase until after both attacks\.((?: [^.]+\.)*)$/i, (_all, who, feet, rest) => {
+            earlyNotes.push(`The two creatures within ${feet} feet of each other.`, ...rest.replace(/\[\[\/act [^\]]*\]\]\{([^}]*)\}/g, "$1").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean));
+            return `${who} makes two spike Strikes, each against a different target. This counts as one attack when calculating its multiple attack penalty.`;
+        });
     body = body.replace(/^((?:The )?[^.]+?) Flies and Strikes twice with (?:its|their|his|her) ([\w' -]+?) at any points? during (?:its|their|his|her) movement\./i, (_all, who, weapon) => `${who} Strides once and makes two ${weapon.replace(/s$/i, "")} Strikes at any point along its movement.`)
         .replace(/^(?:The )?([^.,]+?) [^.,]+?, Striding and making two Strikes against different targets during the movement\./i, (_all, who) => {
             strideFirst = true;
@@ -1988,6 +2010,10 @@ export function readReaction(item, text) {
     // (Batch 104: Bodyguard's Reprisal — "Trigger A creature attacks the subject of bodyguard's defense Effect The bodyguard makes a Strike
     // against the triggering creature." → triggers ["ally-attacked"], its charge only (the GM's: a note), its best melee Strike.)
     if (/^A creature attacks the subject of (?:the )?[\w' -]+?['’]s? defense$/i.test(trigger.trim().replace(/\.$/, "")) && /^(?:The )?[^.]+? makes a Strike against the triggering creature\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, ward: true };
+    // (Batch 204, Retaliate: "Trigger A creature within the tattoo guardian's reach attacks the guardian's ward Effect The tattoo guardian makes an ink
+    // blade Strike against the triggering creature." — its named Strike, its ward played as any ally.)
+    const warded = /^A creature within (?:the [\w' -]+?['’]s|its) reach attacks (?:the [\w' -]+?['’]s|its) ward$/i.test(trigger.trim().replace(/\.$/, "")) ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the triggering creature\.$/i.exec(effect.trim()) : null;
+    if (warded) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: warded[1].toLowerCase(), penalty: 0, disrupts: false, ward: true, note: "Only for its ward, at an attacker within its reach." };
     // (Batch 104: Shoot First — "Trigger An attacker the duelist can see targets them with a Strike or spell Requirements The duelist is
     // holding a loaded firearm Effect The duelist makes a firearm Strike against the triggering creature. On a critical hit, they disrupt the
     // triggering action." → triggers ["targeted"], a firearm Strike, disrupts on a critical hit.)
@@ -3330,6 +3356,9 @@ function readSkillSweep(text) {
 // Strike, after which the boomerang returns to its hand", "makes a Strike with his fist and increases his reach by 5 feet for this
 // Strike". Live play: the Strike from the sheet; nothing more to apply. true or false.
 function readStrikeOnly(text) {
+    // (Batch 204, Hurl Weapon: "The purrodaemon causes a weapon that has steeped in their flesh (see Steep Weapon) to telekinetically launch from their
+    // flesh. The purrodaemon makes a hurled weapon Strike without using their hands." — its Strike.)
+    if (/^(?:The )?[^.]+? causes a weapon [^.]+? to telekinetically launch from (?:its|their) flesh\. (?:The )?[^.]+? makes a hurled weapon Strike without using (?:its|their) hands\.$/i.test(String(text).trim())) return true;
     // (Batch 151, Shadow Swipe: "makes a melee Strike. If the attack hits, the enforcer Strides. If the enforcer ends this movement in dim light or
     // darkness, they can attempt to Hide." — the move and the Hide the GM's.)
     if (/^(?:Effect )?(?:The )?[\w' -]+? makes a melee Strike\. If the attack hits, (?:the [\w' -]+?|it|they|he|she) Strides\. If (?:the [\w' -]+?|it|they|he|she) ends this movement in dim light or darkness, (?:it|they|he|she) can attempt to Hide(?:: Stealth)?\.$/i.test(String(text).trim())) return true;

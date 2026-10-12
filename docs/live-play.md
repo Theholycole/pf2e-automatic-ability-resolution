@@ -1811,3 +1811,17 @@ Two Battlezoo dragon abilities (8 each; their own words stay out of this reposit
 - **Live:** cards and notes as before. Not run in pftest.
 - **Simulator:** nothing new.
 
+## A cast by another verb; Strikes on the move and from a jump; a ward's guard (2026-10-12, batch 204)
+
+- **Compiled:**
+  - Wail → `cast-spell` of Wails of the Damned at DC 38 ("unleashes a soul-chilling Wails of the Damned"); its overcoming silence and lingering for a round are notes. Unlabelled inline rolls in a cast's notes now read as their formulas.
+  - Skittering Assault → three leg Strikes at different creatures after three Strides, one Strike per Stride, with the same multiple attack penalty.
+  - Spike Volley → two spike Strikes at different creatures counted as one attack; the single-creature pin and the 12 spikes a day are notes.
+  - The bulette's Leaping Charge → a jump and two claw Strikes at the same creature, with a note that the second needs a long enough jump.
+  - The narwhal's Impaling Charge → two Swims and a tusk Strike: 1d10 more on a hit and Grabbed until its next turn starts, with notes for the 20 feet and the Escape DC.
+  - Water Sprint → three Strides and a Strike, behind the smooth water (`requires: "requirement"`).
+  - Hurl Weapon → a plain Strike (`strikeOnly`).
+  - Retaliate → `reaction-strike` when its ward is attacked within its reach (`ally-attacked`, `ward`).
+- **Live:** cards and offers as for their kinds. Not run in pftest.
+- **Simulator:** nothing new.
+
