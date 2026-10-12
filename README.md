@@ -279,6 +279,11 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - Tactical Retreat: a Stride away on any damage, its Fleeing a note.
   - A thrall's Rally back to its master: no-effect.
 - **Commands for an ally's reaction Strike** (2026-10-12, batch 215): 5 new in NPC Core: Interest is Due!, Tactical Command, Timely Trick, Stab it! Stab it! Stab it!, and Advise Swarm (no-effect, moves only). An ally's Strike as its reaction, with no Stride first; only an animal or a lower-level goblin where they say so.
+- **Spell Dodge, Warding Strike, ruses, and states in triggers** (2026-10-12, batch 216): 22 new in PF2e and 12 in Battlezoo.
+  - Spell Dodge: +2 to a save against a spell aimed at it.
+  - Warding Strike: a Strike at whoever attacks its allies.
+  - No-effect: Dramatic Death, Live to Tell the Tale, The Jig Is Up, Zealous Rush.
+  - The GM's: a trigger behind a state the simulator can't see (underwater, in torpor, dim light, hiding, a lifesense, a mode in use), and a trigger set off by a social or exploration skill check (out of combat).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

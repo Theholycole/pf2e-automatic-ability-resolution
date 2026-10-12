@@ -3476,3 +3476,18 @@ test("an ally's reaction Strike on a command: extra damage, its Strike instead o
     assert.deepEqual(plan("<p>The test chief picks a target they can see within 30 feet and orders any allied kobolds to attack. A single kobold with a lower level than the test chief that is adjacent to the target can immediately use their reaction to Strike the target.</p>"), { builtin: "ally-advance", actions: 1, within: 30, extraDamage: [], reaction: true, noStride: true, trait: "kobold", lowerLevel: true });
     assert.deepEqual(plan("<p>The test captain issues orders to move. Each sailor from the same crew in a @Template[type:emanation|distance:20] can spend a reaction to Step, Stride, or Take Cover.</p>"), { builtin: "no-effect" });
 });
+
+test("a bonus to AC and saves against a spell aimed at it; a Strike at whoever attacks its allies; ruses, out-of-the-fight saves and moves; states and skill checks in a trigger (2026-10-12, batch 216)", () => {
+    const item = (html) => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: "reaction" }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (trigger, effect) => compileMonsterAbility(item(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`), {});
+    assert.deepEqual(plan("The test hunter is targeted by a spell", "The test hunter gains a +1 circumstance bonus to AC and saving throws against the triggering spell."), { builtin: "save-bonus-reaction", value: 1, against: "spell", notes: ["Or +1 to its AC against the spell's attack."] });
+    assert.deepEqual(plan("One of the test guard's enemies within 60 feet attacks one of the test guard's allies or a person the test guard is sworn to protect", "The test guard Strikes the triggering enemy. If the Strike hits, the enemy's attack is deflected, reducing its damage by 5, or by 10 if the test guard's Strike was a critical hit.").note, "At an enemy within 60 feet attacking one of its allies; if its Strike hits, that attack deals 5 less damage (10 on a critical hit).");
+    assert.deepEqual(plan("The test bard takes any damage", "The test bard falls Prone and dramatically announces their death. They appear to have died."), { builtin: "no-effect" });
+    assert.deepEqual(plan("The test scribe would gain the Dying condition", "The test scribe instead falls Unconscious for 2 hours or until they regain 1 Hit Point."), { builtin: "no-effect" });
+    assert.deepEqual(plan("The test liar critically fails a Deception check", "The test liar Strides."), { builtin: "no-effect" });
+    // The GM's: a state in the trigger, a skill check that sets it off.
+    const odd = "The test thing does something nobody has written a reading for, vividly.";
+    assert.deepEqual(plan("An enemy Strikes the test diver while they're underwater", odd), { builtin: "no-effect", gm: "state" });
+    assert.deepEqual(plan("The test ambusher is using Tree Shape, and a creature comes near", odd), { builtin: "no-effect", gm: "state" });
+    assert.deepEqual(plan("The test guide fails a Survival check", odd), { builtin: "no-effect", gm: "out-of-combat" });
+});

@@ -2016,6 +2016,12 @@ export function readReaction(item, text) {
         const scatter = /^(?:The )?[^.]+?, gaining an? \+(\d+) circumstance bonus to AC and Reflex saves against the triggering effect\.$/i.exec(ownSaveSplit[2].trim().replace(/\s*Effect: [\w' -]+$/, ""));
         if (scatter) return { builtin: "save-bonus-reaction", value: Number(scatter[1]), kind: "reflex", area: true, notes: [`Or +${scatter[1]} to its AC against a splash attack aimed at it.`] };
     }
+    // (Batch 216, Spell Dodge: "Trigger The mage killer is targeted by a spell Effect The mage killer gains a +2 circumstance bonus to AC and saving
+    // throws against the triggering spell." — its save against a spell; the AC against a spell attack a note.)
+    if (ownSaveSplit && /^(?:The )?[^.]+? is targeted by a spell$/i.test(ownSaveSplit[1].trim())) {
+        const dodge = /^(?:The )?[^.]+? gains an? \+(\d+) circumstance bonus to AC and saving throws against the triggering spell\.$/i.exec(ownSaveSplit[2].trim().replace(/\s*Effect: [\w' -]+$/, ""));
+        if (dodge) return { builtin: "save-bonus-reaction", value: Number(dodge[1]), against: "spell", notes: [`Or +${dodge[1]} to its AC against the spell's attack.`] };
+    }
     // (Its own split, case-sensitive: "Trigger The dragon is targeted by a mental effect they're aware of Effect …".)
     const countering = /Trigger (.+?)(?: Requirements? .+?)? Effect (.+)$/.exec(text);
     if (countering && /\b(?:Casts? (?:a |an |the )?(?:[\w-]+ )?Spell|spells?|effects?|casting)\b/i.test(countering[1]) && /\b(?:attempts? to (?:counteract|unravel|unmake)|makes a counteract check|to counter the triggering creature's casting)\b/i.test(countering[2])) return { builtin: "no-effect" };
@@ -2189,6 +2195,12 @@ export function readReaction(item, text) {
     // (Batch 209, a Battlezoo dragon's guard of whoever it's sworn to protect: as a creature within its distance Strikes that one, its own unarmed melee
     // Strike at the attacker, or +2 AC for the one it guards instead — the Strike (the simulator's pick), the AC a note.)
     const contract = /^A creature within (\d+) feet Strikes a creature (?:the [\w' -]+?|it) (?:has made a contract|is sworn) to protect$/i.exec(trigger.trim().replace(/\.$/, ""));
+    // (Batch 216, Warding Strike: "Trigger One of the warden's enemies within 100 feet attacks one of the warden's allies or a person the warden is sworn to
+    // protect Effect The warden Strikes the triggering enemy. If the Strike hits, the enemy's attack is deflected, reducing its damage by 8, or by 16 if the
+    // warden's Strike was a critical hit." — its Strike at the attacker; the damage it takes off a note.)
+    const warding = /^One of (?:the [\w' -]+?['’]s|its) enemies within (\d+) feet attacks one of (?:the [\w' -]+?['’]s|its) allies or a (?:person|creature) (?:the [\w' -]+?|it) is sworn to protect$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const deflects = warding ? /^(?:The )?[^.]+? Strikes the triggering enemy\. If the Strike hits, the enemy['’]s attack is deflected, reducing its damage by (\d+), or by (\d+) if (?:the [\w' -]+?['’]s|its) Strike was a critical hit\.$/i.exec(effect.trim()) : null;
+    if (deflects) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, note: `At an enemy within ${warding[1]} feet attacking one of its allies; if its Strike hits, that attack deals ${deflects[1]} less damage (${deflects[2]} on a critical hit).` };
     if (contract && /^(?:The )?[^.]+? (?:can choose to either make a melee Strike with an unarmed attack that can reach the triggering attacker, or interpose to protect the contractee, granting a \+2 circumstance (?:bonus )?to AC against the triggering Strike|either makes an unarmed melee Strike at the attacker or gives that creature a \+2 circumstance bonus to AC against the Strike)\.$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["ally-attacked"], strike: null, penalty: 0, disrupts: false, ward: true, melee: true, note: `Only for one it's sworn to protect, at an attacker within ${contract[1]} feet; or, instead, +2 circumstance bonus to that one's AC against the Strike.` };
     // (Batch 207: Repartee Riposte's "Trigger A creature within the cadaverous rake's reach critically fails at a melee Strike against the rake Effect …
     // attempts a Strike against the creature, firing back a witty retort. If this Strike succeeds, the creature is Frightened 1, or Frightened 2 on a
@@ -2341,6 +2353,13 @@ export function readReaction(item, text) {
         const conditions = negates[1] ? negates[1].split(/,\s*(?:or\s+)?|\s+or\s+/).map((word) => word.trim().toLowerCase()).filter(Boolean) : null;
         return { builtin: "negate-condition", ...(conditions ? { conditions } : {}) };
     }
+    // (Batch 216: Dramatic Death's ruse ("falls Prone and dramatically announces their death. They appear to have died. …" — the GM's, as Feign Death);
+    // Live to Tell the Tale's "instead falls Unconscious for 1d4 hours or until they regain 1 Hit Point" (out of the fight as at 0 HP); The Jig Is Up's
+    // Stride after a failed Deception or Performance; Zealous Rush's Stride after a spell on itself — moves.)
+    if (/^(?:The )?[^.]+? takes any damage\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? falls Prone and dramatically announces (?:its|their|his|her) death\. (?:It|They|He|She) appears? to have died\./i.test(effect.trim())) return { builtin: "no-effect" };
+    if (/^(?:The )?[^.]+? would gain the Dying condition\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? instead falls Unconscious for [^.]*?(?:hours?|minutes?)[^.]*? or until (?:it|they|he|she) regains? 1 Hit Point\.$/i.test(effect.trim().replace(/\[\[\/\w+ [^\]]*\]\]\{([^}]*)\}/g, "$1"))) return { builtin: "no-effect" };
+    if (/^(?:The )?[^.]+? critically fails a (?:Deception|Performance|Diplomacy)(?: or (?:Deception|Performance|Diplomacy))? check\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides\.$/i.test(effect.trim())) return { builtin: "no-effect" };
+    if (/^(?:The )?[^.]+? casts a spell that takes 1 or more actions and affects only (?:it|them|him|her|itself|themself)\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to \d+ feet, or up to (?:its|their|his|her) full Speed if the triggering spell took 2 actions or more to cast\.$/i.test(effect.trim())) return { builtin: "no-effect" };
     // (Batch 214, Rally: "Trigger The thrall ends their turn more than 30 feet away from their master Effect The thrall Strides up to their Speed toward
     // their master." — a move back to its master, which the simulator doesn't place.)
     if (/^(?:The )?[^.]+? ends (?:its|their) turn more than \d+ feet away from (?:its|their) master\.?$/i.test(trigger.trim()) && /^(?:The )?[^.]+? Strides up to (?:its|their) Speed toward (?:its|their) master\.$/i.test(effect.trim())) return { builtin: "no-effect" };

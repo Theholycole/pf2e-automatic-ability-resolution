@@ -1989,3 +1989,20 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** the GM's whisper says the targeted ally "can Strike as its reaction", only an animal (or a lower-level goblin beside the target) where it says so, with the notes. Not run in pftest.
 - **Simulator (B215):** `bestAdvance` keeps to allies of the trait and lower level, and to Strikes needing no Stride.
 
+## Spell Dodge, Warding Strike, ruses, states in triggers (2026-10-12, batch 216)
+
+- **Compiled:**
+  - **Spell Dodge** → `save-bonus-reaction` `{ value: 2, against: "spell" }`; the +2 AC against the spell's attack is a note.
+  - **Warding Strike** → `reaction-strike` on `ally-attacked`. The 8 (16 on a critical) off the attack's damage is a note.
+  - **No-effect:**
+    - Dramatic Death (a ruse, as Feign Death);
+    - Live to Tell the Tale (unconscious for hours instead of dying: out of the fight);
+    - The Jig Is Up and Zealous Rush (a Stride).
+- **The GM's** (`gm-fallback.js`, once every reading fails):
+  - `"state"`: a trigger behind a state the simulator can't see. This uses the requirement patterns plus "while underwater", "while Feigning Death", "while Hiding in water" and "is using X, and …".
+  - `"out-of-combat"`: a trigger set off by a social or exploration skill check (Survival, Deception, Diplomacy, Performance, a Lore, "a check to Balance or Climb", a Charisma-based skill check).
+  - The trigger is read up to its first full stop, so the rest of an unlabelled text doesn't count.
+  - Numbers: 22 new in PF2e, of which 16 are now the GM's; 12 in Battlezoo, all the GM's (states).
+- **Live:** the save bonus offer shows its notes (Spell Dodge's AC). Not run in pftest.
+- **Simulator:** nothing new.
+

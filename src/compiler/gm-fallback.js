@@ -49,6 +49,11 @@ const UNSEEN = [
     /\bhas (?:a|one|at least one) (?:free )?hand(?: free)?\b|\bhas (?:a|one|at least one) hand free\b|\bhas (?:both|two) hands free\b|\bInitiative has not (?:yet )?been rolled\b|\bcan hear (?:the|it|him|her|them)\b|\bhas (?:a|an|at least one) [\w' -]+? spell remaining\b|\bprotected by the ancestors\b|\bhas (?:detected|sensed)\b|\bis attuned to\b|\b(?:aura|shell|barrier|cloud) is (?:active|frozen|raised|up)\b|\bhasn't been killed\b|\bis within its bonded location\b/i
 ];
 
+// States in a trigger (batch 216).
+const TRIGGER_UNSEEN = /\bwhile (?:it's |it is |they're |they are |he's |she's )?(?:underwater|Feigning Death|Hiding in water|hiding in water)\b|\bis using [A-Z][\w' -]+?(?:,| and\b)/;
+// A social or exploration skill check that sets it off (batch 216).
+const SKILL_TRIGGER = /\b(?:fails|critically fails|succeeds at|critically succeeds at) (?:a|an) (?:(?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|[A-Z][\w-]* Lore)(?: or (?:Crafting|Deception|Diplomacy|Medicine|Performance|Society|Survival|Thievery|Intimidation))? check|(?:Charisma-based )?skill check|check to (?:Balance|Climb|Swim)(?: or (?:Balance|Climb|Swim))?)\b|\battempts? an? (?:Deception, Diplomacy, or (?:an )?Intimidation|Diplomacy|Deception) check against\b/i;
+
 // Combat in its words: a check, damage, a Strike, a save, a condition, movement, a reaction, an area, a casting.
 const COMBAT = /\bCasts? (?:a|the) Spell\b|\bcasts\b|@Check|@Damage|\bStrikes?\b|\bsaves?\b|saving throw|\b(?:damage|AC|attack rolls?|bonus|penalty|Grabbed|Prone|Frightened|Stunned|Slowed|Clumsy|Enfeebled|Sickened|Off-Guard|Immobilized|Restrained|Blinded|Dazzled|Deafened|Fascinated|Confused|Controlled|Paralyzed|Unconscious|Hit Points|HP|resistance|weakness|immun\w*|difficult terrain|cover|Concealed|Hidden|Invisible|Hide|Steps?|Strides?|Fly|Flies|Swims?|Burrows?|Climbs?|Leaps?|Shove|Trip|Grapple|Disarm|Demoralize|Feint|reactions?|initiative|counteract\w*|attacks?|Escape|Engulf\w*|Swallow\w*|Grab|aura|emanation|burst|cone|line)\b/i;
 // Out of combat in its words.
@@ -59,6 +64,11 @@ export function gmFallback(item, options = {}) {
     const text = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
     const requirement = /\bRequirements? (.+?)(?= (?:Effect|Trigger|Frequency) |$)/.exec(text)?.[1] ?? null;
     if (requirement && UNSEEN.some((pattern) => pattern.test(requirement))) return { builtin: "no-effect", gm: "state" };
+    // (Batch 216: a trigger behind such a state too — "while they're underwater", "while Feigning Death", "is using Perfect Camouflage, and …"; one set off
+    // by a social or exploration skill check, the GM's as out of combat.)
+    const trigger = /\bTrigger ([^.]+?)(?=\.| (?:Effect|Requirements?|Frequency) |$)/.exec(text)?.[1] ?? null;
+    if (trigger && (UNSEEN.some((pattern) => pattern.test(trigger)) || TRIGGER_UNSEEN.test(trigger))) return { builtin: "no-effect", gm: "state" };
+    if (trigger && SKILL_TRIGGER.test(trigger)) return { builtin: "no-effect", gm: "out-of-combat" };
     // (Batch 196, Ink Cloud: "This cloud has no effect outside of water." — where it is, which the simulator can't see.)
     if (/\b(?:has|have) no effect (?:outside(?: of)?|out of) (?:the )?water\b|\bonly (?:works|functions) underwater\b/i.test(text)) return { builtin: "no-effect", gm: "state" };
     const traits = item.system?.traits?.value ?? [];
