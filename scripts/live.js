@@ -363,6 +363,8 @@ async function playAbility(item, plan, sourceToken) {
         const marked = plan.every || plan.mark || plan.edge === "deadly";
         // (Batch 277, Krampus: PF2e's own toggle for the mark, its Perception and Survival bonuses behind it — switched on.)
         if (plan.toggle) await item.actor?.toggleRollOption?.("all", plan.toggle, item.id, true);
+        // (Batch 281, Challenge Foe: PF2e's rules wait on its mark — an Effect on itself with that slug, marking the creature.)
+        if (plan.markSlug && prey) await item.actor.createEmbeddedDocuments("Item", [{ name: item.name, type: "effect", img: item.img, system: { slug: plan.markSlug, duration: { value: -1, unit: "unlimited", expiry: null, sustained: false }, rules: [{ key: "TokenMark", slug: plan.markSlug, uuid: prey.document?.uuid ?? prey.uuid }], description: { value: `<p>${prey.name}: its ${item.name}.</p>` } } }]);
         const edgeText = !plan.edge ? "" : plan.edge === "deadly" ? `Its ${plan.strike ?? ""} Strikes against that creature gain deadly d${plan.die}.`.replace(/ {2,}/g, " ") : plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`;
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its ${marked ? "mark" : "prey"}` : `its ${marked ? "mark" : "prey"} is the creature it named`}. ${edgeText}`, ...(plan.notes ?? [])]);
         return;
