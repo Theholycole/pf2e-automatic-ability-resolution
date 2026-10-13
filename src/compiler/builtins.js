@@ -2575,6 +2575,17 @@ export function readReaction(item, text) {
     const holyHit = /^(?:The )?[\w' -]+? takes damage from an? (\w+) effect$/i.exec(trigger.trim().replace(/\.$/, ""));
     const blinked = holyHit ? /^(?:The )?[\w' -]+? teleports to an open space within (\d+) feet (?:it|they) can see(, along with any creatures (?:it|they) (?:has|have) swallowed whole)?\.$/i.exec(effect.trim()) : null;
     if (blinked) return { builtin: "withdraw", on: "damaged", damageTrait: holyHit[1].toLowerCase(), move: "Teleport", feet: Number(blinked[1]), safe: true, notes: [`Only damage from a ${holyHit[1].toLowerCase()} effect.`, ...(blinked[2] ? ["Creatures it has swallowed go with it."] : [])] };
+    // (Batch 267, Fatal Faker: "Trigger The carbuncle takes damage Effect The carbuncle feigns death by teleporting away and leaving a replica of its
+    // corpse behind, …. The real carbuncle transports to a clear space within 30 feet that it can see, and a hollow shell remains behind. …" — a
+    // teleport away on any damage; the fake body, a note.)
+    const faked = /^(?:The )?[\w' -]+? takes damage$/i.test(trigger.trim().replace(/\.$/, "")) ? /^(?:The )?[\w' -]+? feigns death by teleporting away[^.]*\. The real [\w' -]+? transports to a clear space within (\d+) feet that it can see, and a hollow shell remains behind\.((?: [^.]+\.)*)$/i.exec(effect.trim()) : null;
+    if (faked) return { builtin: "withdraw", on: "damaged", move: "Teleport", feet: Number(faked[1]), safe: true, notes: ["It leaves a fake body behind that crumbles when touched."] };
+    // (Batch 267, Dual Mind: "Trigger The hārakasura fails a saving throw against a mental effect Effect … They change their result to a success, but
+    // one of their bodies hangs limply until the end of their next turn. During this time, the hārakasura is Clumsy 2; …" — its failed save against
+    // that trait made a success; the price, a note.)
+    const shunted = /^(?:The )?[^.]+? fails a saving throw against an? (\w+) eff?ect$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const success = shunted ? /(?:^|\.\s+)(?:They|It|The [^.]+?) changes? (?:their|its) result to a success, but ([^.]+)\.((?: [^.]+\.)*)$/i.exec(effect.trim()) : null;
+    if (success) return { builtin: "save-boost", toSuccess: true, against: [shunted[1].toLowerCase()], notes: [`But ${success[1]}.`, ...(success[2].trim() ? [success[2].trim().replace(/\befect\b/g, "effect")] : [])] };
     const more = readMoreReactionStrikes(trigger.trim().replace(/\.$/, ""), effect.trim());
     if (more) return more;
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)

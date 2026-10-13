@@ -2774,6 +2774,13 @@ function effectAbility(item) {
         .replace(/\s*Affected (?:allies|creatures) must use at least one of their actions to Strike each round[^.]*\./i, (all) => {
             told.push(htmlToPlainText(all).trim());
             return "";
+        })
+        // (Batch 267, Compel Courage: "Non-velstracs who accept this compelled courage find bleeding wounds opening …. They take 1 bleed damage and can't
+        // attempt a flat check to end this damage as long as they're compelled." — a note.)
+        .replace(/\s*(Non-[\w-]+) who accept [^.]+\.\s*They take @Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})? damage and can't attempt a flat check to end this damage as long as they're [\w-]+\./i, (all, who) => {
+            const amount = /@Damage\[\(?(\d+)\)?\[(\w+)\]\]/.exec(all);
+            told.push(`${who} who accept it take ${amount ? `${amount[1]} ${amount[2]}` : "bleed"} damage, and can't end it with a flat check while it lasts.`);
+            return "";
         });
     if (!(["action", "free"].includes(type) || triggered) || /<strong>\s*Trigger\s*<\/strong>/i.test(html)) return null;
     if (inlineTags(html, "Check").length || inlineTags(html, "Damage").length || /\[\[\//.test(html)) return null;
@@ -3665,6 +3672,12 @@ function areaExposure(item, actor) {
     plain = plain.replace(/^((?:[^.@]+\. )?)Creatures within an? @T must (?:attempt a save|save) against ([^.]+?)\.$/i, "$1Each creature within a @T is exposed to $2.")
         // (Batch 263, Yellow Mold: "The triggering creature and all creatures within 10 feet are exposed to yellow mold spores.")
         .replace(/^The triggering creature and all creatures within (?:an? )?@T are exposed to ([^.]+?)\.$/i, "All creatures within a @T are exposed to $1.")
+        // (Batch 266, Venomous Spray: "… begins to weep, spraying its venom-filled tears at all creatures within 30 feet. The creatures are immediately
+        // exposed to lacridaemon venom. Other lacridaemons are immune to this venom." — the immunity, a note.)
+        .replace(/^(?:The )?[^.@]+?, (?:spraying|spewing|showering) [^.@]+? at all creatures within (?:an? )?@T\. The creatures are (?:immediately )?exposed to ([^.]+?)\.( Other [\w' -]+? are immune to this (?:venom|poison|disease)\.)?$/i, (_all, what, immune) => {
+            if (immune) extra.push(immune.trim());
+            return `All creatures within a @T are exposed to ${what}.`;
+        })
         .replace(/^(?:The )?[^.@]+? in an? @T or targeting an individual creature within (\d+) feet\. A creature targeted or in the area is exposed to ([^.]+?)\.$/i, (_all, range, what) => {
             extra.push(`Or, instead of the area, one creature within ${range} feet.`);
             return `Each creature within a @T is exposed to ${what}.`;
@@ -5420,8 +5433,9 @@ function fifthOneOffs(item, actor) {
     const justice = /^(?:The )?[\w' -]+? makes an? ([\w' -]+?) Strike against a target it detects as evil\. If the target is evil, the Strike deals three extra weapon damage dice and deals @D damage to the target\.((?: [^.]+\.)*)$/i.exec(plain);
     const justiceDamage = justice ? inlineTags(html, "Damage").map(readDamage) : [];
     if (justice && justiceDamage.length === 1) return { builtin: "strike-activity", actions, strides: 0, strike: justice[1].toLowerCase(), attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null, vsTraits: [{ traits: ["unholy", "evil"], damage: justiceDamage }] }, notes: ["Against an evil (unholy) target it also deals three extra weapon damage dice.", ...(justice[2].trim() ? [justice[2].trim()] : [])] };
-    const growth = /^Requirements? [^.]+?\.? Effect (?:The )?[\w' -]+? regains @D Hit Points and recovers from the (\w+) and (\w+) conditions\. It reduces any (\w+) value it has by (\d+)\.$/i.exec(plain);
-    const growthHeal = growth ? inlineTags(html, "Damage").map(readDamage) : [];
+    // (Batch 267, the praskith's: "regains 3d8 Hit Points", its dice as words.)
+    const growth = /^Requirements? [^.]+?\.? Effect (?:The )?[\w' -]+? regains (@D|\d+d\d+(?:\+\d+)?) Hit Points and recovers from the (\w+) and (\w+) conditions\. It reduces any (\w+) value it has by (\d+)\.$/i.exec(plain)?.slice(1);
+    const growthHeal = growth?.[0] === "@D" ? inlineTags(html, "Damage").map(readDamage) : growth ? [growth[0]] : [];
     if (growth && growthHeal.length === 1) {
         const formula = growthHeal[0].replace(/\[[^\]]*healing[^\]]*\]$/i, "").replace(/^\((.*)\)$/, "$1");
         const success = { damage: none().damage, effects: [{ kind: "heal", formula }, { kind: "end-condition", slugs: [growth[1].toLowerCase(), growth[2].toLowerCase()] }] };
@@ -5559,6 +5573,63 @@ function seventhOneOffs(item, actor) {
         return { ...base(item), targeting: { target: "self", range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } }, requires: "requirement", notes: [`Only from a creature in its reach dead no more than ${brain[1]} minute${brain[1] === "1" ? "" : "s"}; the healing after an Interact action.`] };
     }
     return null;
+}
+
+// Eighth chunk's one-offs (2026-10-12, batch 267). null otherwise:
+// - Drag Below: "… attempts an Athletics check against a Grabbed foe's Fortitude DC. If the elasmosaurus succeeds, the foe is forcibly moved 5 feet
+//   toward the elasmosaurus's body. If the elasmosaurus critically succeeds, the foe is moved 10 feet …" → that check at the creature it holds, a pull
+//   by its degree;
+// - Tricky Throw: "… make a dart Strike at one enemy within 40 feet. If the Strike is unsuccessful, the tanuki falls Prone. If the Strike is successful,
+//   … appears in a space adjacent to the enemy and makes a kama Strike against said enemy, who's Off-Guard to the attack." → the dart Strike; the fall
+//   and the second Strike, notes;
+// - Titanic Grasp: "The titan makes a fist Strike against a creature affected by their impossible stature, even if it's outside of the titan's normal
+//   reach. On a hit, the titan automatically Grabs the creature and, if out of their reach, pulls it within reach." → the Strike, Grabbed on a hit;
+//   the reach and the pull, notes;
+// - a price it pays until it Dismisses it (Extend Arms: "… giving them both a reach of 20 feet with all melee attacks. However, the dynamo becomes
+//   Enfeebled 1 and can't use the Interact action. The dynamo can Dismiss this ability."; Extend Legs) → that condition on itself, for no set time;
+//   what it gains and can't do, notes.
+function eighthOneOffs(item, actor) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "@C")).replace(/\s+/g, " ").trim();
+    const actions = Number(item.system?.actions?.value) || 1;
+    const drag = /^(?:The )?[\w' -]+? attempts an Athletics check against a Grabbed (?:foe|creature|target)['’]s Fortitude DC\. If (?:the [\w' -]+?|it) succeeds, the (?:foe|creature|target) is (?:forcibly )?moved (\d+) feet toward (?:the [\w' -]+?['’]s|its) body\. If (?:the [\w' -]+?|it) critically succeeds, the (?:foe|creature|target) is (?:forcibly )?moved (\d+) feet toward (?:the [\w' -]+?['’]s|its) body\.$/i.exec(plain);
+    if (drag) {
+        const pull = (feet) => ({ ...none(), forcedMovement: { kind: "pull", distance: Number(feet), upTo: false, optional: false, direction: "toward" } });
+        return { ...base(item), targeting: { target: "the creature it holds", range: "touch", area: null, grabbed: true }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "fortitude" } }, sharedDamage: null, outcomes: { criticalSuccess: pull(drag[2]), success: pull(drag[1]), failure: none(), criticalFailure: none() } } };
+    }
+    const throwIn = /^(?:[^.]+\. )?(?:They|It|The [\w' -]+?) makes? an? ([\w' -]+?) Strike at one enemy within (\d+) feet\. If the Strike is unsuccessful, (?:the [\w' -]+?|it|they) falls? Prone\. If the Strike is successful, [^.]+\. (?:The [\w' -]+?|It|They) disappears? from the space (?:it|they) threw from, appears? in a space adjacent to the enemy and makes? an? ([\w' -]+?) Strike against said enemy, who['’]s Off-Guard to the attack\.$/i.exec(plain);
+    if (throwIn) return { builtin: "strike-activity", actions, strides: 0, strike: throwIn[1].toLowerCase(), attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null }, notes: [`Only at an enemy within ${throwIn[2]} feet.`, "If it misses, it falls Prone.", `If it hits, it appears beside the enemy and makes a ${throwIn[3].toLowerCase()} Strike against it; the enemy is Off-Guard to that Strike.`] };
+    const price = /^((?:[^.]+\. )+)However, (?:the [\w' -]+?|it|they) becomes? (Clumsy|Enfeebled|Stupefied|Sickened|Off-Guard) ?(\d)?(?: and ([^.]+))?\. (?:The [\w' -]+?|It|They) can Dismiss this (?:ability|effect)\.$/i.exec(plain);
+    if (price && !/@[DC]\b/.test(price[1])) {
+        const success = { damage: none().damage, effects: [{ kind: "condition", slug: price[2].toLowerCase(), value: price[3] ? Number(price[3]) : null, duration: null }] };
+        const gains = price[1].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+        return { ...base(item), targeting: { target: "self", range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } }, notes: [...gains, ...(price[4] ? [`Meanwhile it ${price[4]}.`] : []), "It keeps the condition until it Dismisses this (remove it then)."] };
+    }
+    const grasp = /^(?:The )?[\w' -]+? makes an? ([\w' -]+?) Strike against a creature affected by (?:its|their) ([\w' -]+?), even if it['’]s outside of (?:the [\w' -]+?['’]s|its|their) normal reach\. On a hit, (?:the [\w' -]+?|it|they) automatically Grabs? the creature and, if out of (?:its|their) reach, pulls it within reach\.$/i.exec(plain);
+    if (grasp) return { builtin: "strike-activity", actions, strides: 0, strike: grasp[1].toLowerCase(), attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [{ slug: "grabbed", value: null, duration: null }], critical: null, push: null, damage: [], save: null, size: null }, notes: [`Any creature affected by its ${grasp[2]}, even beyond its reach; on a hit it pulls the creature within reach.`] };
+    return null;
+}
+
+// A reaction that makes the creature save against one of its own abilities (2026-10-12, batch 267, Withering Opportunity): "Trigger The meladaemon is
+// attacked by an adjacent creature and the attack misses Effect The meladaemon swipes at the triggering creature, which must immediately attempt a save
+// against the meladaemon's withering touch." → that ability's save and results at the attacker, on a missed melee attack. null otherwise.
+function ownAbilitySave(item, actor, basicActions) {
+    if (item.system?.actionType?.value !== "reaction") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^Trigger (?:The )?[\w' -]+? is attacked by an adjacent creature and the attack misses\.? Effect (?:The )?[\w' -]+? swipes at the triggering creature, which must (?:immediately )?attempt a save against (?:the [\w' -]+?['’]s|its) ([\w' -]+?)\.$/i.exec(plain);
+    if (!match) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const source = (owner?.items?.contents ?? owner?.items ?? []).find((other) => other !== item && other.type === "action" && String(other.name).toLowerCase() === match[1].toLowerCase());
+    if (!source) return null;
+    let plan = null;
+    try {
+        plan = compileMonsterAbility(source, { basicActions, actor: owner });
+    } catch {
+        plan = null;
+    }
+    if (plan?.resolution?.check?.roll !== "save") return null;
+    return { ...plan, ...base(item), targeting: { target: "the attacker", range: "touch", area: null }, trigger: { event: "hit-by", reaction: true, missed: true, melee: true }, notes: ["Only an adjacent attacker."] };
 }
 
 // Troop one-offs (2026-10-12, batch 263). null otherwise:
@@ -6462,7 +6533,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? troopAbility(item, actor, { basicActions, actor }) ?? heldMore(item) ?? saveThenEffect(item) ?? oneOffStrikes(item, actor) ?? cursedSave(item) ?? oneOffGround(item) ?? moreOneOffs(item, actor) ?? fourthOneOffs(item, actor) ?? fifthOneOffs(item, actor) ?? sixthOneOffs(item, actor) ?? seventhOneOffs(item, actor) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? troopAbility(item, actor, { basicActions, actor }) ?? heldMore(item) ?? saveThenEffect(item) ?? oneOffStrikes(item, actor) ?? cursedSave(item) ?? oneOffGround(item) ?? moreOneOffs(item, actor) ?? fourthOneOffs(item, actor) ?? fifthOneOffs(item, actor) ?? sixthOneOffs(item, actor) ?? seventhOneOffs(item, actor) ?? eighthOneOffs(item, actor) ?? ownAbilitySave(item, actor, basicActions) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
     // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
     if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
         const zone = readZone(item, actor);

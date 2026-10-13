@@ -398,6 +398,10 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - held creatures caged or enveloped (Encage in Tentacles, Envelop), a grappling cage at range (Bonds of Iron), and a Strike that grabs for a second head (Collaborative Chomp);
   - a gaze whose save comes from its aura (Consume Death), venom from its own blood (Envenom), and a material of its choice (Adaptive Strike);
   - conditions confined to one head (Partitioned Anatomy), a reroll against one kind of effect (All This Will Happen Again), a brain eaten for healing (Collect Brain), and two Strikes at a helpless creature (the xoarian's Ravage).
+- **The long tail, part 5** (2026-10-12, batch 267): 11 new in PF2e and 1 ability that was the GM's. They include:
+  - a venom sprayed around it (Venomous Spray), a held creature dragged closer (Drag Below), and a grab at any creature under its spell (Titanic Grasp);
+  - a throw that may leave it Prone (Tricky Throw), a swipe at an attacker that missed (Withering Opportunity), and a teleport on damage (Fatal Faker);
+  - a failed save against mental effects made a success (Dual Mind), courage for its allies (Compel Courage), regrowth from dice (the praskith's Rampant Growth), and a condition kept until it Dismisses it (Extend Arms, Extend Legs).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -2695,3 +2695,21 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
     - a gaze whose save is its aura's, with the degrees written in the gaze, and a critical failure's drain set to the amount it names (Consume Death);
     - its venom on a weapon it holds, with the blood cost a note (Envenom).
 - **Simulator:** see B266 in its ability decisions.
+
+## The long tail, part 5 (2026-10-12, batch 267)
+
+- **Compiled** (11 new in PF2e; 1 adventure ability that was the GM's):
+  - **Areas and held creatures:**
+    - its venom on all creatures around it, the others of its kind immune as a note (Venomous Spray);
+    - an Athletics check against the Fortitude DC of the creature it holds, a pull toward it by degree (Drag Below).
+  - **Strikes:**
+    - a dart Strike within 40 feet, with falling Prone on a miss and the teleport and second Strike on a hit as notes (Tricky Throw);
+    - a fist Strike at any creature under its spell, Grabbed on a hit, with the pull as a note (Titanic Grasp).
+  - **Reactions:**
+    - its own ability's save against an adjacent creature whose attack missed it (Withering Opportunity; played on a missed melee attack, adjacency as a note);
+    - a teleport 30 feet away on any damage (Fatal Faker);
+    - a failed save against a mental effect made a success, with the price as notes (Dual Mind).
+  - **Effects:**
+    - PF2e's linked effect for its allies in a 50-foot emanation, with the bleed for other creatures as a note (Compel Courage);
+    - healing written as dice, with Fatigued and Slowed ended (the praskith's Rampant Growth);
+    - Clumsy 1 or Enfeebled 1 on itself until it Dismisses the ability, with what it gains as notes (Extend Legs, Extend Arms).
