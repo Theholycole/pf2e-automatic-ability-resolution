@@ -15,6 +15,7 @@ import { gmDecided } from "./gm-decided.js";
 import { readSummon } from "./summons.js";
 import { withWatchedTrigger } from "./watch.js";
 import { passiveRules, readReactions } from "./passive-rules.js";
+import { readNeeds } from "./needs.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -10461,7 +10462,15 @@ export function compileMonsterAbility(source, options = {}) {
     // the simulator.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null);
+    return withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null));
+}
+
+// (Batch 303: a requirement the simulator can check, read into needs — "adjacent to the corpse of a creature that died within the last
+// hour", "has a creature Grabbed", "last action was a successful tail Strike"; src/compiler/needs.js. Live, the GM still judges it.)
+function withNeeds(item, plan) {
+    if (!plan?.requires || plan.needs || (plan.builtin === "no-effect" && plan.gm)) return plan;
+    const needs = readNeeds(item);
+    return needs ? { ...plan, needs } : plan;
 }
 
 // (Batch 302: a reaction or passive that also grants extra reactions — the grindylow's Reactive Strike "gains 1 extra reaction … only to make a

@@ -3151,6 +3151,21 @@ The user's calls: "Have Bravery apply as intended even if it changes how morale 
   - **Simulator snapshot:** the Bandit's Stealth initiative, Kylix's Diplomacy, the grindylow's and marilith's kept Reactive Strikes, and the Tarrasque's 3 a round.
   - **Cleanup:** the temporary actors and their notes were removed.
 
+## Requirements the simulator checks (2026-10-13, batch 303)
+
+The user's call: "work through your recommendations in order" (item 1: requirements the simulator could check but didn't).
+
+- **Reader** (`readNeeds` in `src/compiler/needs.js`; `withNeeds` in `src/compiler/monster.js` adds it to any plan with a `requires`, not the GM's): the Requirements sentence, split on "and" and "or" (but not inside a list of conditions) → `needs`, each of which must hold:
+  - `corpse` (with traits when it names them), `grabbing` (its trait: "an incorporeal creature"), `swallowing` (or not);
+  - `hpAtLeast`, `hpBelow`, `hurt`, `regeneration`, `notFatigued`, `self` (prone, off-guard), `shieldRaised`;
+  - `enemyAdjacent`, `allyAdjacent`, `freeHand`, `allyTrait` ("a kobold is within 10 feet");
+  - `afterCast` (non-cantrip), `afterStrike` (a named Strike, a hit or critical success, the target's size), `firstAction`;
+  - `foe` (a dying creature beside it, one bleeding in its aura), `target` (the creature it acts on: Prone; Paralyzed, Restrained or Unconscious);
+  - `any` (one of them).
+- **Not read:** a creature that doesn't realize it's an enemy, a body it inhabits, its segments, spectators, a named earlier ability, a Mythic Point's cost. The requirement stays as text, and the simulator leaves it out.
+- **Coverage:** 109 rulebook and 24 Battlezoo plans.
+- **Live:** unchanged. The card's "Only if" line shows the requirement, and the GM judges it.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

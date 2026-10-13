@@ -506,6 +506,8 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - **Bravery:** any frightened a creature with it gains (a spell, Demoralize, the simulator's morale card, the GM) comes 1 lower; one that would be 0 isn't added (`scripts/bravery.js`). PF2e's rules give Bravery only the save.
   - **Initiative skills:** `api.initiativeSkills(item)` reads the skills an ability names for its creature's own initiative ("rolls Deception or Stealth for initiative", "Warfare Lore for initiative"), for the simulator.
 
+- **Requirements the simulator checks** (2026-10-13, batch 303): a plan whose requirement can be checked carries `needs` (`src/compiler/needs.js`). That covers a corpse nearby (Consume Flesh), a creature it holds or has swallowed, an HP threshold, its regeneration, its shield raised, a foe or ally beside it, and its last action (a non-cantrip spell, a named Strike that hit, a critical success). A target in a state works too ("adjacent to a Prone creature"), as do "and" and "or" combinations. 117 of the 182 requirements the simulator left out are read. The rest depend on things it can't see: a creature unaware it's an enemy, a body it inhabits. Live, the GM still judges them.
+
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
