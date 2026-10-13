@@ -110,12 +110,27 @@ function constrict(item, { greater = false } = {}) {
     const check = raw ? readCheck(raw) : null;
     const components = damageComponents(html);
     if (!check?.dc || !components.length) return null;
-    return {
+    // (2026-10-13, a Battlezoo tyrant's: a condition added on a failure and a worse one instead on a critical failure — those on the failures; another
+    // ability of its own added to the damage ("plus …"), a note.)
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ");
+    const riders = /\bOn a failure, the creature is also ([^,;]+?)(?:, and|;) on a critical failure, (?:it is|they['’]re|it['’]s) ([^,.]+?) instead\./i.exec(plain);
+    const plus = /\]\]? plus ([A-Z][\w' -]+?),/.exec(htmlToPlainText(html))?.[1] ?? /\bplus ([A-Z][\w' -]+?), @Check/.exec(html)?.[1];
+    const plan = {
         ...base(item),
         targeting: { target: "creatures it has grabbed or restrained", range: "touch", area: null, grabbed: true },
         trigger: { event: "use" },
-        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: true, against: { dc: "fixed", value: check.dc } }, sharedDamage: { rollOnce: true, components }, outcomes: greaterRows(basicRows(components.map((component) => component.id)), greater) }
+        resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: true, against: { dc: "fixed", value: check.dc } }, sharedDamage: { rollOnce: true, components }, outcomes: greaterRows(basicRows(components.map((component) => component.id)), greater) },
+        ...(plus ? { notes: [`Plus its ${plus}.`] } : {})
     };
+    if (riders) {
+        const failure = readConditions(riders[1], { plain: STAGE_CONDITIONS });
+        const worse = readConditions(riders[2], { plain: STAGE_CONDITIONS });
+        if (failure.length && worse.length) {
+            plan.resolution.outcomes.failure.effects = [...(plan.resolution.outcomes.failure.effects ?? []), ...failure];
+            plan.resolution.outcomes.criticalFailure.effects = [...(plan.resolution.outcomes.criticalFailure.effects ?? []).filter((effect) => !worse.some((entry) => entry.slug === effect.slug)), ...worse];
+        }
+    }
+    return plan;
 }
 
 // Wrap in Coils (2026-10-10, batch 30): "The python moves the creature into its coils, freeing its jaws to make attacks, then uses
@@ -6620,8 +6635,42 @@ function linkedEffect(plan, html) {
 // A plan for an NPC ability, { builtin } for rules the simulator plays itself,// A plan for an NPC ability, { builtin } for rules the simulator plays itself,
 // or null. basicActions: the compiled basic actions ({ grapple, trip, shove, … }), for riders.
 // actor: the creature, when the item has none (pack data), for Trample's Strike.
+// PF2e's DC by level (−1 to 25), and the "hard" adjustment (+2).
+const LEVEL_DC = [13, 14, 15, 16, 18, 19, 20, 22, 23, 24, 26, 27, 28, 30, 31, 32, 34, 35, 36, 38, 39, 40, 42, 44, 46, 48, 50];
+const levelDC = (actor, hard = false) => {
+    const level = Number(actor?.system?.details?.level?.value);
+    return Number.isFinite(level) ? LEVEL_DC[Math.max(0, Math.min(LEVEL_DC.length - 1, level + 1))] + (hard ? 2 : 0) : null;
+};
+
+// A save with no DC in the data (2026-10-13, the user's choice: the creature's level DC, hard): a check whose DC is empty ("dc:|") — the number hidden
+// in a broken attribute when it's there ("data-pf2-dc=…"); "must attempt a Reflex save." or "with a basic Fortitude save" with no check at all; a troop's
+// breath with no save, a basic Reflex save at its level DC. The source with those filled in, or the source.
+function fillMissingDCs(source, actor) {
+    const html = String(source?.system?.description?.value ?? "");
+    // (Not a glossary entry with no numbers at all, its damage 0: the GM's.)
+    if (!html || /@Damage\[\(0\)\[/.test(html)) return source;
+    const hard = levelDC(actor, true);
+    let filled = html.replace(/@Check\[([^\]]*)\]/g, (all, inner) => {
+        if (!/\bdc:(?=\||$)/.test(inner)) return all;
+        const hidden = /data-pf2-dc="(\d+)/.exec(inner)?.[1];
+        const dc = hidden ?? hard;
+        return dc ? `@Check[${inner.replace(/\|?traits:[^|]*?" data-pf2-dc="\d+/, "").replace(/\bdc:(?=\||$)/, `dc:${dc}`)}]` : all;
+    });
+    if (hard && !/@Check\[/.test(filled)) {
+        filled = filled.replace(/\bmust attempt an? (Fortitude|Reflex|Will) save\./g, (_all, save) => `must attempt a @Check[${save.toLowerCase()}|dc:${hard}] save.`)
+            .replace(/,? with a basic (Fortitude|Reflex|Will) save\./g, (_all, save) => ` (@Check[${save.toLowerCase()}|dc:${hard}|basic] save).`);
+    }
+    const troop = (actor?.system?.traits?.value ?? []).includes("troop");
+    const plain = levelDC(actor);
+    if (troop && plain && !/@Check\[/.test(filled) && /\bbreath weapon\b/i.test(filled) && /@Template\[/.test(filled)) {
+        filled = filled.replace(/(This explosion deals @Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})? damage) \(([^)]*)\);/, (_all, deals, kinds) => `${deals} (@Check[reflex|dc:${plain}|basic] save; ${kinds});`);
+    }
+    return filled === html ? source : withDescription(source, filled);
+}
+
 export function compileMonsterAbility(source, options = {}) {
     if (!source || (source.type !== "action" && source.type !== "feat")) return null;
+    source = fillMissingDCs(source, options.actor ?? source.actor ?? source.parent);
     const html = String(modernItem(source).system?.description?.value ?? "");
     // (Batch 75: "If the creature was already Slowed …, a failed save causes it to be Petrified permanently" — read on its own, set aside
     // for the other readings, and put back on the failures' condition after them.)

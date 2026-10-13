@@ -9,6 +9,7 @@
 // Only after every reading has failed, so it never takes the place of one that plays.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
+import { gmDecided } from "./gm-decided.js";
 
 // PF2e's rulebook bestiaries (and its rulebook hazards and vehicles): not one-off adventures.
 export const CORE_PACKS = new Set([
@@ -76,6 +77,9 @@ const OUT_OF_COMBAT = /\b(?:out of combat|outside of combat|not in combat|in exp
 const DUPLICATES = /\b(?:creates?|spins?|leaving behind|leaves behind|splits? (?:themself|itself|himself|herself) into)\b[^.]*?\b(?:(?:illusory|shadowy|temporal) )?(?:duplicates?|decoys?|copy|copies|afterimages?|doubles?|(?:two|three) versions)\b(?! of (?:a|an|any) )|\b(?:all of (?:their|its) copies|while (?:they have|it has) at least one duplicate|swap places\b[^.]*\bduplicate)\b|\bshadowy afterimage\b|\bA duplicate of (?:itself|themselves|themself)\b|\bboth copies\b|\bThe [\w' -]+? is a minion\b/i;
 
 export function gmFallback(item, options = {}) {
+    // (2026-10-13, the user's choices: those named in gm-decided.js.)
+    const decided = item?.type === "action" ? gmDecided((options.actor ?? item.actor ?? item.parent)?.name, item.name) : null;
+    if (decided) return { builtin: "no-effect", gm: decided };
     // (Batch 248, a passive that takes a full minute to do — moving through a wall over a minute: out of combat.)
     if (item?.type === "action" && item.system?.actionType?.value === "passive") {
         const said = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\s+/g, " ");

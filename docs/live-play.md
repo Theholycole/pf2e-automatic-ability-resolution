@@ -2775,3 +2775,8 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
     - itself or an ally within 30 feet rerolls a failed save with +2 (a note), the new result kept, each once a minute;
     - a creature striding within 60 feet saves or treats every square as difficult terrain (the GM's), maybe held after (a note);
     - its failed save made a success, then Sickened 1 (a note), or 0 Hit Points made 1 (the GM's).
+
+## The user's choices (2026-10-13, batch 272)
+
+- **Kept the GM's:** 252 abilities, by creature and ability name (`src/compiler/gm-decided.js`; a creature's name matches the end of the actor's): a `no-effect` with the reason — `out-of-combat`, `items`, `form`, `counterspell`, `control` (another creature controlled, or its allies ordered about), `summons`, `state`, `plane-shift`, `copies`, `adventure`, `nothing`, `data`. Only when no reading plays the ability.
+- **Saves with no DC in the data:** the DC hidden in broken markup when it's there, else the creature's level DC, hard (+2): an empty `dc:`, "must attempt a Reflex save." or "with a basic Fortitude save" with no check at all. A troop's breath with no save gets a basic Reflex save at its level DC. A Constrict's own riders on its failures ("also Stupefied 1 …, Stupefied 2 … instead") and another ability it adds ("plus …", a note) are read too.

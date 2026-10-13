@@ -4597,3 +4597,27 @@ test("Battlezoo's long tail, part 3, in our own words: dazzling dashes, leaping 
     const revel = plan("<p><strong>Trigger</strong> The test reveler fails or critically fails a save or drops to 0 Hit Points</p><hr /><p><strong>Effect</strong> It laughs it off. If it would drop to 0 Hit Points, it stays at 1 Hit Point. If it failed or critically failed a save, it gets a success instead. In both cases, it becomes Sickened 1.</p>", "free");
     assert.deepEqual([revel?.builtin, revel?.toSuccess, revel?.free], ["save-boost", true, true]);
 });
+
+test("the user's choices of 2026-10-13: abilities kept the GM's by name, and saves with no DC at the creature's level DC (batch 272)", async () => {
+    const { gmDecided } = await import("../src/compiler/gm-decided.js");
+    const item = (html, type = "action", actions = 1, name = "Test", slug = null) => ({ type: "action", name, system: { slug, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const actor = (name, level, traits = []) => ({ name, type: "npc", system: { details: { level: { value: level } }, traits: { value: traits } }, items: [] });
+    // By name: a test copy's prefix aside; another creature's ability of the same name, not.
+    assert.equal(gmDecided("Zombie Lord", "Command Zombie"), "control");
+    assert.equal(gmDecided("PFTEST SIM B272 Zombie Lord", "Command Zombie"), "control");
+    assert.equal(gmDecided("Test Lord", "Command Zombie"), null);
+    assert.deepEqual(compileMonsterAbility(item("<p>The lord's will drives its dead.</p>", "action", 1, "Command Zombie"), { basicActions: {}, actor: actor("Zombie Lord", 4) }), { builtin: "no-effect", gm: "control" });
+    // An empty DC: the one hidden in the broken markup, else the level's, hard.
+    const hidden = compileMonsterAbility(item('<p>The test crab spits a jet of foam in a @Template[cone|distance:15], dealing @Damage[2d6[acid]] damage (@Check[type:reflex|dc:|name:Test|traits:damaging-effect" data-pf2-dc="21|basic|showDC:gm]{basic Reflex} save).</p>', "action", 2), { basicActions: {}, actor: actor("Test Crab", 5) });
+    assert.equal(hidden?.resolution?.check?.against?.value, 21);
+    const none = compileMonsterAbility(item("<p>The test giant sweeps its tail in a @Template[cone|distance:20]. All creatures in the cone must attempt a Reflex save.</p><hr /><p><strong>Success</strong> The target is pushed 5 feet away.</p><p><strong>Failure</strong> The target is pushed 10 feet away.</p>", "action", 2), { basicActions: {}, actor: actor("Test Giant", 10) });
+    assert.deepEqual([none?.resolution?.check?.statistic, none?.resolution?.check?.against?.value], ["reflex", 29]);
+    // A constriction with "a basic Fortitude save", riders on its failures, and another ability added.
+    const squeeze = compileMonsterAbility(item("<p><strong>Requirements</strong> The test kraken has a creature Grabbed</p><hr /><p><strong>Effect</strong> The test kraken squeezes. Its prey takes @Damage[(2d10+5)[bludgeoning]] damage, with a basic Fortitude save. On a failure, the creature is also @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} for 2 rounds; on a critical failure, it is @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 2} for 2 rounds instead.</p>", "action", 1, "Constrict", "constrict"), { basicActions: {}, actor: actor("Test Kraken", 12) });
+    assert.deepEqual([squeeze?.resolution?.check?.against?.value, squeeze?.resolution?.outcomes?.failure?.effects?.[0]?.value, squeeze?.resolution?.outcomes?.criticalFailure?.effects?.map((effect) => effect.value)], [32, 1, [2]]);
+    const plus = compileMonsterAbility(item("<p>[[/r (1d4+2)[bludgeoning]]] plus Test Ooze, @Check[type:fortitude|dc:|basic:true]</p><hr /><p>@Localize[PF2E.NPC.Abilities.Glossary.Constrict]</p>", "action", 1, "Constrict", "constrict"), { basicActions: {}, actor: actor("Test Slime", 1) });
+    assert.deepEqual([plus?.resolution?.check?.against?.value, plus?.notes], [17, ["Plus its Test Ooze."]]);
+    // A troop's breath with no save: a basic Reflex save at its level DC.
+    const breath = compileMonsterAbility(item("<p>The test drakes use their breath weapon, exhaling fire that explodes in a @Template[type:burst|distance:10] within 60 feet. This explosion deals @Damage[3d6[untyped]|options:area-damage] damage (cold or fire damage); the ability gains that trait.</p>", "action", 2), { basicActions: {}, actor: actor("Test Drakes", 4, ["troop"]) });
+    assert.deepEqual([breath?.resolution?.check?.basic, breath?.resolution?.check?.against?.value], [true, 19]);
+});
