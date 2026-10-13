@@ -2878,3 +2878,7 @@ Fixed on the way:
 - **New pieces:** self-effect modifiers on `perception`, `spell-dc` and `spell-attack` (PF2e's `spell-attack-roll`). Ways nested as list items with a spell and a boon (Don Mask). A random way table from "Roll 1d20 to determine the type: 1–7 acid 8–9 cold …" (Breach the Outer Rifts).
 - **Compiled** (30 rows; 29 new in PF2e, 4 more that were the GM's): Third Contingent Sequencer, Tidal Pressure, Mind if I Borrow That?, Lucky Momentum, Tip the Scales, Evoke Pity, Glittering Distraction, Swirling Blade, Lasso, Hogtie, Bloodthirsty Plants, Verdant Aria, Harness Wickedness, Don Mask, Dramatic Exit, Noble Pride, Dash of Spice, Rearming Advance, Warding Shift, Keep Up With Me!, Magnificent…!, Following Spell, Divine Frenzy, Foresight, Breach the Outer Rifts, Animal Tandem, Unavoidable Question, Share Burden. Didactic Arcanism joins the user's "copies".
 
+## The long tail after the user's choices, part 12 (2026-10-13, batch 284)
+
+- **Compiled** (30 rows; 28 new in PF2e, 2 more that were the GM's): Base Kinesis, Channel Elements, Kick Away, Construct Trap, False Blessing, Divine Protection, Behead, Felling Shot, Crack the Shell, Pantomime, Repentant Defiance, Spiritual Edge, Return Throw, Crystal Refraction, Metallurgic Adaptation, Magnetic Disarm, Evaporate, Conductive Redirection (twice), Dissolve, Overflow, Vacuum, Exploit Regret, Rhythmic Stomp, Magnetic Reposition, Consume Magic, Blazing Rush, Rock Stride.
+
