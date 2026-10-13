@@ -5525,6 +5525,11 @@ function seventhOneOffs(item, actor) {
         if (links.length === 1 && /^(?:The )?[\w' -]+? chooses [a-z ,]+?; (?:its|their) (?:melee )?Strikes count as that (?:type|material) for \d+ minutes? or until (?:it|they) uses? [\w' -]+? again\.$/i.test(said)) {
             return { ...base(item), targeting: { target: null, range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: links[0][1], label: links[0][2] ?? item.name, recipients: "self" }] } };
         }
+        // (Batch 268, Bosun's Command: "The bosun orders an ally to attack or to get in position. Until the end of the ally's next turn, they gain the
+        // bosun's choice of a +2 status bonus to attack rolls or a +10-foot status bonus to their Speeds. Effect: Bosun's Command" — PF2e's effect on the
+        // ally, which asks for the choice.)
+        const ordered = links.length === 1 ? /^(?:Frequency [^.]+?\.? Effect )?(?:The )?[\w' -]+? orders an ally to [^.]+\. Until the end of the ally['’]s next turn, they gain (?:the [\w' -]+?['’]s|its) choice of ([^.]+)\.$/i.exec(said) : null;
+        if (ordered) return { ...base(item), targeting: { target: "1 creature", range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: links[0][1], label: links[0][2] ?? item.name, recipients: "target" }] }, notes: ["Only an ally.", `PF2e's effect asks which: ${ordered[1]}.`] };
         const flat = /^(?:The )?[\w' -]+? flattens to [^.]+\. While ([A-Z]\w+), (?:they|it) can ([^;]+); however, (?:they|it) becomes? (Clumsy|Enfeebled|Off-Guard|Stupefied) ?(\d)?\. (?:The )?[\w' -]+? can Dismiss this effect\.$/i.exec(htmlToPlainText(html.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim());
         if (flat) {
             const success = { damage: none().damage, effects: [{ kind: "condition", slug: flat[3].toLowerCase(), value: flat[4] ? Number(flat[4]) : null, duration: null }] };
@@ -5550,13 +5555,16 @@ function seventhOneOffs(item, actor) {
         const swallowed = () => ({ damage: { mode: "formulas", formulas: [{ formula: encageDamage[0] }], rollScope: "outcome" }, effects: [{ kind: "swallow", damage: encageDamage[0], rupture: Number(encage[3]), size }] });
         return { ...base(item), targeting: { target: "a creature it has grabbed or restrained", range: "touch", area: null, grabbed: true, size }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: swallowed(), failure: none(), criticalFailure: none() } }, notes: [...(encage[4] ? [`As Swallow Whole, except ${encage[4]}.`] : []), ...(encage[5].trim() ? [encage[5].trim()] : [])] };
     }
-    const envelop = /^Requirements? (?:The )?[\w' -]+? begins its turn with a (?:target|creature) its size or smaller Grabbed\.? Effect (?:The )?[\w' -]+? maintains the Grab and [^.]+\. This thereafter has the same effect as if (?:the [\w' -]+?|it) had Engulfed the creature \(DC \d+, @D damage, Escape DC (\d+), Rupture (\d+)\)\.$/i.exec(plain);
-    const envelopDamage = envelop ? inlineTags(html, "Damage").map(readDamage) : [];
+    // (Batch 268, the veiled current's: "… begins their turn with a target of their size …", "(DC 26, 1d8+8 bludgeoning, …)" — its damage as words; "As
+    // engulfing a creature is a hostile action, …" — a note.)
+    const enveloped = /^Requirements? (?:The )?[\w' -]+? begins (?:its|their) turn with a (?:target|creature) (?:of )?(?:its|their) size or smaller Grabbed\.? Effect (?:The )?[\w' -]+? maintains the Grab and [^.]+\. This thereafter has the same effect as if (?:the [\w' -]+?|it) had Engulfed the creature \(DC \d+, (?:@D damage|(\d+d\d+(?:[+-]\d+)?) (\w+)), Escape DC (\d+), Rupture (\d+)\)\.((?: [^.]+\.)*)$/i.exec(plain);
+    const envelop = enveloped ? { dice: enveloped[1], type: enveloped[2], escapeDC: Number(enveloped[3]), rupture: Number(enveloped[4]), rest: enveloped[5].trim() } : null;
+    const envelopDamage = !envelop ? [] : envelop.dice ? [`${/[+-]/.test(envelop.dice) ? `(${envelop.dice})` : envelop.dice}[${envelop.type.toLowerCase()}]`] : inlineTags(html, "Damage").map(readDamage);
     if (envelop && envelopDamage.length === 1) {
         const sizes = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
         const size = sizes[owner?.system?.traits?.size?.value] ?? "medium";
-        const engulfed = { damage: { mode: "formulas", formulas: [{ formula: envelopDamage[0] }], rollScope: "outcome" }, effects: [{ kind: "swallow", damage: envelopDamage[0], rupture: Number(envelop[2]), size, escapeDC: Number(envelop[1]) }] };
-        return { ...base(item), targeting: { target: "a creature it has grabbed or restrained", range: "touch", area: null, grabbed: true, size }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: engulfed, failure: none(), criticalFailure: none() } }, requires: "requirement", notes: ["Only a creature it held at the start of its turn."] };
+        const engulfed = { damage: { mode: "formulas", formulas: [{ formula: envelopDamage[0] }], rollScope: "outcome" }, effects: [{ kind: "swallow", damage: envelopDamage[0], rupture: envelop.rupture, size, escapeDC: envelop.escapeDC }] };
+        return { ...base(item), targeting: { target: "a creature it has grabbed or restrained", range: "touch", area: null, grabbed: true, size }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: engulfed, failure: none(), criticalFailure: none() } }, requires: "requirement", notes: ["Only a creature it held at the start of its turn.", ...(envelop.rest ? [envelop.rest] : [])] };
     }
     const bonds = /^(?:Frequency [^.]+?\.? Effect )?(?:The )?[\w' -]+? causes [^.;]+? around one creature within (\d+) feet, attempting an Athletics check to Grapple against the target['’]s Fortitude DC; (if [^.]+)\. On a success, the creature is Grabbed by [^.(]+? \(or Restrained on a critical success\)\.((?: [^.]+\.)*)$/i.exec(plain);
     if (bonds) {
@@ -5587,7 +5595,18 @@ function seventhOneOffs(item, actor) {
 //   the reach and the pull, notes;
 // - a price it pays until it Dismisses it (Extend Arms: "… giving them both a reach of 20 feet with all melee attacks. However, the dynamo becomes
 //   Enfeebled 1 and can't use the Interact action. The dynamo can Dismiss this ability."; Extend Legs) → that condition on itself, for no set time;
-//   what it gains and can't do, notes.
+//   what it gains and can't do, notes;
+// - Wild Leadership: "… inspires a willing animal. The animal becomes Quickened for 1 round. It can use this additional action only to Climb, …" →
+//   that condition on the creature; who and what for, notes;
+// - Rapid Barrage: "… make three fist Strikes against one target. If more than one Strike hits, combine damage …. Regardless of whether any Strikes hit,
+//   the target must succeed at a DC 32 Fortitude save or be Clumsy 1 until the end of their next turn and Stunned 1 (Clumsy 2 and Stunned 2 on a
+//   critical failure)." → the three Strikes at one target; the save after, a note;
+// - Dig In: "… While Dug In, the carved beast can't Stride nor use its roots Strike; however, this also negates the effects of top-heavy, grants the
+//   beast a +2 status bonus to its AC and Fortitude saves, and increases the damage of its statue Strike by 1d8. …" → a stance with those bonuses and
+//   that die on that Strike; what it can't do and when it ends, notes;
+// - Scent of Blood: "Requirements A creature within the eidolon's scent range is taking bleed damage Effect The eidolon flies into a frenzy, gaining 10
+//   temporary HP for 1 minute and a +4 status bonus to damage rolls with its unarmed attacks, but becomes Off-Guard. … The frenzy lasts for 1 minute,
+//   after which the eidolon is Fatigued for 1 minute." → those Hit Points and the damage bonus for a minute; Off-Guard and the fatigue after, notes.
 function eighthOneOffs(item, actor) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
@@ -5600,6 +5619,23 @@ function eighthOneOffs(item, actor) {
     }
     const throwIn = /^(?:[^.]+\. )?(?:They|It|The [\w' -]+?) makes? an? ([\w' -]+?) Strike at one enemy within (\d+) feet\. If the Strike is unsuccessful, (?:the [\w' -]+?|it|they) falls? Prone\. If the Strike is successful, [^.]+\. (?:The [\w' -]+?|It|They) disappears? from the space (?:it|they) threw from, appears? in a space adjacent to the enemy and makes? an? ([\w' -]+?) Strike against said enemy, who['’]s Off-Guard to the attack\.$/i.exec(plain);
     if (throwIn) return { builtin: "strike-activity", actions, strides: 0, strike: throwIn[1].toLowerCase(), attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null }, notes: [`Only at an enemy within ${throwIn[2]} feet.`, "If it misses, it falls Prone.", `If it hits, it appears beside the enemy and makes a ${throwIn[3].toLowerCase()} Strike against it; the enemy is Off-Guard to that Strike.`] };
+    const inspired = /^(?:[^.]+?, )?(?:the [\w' -]+?|it) inspires a willing ([\w-]+)\. The \1 becomes (Quickened) for 1 round\. (It can use this additional action only to [^.]+)\.$/i.exec(plain);
+    if (inspired) {
+        const effects = readConditions(html, { plain: STAGE_CONDITIONS }).filter((effect) => effect.slug === "quickened");
+        if (effects.length === 1) return { ...base(item), targeting: { target: "1 creature", range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: { ...none(), effects }, failure: none(), criticalFailure: none() } }, notes: [`Only a willing ${inspired[1].toLowerCase()}.`, `${inspired[3]}.`] };
+    }
+    const barrage = /^(?:[^.]+\. )?(?:They|It|The [\w' -]+?) makes? three ([\w' -]+?) Strikes against one target\. If more than one Strike hits, combine damage for the purpose of resistances and weaknesses\. (Regardless of whether any Strikes hit, the target must succeed at an? @C save or be [^.]+)\.$/i.exec(plain);
+    if (barrage) {
+        const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+        if (check) return { builtin: "multi-strike", actions, strikes: [barrage[1].toLowerCase(), barrage[1].toLowerCase(), barrage[1].toLowerCase()], sameTarget: true, notes: ["Their damage combined against resistances and weaknesses when more than one hits.", `${barrage[2].replace("@C save", `DC ${check.dc} ${check.statistic[0].toUpperCase()}${check.statistic.slice(1)} save`)}.`] };
+    }
+    const dug = /^(?:The )?[\w' -]+? (?:digs|sinks|drives|plants) [^.]+\. While ([A-Z][\w ]+?), (?:the [\w' -]+?|it) can(?:'t|not) ([^;]+); however, this also ([^,]+), grants (?:the [\w' -]+?|it) a \+(\d+) status bonus to its AC and (Fortitude|Reflex|Will) saves, and increases the damage of its ([\w' -]+?) Strike by (?:\[\[\/r )?(\d+d\d+)(?:\]\])?\.((?: [^.]+\.)*)$/i.exec(plain);
+    if (dug) {
+        const value = Number(dug[4]);
+        return { builtin: "self-effect", actions, model: { name: item.name, rounds: null, modifiers: [{ on: "ac", type: "status", value }, { on: dug[5].toLowerCase(), type: "status", value }], tempHp: 0 }, damage: [dug[7]], strike: dug[6].toLowerCase(), melee: false, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: [`While ${dug[1]}, it can't ${dug[2].trim()}; this also ${dug[3].trim()}.`, ...(dug[8].trim() ? [dug[8].trim()] : [])] };
+    }
+    const frenzy = /^Requirements? ([^.]+?)\.? Effect (?:The )?[\w' -]+? flies into a frenzy, gaining (\d+) temporary HP for 1 minute and a \+(\d+) status bonus to damage rolls with its ([\w' -]+?), but becomes Off-Guard\.((?: [^.]+\.)*?) The frenzy lasts for 1 minute, after which (?:the [\w' -]+?|it) is Fatigued for 1 minute\.$/i.exec(plain);
+    if (frenzy) return { builtin: "self-effect", actions, model: { name: item.name, rounds: 10, modifiers: [{ on: "damage", type: "status", value: Number(frenzy[3]) }], tempHp: Number(frenzy[2]) }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "minutes", expiry: null }, requires: "requirement", notes: [`Only when ${frenzy[1].replace(/^A /, "a ")}.`, `The damage bonus is for its ${frenzy[4]} only.`, "It's Off-Guard during the frenzy (apply it).", ...(frenzy[5].trim() ? [frenzy[5].trim()] : []), "It's Fatigued for 1 minute after."] };
     const price = /^((?:[^.]+\. )+)However, (?:the [\w' -]+?|it|they) becomes? (Clumsy|Enfeebled|Stupefied|Sickened|Off-Guard) ?(\d)?(?: and ([^.]+))?\. (?:The [\w' -]+?|It|They) can Dismiss this (?:ability|effect)\.$/i.exec(plain);
     if (price && !/@[DC]\b/.test(price[1])) {
         const success = { damage: none().damage, effects: [{ kind: "condition", slug: price[2].toLowerCase(), value: price[3] ? Number(price[3]) : null, duration: null }] };

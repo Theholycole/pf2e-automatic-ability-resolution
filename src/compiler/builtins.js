@@ -1782,6 +1782,13 @@ function readMoreReactionStrikes(trigger, effect) {
         const rest = sentences.slice(2).every((sentence) => /^The [\w' -]+? can continue to Grapple the creature normally\.$|^Since the [\w' -]+? is grappling the creature, [^.]+? doesn't need a free hand to do so\.$/i.test(sentence));
         if (check && rest) return { builtin: "reaction-strike", triggers: ["leave"], strike: null, skill: "grapple", penalty: Number(check[1]) || 0, disrupts: false };
     }
+    // (Batch 268, Reactive Grab: "Trigger A creature within the olobigonde's reach leaves a square during a move action it's using Requirements The
+    // olobigonde doesn't have a creature Grabbed Effect The olobigonde attempts to Grapple the triggering creature with its jaws. On a success, the target
+    // also takes 3 piercing damage (doubled on a critical success)." → its Grapple as the creature leaves; the damage and the requirement, a note.)
+    const leaving = new RegExp(String.raw`^A creature within (?:the [\w' -]+?['’]s|its|their) reach leaves a square during a move action it['’]s using(?:\.? Requirements? (?:The )?[\w' -]+? doesn['’]t have a creature Grabbed)?$`, "i").test(trigger);
+    const grappled = leaving ? /^(?:The )?[^.]+? attempts to Grapple the triggering creature with (?:its|their) ([\w' -]+?)\.$/i.exec(sentences[0] ?? "") : null;
+    const bitten = grappled ? /^On a success, the target also takes (?:@Damage\[\(?(\d+)\)?\[(\w+)\]\](?:\{[^}]*\})?|(\d+) (\w+)) damage \(doubled on a critical success\)\.$/i.exec(sentences[1] ?? "") : null;
+    if (grappled && sentences.length === (bitten ? 2 : 1)) return { builtin: "reaction-strike", triggers: ["leave"], strike: null, skill: "grapple", penalty: 0, disrupts: false, melee: true, note: [`With its ${grappled[1].toLowerCase()}; only while it holds no one.`, ...(bitten ? [`On a success the creature also takes ${bitten[1] ?? bitten[3]} ${bitten[2] ?? bitten[4]} damage (double on a critical success).`] : [])].join(" ") };
     if (new RegExp(String.raw`^A creature within reach of (?:the [\w' -]+?['’]s|its|their) [\w' -]+? uses an action to Strike or attempt a skill check$`, "i").test(trigger)) {
         const struck = back(sentences[0]);
         if (struck && sentences.length <= 2 && (sentences.length === 1 || /^If the strike is a critical hit, the triggering action is disrupted\.$/i.test(sentences[1]))) return { builtin: "reaction-strike", triggers: ["strike", "skill"], strike: struck[1].toLowerCase(), penalty: 0, disrupts: sentences.length === 2 ? "critical" : false };
@@ -1996,6 +2003,11 @@ export function readAllySave(text) {
     // or its own failed save rerolled, the new result kept, once a round; a skill check and the immunity notes.)
     const second = /^Frequency once per round Trigger A creature within (\d+) feet \(including (?:the [\w' -]+?|itself)\) fails a saving throw or skill check\.? Effect The target rerolls the check, but must use the second result\.(?: The target is then temporarily immune to [A-Z][\w' -]+? for 24 hours\.)?$/i.exec(String(text).trim());
     if (second) return { builtin: "save-reroll", ally: true, self: true, within: Number(second[1]), save: null, keep: "new", perRound: true, free: true, note: "The new result counts. Also a failed skill check (the GM's); each creature once a day." };
+    // (Batch 268, Little Wish: "Trigger A creature the gennayn can see that's within 60 feet attempts a saving throw or skill check Frequency once per day
+    // Effect The gennayn reshapes reality in a small way to twist fate, allowing the creature to reroll the saving throw or skill check and take the better
+    // result." — an ally's failed save rerolled, the better kept, once a fight; a skill check or another creature, the GM's.)
+    const wish = /^Trigger A creature (?:the [\w' -]+?|it) can see that['’]s within (\d+) feet attempts a saving throw or skill check\.? Frequency once per (?:hour|day|10 minutes) Effect (?:The )?[^.]+?, allowing the creature to reroll the saving throw or skill check and take the better result\.$/i.exec(String(text).trim());
+    if (wish) return { builtin: "save-reroll", ally: true, within: Number(wish[1]), save: null, uses: 1, note: "The better of the two counts. Also any other creature it can see, or a skill check (the GM's)." };
     const body = String(text).trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\befect\b/g, "effect");
     const split = /^(?:Frequency (once per (?:hour|day|minute)) )?Trigger (.+?)\.? Effect (.+)$/.exec(body);
     if (!split) return null;
@@ -3713,11 +3725,18 @@ export function readShell(item, actor = null) {
     if (item?.system?.actionType?.value !== "action") return null;
     const text = htmlToPlainText(String(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[\(?([^\[\]()]+?)\)?\[(\w+)\]\](?:\{[^}]*\})?/g, "$1 $2")).replace(/\s+/g, " ").trim();
     const said = text.split(/(?<=\.)\s+(?=[A-Z])/);
-    if (!/\b(?:into (?:its|their) shell|rolls up into a ball)\b/i.test(said[0] ?? "")) return null;
+    // (Batch 268, Roll Up: "… falls Prone, closes up its scales, and rolls into a ball.")
+    if (!/\b(?:into (?:its|their) shell|rolls (?:up )?into a ball)\b/i.test(said[0] ?? "")) return null;
     const modifiers = [];
     const resistances = [];
     const notes = [];
     if (/\bends (?:its|their) turn\b|\b(?:its|their) turn ends\b/i.test(said[0])) notes.push("Its turn ends.");
+    // (Batch 268, Retract: "… fully retreats into their shell, gaining greater cover; the bonus to Stealth applies only if the murajau is undetected." —
+    // greater cover's +4 to AC and Reflex; the Stealth, a note.)
+    if (/\bgaining greater cover\b/i.test(said[0])) {
+        modifiers.push({ on: "ac", type: "circumstance", value: 4 }, { on: "reflex", type: "circumstance", value: 4 });
+        notes.push("Greater cover: +4 to AC and Reflex saves (to Stealth only while undetected).");
+    }
     if (/\bfalls Prone\b/i.test(said[0])) notes.push("It falls Prone.");
     for (const sentence of said.slice(1)) {
         let match = /^This gives (?:it|them) a \+(\d+) circumstance bonus to AC, removes (?:its|their) weakness to (\w+) damage, and grants (?:it|them) resistance (\d+) to ([a-z ,]+?) damage\.$/i.exec(sentence);
@@ -3777,6 +3796,23 @@ export function readShell(item, actor = null) {
         }
         if ((match = /^An adjacent creature that hits an? [\w' -]+? with a melee Strike takes (\d+d\d+) (\w+) damage\.$/i.exec(sentence))) {
             notes.push(`An adjacent creature that hits it with a melee Strike takes ${match[1]} ${match[2]} damage.`);
+            continue;
+        }
+        // (Batch 268, Roll Up: "While Rolled Up, the pangolin gains resistance 10 to physical damage and total immunity to falling damage from heights of
+        // 50 feet or less. The only action the pine pangolin can take is to Stand, and the effects of Roll Up end once the pangolin Stands.")
+        match = /^While Rolled Up, (?:the [\w' -]+?|it|they) gains? resistance (\d+) to ([a-z ,]+?) damage(?: and (total immunity to falling damage[^.]*))?\.$/i.exec(sentence);
+        if (match && resistanceTypes(match[2])) {
+            resistances.push(...resistanceTypes(match[2]).map((type) => ({ type, value: Number(match[1]), exceptions: [] })));
+            if (match[3]) notes.push(`It has ${match[3].replace(/^total /, "")}.`);
+            continue;
+        }
+        if (/^The only action (?:the [\w' -]+?|it|they) can take is to Stand, and the effects of [A-Z][\w' -]+? end once (?:the [\w' -]+?|it|they) Stands?\.$/i.test(sentence)) {
+            notes.push("It can only Stand, which ends it.");
+            continue;
+        }
+        // (Retract's other sentences.)
+        if (/^While in (?:its|their) shell, (?:the [\w' -]+?|it|they) can(?:'t|not) see outside and takes? an? [-–−]\d+ circumstance penalty to auditory Perception checks\.$|^The only move actions (?:the [\w' -]+?|it|they) can take are to Stand or Step\.$|^(?:The [\w' -]+?|It|They) can come back out as a single action\.$/i.test(sentence)) {
+            notes.push(sentence);
             continue;
         }
         if (/^These effects end once (?:the [\w' -]+?|it|they) Stands?\.$/i.test(sentence)) {

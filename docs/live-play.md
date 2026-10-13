@@ -2713,3 +2713,20 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
     - PF2e's linked effect for its allies in a 50-foot emanation, with the bleed for other creatures as a note (Compel Courage);
     - healing written as dice, with Fatigued and Slowed ended (the praskith's Rampant Growth);
     - Clumsy 1 or Enfeebled 1 on itself until it Dismisses the ability, with what it gains as notes (Extend Legs, Extend Arms).
+
+## The long tail, part 6 (2026-10-12, batch 268)
+
+- **Compiled** (10 new in PF2e; 5 adventure abilities that were the GM's):
+  - **Allies:**
+    - Quickened for 1 round on a willing animal, what the action is for as a note (Wild Leadership);
+    - PF2e's linked effect on one ally, which asks for the choice (Bosun's Command, and the Leader's, Plunderer's and Captain's Commands);
+    - an ally's failed save rerolled, keeping the better, once a fight (Little Wish; a skill check or another creature, the GM's).
+  - **On itself:**
+    - resistance 10 to physical damage while rolled up, Prone and Stand-only as notes (Roll Up);
+    - greater cover's +4 to AC and Reflex while in its shell (Retract);
+    - +2 to AC and Fortitude and 1d8 more on its statue Strike while dug in (Dig In);
+    - 10 temporary Hit Points and +4 damage for a minute, with Off-Guard and the fatigue after as notes (Scent of Blood).
+  - **Foes:**
+    - three fist Strikes at one target, the save after as a note (Rapid Barrage);
+    - a Grapple at a creature leaving its reach, with the damage as a note (Reactive Grab);
+    - a held creature engulfed with its damage written in words (the veiled current's Envelop).

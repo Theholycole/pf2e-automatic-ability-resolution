@@ -402,6 +402,10 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a venom sprayed around it (Venomous Spray), a held creature dragged closer (Drag Below), and a grab at any creature under its spell (Titanic Grasp);
   - a throw that may leave it Prone (Tricky Throw), a swipe at an attacker that missed (Withering Opportunity), and a teleport on damage (Fatal Faker);
   - a failed save against mental effects made a success (Dual Mind), courage for its allies (Compel Courage), regrowth from dice (the praskith's Rampant Growth), and a condition kept until it Dismisses it (Extend Arms, Extend Legs).
+- **The long tail, part 6** (2026-10-12, batch 268): 10 new in PF2e and 5 abilities that were the GM's. They include:
+  - an animal Quickened (Wild Leadership), an ally's order with PF2e's effect (Bosun's Command and the other commands), and three fist Strikes (Rapid Barrage);
+  - a ball with physical resistance (Roll Up), a shell with greater cover (Retract), roots that steady it (Dig In), and a frenzy (Scent of Blood);
+  - a reroll for a creature it can see (Little Wish), a Grapple at a creature leaving its reach (Reactive Grab), and an engulf written in words (the veiled current's Envelop).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
