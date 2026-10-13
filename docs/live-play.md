@@ -2595,3 +2595,32 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **A square trap as a zone:** an area given as a square, so many feet on a side and within a distance of the creature, is a square zone the GM places, drawn as a rectangle Region. Its greater difficult terrain applies. Its save is made as it's created and by each creature that enters, with damage on a failure. When the damage counts is a note. It lasts the minute the text gives, and Dismissing it sooner is a note (Natural Trap).
   - **A breath reshaped by rage:** while enraged, it uses its own Breath Weapon in a line, with a burst at the end of the line as a note. A critical failure adds persistent fire damage, and it has a longer recharge. Using it starts the Breath Weapon's recharge too, for the same rounds (Rage-Charged Breath).
 - **Simulator:** see B262 in its ability decisions. Abilities that need a spell just before (B259), rage, or a recharging breath (B247) now load in the snapshot and the sweep. Before this, only the tests played them.
+
+## The long tail, part 1 (2026-10-12, batch 263)
+
+The user's call (2026-10-12): automate every remaining ability that can be, and list the ones that can't or shouldn't be for the user's decision (kept outside the repositories). This batch takes the first chunks of that list.
+
+- **Compiled** (32 new in PF2e; 9 adventure abilities and 2 Battlezoo abilities that were the GM's now play their opening, with the rest as notes):
+  - **Reactions in their own words:**
+    - a Disarm when hit with a melee weapon (Absorb Weapon);
+    - less damage from a critical hit, as resistance to it (Cringe);
+    - resistance to the type of the damage it's about to take (Preemptive Reconfiguration);
+    - a failed save against fear or an emotion made a success, at a cost in mental damage, read from a reaction with no Trigger label (Grit Teeth);
+    - a save that cancels a hostile action aimed at it, with Stunned on a critical failure (Slack of Opportunity), or a spell aimed at it (Shut It);
+    - Performance in place of a save against auditory or sonic effects (Rhapsodic Flourish).
+  - **Troops:**
+    - "a number of creatures equal to its remaining segments" is up to four creatures, with fewer as segments are lost as a note (Bad Deal);
+    - one volley in either of two areas, as two ways (Rain of Arrows);
+    - a move at +2 AC against reactions, Off-Guard after it as a note (Group Scamper).
+  - **Held creatures:** Restrained until its next turn (Overwhelm), healing (There, There), a Grapple with damage by degree (Submission Lock), and a Strike after a push and a teleport, Prone on a hit (Teleporting Clothesline).
+  - **Strikes and moves:** a jump then an unarmed Strike (Flying Kick), four Strikes with no multiple attack penalty behind a requirement the GM checks (Reduce Options), a Strike that deals no damage but marks (Bloody Handprint), Hit Points spent for a long Leap (Muscular Leap).
+  - **On itself:** incorporeal resistance until its next turn (Ghostly Swoop), a resistance stance with concealment as a note (Ghost Stance), and Attack of Opportunity on itself until it moves or attacks (Set Defense).
+  - **A 2d6 table:** "rolls 2d6, adding them together to determine the effect" picks a row by the dice's total: healing or damage on the creature (Roll the Bones).
+  - **Ground:** a burrow hole is a one-square zone of difficult terrain beside it (Shovel Earth). A square zone of any size is drawn as a rectangle Region.
+  - **Hazards:** a hazard's reaction fires from its linked Regions, so only its Effect needs to read. Its plan's trigger is `hazard`: spores in an area (Spore Explosion), a save or a lasting curse with a penalty (Curse the Intruders). Hazards that only appear and roll initiative, now also with sizes and distances in their words, are left to their routine (Gather Spirit, Whirling Blades, Awaken, Submerge).
+  - **A card from its opening sentences:** when nothing reads the whole text, the longest opening that makes a card is used, with the sentences after it as notes. This only happens when those sentences have no rolls, damage, areas, linked conditions, bonuses or penalties, and no numbered results for a degree (Chain Capture's Grapple on a critical hit, its pull and next-turn damage as notes).
+- **Live:**
+  - Set Defense's Attack of Opportunity effect lasts until the GM ends it (a move or attack);
+  - a hostile action aimed at the monster can set off its reaction (`targeted-by` with `any`);
+  - Rhapsodic Flourish's check replaces the save.
+- **Simulator:** see B263 in its ability decisions.

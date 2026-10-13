@@ -804,7 +804,7 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 const dc = context.dc?.value;
                 if (!Number.isFinite(dc) || !Number.isFinite(roll?.total)) continue;
                 const skill = plan.skill.replace(/^\w/, (letter) => letter.toUpperCase());
-                await offer({ kind: "save-skill", item, monster: token, actor, target: self ? null : saver, trigger: `failed ${self ? "its" : "a"} ${statistic ?? ""} save`.replace(/ {2,}/g, " "), skill: { slug: plan.skill }, attack: { messageId: message.id, total: roll.total, dc, before: context.outcome }, note: plan.ally ? `One ${skill} check counts for it and its ${plan.allyTrait ? `${plan.allyTrait} ` : ""}allies in the area against that effect.` : null });
+                await offer({ kind: "save-skill", item, monster: token, actor, target: self ? null : saver, trigger: `failed ${self ? "its" : "a"} ${statistic ?? ""} save`.replace(/ {2,}/g, " "), skill: { slug: plan.skill }, attack: { messageId: message.id, total: roll.total, dc, before: context.outcome, ...(plan.instead ? { instead: true } : {}) }, note: plan.ally ? `One ${skill} check counts for it and its ${plan.allyTrait ? `${plan.allyTrait} ` : ""}allies in the area against that effect.` : null });
                 break;
             }
             // (Batch 65: "must use the new result", keep "new"; a free action's.)
@@ -834,7 +834,7 @@ async function saveAnswers(message, context, scene, combat, saver) {
             if (plan.criticalOnly && context.outcome !== "criticalFailure") continue;
             // (Batch 133, Gardener's Resolve: only a failure, of its Will save, against a mental or fear effect; its damage on itself.)
             if ((plan.failureOnly && context.outcome !== "failure") || (plan.save && plan.save !== statistic) || (plan.against?.length && !plan.against.some((trait) => effectTraits.has(trait)))) continue;
-            if (plan.selfDamage) return offer({ kind: "boost", item, monster: token, actor, target: null, trigger: "failed a saving throw", note: [`The save becomes ${better}: apply that result instead.`, `It takes ${plan.selfDamage.replace(/\[(\w+)\]/, " $1")} damage: roll and apply it.`, ...(plan.notes ?? [])].join(" "), free: !!plan.free });
+            if (plan.selfDamage) return offer({ kind: "boost", item, monster: token, actor, target: null, trigger: "failed a saving throw", note: [`The save becomes ${plan.toSuccess ? "a success" : better}: apply that result instead.`, `It takes ${plan.selfDamage.replace(/\[(\w+)\]/, " $1")} damage: roll and apply it.`, ...(plan.notes ?? [])].join(" "), free: !!plan.free });
             const left = Number(item.system?.frequency?.value);
             if (self && plan.uses && Number.isFinite(left) && left <= 0) continue;
             // (Batch 169, Flash of Insight: a success, whatever it rolled — "Use it: a success".)
@@ -1334,7 +1334,10 @@ async function use(message, action, slug) {
         const roll = await statistic.roll({ dc: { value: state.attack.dc, label: "The save's DC" }, skipDialog: true, ...(item ? { item } : {}) });
         if (!Number.isFinite(roll?.total)) throw new Error("The check wasn't rolled.");
         const after = degreeOf(roll.total, state.attack.dc, roll.dice?.[0]?.total ?? null);
-        result = roll.total > state.attack.total
+        // (Batch 263, Rhapsodic Flourish: its check in place of the save, whatever it rolls.)
+        result = state.attack.instead
+            ? `${state.ability.name}: its ${state.skill.slug} check (${roll.total}) replaces the save, so the save is ${degreeWords(after, true)}. Apply that result instead.`
+            : roll.total > state.attack.total
             ? after === state.attack.before
                 ? `${state.ability.name}: ${roll.total} beats the save's ${state.attack.total}, but it's still ${degreeWords(after, true)}.`
                 : `${state.ability.name}: ${roll.total} beats the save's ${state.attack.total}, so the save is ${degreeWords(after, true)}. Apply that result instead.`

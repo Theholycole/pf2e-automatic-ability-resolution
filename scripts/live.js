@@ -317,7 +317,8 @@ async function playAbility(item, plan, sourceToken) {
         const scene = sourceToken?.parent ?? canvas.scene;
         const grid = gridOf(scene);
         const reactive = (actor) => actor.itemTypes.action.some((entry) => /^(?:attack of opportunity|reactive strike)$/i.test(entry.name) || ["attack-of-opportunity", "reactive-strike"].includes(entry.system?.slug));
-        const allies = sourceToken ? scene.tokens.filter((token) => token.id !== sourceToken.id && token.actor && token.disposition === sourceToken.disposition && (!plan.trait || (token.actor.system?.traits?.value ?? []).includes(plan.trait)) && distanceFeet(box(sourceToken, grid.size), box(token, grid.size), grid) <= plan.within) : [];
+        // (Batch 263, Set Defense: itself, until it moves or attacks.)
+        const allies = plan.self && sourceToken ? [sourceToken.document ?? sourceToken] : sourceToken ? scene.tokens.filter((token) => token.id !== sourceToken.id && token.actor && token.disposition === sourceToken.disposition && (!plan.trait || (token.actor.system?.traits?.value ?? []).includes(plan.trait)) && distanceFeet(box(sourceToken, grid.size), box(token, grid.size), grid) <= plan.within) : [];
         const granted = [];
         for (const token of allies) {
             if (reactive(token.actor)) continue;
@@ -326,13 +327,13 @@ async function playAbility(item, plan, sourceToken) {
                 type: "effect",
                 img: item.img ?? "icons/svg/sword.svg",
                 flags: { [MODULE_ID]: { grantedAoo: { sourceActorUuid: item.actor.uuid } } },
-                system: { description: { value: `<p>${plan.reaction ?? "Attack of Opportunity"} from <strong>${item.name}</strong> (${sourceToken.name}), until the end of ${plan.until === "source" ? `${sourceToken.name}'s` : "its"} next turn.</p>` }, duration: { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
+                system: { description: { value: `<p>${plan.reaction ?? "Attack of Opportunity"} from <strong>${item.name}</strong> (${sourceToken.name}), ${plan.until === "move-or-attack" ? "until it takes a move or attack action" : `until the end of ${plan.until === "source" ? `${sourceToken.name}'s` : "its"} next turn`}.</p>` }, duration: plan.until === "move-or-attack" ? { value: -1, unit: "unlimited", expiry: null, sustained: false } : { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
             }]);
             granted.push(token.name);
         }
         // (Batch 176, Call to Arms: Reactive Strike until the end of its own next turn — the effect's own round; an ally that uses it immune after.)
         const reaction = plan.reaction ?? "Attack of Opportunity";
-        const until = plan.until === "source" ? `until the end of ${sourceToken.name}'s next turn.` : `until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).`;
+        const until = plan.until === "move-or-attack" ? "until it takes a move or attack action (remove the effect then)." : plan.until === "source" ? `until the end of ${sourceToken.name}'s next turn.` : `until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).`;
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} ${reaction} ${until}` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks ${reaction}.`.replace(/ {2,}/g, " ")}`, ...(plan.usedOnce ? [`One that uses this ${reaction} is immune to ${item.name} from ${sourceToken.name} for 10 minutes.`] : [])]);
         return;
     }
@@ -664,7 +665,8 @@ export async function targetedEvent(message) {
 }
 
 // Does the event set off this trigger ("targets the hound with a mental effect", "… or spell")?
-export const targetedSetsOff = (trigger, event) => trigger?.event === "targeted-by" && ((trigger.traits ?? []).some((trait) => event.traits.includes(trait)) || (trigger.spells && event.spell));
+// (Batch 263: trigger.any — anything aimed at it, Slack of Opportunity's hostile action.)
+export const targetedSetsOff = (trigger, event) => trigger?.event === "targeted-by" && (trigger.any || (trigger.traits ?? []).some((trait) => event.traits.includes(trait)) || (trigger.spells && event.spell));
 
 // A monster's passive that answers it (Otherworldly Mind): its card on the creature that aimed the effect.
 async function cardsForTargeted(message) {

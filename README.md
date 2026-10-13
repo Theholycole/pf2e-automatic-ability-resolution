@@ -375,6 +375,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 - **A square trap, a breath reshaped by rage** (2026-10-12, batch 262): 10 new in the Battlezoo bestiaries:
   - a trap over a square area, as a zone the GM places (Natural Trap);
   - a dragon's Breath Weapon in a new shape while enraged, which recharges the Breath Weapon too (Rage-Charged Breath).
+- **The long tail, part 1** (2026-10-12, batch 263): 32 new in PF2e and 11 abilities that were the GM's. They include:
+  - reactions in their own words (Absorb Weapon, Cringe, Grit Teeth, Slack of Opportunity, Rhapsodic Flourish);
+  - troops (Bad Deal, Rain of Arrows), held creatures (Submission Lock, Teleporting Clothesline), and Strikes and stances (Bloody Handprint, Ghostly Swoop, Set Defense);
+  - a 2d6 table (Roll the Bones), and a one-square terrain zone (Shovel Earth);
+  - hazards played by their Effect alone (Spore Explosion, Curse the Intruders);
+  - a card from an ability's opening sentences, with the rest as notes (Chain Capture).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

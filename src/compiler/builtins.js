@@ -2037,6 +2037,12 @@ export function readSaveSkill(text) {
     const body = String(text).trim().replace(/@Check\[(\w+)[^\]]*\](?:\{[^}]*\})?/g, (_all, slug) => slug[0].toUpperCase() + slug.slice(1));
     const split = /^Trigger (.+?)\.? Effect (.+)$/.exec(body);
     if (!split) return null;
+    // (Batch 263, Rhapsodic Flourish: "Trigger The fiddling bones would roll a saving throw against an auditory or sonic effect Effect … They roll a
+    // Performance check in place of the triggering saving throw. Sonic feedback rebounds from the effect, dealing 1d6 sonic damage to the source … if the
+    // Performance check succeeded or 2d6 sonic damage to the fiddling bones on a failure." — its Performance in place of that save; the feedback, a note.)
+    const instead = /^(?:The )?[\w' -]+? would roll a saving throw against an? (\w+(?: or \w+)*) effect$/i.exec(split[1].trim());
+    const insteadSkill = instead ? /\b(?:rolls?|makes?) an? (Acrobatics|Athletics|Deception|Diplomacy|Intimidation|Performance|Religion|Occultism|Survival) check in place of the triggering saving throw\.((?: [^.]+\.)*)$/i.exec(split[2]) : null;
+    if (insteadSkill) return { builtin: "save-skill", skill: insteadSkill[1].toLowerCase(), against: instead[1].toLowerCase().split(/\s+or\s+/), instead: true, ...(insteadSkill[2].trim() ? { notes: [readableText(insteadSkill[2].trim())] } : {}) };
     const trigger = /^(?:The )?[\w' -]+?(?: or (?:one of (?:its|their|his|her) allies|an ally) within (\d+) feet)? attempts an? (?:(Fortitude|Reflex|Will) )?(?:saving throw|save)(?: against an? (\w+(?: or \w+)*) effect)?$/i.exec(split[1]);
     if (!trigger) return null;
     const said = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
@@ -2238,6 +2244,8 @@ export function readReaction(item, text) {
     // (Batch 145: a riposte's trigger with no "Effect" label, "Trigger A creature within your reach critically fails to Strike you. A clever parry …".)
     text = text.replace(/^Trigger (A creature within your reach critically fails (?:a melee Strike against|to Strike) you)\.\s+(?!Effect\b)/i, "Trigger $1 Effect ");
     // (Batch 149: the labels as written, capitalised — "An attack or effect would …" in a trigger isn't its Effect.)
+    // (Batch 263, Grit Teeth: a reaction with no Trigger label, "Zhang Yong fails … Effect …" — the words before Effect, its trigger.)
+    if (!/\bTrigger\b/.test(text) && /^[^.]+? Effect [A-Z]/.test(text.trim()) && item?.system?.actionType?.value === "reaction") text = `Trigger ${text.trim()}`;
     const [trigger, effect] = [/Trigger (.+?)(?= Effect |$)/.exec(text)?.[1] ?? "", /\bEffect (.+)$/.exec(text)?.[1] ?? ""];
     if (!trigger || !effect) return trigger ? acDodge(text, trigger, effect) : null;
     if (readPlaneShift(text)) return { builtin: "no-effect" };
@@ -2290,6 +2298,11 @@ export function readReaction(item, text) {
     // as summons are. Not one whose routine it performs at once.)
     if (joining.every(quiet) && joining.some((sentence) => /\brolls? (?:for )?initiative\b/i.test(sentence)) && !/\broutine\b|\[\[\/|\b(?:Demoralize|Trip|Shove|Grapple|Disarm|Reposition|Feint|Seek|Hide|Sneak|targets?|shoots?|fires?|sinks?|random)\b/i.test(effect)) return { builtin: "no-effect" };
     if (joining.every(quiet) && /\b(?:Sustains a Spell|gains the effects of the Sustain a Spell action)\b/.test(effect) && /\bturn begins\b/i.test(trigger)) return { builtin: "no-effect" };
+    // (Batch 263: the same with sizes and distances in its words — a cyclone "10 feet wide and 60 feet tall", blades "taking up one 5-foot square",
+    // mannequins "Striding up to 50 feet, then roll initiative", a creature that "sinks into the quicksand up to its waist", decorations that each
+    // make "a cloud of objects … (three clouds total)" — still only joining the fight.)
+    const measured = (sentence) => quiet(sentence.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "an area").replace(/\(three [\w ]+? total\)/gi, "").replace(/\b\d+(?:-foot| feet| foot)\b/g, "some way").replace(/\b(?:lurch towards the triggering creature, )?Striding up to some way\b/g, "drawing near").replace(/\bsinks into\b/g, "settles into"));
+    if (joining.every(measured) && joining.some((sentence) => /\brolls? (?:for )?initiative\b/i.test(sentence)) && !/\broutine\b|\[\[\/|\b(?:Demoralize|Trip|Shove|Grapple|Disarm|Reposition|Feint|Seek|Hide|Sneak|shoots?|fires?|random)\b/i.test(effect)) return { builtin: "no-effect" };
     // (Batch 85: a form shift as the fight starts, the GM's (the user's choice of 2026-10-11) — Quick Change's "… uses Change Shape to
     // enter her hybrid form", True Appearance's "… ends Change Shape".)
     const shifts = (sentence) => /^(?:The )?[^.]+? (?:uses Change Shape to (?:enter|take|assume) (?:its|their|his|her) [\w' -]+? form|ends Change Shape)\.$/i.test(sentence);
@@ -2890,6 +2903,33 @@ export function readReaction(item, text) {
     const struck = /^The [^.]+? (?:makes|whips around and attempts) an? ([\w' -]+?) Strike (?:at|against) the (?:triggering )?creature(?: with an? [–-](\d+) penalty)?\./i.exec(effect);
     if (leaving && struck && !/\.\s+\S/.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["leave"], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: false, ...(leaving[1] ? { only: `a creature ${leaving[1]}` } : {}) };
     if (moving && !leaving && struck) return { builtin: "reaction-strike", triggers: ["move", ...(/\bwith a ranged attack\b/i.test(trigger) ? ["ranged"] : [])], strike: struck[1].toLowerCase(), penalty: Number(struck[2] ?? 0), disrupts: /\bIf the Strike hits, [^.]*disrupts\b/i.test(effect), ...(/\bOn a critical (?:success|hit), [^.]*? can also attempt an Athletics check to Trip the triggering creature\./i.test(effect) ? { criticalTrip: true } : {}) };
+    // (Batch 263, one-off reactions:)
+    // - Absorb Weapon: "A creature hits the omox slime pool with a melee weapon Effect The omoxes attempt to Disarm the creature. On a critical success,
+    //   the weapon becomes subsumed …" — PF2e's Disarm at the creature that hit it; the rest a note.
+    if (/^An? creature hits (?:the [\w' -]+?|it|them) with a melee weapon\.?$/i.test(trigger.trim())) {
+        const disarm = /^(?:The )?[^.]+? attempts? to (?:\[\[\/act disarm\]\](?:\{[^}]*\})?|Disarm) the (?:triggering )?creature\.((?: [^.]+\.)*)$/i.exec(effect.trim());
+        if (disarm) return { builtin: "reaction-strike", triggers: ["hit"], melee: true, strike: null, skill: "disarm", penalty: 0, disrupts: false, ...(disarm[1].trim() ? { note: disarm[1].trim().replace(/\[\[\/act disarm dc=(\d+)\]\](?:\{[^}]*\})?/gi, "Disarm (DC $1)") } : {}) };
+    }
+    // - Cringe: "A creature … critically succeeds on a Strike against her and would deal damage to her Effect … The attacking creature takes a -8
+    //   circumstance penalty to the damage of the triggering Strike. This penalty applies after doubling …" — that much less of the critical hit's
+    //   damage, as resistance to it; the immunity after, a note.
+    if (/^An? creature [^.]*?critically succeeds on a Strike against (?:her|him|it|them|the [\w' -]+?) and would deal damage to (?:her|him|it|them)\.?$/i.test(trigger.trim())) {
+        const less = /\btakes an? [-\u2013\u2212](\d+) circumstance penalty to the damage of the triggering Strike\. This penalty applies after doubling the damage for a critical hit\.((?: [^.]+\.)*)$/i.exec(effect.trim());
+        if (less) return { builtin: "crit-resistance", value: Number(less[1]), ...(less[2].trim() ? { note: less[2].trim() } : {}) };
+    }
+    // - Grit Teeth (no Trigger label): "Zhang Yong fails or critically fails a saving throw against an enchantment or fear effect Effect Zhang Yong
+    //   succeeds on the saving throw instead and takes 2d6 mental damage. If he critically failed …, he also takes 2d6 persistent mental …" — the save
+    //   a success, the damage on itself; the critical failure's extra, a note. (Enchantment is mental in the remaster.)
+    const grit = /^(?:Trigger )?(?:The )?[\w' -]+? fails or critically fails a saving throw against an? (\w+) or (\w+) effect;? Effect (?:The )?[\w' -]+? succeeds on the saving throw instead and takes (@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?) damage\.((?: [^.]+\.)*)$/i.exec(text.trim());
+    if (grit) {
+        const against = [...new Set([grit[1], grit[2]].map((trait) => trait.toLowerCase()).flatMap((trait) => (trait === "enchantment" ? ["enchantment", "mental"] : [trait])))];
+        return { builtin: "save-boost", toSuccess: true, against, selfDamage: readDamage(inlineTags(grit[3], "Damage")[0]), ...(grit[4].trim() ? { notes: [grit[4].trim().replace(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g, (_all, formula) => readableText(`@Damage[${formula}]`))] } : {}) };
+    }
+    // - Preemptive Reconfiguration: "Trigger Urok would take bludgeoning piercing, or slashing damage Effect … He gains resistance 9 against the triggering
+    //   damage type, which applies against the triggering damage …" — resistance to that type of the damage it took.
+    const bracing = /^(?:The )?[\w' -]+? would take ((?:bludgeoning|piercing|slashing)(?:,? (?:or )?(?:bludgeoning|piercing|slashing))*) damage\.?$/i.exec(trigger.trim());
+    const bracingWith = bracing ? /\b(?:gains?|gaining) resistance (\d+) against the triggering damage type\b/i.exec(effect) : null;
+    if (bracingWith) return { builtin: "resist-damage", value: Number(bracingWith[1]), on: bracing[1].toLowerCase().split(/,\s*(?:or\s+)?|\s+or\s+|\s+/).filter((type) => ["bludgeoning", "piercing", "slashing"].includes(type)), types: ["triggering"], ...(/\bCrystalline Dust\b/.test(effect) ? { note: "It can spend its Crystalline Dust for more: the GM's." } : {}) };
     // (Batch 73, Final Blow: "Berleth is reduced to 0 HP", "Berleth makes a final shovel Strike before dying.")
     if (/^(?:The )?[^.]+? is reduced to 0 (?:Hit Points|HP)\.?$/i.test(trigger.trim())) {
         // (Batch 61, Death Slam: "Before it's knocked out, the argorth makes a tail Strike against a random creature within reach.")
@@ -3404,6 +3444,11 @@ export function compileBuiltin(item, slug) {
     // turn." → { builtin: "grant-aoo", within, trait, uuid } — PF2e's own ability granted to those allies for that time.)
     const directed = /^Each ([a-z]+ )?ally in an? @Template\[(?:type:)?emanation\|distance:(\d+)\](?:\{[^}]*\})? gains the (@UUID\[([^\]]+)\]\{Attack of Opportunity\}|Attack of Opportunity) reaction until the end of their next turn\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, "").trim());
     if (directed) return { builtin: "grant-aoo", actions, within: Number(directed[2]), ...(directed[1] ? { trait: directed[1].trim().toLowerCase() } : {}), ...(directed[4] ? { uuid: directed[4] } : {}) };
+    // (Batch 263, Set Defense: "The skeletal soldier sets its glaive (or other reach weapon) to defend the area around it. It gains the Attack of
+    // Opportunity reaction for that weapon only. This lasts until the skeleton takes an action with the move or attack trait or is destroyed." — PF2e's
+    // Attack of Opportunity on itself (self), until it moves or attacks.)
+    const defended = /^(?:The )?[^.]+? sets (?:its|their) [\w' -]+?(?: \([^)]*\))? to defend the area around (?:it|them)\. (?:It|They) gains? the (@UUID\[([^\]]+)\]\{Attack of Opportunity\}|Attack of Opportunity) reaction for that weapon only\. This lasts until (?:the [\w' -]+?|it|they) takes? an action with the move or attack trait(?: or is destroyed)?\.$/i.exec(String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+    if (defended) return { builtin: "grant-aoo", actions, self: true, ...(defended[2] ? { uuid: defended[2] } : {}), until: "move-or-attack", notes: ["Only with that reach weapon; it lasts until it takes a move or attack action."] };
     // (Batch 176, Call to Arms: "Each caligni within a 30-foot emanation of the vanguard gains the Reactive Strike reaction until the end of the
     // vanguard's next turn. Once a caligni has used this Reactive Strike, that caligni is temporarily immune to the same vanguard's Call to Arms for 10
     // minutes." → until its own next turn ends (until: "source"), and once a fight for each ally that uses it.)
@@ -3547,6 +3592,25 @@ function readSelfResistance(item, body) {
             const notes = [/can make ([^.]+?) Strikes/i.exec(said[active])?.[1] ? `While it lasts it can make ${/can make ([^.]+?) Strikes/i.exec(said[active])[1]} Strikes.` : null, ...said.slice(active + 1)].filter(Boolean);
             return plan(types.map((type) => ({ type, value: Number(found[1]), exceptions: [] })), { rounds: null, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes });
         }
+    }
+    // (Batch 263, Ghost Stance: "… While in this stance, they are Concealed to any creature that isn't adjacent to them. They can't use this concealment to
+    // Hide or Sneak. They also gain resistance 5 to physical damage. If the ghost ape takes force damage, this stance ends and they can't reenter it for
+    // 1d3 rounds." — the resistance as a stance; the concealment and how it ends, notes.)
+    const phased = said.findIndex((sentence) => /^While in this stance, (?:it is|they are) Concealed to any creature that isn't adjacent to (?:it|them)\.$/i.test(sentence));
+    const phasedResist = phased >= 0 ? /^(?:It|They) also gains? resistance (\d+) to ([a-z, ]+?) damage\.$/i.exec(said[phased + 2] ?? "") : null;
+    if (phasedResist && said.slice(0, phased).every(told) && /^(?:It|They) can(?:'t|not) use this concealment to Hide or Sneak\.$/i.test(said[phased + 1] ?? "") && resistanceTypes(phasedResist[2])) {
+        const ends = said.slice(phased + 3).map((sentence) => sentence.replace(/\[\[\/[^\]]*\]\]\{([^}]*)\}/g, "$1"));
+        if (ends.every((sentence) => /^If (?:the [\w' -]+?|it|they) takes? [a-z]+ damage, this stance ends\b[^.]*\.$/i.test(sentence))) return plan(resistanceTypes(phasedResist[2]).map((type) => ({ type, value: Number(phasedResist[1]), exceptions: [] })), { rounds: null, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: ["It's Concealed to any creature not beside it (not to Hide or Sneak).", ...ends] });
+    }
+    // (Batch 263, Ghostly Swoop: "The queen sluagh becomes incorporeal until the start of their next turn, and Flies up to their fly Speed. While
+    // incorporeal, they are immune to precision damage, and have resistance 10 to all damage (except force, Ghost Touch, or vitality); this resistance is
+    // doubled against non-magical damage. After using Ghostly Swoop, … can't use it again for 1d4 rounds." — the resistance until its next turn; the
+    // flight, the precision immunity and the doubling, notes; the recharge its own.)
+    const swoop = /^(?:The )?[^.]+? becomes incorporeal until the (start|end) of (?:its|their|his|her) next turn, and Flies up to (?:its|their|his|her) fly Speed\.$/i.exec(said[0] ?? "");
+    const swooped = swoop ? /^While incorporeal, (?:it is|they are) immune to precision damage, and (?:has|have) resistance (\d+) to all damage \(except ([^)]+)\); this resistance is doubled against non-magical damage\.$/i.exec(said[1] ?? "") : null;
+    if (swooped && resistanceExceptions(swooped[2]) && said.slice(2).every((sentence) => /^After using [A-Z][\w' -]+?, (?:the [\w' -]+?|it|they) can(?:'t|not) use it again for (?:\d+d\d+|\d+) rounds\.$/i.test(sentence.replace(/\[\[\/[^\]]*\]\]\{([^}]*)\}/g, "$1")))) {
+        const end = /end/i.test(swoop[1]);
+        return plan([{ type: "all-damage", value: Number(swooped[1]), exceptions: resistanceExceptions(swooped[2]) }], { rounds: end ? 2 : 1, duration: { value: 1, unit: "rounds", expiry: end ? "turn-end" : "turn-start" }, notes: ["It Flies up to its fly Speed, incorporeal for that time.", "It's immune to precision damage, and the resistance is doubled against non-magical damage."] });
     }
     // (Batch 261, Tilt Scales: "The zetogeki gains resistance 10 to physical damage, but its Speeds are reduced to 10 feet. If … it stores the kinetic
     // energy of the blow. The zetogeki can realign its scales to their regular position by taking this action again. …" — the resistance until it uses
