@@ -2860,3 +2860,12 @@ Fixed on the way:
 - **New pieces:** Hunt Prey's kin can carry `markSlug`: live, an Effect on the creature with that slug and PF2e's TokenMark on the named creature (Challenge Foe: PF2e's damage rules wait on `target:mark:challenge-foe` and `self:effect:challenge-foe`). Ways may be emphasized items (`<li><em>Crystallize</em> …`). A reaction that gives PF2e's effect to the one ally that set it off (Timely Advice, Cloak in Embers) plays it on that ally.
 - **Compiled** (29 of 30 rows; 25 new in PF2e, 6 more that were the GM's): Wound Thief, Discorporate, Intuit Object, Statue, Blood Leech, Challenge Foe, Healing Arrow, Sakugami's Foresight, Frozen Shell, Focused Gaze, Channel Magic, Solidify Mist, Bide, Cloak in Embers, Bleed Destruction, Amber Strikes, Absorb Flame, Spring Up, Wreck, Healing Echo, Channel Smite (Zealot of Asmodeus), Avenge the Fallen, Takedown Fluidity, Timely Advice, Sage's Analysis. Left for the user: Eye Probe.
 
+## Live check of batches 276–281 (2026-10-13)
+
+Checked in pftest: Extend Strands on and off (Stealth 17 → 13 → 17); Wolverine Rage turning PF2e's toggle on through its Effect (AC 18 → 17, the raging AC); Emotional Frenzy's ways in turn, Wave of Despair named on the card and cast through the quelaunt's own entry at DC 39; Krampus's mark switching PF2e's toggle on; Challenge Foe's Demoralize, then its Effect with slug `challenge-foe` and PF2e's TokenMark on Valeros; Opening Statement offered as the attorney's turn began, its card rolling Legal Lore against Will DC; Hat Toss at its own +27 against AC, the critical hit's follow-up Will save card, Stupefied 2 for a rolled 1d4+1 rounds; Divine Aegis's two predicated save modifiers; Infrasonic Moan's three ways.
+
+Fixed on the way:
+- **Toggle-only self-effects:** the self-effect dispatcher didn't admit a plan whose only part is `model.toggle`, so Wolverine Rage made nothing; it does now.
+- **Toggle domains:** a toggle is switched in its own rule's domain (Extend Strands' is `skill-check`), not always `all`.
+- **Own spells by name:** a name without the sheet's suffix finds the spell ("Fear" for "Fear (At Will)").
+

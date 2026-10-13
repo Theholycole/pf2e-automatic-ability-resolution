@@ -205,8 +205,9 @@ async function playAbility(item, plan, sourceToken) {
     }
     // (Batch 274: a choice PF2e holds as the ability's own toggle — Ablative Adaptation's material: the toggle set to it.)
     if (plan?.builtin === "roll-option") {
-        // (Batch 276: a plain toggle switched on or off — Extend Strands.)
-        await item.actor?.toggleRollOption?.("all", plan.option, item.id, plan.value ?? true, plan.suboption ?? null);
+        // (Batch 276: a plain toggle switched on or off — Extend Strands. Its domain, the rule's own: "skill-check" there.)
+        const rule = (item.system?.rules ?? []).find((entry) => entry?.key === "RollOption" && entry.option === plan.option);
+        await item.actor?.toggleRollOption?.(plan.domain ?? rule?.domain ?? "all", plan.option, item.id, plan.value ?? true, plan.suboption ?? null);
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.label ?? plan.suboption}.`, ...(plan.notes ?? [])]);
         return;
     }
@@ -286,7 +287,7 @@ async function playAbility(item, plan, sourceToken) {
     // not when the ability links PF2e's own effect (its card offers that).
     // (Batch 39: a bonus to its AC for a while, Dueling Parry; a plan with its own time only, not a rage's, whose PF2e effect is linked.)
     // (Batch 235: with no time of its own, its model's rounds — Raise Shields, Blood Fury, a rage with no PF2e effect; its healing too.)
-    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp || plan.model?.regeneration || plan.model?.materials?.length) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp || plan.model?.regeneration || plan.model?.materials?.length || plan.model?.toggle) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
         await strikeBuff(item, plan, sourceToken);
         if (Number(plan.heal) > 0) {
             const actor = sourceToken?.actor ?? item.actor;
@@ -362,7 +363,7 @@ async function playAbility(item, plan, sourceToken) {
         // (Batch 275, Punish the Naughty: a mark with no extra damage, its benefits its notes.)
         const marked = plan.every || plan.mark || plan.edge === "deadly";
         // (Batch 277, Krampus: PF2e's own toggle for the mark, its Perception and Survival bonuses behind it — switched on.)
-        if (plan.toggle) await item.actor?.toggleRollOption?.("all", plan.toggle, item.id, true);
+        if (plan.toggle) await item.actor?.toggleRollOption?.((item.system?.rules ?? []).find((entry) => entry?.key === "RollOption" && entry.option === plan.toggle)?.domain ?? "all", plan.toggle, item.id, true);
         // (Batch 281, Challenge Foe: PF2e's rules wait on its mark — an Effect on itself with that slug, marking the creature.)
         if (plan.markSlug && prey) await item.actor.createEmbeddedDocuments("Item", [{ name: item.name, type: "effect", img: item.img, system: { slug: plan.markSlug, duration: { value: -1, unit: "unlimited", expiry: null, sustained: false }, rules: [{ key: "TokenMark", slug: plan.markSlug, uuid: prey.document?.uuid ?? prey.uuid }], description: { value: `<p>${prey.name}: its ${item.name}.</p>` } } }]);
         const edgeText = !plan.edge ? "" : plan.edge === "deadly" ? `Its ${plan.strike ?? ""} Strikes against that creature gain deadly d${plan.die}.`.replace(/ {2,}/g, " ") : plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`;
@@ -486,7 +487,8 @@ async function castFromCard(message, state, data) {
         if (!named) throw new Error("Name the spell first.");
         // (Batch 276, Emotional Frenzy: one of its own spells — the creature must have it.)
         if (state.pick.own) {
-            const mine = actor.itemTypes.spell.find((spell) => spell.name.toLowerCase() === named);
+            // (A name without its sheet suffix too: "fear" for "Fear (At Will)".)
+            const mine = actor.itemTypes.spell.find((spell) => spell.name.toLowerCase() === named) ?? actor.itemTypes.spell.find((spell) => spell.name.toLowerCase().replace(/\s*\([^)]*\)\s*$/, "") === named);
             if (!mine) throw new Error(`${actor.name} has no spell called "${data.spell}".`);
             state = { ...state, spell: { uuid: mine.sourceId ?? mine._stats?.compendiumSource ?? mine.uuid, name: mine.name }, dc: mine.spellcasting?.statistic?.dc?.value ?? state.dc };
         } else {
