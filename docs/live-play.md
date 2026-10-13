@@ -2516,3 +2516,18 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live-checked (pftest, 2026-10-12):** Fume's burst, with Valeros concealed on entering and cleared on leaving, its save cards on entering and at his turn's start, and its end at the Brimorak's turn clearing every token. Pressurized Pool placed by a click and removed by End. Muddy Field's emanation moving with the Grodair, with PF2e's difficult terrain. Draxie Dust's roll and save card. Generate Bomb's row on the bomb's hit (3d10 poison and 3 splash, the critical doubling only the dice). Chaotic Gizmos' note.
 - **Simulator:** see B256 in its ability decisions.
 
+## Saves and checks in other words (2026-10-12, batch 257)
+
+- **Compiled** (14 new in PF2e; about 40 more plans with better results):
+  - **A skill check against several creatures' DCs:** "a Performance check against the Will DCs of up to two enemies within 30 feet" gives that many targets in range. "As critical success, but the target is affected for only one round" gives the success that time. A "Critical Failure … temporarily immune" makes the immunity that degree's only.
+  - **A degree's own PF2e effect:** each degree section's linked effect goes on its row, when the row reads nothing else (Graceless Domain, Thatchling's Curse, Clinging Dust).
+  - **"You are now Stunned for 1 round unless you succeeded on a … save":** the condition, for that time, on a failure.
+  - **A dying value raised:** "… save or their dying condition increases by 1 and the X regains 2d8 Hit Points", or "on a failure, its dying value increases by 2 (3 on a critical failure)". The dying value is a stacking condition; the Hit Points go on the monster. Only at a dying creature beside it (a requirement); a dead target is a note.
+  - **Pulls toward it:** "… save or be pulled adjacent to the X" is a pull as far as its area. "Pulls all creatures … towards its mouth. A successful save halves the distance, or avoids the pull on a critical success" gives the pull, and half of it on a success.
+  - **A mark:** "The target can avoid becoming marked with a successful save" gives PF2e's linked effect on a failure; Sustain and Dismiss are notes.
+  - **A move through creatures:** "Flies or Strides … deals the damage of its blade Strike to each creature whose space it enters (basic Reflex)", "Swimming twice … through the spaces of Huge or smaller creatures", and "any creature it was adjacent to during this Stride must attempt a basic Reflex save … Prone on a critical failure". These use Trample's targeting over one move or two; the rest are notes.
+  - **A hit's follow-up that moves and drops the creature (Pitch Bale):** moved up to its distance and Prone on a failure, moved on a success, nothing on a critical success.
+  - **A save to dodge an exposure:** "Those in the burst must succeed at a Reflex save or be exposed to jungle drake venom" is that save in the area. A failure brings the venom's own save as a follow-up (the core's `followUps`, now with the affliction handed on).
+- **Live:** a follow-up from a card (the venom's save after a failed Reflex save) is posted as its own card on that creature. Applying its failure hands the affliction to Pseudo Afflictions, as an affliction's card does.
+- **Simulator:** follow-ups resolve as before, now with the affliction (B257 in its ability decisions).
+

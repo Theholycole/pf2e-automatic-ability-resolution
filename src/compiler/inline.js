@@ -425,7 +425,9 @@ export function immunityDetails(raw) {
     const time = /\bfor (\d+|an?|one) (round|minute|hour|day)s?\b/i.exec(raw);
     const value = time ? (/^\d+$/.test(time[1]) ? Number(time[1]) : 1) : 1;
     const unit = time ? UNITS[time[2].toLowerCase()] : "minutes";
-    const degrees = /^Critical Success\b|\bcritically succeeds?\b/i.test(raw) ? ["criticalSuccess"]
+    // (A check's own degrees, Goblin Song's "Critical Failure The target is temporarily immune …": that degree.)
+    const degrees = /^Critical Failure\b/i.test(raw) ? ["criticalFailure"] : /^Failure\b/i.test(raw) ? ["failure"]
+        : /^Critical Success\b|\bcritically succeeds?\b/i.test(raw) ? ["criticalSuccess"]
         : /\bregardless\b|\bsucceeds? or fails?\b|\bfails? or succeeds?\b/i.test(raw) ? ALL_DEGREES
         : /\bsucceed(?:s|ed)?\b|\bsuccessful(?:ly)?\b|^Success\b/i.test(raw) ? ["criticalSuccess", "success"]
         : ALL_DEGREES;

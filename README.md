@@ -338,6 +338,16 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 - **Hurtful Critique, Objection!** (2026-10-12, batch 254): 2 new in PF2e. A save or a −1 circumstance penalty to attack rolls (−2 on a critical failure) for a minute, ending early on a hit against the monster (a note); a save to keep a linguistic action, which is disrupted on a failure (a new "linguistic" trigger kind, live and in the simulator).
 - **Random effect tables, copies of itself** (2026-10-12, batch 255): 22 new in PF2e, 13 in Battlezoo. Duplicates, decoys and illusory copies of the monster are the GM's (`gm: "copies"`, the user's call). A table the dice pick from is rolled and played, not chosen: a numbered list after a roll for the effect (Draxie Dust), PF2e's warpwave table (Inflict Warpwave, 1d4 rounds rolled when applied), a bomb table whose row is the bomb Strike's damage, splash, effect or save (Generate Bomb), a d20 table in paragraphs with a row per range (a reroll, a save, a spell it casts, a condition on itself or the target, damage in an area, a note), a curse picked at random on a failed save, a damage type picked by a die, and Strikes picked by dice.
 - **Zones** (2026-10-12, batch 256): 34 new or changed in PF2e, 2 new in Battlezoo. An area that lasts — a cloud that conceals, difficult or hazardous terrain, a save on entering it or at a turn's start or end, damage at a turn's end, a penalty or PF2e's own effect inside — compiles to `{ builtin: "zone", zone }`. An area save that lasts (a new save each round, on entering, at a turn there) becomes its zone too, keeping the save's results. Live, each zone is a Region on the scene: an emanation attached to its token, a burst on it, or one the GM places; PF2e's difficult terrain on it; a script behaviour that hands the module its enter, leave and turn events. It ends with its time or by its card's button.
+- **Saves and checks in other words** (2026-10-12, batch 257): 14 new in PF2e, and better results for some 40 more. They include:
+  - a skill check against the Will DCs of up to N enemies (Goblin Song);
+  - a gaze's condition "unless you succeeded on a save";
+  - a dying creature's dying value raised, with Hit Points for the monster (Soul Feeding, Eat Soul, Steal Soul);
+  - pulls toward the monster (Vacuum Mouth, and Enormous Inhalation with half the pull on a success);
+  - a mark that's PF2e's effect on a failed save;
+  - a move through creatures dealing a Strike's damage (Whirling Slice, Ravenous Void, Burning Rush);
+  - a hit's follow-up that moves the creature and knocks it Prone (Pitch Bale);
+  - a save to dodge an exposure, then the venom's own save as a follow-up (Spit Venom, Spray Pollen).
+  - A degree's own PF2e effect link now applies to that row, and "As critical success, but affected for only one round" shortens its time.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

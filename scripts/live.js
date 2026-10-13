@@ -1280,6 +1280,15 @@ async function applyChange(change, state) {
         case "affliction":
             return handOffAffliction(state, target, actor, change.data);
         // "…save or instantly die": at 0 HP and marked dead (the GM pressed Apply on the results).
+        // (Batch 257: a second save for the creature, "… save or be exposed to its venom" — the poison's own card on it.)
+        case "followUp": {
+            const sourceActor = await fromUuid(state.source.actorUuid).catch(() => null);
+            const sourceToken = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid).catch(() => null) : null;
+            const item = state.ability?.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+            if (!change.plan || !sourceActor || !token) return null;
+            await postCard({ plan: change.plan, item: item ?? { name: state.ability?.name ?? change.plan.source?.name ?? "Follow-up", uuid: null }, sourceActor, sourceToken, tokens: [token.object ?? token] });
+            return `${target.name}: its next save's card follows`;
+        }
         case "death": {
             if (change.ifReducedTo !== undefined) return null;
             await actor.update({ "system.attributes.hp.value": 0 });

@@ -12,11 +12,15 @@ const DEFENSES = { fortitude: "fortitude", reflex: "reflex", will: "will", perce
 // "{Athletics} check against the target's Reflex DC" → { statistic, against }.
 export function readSkillCheck(html) {
     const plain = htmlToPlainText(String(html ?? "").replace(/\[\[\/act [^\]]*\]\]\{([^}]+)\}/g, "$1"));
-    const match = /\b(Acrobatics|Arcana|Athletics|Crafting|Deception|Diplomacy|Intimidation|Medicine|Nature|Occultism|Performance|Religion|Society|Stealth|Survival|Thievery|Perception) check against (?:that |the |your |its )?(?:target's|creature's|its) (Fortitude|Reflex|Will|Perception) DC/i.exec(plain);
+    // (Batch 257, Goblin Song: "… check against the Will DCs of up to two enemies within 30 feet".)
+    const match = /\b(Acrobatics|Arcana|Athletics|Crafting|Deception|Diplomacy|Intimidation|Medicine|Nature|Occultism|Performance|Religion|Society|Stealth|Survival|Thievery|Perception) check against (?:that |the |your |its )?(?:(?:target's|creature's|its) (Fortitude|Reflex|Will|Perception) DC|(Fortitude|Reflex|Will|Perception) DCs of (?:up to \w+|all|each|any number of) (?:enemies|foes|creatures|targets)\b)/i.exec(plain);
     if (match) {
         const statistic = match[1].toLowerCase();
-        return SKILLS.includes(statistic) ? { roll: statistic === "perception" ? "perception" : "skill", statistic, against: { dc: "target", statistic: DEFENSES[match[2].toLowerCase()] } } : null;
+        return SKILLS.includes(statistic) ? { roll: statistic === "perception" ? "perception" : "skill", statistic, against: { dc: "target", statistic: DEFENSES[(match[2] ?? match[3]).toLowerCase()] } } : null;
     }
+    // (An inline check named before the words: "a @Check[performance|…] check against the Will DCs of up to two enemies".)
+    const tagged = /@Check\[([a-z]+)[|\]][^\]]*\]?(?:\{[^}]*\})? check against (?:that |the |your |its )?(?:(?:target's|creature's|its) )?(Fortitude|Reflex|Will|Perception) DCs?\b/i.exec(plain);
+    if (tagged && SKILLS.includes(tagged[1].toLowerCase())) return { roll: tagged[1].toLowerCase() === "perception" ? "perception" : "skill", statistic: tagged[1].toLowerCase(), against: { dc: "target", statistic: DEFENSES[tagged[2].toLowerCase()] } };
     // PF2e's inline check, as the PC feats write it: "@Check[diplomacy|against:will]", "@Check[thievery|defense:reflex]".
     for (const raw of inlineTags(html, "Check")) {
         const statistic = raw.split("|")[0].trim().toLowerCase();
@@ -38,7 +42,7 @@ export function readSpecialCheck(html) {
 // "takes a –3 status penalty to Perception and Will saves for 1 minute" →
 // [{ selector, value, type, duration }] (PF2e's FlatModifier terms).
 const PENALTY_TARGETS = [
-    [/^perception$/i, ["perception"]], [/^(?:ac|armor class)$/i, ["ac"]], [/^attack rolls?$/i, ["attack-roll"]],
+    [/^perception(?: checks?)?$/i, ["perception"]], [/^(?:ac|armor class)$/i, ["ac"]], [/^attack rolls?$/i, ["attack-roll"]],
     [/^(?:saves|saving throws)$/i, ["saving-throw"]], [/^fortitude(?: saves?)?$/i, ["fortitude"]], [/^reflex(?: saves?)?$/i, ["reflex"]],
     [/^will(?: saves?)?$/i, ["will"]], [/^skill checks$/i, ["skill-check"]], [/^damage rolls?$/i, ["damage"]], [/^checks$/i, ["check"]]
 ];
@@ -98,6 +102,12 @@ function likeRows(outcomes, sections) {
         const copy = structuredClone(outcomes[like]);
         const value = /\bthe penalty is [–-](\d+)/i.exec(text)?.[1];
         if (value) for (const modifier of copy.modifiers ?? []) modifier.value = -Number(value);
+        // (Batch 257, Goblin Song: "As critical success, but the target is affected for only one round" — its time that long.)
+        const shorter = /\bbut (?:the target|it|the creature) is affected for only (one|1|two|2) rounds?\b/i.exec(text);
+        if (shorter) {
+            const duration = { mode: "fixed", value: /^(?:one|1)$/i.test(shorter[1]) ? 1 : 2, unit: "rounds", expiry: "turn-start", anchor: "effect-start" };
+            for (const entry of [...(copy.modifiers ?? []), ...copy.effects]) if (entry.duration) entry.duration = { ...duration };
+        }
         const own = outcomes[degree];
         outcomes[degree] = { ...copy, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects] };
     }
@@ -243,15 +253,17 @@ export function compileSkillAction(item, { rank = 1, actor = null } = {}) {
     // An area of its own ("in a @Template[emanation|distance:5], … comparing the result to each target's Reflex DC";
     // "against the Will DCs of all enemies within 30 feet"), or its range.
     const many = /\b(?:all|each|any number of) (?:enemies|foes|creatures|targets)\b[^.]*?\bwithin (\d+) feet\b/i.exec(plain)?.[1];
-    const area = prose ? inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? (many ? { type: "emanation", value: Number(many) } : null) : null;
-    const within = /\bwithin (\d+) feet\b/i.exec(plain)?.[1];
+    // ("up to two enemies within 30 feet": that many targets in range, not the area.)
+    const some = /\bup to (two|three|four|five|\d+) (?:enemies|foes|creatures|targets) within (?:an? )?(\d+)(?:-foot emanation| feet)\b/i.exec(plain.replace(/@Template\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const area = prose && !some ? inlineTags(html, "Template").map(readTemplate).find(Boolean) ?? (many ? { type: "emanation", value: Number(many) } : null) : null;
+    const within = some?.[2] ?? /\bwithin (\d+) feet\b/i.exec(plain)?.[1];
     return {
         modelVersion: 13,
         source: { name: item.name, slug: item.system?.slug ?? null, uuid: item.uuid ?? null, type: item.type },
         rank,
         traits,
         activation: { time: String(item.system?.actions?.value ?? 1), traits },
-        targeting: { target: area ? null : "1 creature", range: area ? null : prose && within ? `${within} feet` : /within 30 feet/i.test(plain) ? "30 feet" : traits.includes("attack") ? "touch" : "30 feet", area },
+        targeting: { target: area ? null : some ? `up to ${{ two: 2, three: 3, four: 4, five: 5 }[some[1].toLowerCase()] ?? Number(some[1])} creatures` : "1 creature", range: area ? null : (prose || some) && within ? `${within} feet` : /within 30 feet/i.test(plain) ? "30 feet" : traits.includes("attack") ? "touch" : "30 feet", area },
         trigger: { event: "use", immunity: readImmunity(html) },
         resolution: { kind: "check", check, sharedDamage: null, outcomes },
         automation: { level: "automatic" },
