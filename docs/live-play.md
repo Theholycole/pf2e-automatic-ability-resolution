@@ -3068,3 +3068,55 @@ Checked in pftest:
   - the cancel bug above;
   - trap creatures came out neutral, and are now hostile (checked again: opposition, disposition −1).
 
+## Traps that Strike (2026-10-13, batch 299)
+
+The user's call: "work on item 1" (the last twelve abilities that compiled to nothing; eleven were rulebook traps whose reaction is a Strike).
+
+- **Compiler** (`trapStrike` in `src/compiler/monster.js`, last in the fallback chain): a hazard's reaction or free action whose effect is its own Strike becomes `{ builtin: "trap-strike", strike, at, times, initiative, notes }`.
+  - **Wordings it reads:** "makes a jaws Strike against the triggering creature", "each one Striking all creatures under the grooves", "making an attack against the creature on the tile", "a dart shoots at the triggering creature".
+  - **`at`:** the creature that set it off, every creature named, or one adjacent creature.
+  - **Notes:** whom it Strikes, in the text's own words, and anything more it does, as a note for the GM.
+  - **Not read:** an effect with numbers of its own (a check or damage after "Effect").
+  - **Coverage:** the twelve, plus 104 adventure traps in the same words that had been the GM's only as the last fallback.
+- **Live** (`trapStrikes` in `scripts/reactions.js`, from `playAbility`):
+  - **Offers:** the trap's Strike is offered, free, at each creature the GM targets. With none targeted and "one adjacent creature", it's offered at each creature beside it.
+  - **Initiative:** a trap that rolls initiative joins the combat with its roll; without a combat, the GM gets a note.
+  - **Free offers:** a free Strike offer no longer marks "Reaction used". This also fixes the existing initiative and turn-start free Strikes.
+
+## Reactions offered when they happen (2026-10-13, batch 300)
+
+The user's call: "work on item 2" (reactions on the reminder card whose trigger is an event the module already sees).
+
+- **What the census found:** 2,690 reminder lines. 1,454 are the GM's abilities, and most of the 1,236 that play are traps set off in a marked area, or creatures with a condition the module can't see. The watchable ones were a few dozen.
+- **Compiler** (`src/compiler/watch.js`, applied to the plan a reaction or triggered free action reads as, unless it already has a trigger or plays its own way):
+  - **Trigger read from the text:**
+    - "own-strike": "hits a creature with a weapon / jaws Strike";
+    - "hit-by": "hits it with an attack roll", "is hit by a Strike", ranged-only;
+    - "targeted-by": an attack from at least N feet;
+    - "foe-failed-save": a named save against its spell or effect, or a save against its spells within N feet;
+    - "initiative": "rolls initiative";
+    - "nearby-death" (new): "a (living) creature within N feet dies / is reduced to 0 Hit Points", or an adjacent one.
+  - **Notes:** the note that its trigger was the GM's call is dropped.
+  - **Coverage:** 32 PF2e and 2 Battlezoo abilities.
+- **Live:**
+  - **Existing handlers:** these offer them, with new checks for a ranged hit only (`hitSetsOff`), an attack roll only and from far enough (`targetedSetsOff`, `targetedEvent`'s kind), and the save named (`saveAnswers`).
+  - **New handler:** `onNearbyDeath` offers the reaction of any monster in the encounter within the distance, the living-only and "dies" conditions included, with the card on the creature that fell.
+  - **"Use it":** a plan that's one of the module's own kinds (a cast spell, ways, an effect on itself) is posted as from its sheet, targeting the creature that set it off.
+- **Item 3, the "nothing to play" group (1,448):** looked at, and nothing built.
+  - Most has nothing to roll: Change Shape (389), feigned deaths, troop formations, plane and form shifts, extinguished fires, capsized boats, glossary-only entries.
+  - The rest are earlier batches' deliberate readings: a Strike that's only a Strike (Quick Draw, Skirmish Strike, Lunge) is played from the sheet; adamantine claws matter only against objects; Hunt Prey worded with only Seek and Track bonuses deals no damage.
+
+## Live check of batches 299–300 (2026-10-13)
+
+Checked in pftest:
+
+- **Titanic Flytrap:** with Valeros targeted, Snap Shut offered its Jaws Strike. It rolled against Valeros (a critical hit, 36 vs AC 23), and no "Reaction used".
+- **Spinning Blade Pillar:** with nothing targeted, Rising Pillar offered its Spinning Blade at each of the four creatures beside it, and joined the combat at initiative 26.
+- **Rhevanna:** her Claw's critical hit on Valeros brought the Detaining Strike offer. "Use it" posted the Planar Tether cast card (rank 10, DC 45), free.
+- **Amalgamite:** Valeros's hit brought the Displace offer, and its card applied.
+- **Ravener:** a goblin dropping to 0 HP 20 feet away brought the Consume Soul offer, with its DC 44 Fortitude save card on the goblin.
+- **Fixed during the check:**
+  - the trap offer's wording;
+  - the stale "GM's call" note;
+  - the nearby-death card's target (now the creature that fell).
+

@@ -31,7 +31,7 @@ import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { startZone } from "./zones.js";
 import { startConjure } from "./conjure.js";
 import { zoneDamagePlan } from "../src/live/zones.js";
-import { endRecharge } from "./recharge.js";
+import { endRecharge, noteToGM } from "./recharge.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
 import { isActiveGM, postCard, postEffectCard, postSkillCard, targetedEvent, targetedSetsOff, tokensAround } from "./live.js";
@@ -63,6 +63,8 @@ export function setUpReactions({ compileItem }) {
         if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) serially("down", () => onDown(actor));
         // (A creature a monster downed: its reaction to that, You're Next; batch 52.)
         if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) serially("downed", () => onDowned(actor));
+        // (Batch 300: a creature dying near a monster that answers it, Consume Soul.)
+        if (isActiveGM() && changed.system?.attributes?.hp?.value === 0) serially("nearby death", () => onNearbyDeath(actor));
         // PF2e's damage, with the amount it applied (not its undo).
         if (isActiveGM() && options?.damageTaken > 0 && !options.damageUndo) serially("damaged", () => onDamaged(actor, options.damageTaken));
     });
@@ -101,7 +103,7 @@ function reactionsOf(actor) {
     if ((actor?.itemTypes?.action ?? []).some((item) => item.system?.actionType?.value === "passive" && compile(item)?.noReactions)) return [];
     // (And a reaction with results of its own whose trigger the module reads: plan.trigger.reaction.)
     return (actor?.itemTypes?.action ?? []).filter((item) => ["reaction", "free"].includes(item.system?.actionType?.value)).map((item) => ({ item, plan: same(compile(item)) }))
-        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade" || (item.system?.actionType?.value === "free" && plan.free))) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && (plan.resolution || plan.builtin === "zone" || plan.builtin === "conjure")));
+        .filter(({ plan, item }) => (KINDS.has(plan?.builtin) && (item.system?.actionType?.value === "reaction" || plan.builtin === "crit-downgrade" || (item.system?.actionType?.value === "free" && plan.free))) || ((item.system?.actionType?.value === "reaction" || plan?.trigger?.free) && plan?.trigger?.reaction && (plan.resolution || plan.builtin)));
 }
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
@@ -263,7 +265,9 @@ async function onMessage(message) {
     const event = await targetedEvent(message);
     if (event) {
         const mine = reactors(scene, combat).find((entry) => entry.token.id === event.defender.id);
-        const entry = mine && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.trigger?.reaction && targetedSetsOff(plan.trigger, event)) : null;
+        // (Batch 300, Shielding Stone: an attack only, from at least that far away.)
+        const apart = mine ? distanceFeet(box(mine.token, gridOf(scene).size), box(event.attacker, gridOf(scene).size), gridOf(scene)) : 0;
+        const entry = mine && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.trigger?.reaction && targetedSetsOff(plan.trigger, event) && !(plan.trigger.from && apart < plan.trigger.from)) : null;
         if (entry) await offer({ kind: "card", item: entry.item, monster: mine.token, actor: mine.actor, target: event.attacker, trigger: `aimed ${event.spell ? "a spell" : "an effect"} at it (${event.traits.filter((trait) => entry.plan.trigger.traits?.includes(trait)).join(", ") || "spell"})`, free: !!entry.plan.trigger.free });
         // (Batch 193, Divert Essence: a spell aimed at it — resistance to spells equal to the spell's rank, until the start of its next turn.)
         const divert = mine && event.spell && isFoe(mine.token, event.attacker) ? mine.reactions.find(({ plan }) => plan.builtin === "resist-damage" && plan.spell) : null;
@@ -812,7 +816,9 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 const spellOk = !plan.trigger.spell || origin?.type === "spell" || message.flags?.pf2e?.origin?.type === "spell";
                 const traitOk = !plan.trigger.traits?.length || plan.trigger.traits.some((trait) => effectTraits.has(trait));
                 const near = !plan.trigger.within || distanceFeet(box(token, grid.size), box(saver, grid.size), grid) <= plan.trigger.within;
-                if ((plan.trigger.anyone || its) && named && spellOk && traitOk && near) {
+                // (Batch 300, Instant Suggestion: a Will save only.)
+                const saveOk = !plan.trigger.save || statistic === plan.trigger.save;
+                if ((plan.trigger.anyone || its) && named && spellOk && traitOk && near && saveOk) {
                     await offer({ kind: "card", item, monster: token, actor, target: saver, trigger: `failed a save against ${origin?.name ?? "its effect"}`, free: !!plan.trigger.free });
                     break;
                 }
@@ -972,6 +978,24 @@ async function onInitiative(combat) {
         const plan = item ? compile(item) : null;
         const strikes = plan ? meleeStrikes(actor, `(${plan.strike} only)`) : [];
         if (strikes.length) await offer({ kind: "strike", item, monster, actor, target: null, strikes, trigger: "rolls initiative", free: true, note: plan.notes?.join(" ") || null });
+    }
+}
+
+// A creature reduced to 0 HP near a monster whose reaction answers it (2026-10-13, batch 300: Consume Soul's "A living creature within 30 feet of the
+// ravener dies", Soul Feast's adjacent one): its card at that creature.
+async function onNearbyDeath(actor) {
+    const living = !["undead", "construct"].some((trait) => actor.traits?.has?.(trait));
+    for (const token of actor.getActiveTokens(false, true)) {
+        const scene = token.parent;
+        const combat = scene && runningCombat(scene);
+        if (!combat) continue;
+        const grid = gridOf(scene);
+        for (const { token: monster, actor: monsterActor, reactions } of reactors(scene, combat)) {
+            if (monster.id === token.id) continue;
+            const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "nearby-death" && (!plan.trigger.living || living));
+            if (!entry || distanceFeet(box(monster, grid.size), box(token, grid.size), grid) > (entry.plan.trigger.within ?? 30)) continue;
+            await offer({ kind: "card", item: entry.item, monster, actor: monsterActor, target: token, trigger: "fell nearby", free: !!entry.plan.trigger.free, note: entry.plan.trigger.dies ? "Only if it dies, not just falls unconscious." : null, triggerTarget: true });
+        }
     }
 }
 
@@ -1166,8 +1190,29 @@ async function onDamaged(actor, amount) {
     }
 }
 
+// A trap's own Strike (2026-10-13, batch 299): offered at each creature the GM targets (for "one adjacent creature", those beside it when none
+// is), free — the trap's reaction is set off once, at all of them; it joins the turns when it "then rolls initiative".
+export async function trapStrikes({ item, plan, sourceToken }) {
+    const token = sourceToken?.document ?? sourceToken;
+    const actor = token?.actor ?? item.actor;
+    if (!token || !actor) return;
+    const named = String(plan.strike ?? "").toLowerCase();
+    const strikes = (actor.system?.actions ?? []).filter((action) => action.type === "strike" && (!named || action.label.toLowerCase().includes(named))).map(({ slug, label }) => ({ slug, label }));
+    let targets = [...game.user.targets].map((target) => target.document ?? target).filter((target) => target.id !== token.id);
+    if (!targets.length && plan.at === "adjacent") targets = tokensAround(token, 5).map((other) => other.document ?? other);
+    const note = (plan.notes ?? []).join(" ") || null;
+    if (!strikes.length) await noteToGM(actor, token, [`<strong>${item.name}</strong>: roll its ${plan.strike ? `${plan.strike} ` : ""}Strike from its sheet. ${note ?? ""}`]);
+    else for (const target of targets.length ? targets : [null]) await offer({ kind: "strike", item, monster: token, actor, target, strikes, trigger: "set it off", note, free: true });
+    if (!plan.initiative) return;
+    const combat = token.parent ? runningCombat(token.parent) : null;
+    if (!combat) return noteToGM(actor, token, [`<strong>${item.name}</strong>: it rolls initiative (start a combat).`]);
+    if (combat.combatants.some((entry) => entry.tokenId === token.id)) return;
+    const [joined] = await combat.createEmbeddedDocuments("Combatant", [{ tokenId: token.id, sceneId: token.parent.id, actorId: actor.id, hidden: token.hidden }]);
+    await combat.rollInitiative([joined.id], { skipDialog: true, updateTurn: false }).catch(() => noteToGM(actor, token, [`<strong>${item.name}</strong>: roll its initiative.`]));
+}
+
 // The whispered offer, unless one for the same monster and creature is still open.
-async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null, move = null, noGrab = false, context = null }) {
+async function offer({ kind, item, monster, actor, target, strikes = [], penalty = 0, trigger, note = null, attack = null, retribution = null, negate = null, survive = null, free = false, skill = null, move = null, noGrab = false, context = null, triggerTarget = false }) {
     const open = game.messages.contents.slice(-30).some((message) => {
         const state = message.flags?.[MODULE_ID]?.[FLAG];
         return state?.status === "open" && state.monster.tokenUuid === monster.uuid && state.target?.tokenUuid === (target?.uuid ?? undefined) && state.kind === kind;
@@ -1196,6 +1241,7 @@ async function offer({ kind, item, monster, actor, target, strikes = [], penalty
         ...(free ? { free: true } : {}),
         ...(noGrab ? { noGrab: true } : {}),
         ...(context ? { context } : {}),
+        ...(triggerTarget ? { triggerTarget: true } : {}),
         status: "open",
         result: null
     };
@@ -1237,6 +1283,8 @@ async function use(message, action, slug) {
     let result;
     if (state.kind === "strike") {
         result = await rollStrike(state, actor, slug);
+        // (Batch 299: a free Strike doesn't spend the reaction — an initiative Strike, a trap's at each creature.)
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "resist") {
         // Liquefy, Chipping Scales (batch 71): the damage it resisted back as Hit Points; what lasts as PF2e effects; a use spent.
         const hp = actor.system?.attributes?.hp;
@@ -1340,6 +1388,15 @@ async function use(message, action, slug) {
         await startConjure({ item, plan: compile(item), sourceToken: monster, context: state.context ?? {} });
         result = `${state.ability.name}: its creatures are summoned (or its card asks first).`;
         if (state.free) return settle(message, state, "used", result);
+    } else if (state.kind === "card" && !["zone", "conjure", undefined].includes((await fromUuid(state.ability.uuid).then((item) => (item ? compile(item) : null)).catch(() => null))?.builtin)) {
+        // (Batch 300: a reaction whose plan is one of the module's own kinds — a spell cast, a choice of ways, an effect on itself — played as from
+        // its sheet, at the creature that set it off.)
+        const item = await fromUuid(state.ability.uuid);
+        const target = state.target ? await fromUuid(state.target.tokenUuid) : null;
+        if (target?.object) target.object.setTarget(true, { releaseOthers: true, groupSelection: false });
+        await item.toMessage(undefined, { speaker: ChatMessage.getSpeaker({ token: monster }) });
+        result = `${state.ability.name}: played${target ? ` at ${target.name}` : ""}.`;
+        if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "card" && (await fromUuid(state.ability.uuid).then((item) => (item ? compile(item) : null)).catch(() => null))?.builtin === "zone") {
         // (Batch 256: an area that lasts, Cloud of Allergens' as it rolls initiative — its Region and card.)
         const item = await fromUuid(state.ability.uuid);
@@ -1367,6 +1424,8 @@ async function use(message, action, slug) {
             // "the triggering creature".)
             // (Batch 287, Septic Invasion: "the creature it damaged", "the creature its Strike hit" and the like — the one that set it off too.)
             : ["the attacker", "the creature the Strike hits", "an adjacent creature", "the triggering creature", "the creature it damaged", "the creature it hit", "the creature its Strike hit", "the creature its Strike damaged"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
+            // (Batch 300: one creature, and the offer's is it — Consume Soul's dying creature.)
+            : state.triggerTarget && !area && target?.object ? [target.object]
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
             : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0, { foes: !!area.foes }) : [];
         if (applications.length) await postEffectCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens: ownEffect ? [] : tokens });

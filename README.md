@@ -479,6 +479,18 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 
 - **Summons** (2026-10-13, batch 297, the user's call: "automate the summoning of creatures", spawn rules and adventure set pieces left to the GM): abilities that bring creatures in make them as tokens beside their maker (`src/compiler/summons.js`, live in `scripts/conjure.js`). That covers summoned steeds (elite War Horse with the fiend and unholy traits, Nightmare), the graveknights' Phantom Mount (its numbers and Marvelous Mount's Speeds at its rank), Final Spite's horn (1d4 Wights raised, their initiative rolled), swarms that rise from a fallen bruiser, Undead, Arise!'s entities with the necromancer's AC and saves, Raise Serpent's skeletons, awakened trees, Spider Minions, a sycophant split off by heavy damage, guardians and fractrices, statues, phantasms, and another Nonsequitaur. Where the GM decides something first, a card asks: which creature of two, how many of a roll, whether the corpses or the tree are there, or a creature picked from the compendiums (Summon Aquatic Ally's aquatic animals; a summon heightened by the damage taken). Summoning rune traps ask for their creature when they're placed on the map and summon it, hostile, with initiative and a rolled time, when they go off. That covers the rulebook rune and (batch 298, the user's call) the twelve adventure runes: a rune that names its creature offers it first and summons it if nothing is picked, and its elite or weak adjustment is applied. Summoned creatures go at 0 HP, some along with their maker. Other adventure set pieces stay the GM's, as do spawn rules and God Caller's eidolon (no statistics anywhere).
 
+- **Traps that Strike** (2026-10-13, batch 299): a hazard whose reaction makes its own Strike (a flytrap's jaws, scythe blades, a spear launcher, dart galleries; 116 in PF2e's packs) offers that Strike at each creature the GM targets, or at each creature beside it for "one adjacent creature". The offers are free, so the trap's reaction isn't spent. A trap that "then rolls initiative" joins the combat. Anything more it does (doors locking, oozes released) is a note for the GM.
+
+- **More reactions offered when they happen** (2026-10-13, batch 300): reactions that were only on the reminder card get an offer when the module sees their trigger:
+  - the monster's own Strike hitting (Detaining Strike, Dispelling Strike);
+  - being hit, or hit at range (Displace, Reactive Relocation, Deflecting Lie);
+  - an attack from 10 feet or more away (Shielding Stone);
+  - a foe failing a Will save against its effect (Instant Suggestion);
+  - rolling initiative (Diplomatic Solution);
+  - a creature dying nearby (Consume Soul, Soul Feast, Preserve Prey).
+
+  "Use it" plays the ability as if used from its sheet, at the creature that set it off. Free Strike offers no longer spend the reaction.
+
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -15,6 +15,7 @@ import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } f
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { startZone } from "./zones.js";
 import { startConjure } from "./conjure.js";
+import { trapStrikes } from "./reactions.js";
 import { strikeBuffEffect } from "../src/live/buff.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
@@ -208,6 +209,11 @@ async function playAbility(item, plan, sourceToken) {
     // (Batch 295: creatures it makes or becomes — Eye Probe's probes, the Gestalt: their tokens and card, scripts/conjure.js.)
     if (plan?.builtin === "conjure") {
         await startConjure({ item, plan, sourceToken });
+        return;
+    }
+    // (Batch 299: a trap's own Strike, offered at the creatures it hits; scripts/reactions.js.)
+    if (plan?.builtin === "trap-strike") {
+        await trapStrikes({ item, plan, sourceToken });
         return;
     }
     // (Batch 274: a choice PF2e holds as the ability's own toggle — Ablative Adaptation's material: the toggle set to it.)
@@ -712,18 +718,19 @@ export async function targetedEvent(message) {
     const spell = options.includes("item:type:spell");
     if (["skill-check", "attack-roll", "spell-attack-roll"].includes(context.type)) {
         const defender = context.target?.token ? await fromUuid(context.target.token) : null;
-        return defender && message.token ? { defender, attacker: message.token, traits, spell } : null;
+        return defender && message.token ? { defender, attacker: message.token, traits, spell, kind: context.type } : null;
     }
     if (context.type === "saving-throw" && !options.some((option) => /^item:area\b|^area-effect$/.test(option))) {
         const attacker = context.origin?.token ? await fromUuid(context.origin.token) : null;
-        return attacker && message.token && attacker.id !== message.token.id ? { defender: message.token, attacker, traits, spell } : null;
+        return attacker && message.token && attacker.id !== message.token.id ? { defender: message.token, attacker, traits, spell, kind: context.type } : null;
     }
     return null;
 }
 
 // Does the event set off this trigger ("targets the hound with a mental effect", "… or spell")?
 // (Batch 263: trigger.any — anything aimed at it, Slack of Opportunity's hostile action.)
-export const targetedSetsOff = (trigger, event) => trigger?.event === "targeted-by" && (trigger.any || (trigger.traits ?? []).some((trait) => event.traits.includes(trait)) || (trigger.spells && event.spell));
+// (Batch 300: trigger.attack — an attack roll only, Shielding Stone's.)
+export const targetedSetsOff = (trigger, event) => trigger?.event === "targeted-by" && (!trigger.attack || ["attack-roll", "spell-attack-roll"].includes(event.kind)) && (trigger.any || (trigger.traits ?? []).some((trait) => event.traits.includes(trait)) || (trigger.spells && event.spell));
 
 // A monster's passive that answers it (Otherworldly Mind): its card on the creature that aimed the effect.
 async function cardsForTargeted(message) {

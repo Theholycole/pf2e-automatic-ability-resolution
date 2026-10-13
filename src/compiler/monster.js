@@ -13,6 +13,7 @@
 import { gmFallback } from "./gm-fallback.js";
 import { gmDecided } from "./gm-decided.js";
 import { readSummon } from "./summons.js";
+import { withWatchedTrigger } from "./watch.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -9564,6 +9565,42 @@ function chunk295(item, actor) {
     return null;
 }
 
+// A trap's own Strike (2026-10-13, batch 299; the user's call: "work on item 1", the last abilities that read as nothing): "The flytrap's jaws
+// snap shut, making a jaws Strike against the triggering creature", "Both blades swing down, each one Striking all creatures under the ceiling
+// grooves", "makes a spinning blade Strike against one adjacent creature (if any), then rolls initiative" → { builtin: "trap-strike", strike,
+// at: "trigger" | "all" | "adjacent", times, initiative, notes } — live, its Strike offered at each creature the GM targets (the ones beside it
+// for "one adjacent creature"), the trap joining the turns when it rolls initiative. A hazard's reaction or free action with nothing else to it.
+function trapStrike(item, actor) {
+    const type = item.system?.actionType?.value;
+    if (!["reaction", "free"].includes(type) || (actor?.type ?? item.actor?.type ?? item.parent?.type) !== "hazard") return null;
+    const html = String(item.system?.description?.value ?? "");
+    // (Its effect's own numbers belong to another reading: not a check or damage after "Effect"; one in its trigger is the trigger's.)
+    if (/@(?:Damage|Check)\[|\[\[\/(?:r|gmr|br|roll)\b/.test(html.slice(Math.max(0, html.search(/<strong>Effect<\/strong>/))))) return null;
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const effect = /\bEffect (.+)$/.exec(plain)?.[1] ?? plain;
+    if (/\b(?:save|DC|Grabbed|Restrained|persistent|Prone|teleport|cast|spell)\b/i.test(effect.replace(/\bStrike\b/g, ""))) return null;
+    const made = /\b(?:makes?|making) (?:a|an|one) ([a-z][\w' -]*? )?Strike(?: (?:against|at) ([^.,(]+))?/.exec(effect);
+    // (Batch 299: the same traps in other words — "each one attacking all creatures", "making an attack against the creature", "A poisoned dart
+    // shoots at the triggering creature", "shoots 4 darts as a single attack".)
+    const struck = /\b(?:Strik(?:e|es|ing)|attacking|making an attack against|shoots? at) (the triggering creature|all creatures [^.,]+|each creature [^.,]+|the creature [^.,]+)/.exec(effect) ?? (/\bshoots \w+ [a-z]+ as a single attack\b/.test(effect) ? [null, "the triggering creature"] : null);
+    const biting = /\bthe triggering creature with an? (?:[a-z]+ )?([a-z][\w' -]*?) Strike\b/.exec(effect);
+    if (!made && !struck && !biting) return null;
+    const strike = (made?.[1] ?? biting?.[1] ?? "").trim().replace(/^(?:ferocious|poisoned)\s+/, "") || null;
+    // ("… makes a swinging chandelier Strike against it": the creature that set it off.)
+    const whom = (made?.[2] ?? struck?.[1] ?? "the triggering creature").trim().replace(/^(?:it|them|him|her)$/, "the triggering creature");
+    const at = /\bone adjacent creature\b/.test(whom) ? "adjacent" : /\b(?:each|all) creatures?\b/.test(whom) ? "all" : "trigger";
+    const times = /\b(?:Both|Two) [\w ]+? (?:swing|strike|Strike)|\beach one Striking\b/.test(effect) ? 2 : 1;
+    const initiative = /\bthen rolls initiative\b/i.test(effect);
+    // (Whom it Strikes in the text's own words; anything more it does — a summon, doors locking, another of its abilities — a note for the GM.)
+    const plural = at === "all" || /\b(?:two|three|four|all|each)\b/i.test(whom);
+    const sentences = effect.split(/(?<=\.)\s+/);
+    const strikeSentence = sentences.find((sentence) => /\bStrik|\battack(?:ing)?\b|\bshoots?\b/i.test(sentence)) ?? "";
+    const more = sentences.filter((sentence) => sentence !== strikeSentence && !/\brolls (?:for )?initiative\b|\bmultiple attack penalty\b|\bcan't be targeted more than once\b/i.test(sentence));
+    if (/\b(?:uses|activates)\b/.test(strikeSentence)) more.unshift(strikeSentence);
+    const notes = [whom === "the triggering creature" ? "At the creature that set it off: target it." : `At ${whom.replace(/\s*\(if any\)$/, "")}: target ${plural ? "them" : "it"}.`, ...(times > 1 ? ["Twice at each: once for each blade."] : []), ...(more.length ? [`Also, for the GM: ${more.join(" ")}`] : [])];
+    return { builtin: "trap-strike", strike, at, times, initiative, notes };
+}
+
 // A spell and a grab at once (2026-10-13, batch 275, Crew's Call: "This is a Wails of the Damned spell in a 100-foot emanation …. In addition, any
 // creature within 5 feet of the ship is automatically Grabbed by the crew.") → each in turn: the spell's cast card, Grabbed on the creatures beside
 // it. Read before the spell alone. null otherwise.
@@ -10418,7 +10455,8 @@ export function compileMonsterAbility(source, options = {}) {
     // creature's — the GM's.)
     // (Batch 194, Improved Vex: a free action's follow-up to a Strike, when no other reading has it.)
     const free = !read && modernItem(source).system?.actionType?.value === "free" ? followUp(modernItem(source), options.actor ?? null, options.basicActions ?? {}) : null;
-    return read ?? free ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options);
+    // (Batch 300: a reaction's trigger the module can watch, read for a plan that had none — offered when it happens, not only reminded.)
+    return withWatchedTrigger(modernItem(source), read ?? free ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
 }
 
 // A reaction whose trigger reads but no reading plays as a whole (2026-10-13, batch 273): its Effect compiled as an action, with that trigger — on the
@@ -10579,7 +10617,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castAndGrab(item, actor) ?? castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? troopAbility(item, actor, { basicActions, actor }) ?? heldMore(item) ?? saveThenEffect(item) ?? oneOffStrikes(item, actor) ?? cursedSave(item) ?? oneOffGround(item) ?? moreOneOffs(item, actor) ?? fourthOneOffs(item, actor) ?? fifthOneOffs(item, actor) ?? sixthOneOffs(item, actor) ?? seventhOneOffs(item, actor) ?? eighthOneOffs(item, actor) ?? ownAbilitySave(item, actor, basicActions) ?? bzOneOffs(item, actor) ?? bzReactions(item, actor) ?? chunk273(item, actor, basicActions) ?? chunk274(item, actor, basicActions) ?? chunk275(item, actor, basicActions) ?? chunk276(item, actor, basicActions) ?? chunk277(item, actor, basicActions) ?? chunk278(item, actor, basicActions) ?? chunk279(item, actor, basicActions) ?? chunk280(item, actor, basicActions) ?? chunk281(item, actor, basicActions) ?? chunk282(item, actor, basicActions) ?? chunk283(item, actor, basicActions) ?? chunk284(item, actor, basicActions) ?? chunk285(item, actor, basicActions) ?? chunk286(item, actor, basicActions) ?? chunk287(item, actor, basicActions) ?? chunk288(item, actor, basicActions) ?? chunk289(item, actor, basicActions) ?? chunk290(item, actor, basicActions) ?? chunk291(item, actor, basicActions) ?? chunk292(item, actor, basicActions) ?? chunk293(item, actor, basicActions) ?? chunk294(item, actor, basicActions) ?? chunk295(item, actor) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castAndGrab(item, actor) ?? castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? troopAbility(item, actor, { basicActions, actor }) ?? heldMore(item) ?? saveThenEffect(item) ?? oneOffStrikes(item, actor) ?? cursedSave(item) ?? oneOffGround(item) ?? moreOneOffs(item, actor) ?? fourthOneOffs(item, actor) ?? fifthOneOffs(item, actor) ?? sixthOneOffs(item, actor) ?? seventhOneOffs(item, actor) ?? eighthOneOffs(item, actor) ?? ownAbilitySave(item, actor, basicActions) ?? bzOneOffs(item, actor) ?? bzReactions(item, actor) ?? chunk273(item, actor, basicActions) ?? chunk274(item, actor, basicActions) ?? chunk275(item, actor, basicActions) ?? chunk276(item, actor, basicActions) ?? chunk277(item, actor, basicActions) ?? chunk278(item, actor, basicActions) ?? chunk279(item, actor, basicActions) ?? chunk280(item, actor, basicActions) ?? chunk281(item, actor, basicActions) ?? chunk282(item, actor, basicActions) ?? chunk283(item, actor, basicActions) ?? chunk284(item, actor, basicActions) ?? chunk285(item, actor, basicActions) ?? chunk286(item, actor, basicActions) ?? chunk287(item, actor, basicActions) ?? chunk288(item, actor, basicActions) ?? chunk289(item, actor, basicActions) ?? chunk290(item, actor, basicActions) ?? chunk291(item, actor, basicActions) ?? chunk292(item, actor, basicActions) ?? chunk293(item, actor, basicActions) ?? chunk294(item, actor, basicActions) ?? chunk295(item, actor) ?? trapStrike(item, actor) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
     // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
     if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
         const zone = readZone(item, actor);

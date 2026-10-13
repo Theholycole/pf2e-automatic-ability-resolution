@@ -62,6 +62,8 @@ export function hitSetsOff(trigger, { outcome, ranged = false, unarmed = false, 
     // (Batch 287, Bounce: not on a critical hit.)
     if (trigger.notCritical && outcome === "criticalSuccess") return false;
     if (trigger.melee && ranged) return false;
+    // (Batch 300, Deflecting Lie: a ranged one only.)
+    if (trigger.ranged && !ranged) return false;
     if (trigger.unarmed && !unarmed) return false;
     return !(trigger.within && Number.isFinite(distance) && distance > trigger.within);
 }
@@ -198,7 +200,7 @@ export const REACTION_KINDS = new Set(["reactive-strike", "reaction-strike", "ac
 // (Played by their own hooks: Attack of Opportunity as Reactive Strike, Fast Swallow after a grab, the initiative warnings; Shield Block by
 // PF2e itself, as damage is applied.)
 const PLAYED_ELSEWHERE = new Set(["attack-of-opportunity", "fast-swallow", "initiative-warning", "shield-block"]);
-export const WATCHED_EVENTS = new Set(["provoke", "own-strike", "grab-turn", "damaged", "turn-start", "own-turn-start", "targeted-by", "initiative", "hit-by", "foe-mishap", "foe-failed-save", "escape-failed", "escaped", "downs", "death", "condition-lost", "condition-gained", "attacked", "aura"]);
+export const WATCHED_EVENTS = new Set(["provoke", "own-strike", "grab-turn", "damaged", "turn-start", "own-turn-start", "targeted-by", "initiative", "hit-by", "foe-mishap", "foe-failed-save", "escape-failed", "escaped", "downs", "death", "condition-lost", "condition-gained", "attacked", "aura", "nearby-death"]);
 
 // Whether the module offers this reaction itself when its trigger happens.
 export function offeredByModule(plan) {
