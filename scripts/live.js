@@ -361,6 +361,8 @@ async function playAbility(item, plan, sourceToken) {
         // (Batch 153, Lawbringer: every Strike against the creature it marks; batch 164, Mark for Death: deadly on its Strikes against it.)
         // (Batch 275, Punish the Naughty: a mark with no extra damage, its benefits its notes.)
         const marked = plan.every || plan.mark || plan.edge === "deadly";
+        // (Batch 277, Krampus: PF2e's own toggle for the mark, its Perception and Survival bonuses behind it — switched on.)
+        if (plan.toggle) await item.actor?.toggleRollOption?.("all", plan.toggle, item.id, true);
         const edgeText = !plan.edge ? "" : plan.edge === "deadly" ? `Its ${plan.strike ?? ""} Strikes against that creature gain deadly d${plan.die}.`.replace(/ {2,}/g, " ") : plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`;
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its ${marked ? "mark" : "prey"}` : `its ${marked ? "mark" : "prey"} is the creature it named`}. ${edgeText}`, ...(plan.notes ?? [])]);
         return;
