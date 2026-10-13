@@ -9294,6 +9294,149 @@ function chunk292(item, actor, basicActions) {
     return null;
 }
 
+// Group D, the last of it (2026-10-13, batch 293; the user's call: build the rest; Battlezoo dragons, described in our words). null otherwise:
+// - a duelist's mercy (Duelist's Mercy) → Prone and 1 HP kept, the weapon flung; a triumph proclaimed (Display Triumph) → its allies' bonus
+//   (a way per pair) and its own frightful presence on its foes;
+// - an honourable death (Honorable Death) → Revival named on its allies, or the GM's for inhabiting a body (control);
+// - caustic darkness (Caustic Darkness) → its own darkness and a hazard zone; stoked flames, a nemesis denounced, a polymorphing breath → note
+//   Effects;
+// - a cleansing surge (Cleansing Surge) → healing on its allies in its aura, conditions and afflictions in words;
+// - a tall tale believed (Credible Yarn) → a save, a note Effect; a revel (Rapturous Revel) → PF2e's linked inspiration, a charm save, a confusion save;
+// - a fly-by frenzy (Wing By) → its own Draconic Frenzy at different creatures; an insight into a foe (Fool's Insight) → Perception against Will,
+//   its bonuses or penalties against that creature;
+// - a strength exaggerated, a cheer for an ally, a wander away (Exaggerate Strength, Celebratory Cheer, Peregrinate) → cards, PF2e's linked
+//   effect, a safe move; a burst of speed (Bionic Celerity) → Quickened and a Strike in turn.
+function chunk293(item, actor, basicActions) {
+    const type = item.system?.actionType?.value;
+    const html = String(item.system?.description?.value ?? "");
+    const owner = actor ?? item.actor ?? item.parent;
+    const ownItems = owner?.items?.contents ?? owner?.items ?? [];
+    const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@UUID\[[^\]]*\](?!\{)/g, "it").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br) \{?([^\]#}]+?)\}?(?: ?#[^\]]*)?\]\](?!\{)/g, "$1").replace(/\[\[\/act ([\w-]+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, slug, label) => label ?? slug.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()))).replace(/\s+/g, " ").trim();
+    const tagged = plain.replace(/([^.])$/, "$1.").replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "@C").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D");
+    const actions = Number(item.system?.actions?.value) || 1;
+    const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
+    const damage = inlineTags(html, "Damage").map(readDamage);
+    const template = inlineTags(html, "Template").map(readTemplate).find(Boolean);
+    const split = /^(?:Frequency [^.]+?\.? )?Trigger (.+?)[;.]?(?: Requirements? [^.]+?\.?)? Effect (.+)$/.exec(tagged);
+    const required = /^(?:Frequency [^.]+?\.? )?(?:Requirements?|Cost) (.+?)\.? Effects? /.exec(tagged)?.[1] ?? null;
+    const sentences = (text) => String(text ?? "").trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean);
+    const auto = (targeting, success, extra = {}) => ({ ...base(item), targeting, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } }, ...extra });
+    const saveOf = (entry) => ({ kind: "save", check: { roll: "save", statistic: entry.statistic, basic: false, against: { dc: "fixed", value: entry.dc } }, sharedDamage: null });
+    const words = (target, lines, extra) => auto({ target, range: null, area: null }, { ...none(), manualInstructions: lines }, extra);
+    const noteOn = (target, label, text, duration, extra) => auto({ target, range: null, area: null }, { ...none(), noteEffects: [{ label, text, duration }] }, extra);
+    const toggles = (item.system?.rules ?? []).filter((rule) => rule?.key === "RollOption" && rule.toggleable && rule.option && !rule.suboptions?.length);
+    const spellLinks = [...html.matchAll(/@UUID\[(Compendium\.pf2e\.spells-srd\.Item\.\w{16})\](?:\{([^}]+)\})?/g)].map((match) => ({ uuid: match[1], name: match[2] ?? null }));
+    const effectLinks = [...html.matchAll(/@UUID\[(Compendium\.[\w-]+\.(?:bestiary-effects|[\w-]*effects?)\.Item\.[A-Za-z0-9]{16})\]\{([^}]*)\}/g)].map((match) => ({ uuid: match[1], label: match[2].replace(/^Effect:\s*/i, "") }));
+    const castPlan = (spell, extra = {}) => ({ builtin: "cast-spell", source: { name: item.name, uuid: item.uuid ?? null, slug: item.system?.slug ?? null }, spell: spell ? { uuid: spell.uuid, name: spell.name } : null, rank: null, dc: null, attack: null, tradition: null, self: false, ...extra });
+    const strikeActivity = (strike, notes, extra = {}) => ({ builtin: "strike-activity", actions, strides: 0, strike: strike ? strike.toLowerCase() : null, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null }, notes, ...extra });
+    const toggleOn = (rounds, duration, notes) => ({ builtin: "self-effect", actions: ["reaction", "free"].includes(type) ? 0 : actions, model: { name: item.name, rounds, modifiers: [], tempHp: 0, toggle: true }, damage: [], strike: null, melee: false, duration, notes });
+    const minute = { mode: "fixed", value: 1, unit: "minutes", expiry: "turn-start", anchor: "effect-start" };
+    const rounds = (value) => ({ mode: "fixed", value, unit: "rounds", expiry: "turn-start", anchor: "effect-start" });
+    const condition = (slug, value = null, duration = null) => ({ kind: "condition", slug, value, duration });
+    const said = split ? `Its trigger, the GM's call: ${split[1].trim().replace(/\.?$/, ".")}` : null;
+    // (A reaction's trigger the module reads, or the GM's call on the card.)
+    const triggered = (plan, text = split?.[1]) => {
+        const trigger = text ? readReactionTrigger(String(text).trim()) : null;
+        return trigger ? { ...plan, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } } : { ...plan, trigger: { event: "use", reaction: true, ...(type === "free" ? { free: true } : {}) }, notes: [said, ...(plan.notes ?? [])] };
+    };
+    const compileOwn = (entry) => {
+        try {
+            return entry ? compileMonsterAbility(entry, { basicActions, actor: owner }) : null;
+        } catch {
+            return null;
+        }
+    };
+    const exposure = (name) => {
+        const affliction = ownAffliction(item, owner, name.toLowerCase());
+        return affliction?.resolution?.afflictionHandoff ? { kind: "save", check: affliction.resolution.check, outcomes: affliction.resolution.outcomes, afflictionHandoff: affliction.resolution.afflictionHandoff } : null;
+    };
+    const basicSave = (text) => inlineSave(withDescription(item, `<p>${text}</p>`), owner);
+    const required0 = required ? required.replace(/;$/, "") : null;
+    const spellAttack = Number(ownItems.find((entry) => entry?.type === "spellcastingEntry" && Number.isFinite(Number(entry.system?.spelldc?.value)))?.system?.spelldc?.value);
+    const ownNamed = (name) => ownItems.find((entry) => entry !== item && String(entry?.name ?? "").toLowerCase() === String(name).toLowerCase());
+    // (A reaction's own trigger after a requirement or a lead-in sentence.)
+    const parts = split ?? /(?:^|[.;] )(?:Requirements? [^;.]+[;.] )?Trigger (.+?)[;.]? Effect (.+)$/.exec(tagged);
+    const told = parts ? `Its trigger, the GM's call: ${parts[1].trim().replace(/\.?$/, ".")}` : null;
+    const fromTrigger = (plan) => {
+        const trigger = parts ? readReactionTrigger(parts[1].trim()) : null;
+        return trigger ? { ...plan, trigger: { ...trigger, ...(type === "free" ? { free: true } : {}) } } : { ...plan, trigger: { event: "use", reaction: true, ...(type === "free" ? { free: true } : {}) }, notes: [told, ...(plan.notes ?? [])] };
+    };
+    const onHit = (extra) => ({ conditions: [], critical: null, push: null, damage: [], save: null, size: null, ...extra });
+    const link = (pattern) => effectLinks.find((entry) => pattern.test(entry.label)) ?? null;
+    const auraFeet = (name) => Number(/^(?:<p>)?\s*(\d+) feet\b/.exec(String(ownNamed(name)?.system?.description?.value ?? ""))?.[1]) || null;
+
+    if (type === "action" || type === "free") {
+        const darkness = damage.length === 1 && /^The dragon casts their innate darkness spell more quickly than is normally possible, [^.]+\. The area of the darkness spell becomes hazardous terrain\b/i.test(tagged);
+        if (darkness) {
+            const zone = { builtin: "zone", actions: 0, zone: { area: { type: "burst", value: 20 }, centre: "placed", range: 120, lasts: { mode: "fixed", value: 1, unit: "minutes", expiry: "turn-start", anchor: "effect-start" }, untilReused: false, concealed: false, terrain: [], others: true, hazard: { formulas: [damage[0]] }, saves: [], damage: [], effect: null, modifiers: [], notes: [`${damage[0].replace(/\[(\w+)\]$/, " $1")} for each square moved into (add them up, resistance or weakness once), and Sickened 1 (the GM's).`, "Light that counters or pierces the darkness also ends the hazard while it holds."] } };
+            return { builtin: "modes", actions, all: true, modes: [{ name: "Its darkness", plan: castPlan(null, { pick: { own: true }, notes: ["Its innate darkness, cast faster (name it)."] }) }, { name: "The hazard", plan: zone }] };
+        }
+        const stoke = /^Frequency once per round Effect The dragon stokes the power of nearby flames, [^.]+\. All fire damage dealt to the dragon['’]s foes within (\d+) feet of the dragon gains a \+(\d+) status bonus; fire damage dealt by persistent damage and hazardous terrain instead gains only a \+(\d+) status bonus\./i.exec(tagged);
+        if (stoke) return noteOn("self", "Flames stoked", `Fire damage to its foes within ${stoke[1]} feet: +${stoke[2]} status (+${stoke[3]} from persistent damage and hazardous terrain), until its next turn (add it).`, rounds(1), { notes: ["Once a round."] });
+        const surge = damage.length === 1 && /^Frequency once per hour Effect (?:[^.]+\. )?All allies within (?:the [\w' -]+?['’]s|its) ([a-z' -]+?) recover @D Hit Points and reduce the value of all their harmful conditions by 1, unless those conditions are permanent or come from afflictions\. Additionally, (?:the [\w' -]+?|it) attempts to counteract one affliction affecting each of the targeted allies \(counteract modifier \+(\d+), counteract rank (\d+)\)\.$/i.exec(tagged);
+        const surgeFeet = surge ? auraFeet(surge[1]) : null;
+        if (surge && surgeFeet) return auto({ target: "allies", range: null, area: { type: "emanation", value: surgeFeet }, allies: true }, { ...none(), effects: [{ kind: "heal", formula: damage[0].replace(/\[[^\]]*\]$/, "") }], manualInstructions: [`{target}'s harmful conditions each drop by 1 (not permanent ones or an affliction's), and it tries to counteract one affliction on {target} (counteract rank ${surge[3]}, +${surge[2]}).`] }, { notes: ["Once an hour; its allies within its aura."] });
+        const nemesis = /^The [\w' -]+? denounces an enemy as anathema to their chosen cause, [^.]+\. The [\w' -]+? selects one enemy they can see to target with [^.]+\. Until the beginning of the [\w' -]+?['’]s next turn, the dragon['’]s Strikes deal an additional (\d+) damage of one of the following types to the selected target: good, mental, or positive\./i.exec(tagged);
+        if (nemesis) return noteOn("1 enemy", "Denounced", `The denouncer's Strikes deal ${nemesis[1]} more damage to it (holy, mental or vitality, its pick; add it) and ignore its concealment, hiding and cover, until the denouncer's next turn.`, rounds(1));
+        const yarn = check ? /^The [\w' -]+? tells a tall tale so believably that those around them temporarily don't realize it['’]s all make believe\. All creatures with(?:in)? (\d+) feet must succeed at an? @C save or believe that the dragon is telling the truth about its credible yarn for 1 minute;/i.exec(tagged) : null;
+        if (yarn) {
+            const believe = (duration) => ({ ...none(), noteEffects: [{ label: "Believes the yarn", text: "It takes the tall tale for truth; a belief that clashes with its own may keep it busy talking it over with the teller.", duration }] });
+            return { ...base(item), targeting: { target: null, range: null, area: { type: "emanation", value: Number(yarn[1]) } }, trigger: { event: "use" }, resolution: { ...saveOf(check), outcomes: { criticalSuccess: none(), success: none(), failure: believe(minute), criticalFailure: believe({ ...minute, value: 1, unit: "hours" }) } }, notes: ["Then they're immune for a day."] };
+        }
+        const revel = check && template ? /^Frequency once per day Effect You bring forth a reverie [^.]+\. A surge of inspiration and joy surrounds you in an? @T filled with [^.]+\. For each target you perceive in the area, choose whether to inspire, charm, or confuse them\./i.test(tagged) : false;
+        const inspire = revel ? link(/inspire/i) : null;
+        if (inspire) {
+            const area = { type: template.type, value: Number(template.value) };
+            const charmed = (helpful) => ({ ...none(), noteEffects: [{ label: helpful ? "Helpful to the dragon" : "Friendly to the dragon", text: "No hostile actions against it.", duration: minute }] });
+            const charm = { ...base(item), traits: [...new Set([...(item.system?.traits?.value ?? []), "incapacitation"])], targeting: { target: null, range: null, area }, trigger: { event: "use" }, resolution: { ...saveOf(check), outcomes: { criticalSuccess: none(), success: none(), failure: charmed(false), criticalFailure: charmed(true) } }, notes: ["+4 circumstance to the save for a creature it or its allies threatened or harmed lately (raise its roll)."] };
+            const confuse = { ...base(item), targeting: { target: null, range: null, area }, trigger: { event: "use" }, resolution: { ...saveOf(check), outcomes: { criticalSuccess: none(), success: none(), failure: { ...none(), effects: [condition("confused", null, rounds(2))] }, criticalFailure: { ...none(), effects: [condition("confused", null, minute)] } } }, notes: ["They laugh uproariously while confused."] };
+            return { builtin: "modes", actions, all: true, modes: [{ name: "Inspire", plan: auto({ target: "those it inspires", range: null, area, allies: true }, { ...none(), nativeEffects: [inspire] }) }, { name: "Charm", plan: charm }, { name: "Confuse", plan: confuse }], notes: ["Once a day; for each creature in the area, one of the three (target each group in turn)."] };
+        }
+        const wing = /^The dragon Flies, performing a Draconic Frenzy with attacks made at any point during the flight\. Each attack must be against a different creature\.$/i.test(tagged);
+        const frenzy = wing ? compileOwn(ownNamed("Draconic Frenzy")) : null;
+        if (frenzy?.builtin === "multi-strike") return { ...frenzy, actions, each: true, sameTarget: false, max: frenzy.strikes?.length ?? 3, strides: 1, notes: [...(frenzy.notes ?? []), "It Flies, its frenzy's attacks anywhere along the way, each at a different creature."] };
+        // (No frenzy of its own to read: a dragon's usual one — two claws and a wing or tail — from the Strikes it has.)
+        if (wing && !frenzy) {
+            const melee = ownItems.filter((entry) => entry?.type === "melee").map((entry) => String(entry.name).toLowerCase());
+            const claw = melee.find((name) => /\bclaw\b/.test(name));
+            const last = melee.find((name) => /\bwing\b/.test(name)) ?? melee.find((name) => /\btail\b/.test(name));
+            if (claw && last) return { builtin: "multi-strike", actions, strikes: [claw, claw, last], each: true, max: 3, strides: 1, notes: [`It Flies; a dragon's frenzy (two ${claw} Strikes and a ${last} Strike) anywhere along the way, each at a different creature.`] };
+        }
+        const insight = /^The [\w' -]+? attempts to quickly assess a foe, [^.]+\. To do so, the [\w' -]+? attempts a Perception check against the @C or @C DC of one target within (\d+) feet with the following effects\./i.exec(tagged);
+        if (insight) {
+            const read = (value, duration) => ({ ...none(), modifiers: ["deception", "diplomacy", "intimidation"].map((selector) => ({ selector, value, type: "circumstance", recipient: "self", against: "target", duration })) });
+            return { ...base(item), targeting: { target: "1 creature", range: `${insight[1]} feet`, area: null }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "skill", statistic: "perception", against: { dc: "target", statistic: "will" } }, sharedDamage: null, outcomes: { criticalSuccess: read(2, minute), success: read(1, minute), failure: { ...none(), manualInstructions: ["{target} is immune to this for a day."] }, criticalFailure: { ...read(-2, { ...minute, value: 1, unit: "hours" }), manualInstructions: ["{target} is immune to this for a day."] } } }, notes: ["Against its Will DC or its Deception DC, whichever is higher (the GM's)."] };
+        }
+        const polymorph = required0 && /^Requirements? The [\w' -]+? can use its breath weapon and hasn't cast it from their innate spells Effect If the [\w' -]+?['’]s next action is to use its Breath Weapon, each creature in the area of effect is affected by ([a-z' -]+?) instead of the normal effects of the breath weapon\./i.exec(tagged);
+        if (polymorph) return noteOn("self", "Polymorphing breath", `Its next action, if its Breath Weapon, brings ${polymorph[1]} on each creature in the area instead of its usual effects (cast it on them; that innate spell is spent).`, { mode: "fixed", value: 0, unit: "rounds", expiry: "turn-end", anchor: "effect-start" }, { requires: "Its breath is ready and that innate spell unspent" });
+        const celerity = required0 && /^Requirements? The [\w' -]+? isn't Fatigued or exhausted\.? Effect The [\w' -]+? is Quickened for 1 minute and can immediately Strike with their ([\w' -]+?) or an attached weapon\. They can use the extra action only to ([^.]+)\. When the effect ends, the [\w' -]+? is fatigued for 1 hour\.$/i.exec(tagged);
+        if (celerity) return { builtin: "modes", actions, all: true, requires: "It isn't fatigued", modes: [{ name: "Quickened", plan: auto({ target: "self", range: null, area: null }, { ...none(), effects: [condition("quickened", null, minute)] }, { notes: [`The extra action only to ${celerity[2]}.`, "When it ends: fatigued for an hour (add it)."] }) }, { name: "A Strike now", plan: strikeActivity(celerity[1], ["With its cannon or a weapon attached to it."], { actions: 0 }) }] };
+    }
+
+    if (parts && ["reaction", "free"].includes(type)) {
+        const effect = parts[2].trim().replace(/\s*Effect: [^.]+\.?$/i, "");
+        const mercy = /^The dragon would bring a creature who is wielding a melee weapon to 0 Hit Points with a jaws, claw, or tail Strike$/i.test(parts[1].trim()) ? /\bThe creature is brought to 1 Hit Point instead, remains conscious, but is knocked Prone\. The dragon automatically knocks the melee weapon out of the triggering creature['’]s grip and can throw the weapon up to (\d+) feet in any direction of the dragon['’]s choosing\.$/i.exec(effect) : null;
+        if (mercy) return { ...auto({ target: "the triggering creature", range: null, area: null }, { ...none(), effects: [condition("prone")], manualInstructions: ["{target} stays at 1 HP and conscious (undo the rest of the damage).", `Its melee weapon is knocked away, thrown up to ${mercy[1]} feet where the dragon likes.`] }), trigger: { event: "use", reaction: true }, notes: [told] };
+        const triumph = template && /^The warlord dragon reduces an enemy to 0 Hit Points$/i.test(parts[1].trim()) ? /\bUntil the beginning of the dragon['’]s next turn, all of the dragon['’]s allies within an? @T gain a \+(\d) status bonus to the dragon['’]s choice of either their attack and damage rolls, or their AC and saves\. All foes within the same area must make a Will save against the dragon['’]s ([a-z' -]+?), even if they['’]re temporarily immune\.$/i.exec(effect) : null;
+        const presence = triumph ? compileOwn(ownNamed(triumph[2])) : null;
+        if (triumph && presence?.resolution) {
+            const area = { type: template.type, value: Number(template.value) };
+            const bonus = Number(triumph[1]);
+            const boost = (selectors) => auto({ target: "allies", range: null, area, allies: true }, { ...none(), modifiers: selectors.map((selector) => ({ selector, value: bonus, type: "status", duration: rounds(1) })) });
+            return { builtin: "modes", actions: 0, all: true, modes: [{ name: "Allies: attacks and damage", plan: boost(["attack", "damage"]) }, { name: "Allies: AC and saves", plan: boost(["ac", "saving-throw"]) }, { name: `Foes: its ${triumph[2]}`, plan: { ...presence, targeting: { target: null, range: null, area }, trigger: { event: "use" }, notes: [...(presence.notes ?? []), "Even those temporarily immune."] } }], notes: [told, "One of the two for its allies, then the foes' save."] };
+        }
+        const death = /^The great wyrm [\w' -]+? is reduced to 0 Hit Points and killed$/i.test(parts[1].trim()) && /\bAll of the [\w' -]+?['’]s allies within (\d+) feet, including those that are dead, immediately benefit from the effects of a Revival spell that lasts for (\d+) rounds\. Alternatively, the great wyrm [\w' -]+? can select one dead ally within the same range to inhabit and revive that creature temporarily for (\d+) rounds\./i.exec(effect);
+        if (death) return { builtin: "modes", actions: 0, modes: [{ name: "Revival on its allies", plan: castPlan(null, { rank: 10, pick: {}, notes: [`Name Revival: on its allies within ${death[1]} feet, the dead too, lasting ${death[2]} rounds.`] }) }, { name: "Inhabit a dead ally", plan: null, notes: ["The GM's: it takes over a body (the user's rule on control)."] }], notes: [told, "Once a day."] };
+        const exaggerate = /^The [\w' -]+? is about to attempt a saving throw again an incapacitation effect$/i.test(parts[1].trim()) && /\bThe triggering incapacitation effect treats the [\w' -]+? as if they were two levels higher\.$/i.test(effect);
+        if (exaggerate) return { ...words("self", ["That incapacitation effect treats it as two levels higher."]), trigger: { event: "use", reaction: true }, notes: [told, "Once an hour."] };
+        const cheer = effectLinks.length === 1 && /^An ally within (\d+) feet critically hits a foe$/i.exec(parts[1].trim());
+        if (cheer && /\bThe dragon gains a \+(\d) status bonus on attack rolls against the foe that their ally critically hit for (\d) rounds\./i.test(effect)) return { ...auto({ target: "self", range: null, area: null }, { ...none(), nativeEffects: [effectLinks[0]] }), trigger: { event: "use", reaction: true }, notes: [told, "Only against that foe; if it critically hits that foe meanwhile, the ally may take the same bonus as its reaction (the ally's choice)."] };
+        const wander = /^A foe['’]s turn ends, during which that foe hit (?:the [\w' -]+?|it) with a melee Strike$/i.test(parts[1].trim()) && /\bThe [\w' -]+? Strides, Swims, or Flies up to half their Speed, and their movement doesn't trigger reactions triggered by movement\b/i.test(effect);
+        if (wander) return { builtin: "safe-move", actions: 0, notes: [told, "Half its Speed, walking, swimming or flying; no reactions to the move."] };
+    }
+    return null;
+}
+
 // A spell and a grab at once (2026-10-13, batch 275, Crew's Call: "This is a Wails of the Damned spell in a 100-foot emanation …. In addition, any
 // creature within 5 feet of the ship is automatically Grabbed by the crew.") → each in turn: the spell's cast card, Grabbed on the creatures beside
 // it. Read before the spell alone. null otherwise.
@@ -10306,7 +10449,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castAndGrab(item, actor) ?? castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? troopAbility(item, actor, { basicActions, actor }) ?? heldMore(item) ?? saveThenEffect(item) ?? oneOffStrikes(item, actor) ?? cursedSave(item) ?? oneOffGround(item) ?? moreOneOffs(item, actor) ?? fourthOneOffs(item, actor) ?? fifthOneOffs(item, actor) ?? sixthOneOffs(item, actor) ?? seventhOneOffs(item, actor) ?? eighthOneOffs(item, actor) ?? ownAbilitySave(item, actor, basicActions) ?? bzOneOffs(item, actor) ?? bzReactions(item, actor) ?? chunk273(item, actor, basicActions) ?? chunk274(item, actor, basicActions) ?? chunk275(item, actor, basicActions) ?? chunk276(item, actor, basicActions) ?? chunk277(item, actor, basicActions) ?? chunk278(item, actor, basicActions) ?? chunk279(item, actor, basicActions) ?? chunk280(item, actor, basicActions) ?? chunk281(item, actor, basicActions) ?? chunk282(item, actor, basicActions) ?? chunk283(item, actor, basicActions) ?? chunk284(item, actor, basicActions) ?? chunk285(item, actor, basicActions) ?? chunk286(item, actor, basicActions) ?? chunk287(item, actor, basicActions) ?? chunk288(item, actor, basicActions) ?? chunk289(item, actor, basicActions) ?? chunk290(item, actor, basicActions) ?? chunk291(item, actor, basicActions) ?? chunk292(item, actor, basicActions) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castAndGrab(item, actor) ?? castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? troopAbility(item, actor, { basicActions, actor }) ?? heldMore(item) ?? saveThenEffect(item) ?? oneOffStrikes(item, actor) ?? cursedSave(item) ?? oneOffGround(item) ?? moreOneOffs(item, actor) ?? fourthOneOffs(item, actor) ?? fifthOneOffs(item, actor) ?? sixthOneOffs(item, actor) ?? seventhOneOffs(item, actor) ?? eighthOneOffs(item, actor) ?? ownAbilitySave(item, actor, basicActions) ?? bzOneOffs(item, actor) ?? bzReactions(item, actor) ?? chunk273(item, actor, basicActions) ?? chunk274(item, actor, basicActions) ?? chunk275(item, actor, basicActions) ?? chunk276(item, actor, basicActions) ?? chunk277(item, actor, basicActions) ?? chunk278(item, actor, basicActions) ?? chunk279(item, actor, basicActions) ?? chunk280(item, actor, basicActions) ?? chunk281(item, actor, basicActions) ?? chunk282(item, actor, basicActions) ?? chunk283(item, actor, basicActions) ?? chunk284(item, actor, basicActions) ?? chunk285(item, actor, basicActions) ?? chunk286(item, actor, basicActions) ?? chunk287(item, actor, basicActions) ?? chunk288(item, actor, basicActions) ?? chunk289(item, actor, basicActions) ?? chunk290(item, actor, basicActions) ?? chunk291(item, actor, basicActions) ?? chunk292(item, actor, basicActions) ?? chunk293(item, actor, basicActions) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
     // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
     if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
         const zone = readZone(item, actor);

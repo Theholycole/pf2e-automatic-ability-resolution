@@ -117,6 +117,9 @@ export const GM_DECIDED = [
     // (2026-10-13, batch 282: a device or vehicle upgraded, by the same rule.)
     // (2026-10-13, batch 289: alchemical items made inert and reagents given back, by the same rule.)
     ["Living Proof", "Sudden Infusion", "items"],
+    // (Batch 293: a foe's weapon drawn into a dragon's body and used.)
+    ["Bionic Dragon (Great Wyrm)", "Assimilate Weapon", "items"],
+    ["Bionic Dragon (Great Wyrm, Spellcaster)", "Assimilate Weapon", "items"],
     ["Mechanic", "Risky Upgrade", "items"],
     ["Apothecary Bee", "Ingest Potion", "items"],
     ["Apothecary Bee", "Inject Potion", "items"],
@@ -274,6 +277,11 @@ export const GM_DECIDED = [
     // (2026-10-13, batch 282: one more copy, by the user's rule of 2026-10-12 — a creature's action duplicated; batch 291: a spell, item or speech
     // replicated.)
     ["Writer's Block", "Creative Plagiarism", "copies"],
+    // (Batch 293: a foe's own skill action turned back on it.)
+    ["Duel Dragon (Ancient)", "Return the Gesture", "copies"],
+    ["Duel Dragon (Ancient, Spellcaster)", "Return the Gesture", "copies"],
+    ["Duel Dragon (Great Wyrm)", "Return the Gesture", "copies"],
+    ["Duel Dragon (Great Wyrm, Spellcaster)", "Return the Gesture", "copies"],
     ["Mirror Seer", "Rightfully Mine", "copies"],
     ["Eldritch Emeritus", "Didactic Arcanism", "copies"],
     ["Clone Mirrors", "Spawn Reflection", "copies"],
