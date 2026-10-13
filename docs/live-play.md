@@ -2850,3 +2850,8 @@ Fixed on the way:
 - **New pieces:** a cast card's `pick` may name a tradition only (any arcane spell from a soul cage); an Athletics check against the ability's DC by each creature around it is a save with `statistic: "athletics"` (the core rolls the creature's statistic by name).
 - **Compiled** (29 of 30 rows; 30 new in PF2e, 11 more that were the GM's): Demon Hunter, Burning Hoofprints, Indispensable Savvy, Isolating Words, Drain Soul Cage, Belly Grease, Preserve Prey, Light of Truth, Responsive Recovery, Channel Smite, Focus Beauty (as if by its aura), Bond with Mortal, Surgical Rend, Curse of Darkness, Consume Soul, Inherit Soul, Ride the Moonbeams, Raise Grain Cloud, Force Dart, Fastening Leap, Elongate Tongue, Vainglorious Whispers, Isolate Foes, Breath of the Sea, Stoke the Fervent, Strix Vengeance, Vicious Rend. Left for the user: Spirit Blades.
 
+## The long tail after the user's choices, part 8 (2026-10-13, batch 280)
+
+- **New pieces:** an outcome modifier's `predicate` goes onto PF2e's FlatModifier (Divine Aegis: +1 to saves against non-divine magic, −1 against divine). An attack at its own modifier with a save after a hit uses `followUps` (Hat Toss: a way per hat). A rage PF2e holds as a feat effect (Badger Rage) is that effect on itself.
+- **Compiled** (30 rows; 25 new in PF2e, 5 more that were the GM's): Divine Aegis, Spell Break, Whirlwind Throw, Viscous Choke, Divergent Potential, Center of Destiny, Savor Anguish, Ravenous Repast, Slough Toxins, Dweomer Leap, Hostile Duet, Opening Statement, Abrogation of Consequences, Tongue Reposition, Hat Toss, Hell Pack Mindlink, Quick Escape, Tilting Strike, Light to Dark, Intercepting Eyes, Badger Rage, Scuttling Shift, Focus Beauty (Hesperid Queen), Catching Bite, Instinctive Alloy.
+

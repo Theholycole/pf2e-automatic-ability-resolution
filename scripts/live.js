@@ -1458,8 +1458,9 @@ async function penaltyEffect(actor, modifier, state, against = null) {
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
             rules: slug
-                ? [{ key: "TokenMark", slug, uuid: marked.uuid }, { key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, predicate: [`${outgoing ? "target" : "origin"}:mark:${slug}`] }]
-                : [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value }]
+                ? [{ key: "TokenMark", slug, uuid: marked.uuid }, { key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, predicate: [`${outgoing ? "target" : "origin"}:mark:${slug}`, ...(modifier.predicate ?? [])] }]
+                // (Batch 280, Divine Aegis: a modifier only against some effects — its predicate.)
+                : [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, ...(modifier.predicate?.length ? { predicate: modifier.predicate } : {}) }]
         }
     }]);
     return null;
