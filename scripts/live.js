@@ -327,13 +327,14 @@ async function playAbility(item, plan, sourceToken) {
                 type: "effect",
                 img: item.img ?? "icons/svg/sword.svg",
                 flags: { [MODULE_ID]: { grantedAoo: { sourceActorUuid: item.actor.uuid } } },
-                system: { description: { value: `<p>${plan.reaction ?? "Attack of Opportunity"} from <strong>${item.name}</strong> (${sourceToken.name}), ${plan.until === "move-or-attack" ? "until it takes a move or attack action" : `until the end of ${plan.until === "source" ? `${sourceToken.name}'s` : "its"} next turn`}.</p>` }, duration: plan.until === "move-or-attack" ? { value: -1, unit: "unlimited", expiry: null, sustained: false } : { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
+                system: { description: { value: `<p>${plan.reaction ?? "Attack of Opportunity"} from <strong>${item.name}</strong> (${sourceToken.name}), ${plan.untilText ? plan.untilText : plan.until === "move-or-attack" ? "until it takes a move or attack action" : `until the end of ${plan.until === "source" ? `${sourceToken.name}'s` : "its"} next turn`}.</p>` }, duration: plan.until === "move-or-attack" || plan.untilText ? { value: -1, unit: "unlimited", expiry: null, sustained: false } : { value: 1, unit: "rounds", expiry: "turn-end", sustained: false }, tokenIcon: { show: true }, rules: [{ key: "GrantItem", uuid: plan.uuid ?? "Compendium.pf2e.bestiary-ability-glossary-srd.Item.hFtNbo1LKYCoDy2O", onDeleteActions: { granter: "cascade", grantee: "cascade" } }] }
             }]);
             granted.push(token.name);
         }
         // (Batch 176, Call to Arms: Reactive Strike until the end of its own next turn — the effect's own round; an ally that uses it immune after.)
         const reaction = plan.reaction ?? "Attack of Opportunity";
-        const until = plan.until === "move-or-attack" ? "until it takes a move or attack action (remove the effect then)." : plan.until === "source" ? `until the end of ${sourceToken.name}'s next turn.` : `until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).`;
+        // (Batch 265, Coil: until it Strikes with its fangs — its own words.)
+        const until = plan.untilText ? `${plan.untilText} (remove the effect then).` : plan.until === "move-or-attack" ? "until it takes a move or attack action (remove the effect then)." : plan.until === "source" ? `until the end of ${sourceToken.name}'s next turn.` : `until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).`;
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} ${reaction} ${until}` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks ${reaction}.`.replace(/ {2,}/g, " ")}`, ...(plan.usedOnce ? [`One that uses this ${reaction} is immune to ${item.name} from ${sourceToken.name} for 10 minutes.`] : [])]);
         return;
     }

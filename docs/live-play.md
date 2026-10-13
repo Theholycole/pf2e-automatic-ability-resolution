@@ -2649,3 +2649,27 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
   - **Strikes:** a teleport then a Strike with extra sonic damage (Disharmonic Door), two ranged Strikes at one creature (Crimson Vengeance), and two Strikes with different weapons (Defensive Assault, its AC as a note).
   - **Other:** plural gazes (Focus Gaze), a burrow for gems (no effect in the fight), and a trap fall with words around it (Long Fall).
 - **Simulator:** see B264 in its ability decisions.
+
+## The long tail, part 3 (2026-10-12, batch 265)
+
+- **Compiled** (16 new in PF2e and 1 in Battlezoo; 3 adventure abilities that were the GM's):
+  - **Pulls and wounds:**
+    - one Athletics check against each creature it holds, a pull by its degree (Pull the Strands);
+    - its own Hit Points given as healing to the creature it touches, the loss a note (Touch of Charity).
+  - **Strikes:**
+    - one ranged Strike at two creatures in a line (Piercing Shot; one roll, a note);
+    - a Strike with persistent spirit damage against an unholy creature, the extra dice a note (Blade of Justice);
+    - a flying charge with a claw Strike, its Grab or Prone a note (Powerful Dive);
+    - a stinger Strike at +2 on the creature it grabbed that way, its requirement the GM's (Punishing Momentum).
+  - **Afflictions:** eggs implanted in a helpless creature, its requirement the GM's (Implant). An affliction whose cure's check comes before its "Saving Throw" now takes the save's DC (Xill Eggs, Curse of Whispers).
+  - **On itself:**
+    - healing that also ends Fatigued and Slowed (Rampant Growth);
+    - Reactive Strike for itself until it Strikes with its fangs (Coil; live names that end on the effect);
+    - Invisible until it uses an attack, manipulate or move action (Fade from View, a note);
+    - listed conditions negated, persistent damage a note (Unstoppable).
+  - **Allies and foes:**
+    - healing on a willing undead creature, its Strikes' curse a note (Bound in Death);
+    - a save or Fascinated, from a hazard (Tempt).
+  - **Traps:** a save or 1d8 damage and Prone, the push a note (Flip); Clumsy 1 on the creatures in a pool, kept while they stay in it (Downpour, a note).
+  - **A spell cast near it:** a save, the spell disrupted on a failure, only for its tradition, with the higher DC a note (Elegy of the Faithless). In live play, any spell cast within its distance brings the offer, unless the spell's tradition is known and differs.
+- **Simulator:** see B265 in its ability decisions.

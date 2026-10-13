@@ -2707,6 +2707,12 @@ export function readReaction(item, text) {
     if (/^(?:The )?[^.]+? becomes Frightened\.?$/.test(trigger.trim()) && /^(?:The )?[^.]+? reduces (?:its|their) frightened value by 1 \(to a minimum of 0\)\. (?:The )?[^.]+? then Strides toward an enemy\.$/i.test(effect.trim())) {
         return { builtin: "negate-condition", conditions: ["frightened"], reduceBy: 1, stride: "toward" };
     }
+    // (Batch 265, Grendel's Unstoppable: "Trigger Grendel would take Persistent Damage or gain one of the following conditions: Blinded, Clumsy, … Effect The
+    // persistent damage or condition from the triggering effect doesn't affect Grendel." — those conditions negated; the persistent damage, a note.)
+    const unstoppable = /^(?:The )?[\w' -]+? would take Persistent Damage or gain one of the following conditions: ([A-Za-z, ]+?)\.?$/i.exec(trigger.trim());
+    if (unstoppable && /^The persistent damage or condition from the triggering effect doesn't affect (?:the )?[\w' -]+?\.$/i.test(effect.trim())) {
+        return { builtin: "negate-condition", conditions: unstoppable[1].split(/,\s*(?:or\s+)?|\s+or\s+/).map((word) => word.trim().toLowerCase()).filter(Boolean), notes: ["Also persistent damage it would take: the GM ends it."] };
+    }
     const labeled = /\bTrigger (.+?) Effect (?=[A-Z])(.+)$/.exec(text);
     const negates = labeled ? /^(?:The )?[^.]+? would be affected by (?:a condition or adverse effect(?: \([^)]*\))?|the ([\w, ]+?) conditions?(?:, or by an effect that would give it a penalty to its Speeds)?(?:, from a source of \d+(?:st|nd|rd|th) level or less)?)\.?$/i.exec(labeled[1].trim()) : null;
     if (negates && /^(?:The )?[^.]+? negates the triggering condition or effect(?: by [^.]+)?\.(?: Effects from artifacts, deities, or a similarly powerful source can't be avoided in this way\.)?$/i.test(labeled[2].trim())) {

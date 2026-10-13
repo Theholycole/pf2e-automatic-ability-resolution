@@ -311,6 +311,8 @@ async function onMessage(message) {
     const castTraits = (context?.type === "spell-cast" || !context?.type) && origin?.type === "spell" ? (message.item?.system?.traits?.value ?? []) : null;
     // (Batch 104, Spell Interception: any spell cast in its reach, its Strike; a hit disrupts the spell.)
     if (castTraits) await castInterception(scene, combat, token);
+    // (Batch 265, Elegy of the Faithless: any spell cast near it, of its tradition when it names one.)
+    if (castTraits) await provokeTrigger(scene, combat, token, "cast", "cast a spell", { tradition: message.item?.spellcasting?.tradition ?? null });
     // (Batch 195, Siphon Life: a healing spell cast near it.)
     if (castTraits?.includes("healing")) await healSiphonAnswers(scene, combat, token);
     if (castTraits?.includes("manipulate")) {
@@ -515,11 +517,11 @@ function provokeRadius(actor, within) {
 }
 
 // A reaction with results of its own to a creature acting within its distance (Quick Spike, Brine Spit, Baleful Gaze; batch 22).
-async function provokeTrigger(scene, combat, token, kind, words) {
+async function provokeTrigger(scene, combat, token, kind, words, { tradition = null } = {}) {
     const grid = gridOf(scene);
     for (const { token: monster, actor, reactions } of reactors(scene, combat)) {
         if (!isFoe(monster, token)) continue;
-        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "provoke" && plan.trigger.triggers.includes(kind) && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) <= provokeRadius(actor, plan.trigger.within));
+        const entry = reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "provoke" && plan.trigger.triggers.includes(kind) && (!plan.trigger.tradition || !tradition || plan.trigger.tradition === tradition) && distanceFeet(box(monster, grid.size), box(token, grid.size), grid) <= provokeRadius(actor, plan.trigger.within));
         if (entry) await offer({ kind: "card", item: entry.item, monster, actor, target: token, trigger: words, free: !!entry.plan.trigger.free });
     }
 }

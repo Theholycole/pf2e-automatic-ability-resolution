@@ -58,7 +58,9 @@ export function readAffliction(item) {
         // A stage with no duration of its own: the previous stage's.
         if (!stage.duration && !stage.death && index > 0) stage.duration = stages[index - 1].duration;
     }
-    const raw = inlineTags(html, "Check")[0];
+    // (Batch 265, Xill Eggs: a cure's Medicine check before it — the one under "Saving Throw".)
+    const savingAt = html.search(/<strong>\s*Saving Throw\s*<\/strong>/i);
+    const raw = (savingAt >= 0 ? inlineTags(html.slice(savingAt), "Check")[0] : null) ?? inlineTags(html, "Check")[0];
     const check = raw ? readCheck(raw) : null;
     if (!check?.save || !check.dc) return null;
     const plain = htmlToPlainText(html);

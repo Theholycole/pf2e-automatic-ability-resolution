@@ -387,6 +387,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - stances and shells (Full Bloom, Sparking Shell, Paragon's Guard);
   - held, bitten and marked creatures (Fish Fork, Into the Earth, Zinba Restoration);
   - Strikes (Disharmonic Door, Crimson Vengeance, Defensive Assault).
+- **The long tail, part 3** (2026-10-12, batch 265): 16 new in PF2e, 1 in Battlezoo, and 3 abilities that were the GM's. They include:
+  - pulls and wounds taken on (Pull the Strands, Touch of Charity), a shot through two creatures (Piercing Shot), and a holy blade (Blade of Justice);
+  - eggs implanted, with an affliction's save found past a cure's check (Implant, Xill Eggs), and regrowth (Rampant Growth);
+  - a diving charge and the stinger after it (Powerful Dive, Punishing Momentum), a coil that grants itself Reactive Strike (Coil), and healing for an undead ally (Bound in Death);
+  - traps that tip a creature over or soak it (Flip, Downpour);
+  - conditions shrugged off (Unstoppable), invisibility until it acts (Fade from View), and a spell sung away as it's cast (Elegy of the Faithless).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
