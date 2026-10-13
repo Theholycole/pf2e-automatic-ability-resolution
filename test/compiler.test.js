@@ -4510,3 +4510,33 @@ test("the long tail, part 6: inspired animals, orders, barrages, balls and shell
     const mist = plan("<p><strong>Requirements</strong> The test mist begins their turn with a target of their size or smaller @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed}</p><hr /><p><strong>Effect</strong> The test mist maintains the Grab and wraps around the creature. This thereafter has the same effect as if the test mist had Engulfed the creature (DC 20, 2d6+4 cold, [[/act escape dc=20]], Rupture 10).</p>", "action", 3);
     assert.deepEqual(mist?.resolution?.outcomes?.success?.effects?.[0], { kind: "swallow", damage: "(2d6+4)[cold]", rupture: 10, size: "medium", escapeDC: 20 });
 });
+
+test("Battlezoo's long tail, part 1, in our own words: gobs, twin strikes, rock traps, quick bursts, rerolls, jinxes, spins, coated blades, kicks, paired strikes, ice armor, lifts (2026-10-12, batch 269)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, type, actions), { basicActions: {}, ...(actor ? { actor } : {}) });
+    const react = (trigger, effect) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, "reaction");
+    const gob = plan("<p>The test newt lobs a sticky gob, dealing @Damage[1d4[persistent,acid]] damage in a @Template[type:burst|distance:5] within 20 feet (@Check[reflex|dc:15] save negates). Water washes it off.</p>");
+    assert.deepEqual([gob?.targeting, gob?.resolution?.check?.basic, gob?.resolution?.outcomes?.failure?.damage?.formulas, gob?.notes], [{ target: null, range: "20 feet", area: { type: "burst", value: 5 } }, false, [{ formula: "1d4[persistent,acid]" }], ["Water washes it off."]]);
+    const echo = plan("<p>The test ghost makes two echo Strikes against one target. When the first attack misses, it rolls the next one twice and keeps the higher.</p>", "action", 2);
+    assert.deepEqual([echo?.builtin, echo?.sameTarget], ["multi-strike", true]);
+    const trap = plan("<p>The test knight hardens the slag on a foe. The test knight chooses a creature within 30 feet that suffers persistent fire damage by its spells. The creature takes @Damage[2d6[fire]] damage, slows down, and stays stuck until it [[/act escape dc=20]]{Escapes}. Its persistent fire damage then ends.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.VfEM4AXrlPC3tgHX]{Effect: Test Trap}</p>");
+    assert.deepEqual([trap?.targeting?.range, trap?.resolution?.outcomes?.success?.damage?.formulas, trap?.resolution?.outcomes?.success?.nativeEffects?.[0]?.label, trap?.notes?.[1]], ["30 feet", [{ formula: "2d6[fire]" }], "Test Trap", "The effect lasts until it Escapes (DC 20)."]);
+    const burst = plan("<p><strong>Frequency</strong> once per minute</p><hr /><p><strong>Effect</strong> The test bard becomes @UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened} for 1 round. Its extra action is only for a Strike. The test bard is Slowed 1 during their next turn.</p>", "free");
+    assert.deepEqual([burst?.resolution?.outcomes?.success?.effects?.[0]?.slug, burst?.notes?.length], ["quickened", 2]);
+    const muse = react("An ally fails a check within sight of the test muse", "A song lifts them. The ally may reroll the triggering check.");
+    assert.deepEqual([muse?.builtin, muse?.ally, muse?.keep], ["save-reroll", true, "new"]);
+    const jinx = react("A creature within 20 feet of the test tinker takes an action with the manipulate trait", "The test tinker hexes the tool. The creature must attempt a @Check[will|dc:20] save. On a failure, the action is disrupted and it pinches itself, taking @Damage[5[untyped]] damage.");
+    assert.deepEqual([jinx?.trigger?.triggers, jinx?.trigger?.within, jinx?.resolution?.outcomes?.failure?.damage?.formulas], [["manipulate"], 20, [{ formula: "5[untyped]" }]]);
+    const spin = plan("<p>The test top whirls about. It makes a body Strike against every foe in its reach. Its multiple attack penalty doesn't increase until all the attacks are done. After Test Whirl, it is Stunned 1, and cannot use this ability again for [[/gmr 1d4 #Recharge]]{1d4 rounds}.</p>", "action", 3);
+    assert.deepEqual([spin?.builtin, spin?.each, spin?.recharge, spin?.notes], ["multi-strike", true, "1d4", ["It's Stunned 1 after (apply it)."]]);
+    const coat = plan("<p>With a burp, the test goblin Interacts to coat its blade. The test goblin then Strikes with its shortsword; it deals an extra 1d4 acid damage.</p>");
+    assert.deepEqual([coat?.strike, coat?.onHit?.damage], ["shortsword", ["1d4[acid]"]]);
+    const kick = plan("<p>The test monk Strides, attempts a Long Jump, and then makes a knee Strike. If it clears a Long Jump of at least 15 feet first, the Strike's damage becomes 2d10+8.</p>", "action", 2);
+    assert.deepEqual([kick?.strides, kick?.strike, kick?.notes?.length], [1, "knee", 1]);
+    const pair = plan("<p>The test duelist makes two sickle Strikes against the same target, one with each of its sickles. It combines the damage of both for resistances and weaknesses. Both count toward the duelist's multiple attack penalty, but that rises after both of them. If it misses both, the target still takes one sickle's damage.</p>", "action", 2);
+    assert.deepEqual([pair?.builtin, pair?.sameMap, pair?.notes?.length], ["multi-strike", true, 2]);
+    const ice = plan("<p><strong>Requirements</strong> The test owl's last action was to cast a spell with the water trait</p><hr /><p><strong>Effect</strong> The test owl wraps itself in frost, which lasts 1 minute. While it holds, it gains a +2 circumstance bonus to AC but loses its weakness to fire. Any fire damage ends the frost.</p>");
+    assert.deepEqual([ice?.model?.modifiers, ice?.requires], [[{ on: "ac", type: "circumstance", value: 2 }], "after-cast"]);
+    const lift = plan("<p>The test ghost attempts an Athletics check to Grapple a creature it can see within 20 feet. On a success, besides being grabbed, the creature floats 10 feet up.</p>");
+    assert.deepEqual([lift?.targeting?.range, lift?.resolution?.outcomes?.success?.effects?.[0]?.slug, lift?.notes], ["20 feet", "grabbed", ["On a success, also the creature floats 10 feet up."]]);
+});

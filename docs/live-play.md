@@ -2730,3 +2730,20 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
     - three fist Strikes at one target, the save after as a note (Rapid Barrage);
     - a Grapple at a creature leaving its reach, with the damage as a note (Reactive Grab);
     - a held creature engulfed with its damage written in words (the veiled current's Envelop).
+
+## Battlezoo's long tail, part 1 (2026-10-12, batch 269)
+
+- **Compiled** (12 new in Battlezoo; their texts read in their own words, described here in ours):
+  - **Areas and foes:**
+    - persistent damage in a small burst at range, a save negating it, the rest as notes;
+    - set damage and PF2e's linked effect on a creature already burning from its abilities, its Escape DC and the requirement as notes;
+    - an Athletics check against the Fortitude DC of a creature within range, Grabbed or Restrained, the lift as a note.
+  - **Strikes:**
+    - two Strikes at one target, with the second roll's fortune as a note, or the combined damage and a miss's damage as notes;
+    - a Strike at each enemy in reach with its multiple attack penalty held, then Stunned 1 (a note) and a 1d4-round recharge;
+    - a Strike with extra damage of a type after an Interact, and a Stride and Long Jump before a Strike (the bigger damage a note).
+  - **On itself and allies:**
+    - Quickened for 1 round, its limits and the Slowed after as notes;
+    - +4 AC for a minute straight after a cold spell (requires "after-cast"), its fire weakness and the melting as notes;
+    - an ally's failed save rerolled, the new result kept (a skill check, the GM's).
+  - **Reactions:** a manipulate action within 30 feet sets off a Will save; on a failure the action is disrupted and the creature takes the set damage (its type, the GM's).

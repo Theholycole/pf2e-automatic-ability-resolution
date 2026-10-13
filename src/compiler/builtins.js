@@ -1058,6 +1058,7 @@ export function readSweep(text) {
     let strides = 0;
     let noMomentum = false;
     const notes = [];
+    let recharge = null;
     const sentences = text.trim().replace(/^Requirements? (?:The )?[^.]+? is wielding [^.]+? Effect /i, "").replace(stated, "").replace(/ and the bonus from sweep applies to each attack(?=\.)/i, "")
         // (Batch 246, Tomorrow's Fury: "… makes claw attacks against any number of targets within reach. The claw attacks count against the morrowkin's
         // multiple attack penalty, but don't apply the penalty until after all attacks have been made.")
@@ -1212,6 +1213,13 @@ export function readSweep(text) {
             sameMap = true;
             continue;
         }
+        // (Batch 269, a Battlezoo spinner's: Stunned after the sweep, and a rolled wait before the next one — the wait its recharge, Stunned a note.)
+        const after = /^After (?:using )?[A-Z][\w' -]+?, (?:the [\w' -]+?|it|they) (?:becomes?|is|are) Stunned (\d),? and can(?:'t|not) use this ability again for (?:\[\[\/(?:gm|b)?r (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+) rounds)\.$/i.exec(sentence);
+        if (after) {
+            notes.push(`It's Stunned ${after[1]} after (apply it).`);
+            recharge = after[2] ?? after[3];
+            continue;
+        }
         return null;
     }
     // (Batch 83: "a single claw Strike": the claw's.)
@@ -1219,7 +1227,7 @@ export function readSweep(text) {
     // (Batch 224: "a ranged Strike" — its best ranged one.)
     const name = said && /^ranged$/i.test(said.trim()) ? "ranged" : said && !/^(?:(?:single )?(?:melee|melee weapon|weapon|unarmed)|single)$/i.test(said.trim()) ? said.trim().replace(/^(?:single\s+)?(?:melee|ranged)?\s*/i, "").toLowerCase() : null;
     const max = counted ? COUNTS[counted[1].toLowerCase()] ?? Number(counted[1]) : null;
-    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(countsAs ? { countsAs } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(missDamage.length ? { missDamage } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: raging ? "raging" : "requirement" } : {}), ...(strides ? { strides } : {}), ...(noMomentum ? { noMomentum } : {}), ...(notes.length ? { notes } : {}) };
+    return { strike: name, sameMap, ...(penalty ? { penalty } : {}), ...(max ? { max } : {}), ...(countsAs ? { countsAs } : {}), ...(extraDamage.length ? { extraDamage } : {}), ...(missDamage.length ? { missDamage } : {}), ...(match?.[2] ? { notGrabbed: true } : {}), ...(required ? { requires: raging ? "raging" : "requirement" } : {}), ...(strides ? { strides } : {}), ...(noMomentum ? { noMomentum } : {}), ...(notes.length ? { notes } : {}), ...(recharge ? { recharge } : {}) };
 }
 
 // "X Flies up to double its fly Speed and then makes a talon Strike." and other moves before one Strike (2026-10-10):
@@ -2006,6 +2014,10 @@ export function readAllySave(text) {
     // (Batch 268, Little Wish: "Trigger A creature the gennayn can see that's within 60 feet attempts a saving throw or skill check Frequency once per day
     // Effect The gennayn reshapes reality in a small way to twist fate, allowing the creature to reroll the saving throw or skill check and take the better
     // result." — an ally's failed save rerolled, the better kept, once a fight; a skill check or another creature, the GM's.)
+    // (Batch 269, a Battlezoo wyrm's: an ally that fails a save or a skill check where it can see may reroll — the new result kept; a skill check, the
+    // GM's.)
+    const mien = /^Trigger An ally fails (?:a saving throw or a skill check|a save or a skill check|a check) within sight of (?:the [\w' -]+?|it)\.? Effect [^.]+\. The ally (?:can|may) reroll (?:the )?triggering check\.$/i.exec(String(text).trim());
+    if (mien) return { builtin: "save-reroll", ally: true, within: 120, save: null, keep: "new", note: "The new result counts. Any ally it can see; a skill check too (the GM's)." };
     const wish = /^Trigger A creature (?:the [\w' -]+?|it) can see that['’]s within (\d+) feet attempts a saving throw or skill check\.? Frequency once per (?:hour|day|10 minutes) Effect (?:The )?[^.]+?, allowing the creature to reroll the saving throw or skill check and take the better result\.$/i.exec(String(text).trim());
     if (wish) return { builtin: "save-reroll", ally: true, within: Number(wish[1]), save: null, uses: 1, note: "The better of the two counts. Also any other creature it can see, or a skill check (the GM's)." };
     const body = String(text).trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\befect\b/g, "effect");
@@ -3531,7 +3543,7 @@ export function compileBuiltin(item, slug) {
     const flourish = (item.system?.traits?.value ?? []).includes("flourish");
     if (multi) return { builtin: "multi-strike", actions, strikes: multi.strikes, ...(flourish ? { flourish: true } : {}), ...(multi.sameMap ? { sameMap: true } : {}), ...(multi.sameTarget ? { sameTarget: true } : {}), ...(multi.oncePerTurn ? { oncePerTurn: true } : {}), ...(multi.each ? { each: true, max: multi.max } : {}), ...(multi.grab ? { grab: true } : {}), ...(multi.penalty ? { penalty: multi.penalty } : {}), ...(multi.requires ? { requires: multi.requires } : {}), ...(multi.after ? { after: multi.after } : {}), ...(multi.bothHit ? { bothHit: multi.bothHit } : {}), ...(multi.secondOffGuard ? { secondOffGuard: multi.secondOffGuard } : {}), ...(multi.countsAs !== undefined ? { countsAs: multi.countsAs } : {}), ...(multi.notes ? { notes: multi.notes } : {}), ...(multi.noGrab ? { noGrab: true } : {}), ...(multi.critical ? { critical: multi.critical } : {}), ...(multi.extraDamage ? { extraDamage: multi.extraDamage } : {}), ...(multi.then ? { then: multi.then } : {}), ...(multi.strides ? { strides: multi.strides } : {}), ...(multi.oncePerFight ? { oncePerFight: true } : {}), ...(multi.chain ? { chain: true } : {}) };
     const sweep = readSweep(text);
-    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.countsAs ? { countsAs: sweep.countsAs } : {}), ...(sweep.extraDamage ? { extraDamage: sweep.extraDamage } : {}), ...(sweep.missDamage ? { missDamage: sweep.missDamage } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}) };
+    if (sweep) return { builtin: "multi-strike", actions, strikes: [sweep.strike], each: true, ...(sweep.max ? { max: sweep.max } : {}), ...(sweep.sameMap ? { sameMap: true } : {}), ...(sweep.countsAs ? { countsAs: sweep.countsAs } : {}), ...(sweep.extraDamage ? { extraDamage: sweep.extraDamage } : {}), ...(sweep.missDamage ? { missDamage: sweep.missDamage } : {}), ...(sweep.penalty ? { penalty: sweep.penalty } : {}), ...(sweep.notGrabbed ? { notGrabbed: true } : {}), ...(sweep.requires ? { requires: sweep.requires } : {}), ...(sweep.strides ? { strides: sweep.strides } : {}), ...(sweep.noMomentum ? { noMomentum: true } : {}), ...(sweep.notes ? { notes: sweep.notes } : {}), ...(sweep.recharge ? { recharge: sweep.recharge } : {}) };
     // One roll against up to two foes (Swipe): a Strike at each, at the same penalty, counted as that many attacks.
     const swipe = readSwipe(text);
     if (swipe) return { builtin: "multi-strike", actions, strikes: [swipe.strike], each: true, max: swipe.max, sameMap: true, ...(swipe.countsAs ? { countsAs: swipe.countsAs } : {}), ...(swipe.bonus ? { penalty: -swipe.bonus } : {}), ...(swipe.oncePerTurn ? { oncePerTurn: true } : {}), ...(swipe.bonus || swipe.notes ? { notes: [...(swipe.bonus ? [`A +${swipe.bonus} circumstance bonus to the attack roll.`] : []), ...(swipe.notes ?? [])] } : {}) };
