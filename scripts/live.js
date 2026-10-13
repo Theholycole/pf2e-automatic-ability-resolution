@@ -333,9 +333,9 @@ async function playAbility(item, plan, sourceToken) {
         }
         // (Batch 176, Call to Arms: Reactive Strike until the end of its own next turn — the effect's own round; an ally that uses it immune after.)
         const reaction = plan.reaction ?? "Attack of Opportunity";
-        // (Batch 265, Coil: until it Strikes with its fangs — its own words.)
+        // (Batch 265, Coil: until it Strikes with its fangs — its own words; its sheet's own Reactive Strike already there (Coiled Strike), said so.)
         const until = plan.untilText ? `${plan.untilText} (remove the effect then).` : plan.until === "move-or-attack" ? "until it takes a move or attack action (remove the effect then)." : plan.until === "source" ? `until the end of ${sourceToken.name}'s next turn.` : `until the end of ${granted.length === 1 ? "its" : "their"} next turn (the effect lasts a round: remove it sooner if that turn ends first).`;
-        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} ${reaction} ${until}` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks ${reaction}.`.replace(/ {2,}/g, " ")}`, ...(plan.usedOnce ? [`One that uses this ${reaction} is immune to ${item.name} from ${sourceToken.name} for 10 minutes.`] : [])]);
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${granted.length ? `${granted.join(", ")} gain${granted.length === 1 ? "s" : ""} ${reaction} ${until}` : plan.self ? `it already has ${reaction} on its sheet: it can use it ${plan.untilText ?? "while this lasts"}.` : `no ${plan.trait ?? ""} ally within ${plan.within} feet lacks ${reaction}.`.replace(/ {2,}/g, " ")}`, ...(plan.usedOnce ? [`One that uses this ${reaction} is immune to ${item.name} from ${sourceToken.name} for 10 minutes.`] : [])]);
         return;
     }
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".
