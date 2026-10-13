@@ -2845,3 +2845,8 @@ Fixed on the way:
 - **Fixed on the way:** the trigger/effect split in batches 277–278 had matched "effect" case-insensitively, so a trigger ending in "…misfortune effect" swallowed the Effect label; now case-sensitive as before.
 - **Compiled** (30 rows; 22 new in PF2e, 11 more that were the GM's): Pod Prison, String Astral Body, Separate Astral Body, Stitch Into the Web, Astral Thread Control, Contingency Oathday-Nine-Rova, Balance Life, Baleful Glow, Spirit Hunter, Implant Core, Shift Fate, Soul Lock, Draw In, Eat Fortune, Sprinkle Pixie Dust, Reap, Focus Gaze, Focus Beauty, Capturing Grab, Blackaxe - Rejuvenating Deforestation, Reassert Fate, Distracting Arrow, Ash Form, Quicken Pestilence, Focused Flames, Absorb.
 
+## The long tail after the user's choices, part 7 (2026-10-13, batch 279)
+
+- **New pieces:** a cast card's `pick` may name a tradition only (any arcane spell from a soul cage); an Athletics check against the ability's DC by each creature around it is a save with `statistic: "athletics"` (the core rolls the creature's statistic by name).
+- **Compiled** (29 of 30 rows; 30 new in PF2e, 11 more that were the GM's): Demon Hunter, Burning Hoofprints, Indispensable Savvy, Isolating Words, Drain Soul Cage, Belly Grease, Preserve Prey, Light of Truth, Responsive Recovery, Channel Smite, Focus Beauty (as if by its aura), Bond with Mortal, Surgical Rend, Curse of Darkness, Consume Soul, Inherit Soul, Ride the Moonbeams, Raise Grain Cloud, Force Dart, Fastening Leap, Elongate Tongue, Vainglorious Whispers, Isolate Foes, Breath of the Sea, Stoke the Fervent, Strix Vengeance, Vicious Rend. Left for the user: Spirit Blades.
+

@@ -4893,3 +4893,28 @@ test("group D, built, part 6 (2026-10-13, batch 278): cocoons, astral bodies, st
     const absorb = react("The test husk moves into a dying creature's space", "The test husk absorbs the dying creature into itself, instantly killing the creature and healing the test husk for a number of Hit Points equal to the creature's level.", "free");
     assert.deepEqual(absorb?.resolution?.outcomes?.success?.manualInstructions, ["{target} dies, absorbed; the monster heals Hit Points equal to its level."]);
 });
+
+test("group D, built, part 7 (2026-10-13, batch 279): hoofprints, cut-off creatures, grease, revealing lines, smites, toggled bonds, rend wounds, consumed souls, moonbeams, darts by actions, tongues, sea pulls, battle cries, soul cages, savvy, preserved prey, whispers, armor rends", () => {
+    const item = (html, type = "action", actions = 1, name = "Test", rules = []) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, rules, description: { value: html } } });
+    const plan = (html, type, actions, actor, basicActions = {}, rules = []) => compileMonsterAbility(item(html, type, actions, "Test", rules), { basicActions, ...(actor ? { actor } : {}) });
+    const react = (trigger, effect, type = "reaction", actor) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type, 1, actor);
+    const horse = { name: "Test Horse", system: { attributes: { speed: { value: 40 } } }, items: [] };
+    const hooves = plan("<p>The test horse Strides, trailing hoofprints in each square they exit. The hoofprints burn for 1 minute. A creature on the ground that enters a square with burning hoofprints or begins its turn in one takes @Damage[1d6[fire]] damage.</p>", "action", 2, horse);
+    assert.deepEqual([hooves?.zone?.area, hooves?.zone?.damage?.map((entry) => entry.when)], [{ type: "line", value: 40 }, ["enter", "start"]]);
+    const words = plan("<p>The test fiend whispers a secret to a creature within 30 feet. That creature must succeed at a @Check[will|dc:30] save or be mentally cut off from those around them for 1 minute (or permanently on a critical failure). The affected creature treats no one as an ally. Regardless of the results of the saving throw, the creature is immune to Test for 24 hours.</p>");
+    assert.deepEqual([words?.resolution?.outcomes?.failure?.noteEffects?.[0]?.duration?.unit, words?.resolution?.outcomes?.criticalFailure?.noteEffects?.[0]?.duration], ["minutes", null]);
+    const darts = plan("<p>1 to 3 The test wizard fires one dart of force per action spent (dealing @Damage[(1d4+1)[force]] damage each). It needs a free hand per dart.</p>");
+    assert.deepEqual(darts?.modes?.map((mode) => [mode.name, mode.plan?.activation?.time]), [["1 dart", "1"], ["2 darts", "2"], ["3 darts", "3"]]);
+    const sea = plan("<p>The test whale inhales. All creatures and objects in the water within @Template[emanation|distance:30]{30 feet} of the test whale (including boats) are pulled toward it. Creatures must succeed at a @Check[athletics|dc:30|options:forced-movement] check or be pulled up to 10 feet toward the test whale (20 feet on a critical failure).</p>");
+    assert.deepEqual([sea?.resolution?.check?.statistic, sea?.resolution?.outcomes?.criticalFailure?.forcedMovement?.distance], ["athletics", 20]);
+    const cry = plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test raider lets out a battle cry, rousing its kin. The test raider and each ally that hears the call gains a +1 status bonus to attack rolls, damage rolls, and saving throws, and takes a –1 status penalty to AC. They must Strike each round. This lasts for [[/gmr 2d4 #rounds]]{2d4 rounds}.</p>", "action", 2);
+    assert.deepEqual(cry?.resolution?.outcomes?.success?.modifiers?.map((entry) => `${entry.selector}${entry.value}${entry.recipient ? "@self" : ""}`), ["attack1", "damage1", "saving-throw1", "ac-1", "attack1@self", "damage1@self", "saving-throw1@self", "ac-1@self"]);
+    const cage = plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test lich taps into their phylactery's power to cast any arcane spell up to the highest rank the test lich can cast, even if it isn't prepared.</p>", "free");
+    assert.deepEqual([cage?.builtin, cage?.pick], ["cast-spell", { tradition: "arcane" }]);
+    const savvy = react("The test fey attempts a skill check but hasn't rolled yet", "The test fey shows a knack. They use their Deception modifier for the triggering check and for all skill checks using the same skill thereafter until the next time the test fey uses this ability.");
+    assert.deepEqual(savvy?.resolution?.outcomes?.success?.noteEffects?.[0]?.duration?.unit, "hours");
+    const preserve = react("A living creature within 30 feet is reduced to 0 Hit Points", "The test larva channels dark vitality into the triggering creature, which still goes Unconscious but does not gain the dying condition. While that creature is unconscious, vitality healing must counteract it.");
+    assert.deepEqual(preserve?.resolution?.outcomes?.success?.effects, [{ kind: "end-condition", slugs: ["dying"] }]);
+    const rend = react("The test lion uses Rend", "The target's armor takes damage equal to the damage from Rend. The target can attempt a @Check[reflex|dc:25|basic] save to reduce this damage.");
+    assert.deepEqual(rend?.resolution?.outcomes?.success?.manualInstructions, ["{target}'s armor takes half the Rend's damage."]);
+});
