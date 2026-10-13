@@ -1347,7 +1347,8 @@ async function use(message, action, slug) {
             : allyEffect ? monster.parent.tokens.filter((token) => taking.has(token.id) && token.id !== monster.id && !token.hidden && token.disposition === monster.disposition && token.actor && !token.actor.isDead).map((token) => token.object ?? token)
             // (Batch 132: "an adjacent creature", Electric Reflexes — the offer's creature when it was beside it; live check of batch 254, Objection!'s
             // "the triggering creature".)
-            : ["the attacker", "the creature the Strike hits", "an adjacent creature", "the triggering creature"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
+            // (Batch 287, Septic Invasion: "the creature it damaged", "the creature its Strike hit" and the like — the one that set it off too.)
+            : ["the attacker", "the creature the Strike hits", "an adjacent creature", "the triggering creature", "the creature it damaged", "the creature it hit", "the creature its Strike hit", "the creature its Strike damaged"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
             : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0, { foes: !!area.foes }) : [];
         if (applications.length) await postEffectCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens: ownEffect ? [] : tokens });
