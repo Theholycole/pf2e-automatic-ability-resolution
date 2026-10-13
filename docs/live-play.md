@@ -2624,3 +2624,28 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
   - a hostile action aimed at the monster can set off its reaction (`targeted-by` with `any`);
   - Rhapsodic Flourish's check replaces the save.
 - **Simulator:** see B263 in its ability decisions.
+
+## The long tail, part 2 (2026-10-12, batch 264)
+
+- **Compiled** (21 new in PF2e; 3 adventure abilities that were the GM's):
+  - **Reactions near it:**
+    - a tail Strike at a creature that heals or helps beside it (the kun's Spite);
+    - a Demoralize at a creature that ends a move within a distance (Dread Gaze; live keeps to that distance);
+    - a teleport away on damage from an effect of one trait (Instinctive Teleportation; the simulator doesn't play it);
+    - a save against emotion made a critical success (Driven by Hunger; live says "a critical success").
+  - **Flights over creatures:** a venom on one creature it flew over (Venomous Flight), and a save for the creatures under its flight with the venom's own save on a failure (Sun's Heat).
+  - **Fields and waves:**
+    - a basic save in an area except for one kind of creature, which gains temporary Hit Points instead (Static Field, with the note);
+    - a mile-wide save with a push of the creature's choosing (Great Wave).
+  - **Stances and shells:**
+    - extra damage on its Strikes while in a stance, with the save on a hit and its own persistent damage as notes (Full Bloom);
+    - a shell it can only use one ability from (Sparking Shell);
+    - Clumsy until it stops (Rear Back);
+    - a shield always raised (Paragon's Guard).
+  - **Held, bitten and marked:**
+    - a follow-up after a critical hit that grabs and bleeds, with the bite after as a note (Fish Fork);
+    - a dragging Burrow on a failed save, freed on a success (Into the Earth);
+    - a bite that heals with PF2e's linked effect (Zinba Restoration).
+  - **Strikes:** a teleport then a Strike with extra sonic damage (Disharmonic Door), two ranged Strikes at one creature (Crimson Vengeance), and two Strikes with different weapons (Defensive Assault, its AC as a note).
+  - **Other:** plural gazes (Focus Gaze), a burrow for gems (no effect in the fight), and a trap fall with words around it (Long Fall).
+- **Simulator:** see B264 in its ability decisions.

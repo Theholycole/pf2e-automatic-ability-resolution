@@ -2560,9 +2560,21 @@ export function readReaction(item, text) {
     // (Batch 258, Spite: "A creature within reach of the kun's tail uses an action to attack or heal another creature (including the kun)" — an attack on
     // it, or healing beside it; "bats the triggering creature away with their tail, making a tail Strike against the creature. On a hit, the action is
     // disrupted and the creature is pushed 10 feet." — disrupting on a hit, the push a note.)
-    const meddles = /^A creature within reach of (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?) uses an action to attack or heal another creature(?: \(including (?:the [\w' -]+?|it)\))?$/i.exec(trigger.trim().replace(/\.$/, ""));
+    // (Batch 263, the other kun's: "uses an action to heal or help anyone else" — healing beside it; help, the GM's.)
+    const meddles = /^A creature within reach of (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?) uses an action to (attack or heal another creature|heal or help anyone else)(?: \(including (?:the [\w' -]+?|it)\))?$/i.exec(trigger.trim().replace(/\.$/, ""));
     const bats = meddles ? /^(?:The )?[^.]+?, making an? ([\w' -]+?) Strike against the creature\. On a hit, the action is disrupted and the creature is pushed (\d+) feet\.$/i.exec(effect.trim()) : null;
-    if (bats) return { builtin: "reaction-strike", triggers: ["attacked", "healing"], strike: bats[1].toLowerCase(), penalty: 0, disrupts: true, note: `On a hit, the creature is also pushed ${bats[2]} feet.` };
+    const helping = meddles && /^heal or help/i.test(meddles[2]);
+    if (bats) return { builtin: "reaction-strike", triggers: helping ? ["healing"] : ["attacked", "healing"], strike: bats[1].toLowerCase(), penalty: 0, disrupts: true, note: `On a hit, the creature is also pushed ${bats[2]} feet.${helping ? " It also answers an action that helps another (Aid): the GM's." : ""}` };
+    // (Batch 263, Dread Gaze: "Trigger A creature ends a move action within 30 feet of the ascendant griffon Effect … attempts to Demoralize it. This use of
+    // Demoralize has the visual trait rather than the auditory trait, and the griffon does not take a penalty on its check for not sharing a language."
+    // — PF2e's Demoralize at a creature coming within that distance; its traits a note.)
+    const gazed = /^A creature ends a move action within (\d+) feet of (?:the [\w' -]+?|it)$/i.exec(trigger.trim().replace(/\.$/, ""));
+    if (gazed && /^(?:The )?[^.]+?, and attempts to Demoralize it\.(?: This use of Demoralize has the visual trait rather than the auditory trait, and (?:the [\w' -]+?|it) does not take a penalty on its check for not sharing a language\.)?$/i.test(effect.trim())) return { builtin: "reaction-strike", triggers: ["approach"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, within: Number(gazed[1]), note: "A visual Demoralize: no penalty for not sharing a language." };
+    // (Batch 263, Instinctive Teleportation: "Trigger The thruneosaurus takes damage from a holy effect Effect The thruneosaurus teleports to an open space
+    // within 60 feet it can see, along with any creatures it has swallowed whole." — a teleport away on that damage; who goes with it, a note.)
+    const holyHit = /^(?:The )?[\w' -]+? takes damage from an? (\w+) effect$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const blinked = holyHit ? /^(?:The )?[\w' -]+? teleports to an open space within (\d+) feet (?:it|they) can see(, along with any creatures (?:it|they) (?:has|have) swallowed whole)?\.$/i.exec(effect.trim()) : null;
+    if (blinked) return { builtin: "withdraw", on: "damaged", damageTrait: holyHit[1].toLowerCase(), move: "Teleport", feet: Number(blinked[1]), safe: true, notes: [`Only damage from a ${holyHit[1].toLowerCase()} effect.`, ...(blinked[2] ? ["Creatures it has swallowed go with it."] : [])] };
     const more = readMoreReactionStrikes(trigger.trim().replace(/\.$/, ""), effect.trim());
     if (more) return more;
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
@@ -2925,6 +2937,11 @@ export function readReaction(item, text) {
         const against = [...new Set([grit[1], grit[2]].map((trait) => trait.toLowerCase()).flatMap((trait) => (trait === "enchantment" ? ["enchantment", "mental"] : [trait])))];
         return { builtin: "save-boost", toSuccess: true, against, selfDamage: readDamage(inlineTags(grit[3], "Damage")[0]), ...(grit[4].trim() ? { notes: [grit[4].trim().replace(/@Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})?/g, (_all, formula) => readableText(`@Damage[${formula}]`))] } : {}) };
     }
+    // - Driven by Hunger: "Trigger The aoyin fails or succeeds at a save against an emotion effect Effect … The aoyin critically succeeds at the save instead.
+    //   If a creature within 40 feet is taking persistent bleed damage, the aoyin can also Stride …" — the save a critical success; the Stride, a note.
+    const hunger = /^(?:The )?[\w' -]+? fails or succeeds at a save against an? (\w+) effect\.?$/i.exec(trigger.trim());
+    const hungered = hunger ? /^(?:[^.]+\. )?(?:The )?[\w' -]+? critically succeeds at the save instead\.((?: [^.]+\.)*)$/i.exec(effect.trim()) : null;
+    if (hungered) return { builtin: "save-boost", toSuccess: true, toCritical: true, against: [hunger[1].toLowerCase()], notes: ["Also when it succeeds: the save becomes a critical success.", ...(hungered[1].trim() ? [hungered[1].trim()] : [])] };
     // - Preemptive Reconfiguration: "Trigger Urok would take bludgeoning piercing, or slashing damage Effect … He gains resistance 9 against the triggering
     //   damage type, which applies against the triggering damage …" — resistance to that type of the damage it took.
     const bracing = /^(?:The )?[\w' -]+? would take ((?:bludgeoning|piercing|slashing)(?:,? (?:or )?(?:bludgeoning|piercing|slashing))*) damage\.?$/i.exec(trigger.trim());
@@ -3676,6 +3693,20 @@ export function readShell(item, actor = null) {
             notes.push(`Its weakness to ${match[2]} is gone meanwhile.`);
             continue;
         }
+        // (Batch 263, Sparking Shell: "… can't act except to use Shell Shock or reemerge as a single action.")
+        const only = /^This increases (?:its|their) AC to \d+, but (?:it|they) can(?:'t|not) act except to use ([A-Z][\w' -]+?) or reemerge as a single action\.$/i.exec(sentence);
+        if (only) {
+            const ac = Number(actor?.system?.attributes?.ac?.value);
+            const value = Number(/AC to (\d+)/.exec(sentence)[1]);
+            if (Number.isFinite(ac) && value > ac) modifiers.push({ on: "ac", type: "untyped", value: value - ac });
+            else notes.push(`Its AC is ${value}.`);
+            notes.push(`It can't act except to use ${only[1]} or come out (a single action).`);
+            continue;
+        }
+        if (/^While in its shell, (?:the [\w' -]+?['’]s|its) [A-Z][\w' -]+? deals another \d+d\d+ damage and loses the nonlethal trait\.$/i.test(sentence)) {
+            notes.push(sentence);
+            continue;
+        }
         match = /^This increases (?:its|their) AC to (\d+), but (?:it|they) can(?:'t|not) act except to reemerge, which (?:it|they) can do as a single action\.$/i.exec(sentence);
         if (match) {
             const ac = Number(actor?.system?.attributes?.ac?.value);
@@ -3748,6 +3779,11 @@ export function readSelfGuard(item) {
     // action, notes.)
     const shield = /^Requirements? (?:The )?[\w' -]+? is adjacent to an? ([\w' -]+? ally) Effect (?:The )?[\w' -]+? gains cover until the start of (?:its|their|his|her) next turn or when (?:it's|they're|he's|she's) no longer adjacent to the [\w' -]+?, whichever comes first\.$/i.exec(text);
     if (shield) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0 }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, notes: [`Only beside a ${shield[1]}; it ends if it's no longer beside it.`] };
+    // (Batch 263, Full Bloom: "… While in this stance, the blooming guardian's Strikes deal an additional 2d4 poison damage plus 5 persistent poison damage;
+    // on a hit, a target must succeed at a … Fortitude save or become Enfeebled 2. The blooming guardian takes 5 persistent poison damage as long as it's in
+    // Full Bloom." — the extra damage on its Strikes as a stance; the save on a hit and its own damage, notes.)
+    const bloom = /^(?:[^.@]+\. )?While in this stance, (?:the [\w' -]+?['’]s|its) Strikes deal an additional (\d+d\d+) (\w+) damage plus (\d+) persistent (\w+) damage; on a hit, a target must succeed at a @Check\[(\w+)\|dc:(\d+)[^\]]*\](?:\{[^}]*\})? save or become (\w+ \d)\. (?:The [\w' -]+?|It) takes @Damage\[(\d+)\[persistent,(\w+)\]\](?:\{[^}]*\})? damage as long as it's in [A-Z][\w' -]+?\.$/i.exec(text);
+    if (bloom) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: null, modifiers: [], tempHp: 0 }, damage: [`${bloom[1]}[${bloom[2].toLowerCase()}]`, `${bloom[3]}[persistent,${bloom[4].toLowerCase()}]`], strike: null, melee: false, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: [`On a hit, the target must succeed at a DC ${bloom[6]} ${bloom[5][0].toUpperCase()}${bloom[5].slice(1)} save or become ${bloom[7]}.`, `It takes ${bloom[8]} persistent ${bloom[9]} damage while in the stance.`] };
     // (Batch 261, Arrange Scales: "… The manticore gains a +2 circumstance bonus to AC and resistance 15 to their choice of bludgeoning, piercing, or
     // slashing damage. These benefits last until the beginning of the manticore's next turn or they use Arrange Scales again." — the AC until its next
     // turn; the resistance by its choice, a note for the GM.)

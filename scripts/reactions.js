@@ -193,7 +193,8 @@ async function onMove(token, movement) {
         const approach = reactions.find(({ plan }) => plan.builtin === "reaction-strike" && plan.triggers?.includes("approach"));
         // (Batch 151, Toss: its Shove at a creature coming into its reach.)
         if (approach?.plan.skill) {
-            const radius = provokeRadius(actor);
+            // (Batch 263, Dread Gaze: within its own distance, 30 feet.)
+            const radius = approach.plan.within ?? provokeRadius(actor);
             const insides = path.map((at) => distanceFeet(box(monster, grid.size), box(token, grid.size, at), grid) <= radius);
             if (!insides[0] && insides.some(Boolean)) {
                 await offer({ kind: "skill", item: approach.item, monster, actor, target: token, trigger: `came within ${radius} feet`, skill: { slug: approach.plan.skill, shift: (approach.plan.bonus ?? 0) - (approach.plan.penalty ?? 0) }, note: approach.plan.note ?? null });
@@ -838,7 +839,7 @@ async function saveAnswers(message, context, scene, combat, saver) {
             const left = Number(item.system?.frequency?.value);
             if (self && plan.uses && Number.isFinite(left) && left <= 0) continue;
             // (Batch 169, Flash of Insight: a success, whatever it rolled — "Use it: a success".)
-            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: [`The save becomes ${plan.toSuccess ? "a success" : better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}`, ...(plan.notes ?? [])].join(" "), free: !!plan.free, ...(plan.toSuccess ? { attack: { label: "a success" } } : {}) });
+            return offer({ kind: "boost", item, monster: token, actor, target: self ? null : saver, trigger: self ? "failed a saving throw" : "failed a saving throw", note: [`The save becomes ${plan.toCritical ? "a critical success" : plan.toSuccess ? "a success" : better}: apply that result instead.${plan.recharge ? ` Not again for ${plan.recharge} rounds.` : ""}`, ...(plan.notes ?? [])].join(" "), free: !!plan.free, ...(plan.toSuccess ? { attack: { label: "a success" } } : {}) });
         }
     }
 }

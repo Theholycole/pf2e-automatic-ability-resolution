@@ -381,6 +381,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a 2d6 table (Roll the Bones), and a one-square terrain zone (Shovel Earth);
   - hazards played by their Effect alone (Spore Explosion, Curse the Intruders);
   - a card from an ability's opening sentences, with the rest as notes (Chain Capture).
+- **The long tail, part 2** (2026-10-12, batch 264): 21 new in PF2e and 3 abilities that were the GM's. They include:
+  - reactions near it (Spite, Dread Gaze, Instinctive Teleportation, Driven by Hunger);
+  - flights over creatures (Venomous Flight, Sun's Heat), fields and waves (Static Field, Great Wave);
+  - stances and shells (Full Bloom, Sparking Shell, Paragon's Guard);
+  - held, bitten and marked creatures (Fish Fork, Into the Earth, Zinba Restoration);
+  - Strikes (Disharmonic Door, Crimson Vengeance, Defensive Assault).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
