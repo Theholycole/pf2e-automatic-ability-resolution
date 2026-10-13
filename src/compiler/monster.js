@@ -2914,7 +2914,8 @@ function followUp(item, actor, basicActions = {}) {
         targeting: plan.targeting?.area ? plan.targeting : { target: "the creature the Strike hits", range: "touch", area: null },
         // (Batch 194: a free action's, Improved Vex — free, at once after the Strike.)
         ...(free ? { activation: { ...(plan.activation ?? {}), time: "free" } } : {}),
-        trigger: { ...(plan.trigger ?? {}), event: "use", ...(trick ? { map: false } : {}), ...(free ? { cost: "free" } : {}), followUp: { strike: name, melee, on, ...(last.listing ? { listing: last.listing } : {}) } }
+        trigger: { ...(plan.trigger ?? {}), event: "use", ...(trick ? { map: false } : {}), ...(free ? { cost: "free" } : {}), followUp: { strike: name, melee, on, ...(last.listing ? { listing: last.listing } : {}), ...(last.twice ? { twice: true } : {}) } },
+        ...(last.twice ? { notes: [...(plan.notes ?? []), `Only after two ${name ?? ""} Strikes in a row that hit the same creature this round.`.replace(/  +/g, " ")] } : {})
     };
 }
 
@@ -3588,11 +3589,31 @@ function areaExposure(item, actor) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
     const template = /@Template\[(?:type:)?(burst|cone|emanation|line)\|distance:(\d+)[^\]]*\]/i.exec(html);
-    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim()
-        .replace(/^Frequency once per (?:round|turn) Effect /i, "");
+    let plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br|roll) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim()
+        .replace(/^Frequency once per (?:round|turn|hour|day) Effect /i, "");
+    // (Batch 260: "Creatures within a @T must save against the vaspercham's hallucinatory brine." as exposed; "… releasing a spray of pus in a @T or
+    // targeting an individual creature within 30 feet. A creature targeted or in the area is exposed to …" — the area, the one creature instead a
+    // note; "… but gains a +2 circumstance bonus to its initial saving throw against the poison." — that first save's DC 2 lower.)
+    const extra = [];
+    let easier = 0;
+    plain = plain.replace(/^((?:[^.@]+\. )?)Creatures within an? @T must (?:attempt a save|save) against ([^.]+?)\.$/i, "$1Each creature within a @T is exposed to $2.")
+        .replace(/^(?:The )?[^.@]+? in an? @T or targeting an individual creature within (\d+) feet\. A creature targeted or in the area is exposed to ([^.]+?)\.$/i, (_all, range, what) => {
+            extra.push(`Or, instead of the area, one creature within ${range} feet.`);
+            return `Each creature within a @T is exposed to ${what}.`;
+        })
+        // (Robes of Welcome: "If any creature is cursed by the wraith's void's embrace, the wraith can't impose void's embrace on another creature.")
+        .replace(/ If any creature is cursed by (?:the [\w' -]+?['’]s|its|their) ([^,]+?), (?:the [\w' -]+?|it|they) can(?:'t|not) impose \1 on another creature\.$/i, () => {
+            extra.push("Not while another creature is cursed by it: one at a time.");
+            return "";
+        })
+        .replace(/ but gains an? \+(\d+) circumstance bonus to (?:its|their) initial saving throw against the (?:poison|disease|affliction)\.$/i, (_all, bonus) => {
+            easier = Number(bonus);
+            extra.push(`Each creature's first save against it has a +${bonus} circumstance bonus (its DC here is ${bonus} lower).`);
+            return ".";
+        });
     const wait = String.raw`(?: (?:The )?[^.]+? can(?:'t|not) (?:use )?(?:its |their )?[\w' -]+? again for (\d+d\d+|\d+) rounds?\.)?`;
     const gas = new RegExp(String.raw`^(?:The )?[^.]+? (?:exhales|emits|breathes out|sprays) (?:a cloud of )?(?:poisonous|toxic|noxious) gas in an? @T(?: centered on (?:the corner of )?one of (?:the [\w' -]+?['’]s|its|their) squares)?\. The gas persists (?:for 1 round|until the start of (?:the [\w' -]+?['’]s|its|their) next turn)\. Any creature in the area \(or that later enters the area\) is exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
-    const area = gas ? null : new RegExp(String.raw`^(?:[^.@]+\. )?(?:Each|Every|All)(?: living)? creatures? within an? @T (?:is|are) exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
+    const area = gas ? null : new RegExp(String.raw`^(?:[^.@]+\. )?(?:Each|Every|All)(?: living)? creatures? (?:with)?in an? @T (?:is|are) exposed to ([^.]+?)\.${wait}$`, "i").exec(plain);
     // (Batch 230, Scratch: "The goblin dog vigorously scratches itself, exposing all adjacent creatures to goblin pox." — the creatures beside it.)
     const beside = gas || area ? null : /^(?:The )?[^.]+?, exposing all adjacent creatures to ([^.]+?)\.$/i.exec(plain)
         // (Batch 245, Wing Flurry: "…, exposing all creatures within a @Template[burst|distance:10] to crying cicada poison." — around itself.)
@@ -3602,8 +3623,12 @@ function areaExposure(item, actor) {
         const radius = /\bwithin an? @T\b/i.test(plain) ? Number(template[2]) : 5;
         return poison ? { ...poison, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] }, targeting: { target: null, range: null, area: { type: "emanation", value: radius } }, trigger: { event: "use" } } : null;
     }
-    const one = gas || area ? null : /^(?:The )?[^.]+? (?:an adjacent|a) (?:living )?creature(?: (?:that(?:'s| is)|who is) ([^,]+?))?, exposing (?:it|them) to ([^.]+?)\.$/i.exec(plain)
-        ?? /^(?:The )?[^.]+? (?:on|at) a single creature within (\d+) feet\. The target is exposed to ([^.]+?)\.$/i.exec(plain);
+    const oneFirst = gas || area ? null : /^(?:The )?[^.]+? (?:an adjacent|a) (?:living )?creature(?: (?:that(?:'s| is)|who is) ([^,]+?))?, exposing (?:it|them) to ([^.]+?)\.$/i.exec(plain);
+    const one = gas || area ? null : oneFirst
+        ?? /^(?:The )?[^.]+? (?:on|at) a single creature within (\d+) feet\. The target is exposed to ([^.]+?)\.$/i.exec(plain)
+        // (Batch 260, Kiss of Rime: "A shard of magic ice embeds itself within the flesh of a creature within 30 feet. The creature must save against the
+        // curse of the frozen heart.")
+        ?? /^(?:An? |The )?[^.]+? (?:of|on|at|into) a creature within (\d+) feet\. The (?:creature|target) must save against ([^.]+?)\.$/i.exec(plain);
     if (!gas && !area && !one) return null;
     if ((gas || area) && !template) return null;
     const phrase = (gas?.[1] ?? area?.[1] ?? one[2]).toLowerCase().replace(/^the /, "").replace(/^[\w' -]+?['’]s /, "");
@@ -3613,6 +3638,19 @@ function areaExposure(item, actor) {
         const name = String(other.name ?? "").toLowerCase();
         return name === phrase || phrase.includes(name) || name.endsWith(` ${phrase}`);
     });
+    // (Batch 260, Mindwarping Tide: its own save by that name, not an affliction — "Hallucinatory Brine", a save on a Strike's hit: that save at each
+    // creature in the area.)
+    if (!source && area) {
+        const named = (owner?.items?.contents ?? owner?.items ?? []).find((other) => other !== item && String(other.name ?? "").toLowerCase() === phrase);
+        let plan = null;
+        try {
+            plan = named ? compileMonsterAbility(named, { actor: owner }) : null;
+        } catch {
+            plan = null;
+        }
+        if (plan?.resolution?.kind !== "save" || plan.resolution.sharedDamage) return null;
+        return { ...plan, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: plan.activation?.traits ?? [] }, targeting: { target: null, range: null, area: { type: template[1].toLowerCase(), value: Number(template[2]) } }, trigger: { event: "use" }, ...(extra.length ? { notes: [...(plan.notes ?? []), ...extra] } : {}) };
+    }
     if (!source) return null;
     let poison = null;
     try {
@@ -3623,7 +3661,7 @@ function areaExposure(item, actor) {
     if (!poison?.resolution) return null;
     const recharge = gas?.[2] ?? area?.[2] ?? null;
     // (Only at a creature in that state: "that is Paralyzed or Unconscious", "that's asleep, Paralyzed, or Unconscious".)
-    const states = one && /^(?:The )?[^.]+? (?:an adjacent|a)/i.test(plain) && one[1] ? one[1].toLowerCase().split(/,? or |, /).map((state) => state.trim()).filter(Boolean) : [];
+    const states = oneFirst?.[1] ? oneFirst[1].toLowerCase().split(/,? or |, /).map((state) => state.trim()).filter(Boolean) : [];
     const foe = states.length ? { within: 5, conditions: [...new Set(states.map((state) => (state === "unconscious" || state === "asleep" ? "dying" : state)).filter((state) => ["paralyzed", "dying", "restrained", "grabbed", "prone"].includes(state)))] } : null;
     if (states.length && !foe.conditions.length) return null;
     return {
@@ -3633,7 +3671,8 @@ function areaExposure(item, actor) {
         targeting: gas || area ? { target: null, range: null, area: { type: template[1].toLowerCase(), value: Number(template[2]) } } : { target: "1 creature", range: one[1] && /^\d+$/.test(one[1]) ? Number(one[1]) : "touch", area: null },
         trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
         ...(foe ? { requiresFoe: foe } : {}),
-        ...(gas ? { notes: [...(poison.notes ?? []), "The gas lingers: a creature that enters the area then is exposed too."] } : {})
+        ...(easier && poison.resolution?.check?.against?.dc === "fixed" ? { resolution: { ...poison.resolution, check: { ...poison.resolution.check, against: { ...poison.resolution.check.against, value: poison.resolution.check.against.value - easier } } } } : {}),
+        ...(gas || extra.length ? { notes: [...(poison.notes ?? []), ...(gas ? ["The gas lingers: a creature that enters the area then is exposed too."] : []), ...extra] } : {})
     };
 }
 
@@ -3724,6 +3763,10 @@ export function followUpNeed(need) {
         .replace(/ or a Draconic Frenzy that included a successful Strike with a melee unarmed attack$/i, "")
         .replace(/\ba successful Strike with a melee unarmed attack$/i, "a successful melee Strike");
     if (/,|\bor (?:a|an)\b|\b(?:of size|larger|smaller|Tiny|Small|Medium|Large|Huge|Gargantuan|weapon that)\b/i.test(text)) return null;
+    // (Batch 260, Mind-Rending Sting: "The thulgant hits the same enemy with two consecutive sting Strikes in the same round" — after its second hit in a
+    // row on that creature: twice.)
+    const twice = /^(?:The |the )?[^,]*? hits the same (?:enemy|creature|target|foe) with two consecutive (?:(melee|ranged) )?([\w' -]+?) Strikes in the same (?:round|turn)$/i.exec(text);
+    if (twice) return { ...name(twice[1], twice[2]), on: HIT_DEGREES, twice: true };
     let match = new RegExp(String.raw`^(?:The |the )?[^,]*? ${LAST_ACTION} was (.+)$`, "i").exec(text);
     if (match) {
         const rest = match[1];
@@ -4924,7 +4967,52 @@ function hurtRetreat(item) {
     if (item.system?.actionType?.value !== "action") return null;
     const plain = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\s+/g, " ").trim();
     const match = /^Requirements? (?:The )?[\w' -]+? (?:falls|is) below half (?:its|their) (?:total |maximum )?Hit Points Effect (?:The )?[^.]+?, then Strides (twice|three times)\. This movement (?:doesn't|does not) trigger reactions\.$/i.exec(plain);
-    return match ? { builtin: "safe-move", actions: Number(item.system?.actions?.value) || 1, notes: ["Only once it's below half its Hit Points."] } : null;
+    if (match) return { builtin: "safe-move", actions: Number(item.system?.actions?.value) || 1, notes: ["Only once it's below half its Hit Points."] };
+    // (Batch 260, Plane-Hopper Dash: "Frequency once per day Effect The jotunborn sage moves with swiftness between planar boundaries to shorten their
+    // journey. The sage Strides; this movement doesn't trigger reactions. Once the Stride is complete, the sage gains a +5-status bonus to their Speed
+    // until the start of their next turn." — a move that triggers no reactions; the Speed after it, a note.)
+    const dash = /^(?:Frequency [^.]+? Effect )?(?:(?:The )?[^.]+?\. )?(?:The )?[\w' -]+? Strides; this movement (?:doesn't|does not) trigger reactions\. Once the Stride is complete, (?:the [\w' -]+?|it|they) gains? an? \+(\d+)[- ]status bonus to (?:its|their) Speed until the start of (?:its|their) next turn\.$/i.exec(plain);
+    return dash ? { builtin: "safe-move", actions: Number(item.system?.actions?.value) || 1, notes: [`Then a +${dash[1]} status bonus to its Speed until the start of its next turn.`] } : null;
+}
+
+// A condition with no roll on a creature beside it until it clears it (2026-10-12, batch 260, Spice Mix): "The head chef throws a mixture of
+// irritating spices into an adjacent creature's eyes, causing the creature to be Dazzled until it Interacts to clear its vision." → that condition
+// with no end of its own; the Interact a note. null otherwise.
+function eyesCondition(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const plain = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[^.]+? (?:throws|flings|blows|sprays|tosses) [^.]+? into an adjacent creature['’]s eyes, causing (?:the creature|it) to be (Dazzled|Blinded) until it Interacts to (?:clear|wipe) its (?:vision|eyes)\.$/i.exec(plain);
+    if (!match) return null;
+    const success = { damage: none().damage, effects: [{ kind: "condition", slug: match[1].toLowerCase(), value: null, duration: null }] };
+    return {
+        ...base(item),
+        targeting: { target: "1 creature", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } },
+        notes: [`It lasts until the creature uses an Interact action to clear its eyes.`]
+    };
+}
+
+// Damage to a creature that's down (2026-10-12, batch 260, Kiss of Death): "The catrina gives a long, passionate kiss to an Unconscious or willing
+// creature, dealing @Damage[3d6[void]] damage. Any creature damaged by the same catrina's Kiss of Death for 3 consecutive rounds becomes unconscious
+// and is dying 1." → that damage with no roll on a creature beside it; who it may be, a requirement the simulator doesn't plan; the rest a note.
+// null otherwise.
+function downedDamage(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const plain = htmlToPlainText(html.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[^.]+? (?:gives|delivers) [^.]+? to an Unconscious or willing creature, dealing @D damage\.((?: [^.@]+\.)*)$/i.exec(plain);
+    const formulas = inlineTags(html, "Damage").map(readDamage);
+    if (!match || formulas.length !== 1) return null;
+    const success = { damage: { mode: "formulas", formulas: formulas.map((formula) => ({ formula })), rollScope: "outcome" }, effects: [] };
+    return {
+        ...base(item),
+        targeting: { target: "1 creature", range: "touch", area: null },
+        trigger: { event: "use" },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success, failure: none(), criticalFailure: none() } },
+        requires: "requirement",
+        notes: ["Only at an Unconscious or willing creature.", ...(match[1].trim() ? match[1].trim().split(/(?<=\.)\s+/) : [])]
+    };
 }
 
 // A zone of its own used on a trigger, once or more (Master of Clouds: "Trigger The dragon rolls initiative Effect … The dragon uses Dragonmist
@@ -5625,7 +5713,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? hurtRetreat(item) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
     // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
     if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
         const zone = readZone(item, actor);

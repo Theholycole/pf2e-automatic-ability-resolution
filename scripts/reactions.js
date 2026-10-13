@@ -912,7 +912,7 @@ async function onInitiative(combat) {
         const plan = item ? compile(item) : null;
         if (!plan || (!plan.free && reactionUsed(actor))) continue;
         const skills = plan.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1));
-        await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value, ...(plan.within ? { within: plan.within } : {}) }, note: [`Only if it rolled initiative with ${skills.join(" or ")}, and for the allies ${plan.within ? `within ${plan.within} feet` : "that can hear or see it"}.`, ...(plan.notes ?? [])].join(" ") });
+        await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value, ...(plan.within ? { within: plan.within } : {}), ...(plan.self ? { self: true } : {}) }, note: [plan.self ? "Its own initiative roll." : `Only if it rolled initiative with ${skills.join(" or ")}, and for the allies ${plan.within ? `within ${plan.within} feet` : "that can hear or see it"}.`, ...(plan.notes ?? [])].join(" ") });
     }
     // (Batch 199, Uncanny Pounce: a Stride and its Strike as it rolls initiative, free; the skill it names in its note.)
     for (const monster of scene.tokens) {
@@ -1341,9 +1341,10 @@ async function use(message, action, slug) {
         // (Batch 178, Warning Ears: only its allies within that distance.)
         const grid = gridOf(monster.parent);
         const near = (entry) => !state.attack.within || (entry.token && distanceFeet(box(monster, grid.size), box(entry.token, grid.size), grid) <= state.attack.within);
-        const allies = (combat?.combatants.contents ?? []).filter((entry) => entry.tokenId !== monster.id && entry.token?.disposition === monster.disposition && Number.isFinite(entry.initiative) && near(entry));
+        // (Batch 260, All This Has Happened Before: its own initiative instead.)
+        const allies = (combat?.combatants.contents ?? []).filter((entry) => (state.attack.self ? entry.tokenId === monster.id : entry.tokenId !== monster.id && entry.token?.disposition === monster.disposition && near(entry)) && Number.isFinite(entry.initiative));
         if (allies.length) await combat.updateEmbeddedDocuments("Combatant", allies.map((entry) => ({ _id: entry.id, initiative: entry.initiative + state.attack.value })));
-        result = allies.length ? `${state.ability.name}: +${state.attack.value} to the initiative of ${allies.map((entry) => entry.name).join(", ")}.` : `${state.ability.name}: none of its allies has rolled initiative.`;
+        result = allies.length ? `${state.ability.name}: +${state.attack.value} to the initiative of ${allies.map((entry) => entry.name).join(", ")}.` : `${state.ability.name}: ${state.attack.self ? "it hasn't" : "none of its allies has"} rolled initiative.`;
         if (state.free) return settle(message, state, "used", result);
     } else if (state.kind === "boost") {
         // Golden Luck, Word of Wisdom (batch 53): one degree better, for the GM to apply; a use of its frequency spent (batch 65).

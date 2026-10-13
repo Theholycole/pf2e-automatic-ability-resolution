@@ -2560,3 +2560,20 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **Temporary Hit Points from gold:** after a jaws hit, it gains 2d12 temporary Hit Points for a minute. A note says the amount can't be more than the gold the creature carries (Devour Wealth).
   - **An after-spell boost:** "previous action was to Cast a Spell … inspire another kobold within 30 feet" gives PF2e's effect to one ally within 30 feet, only straight after a spell (Inspiring Display).
 - **Simulator:** an ability that needs a spell just before is used only right after it casts one (B259 in its ability decisions).
+
+## Exposures in other words, initiative, two hits in a row (2026-10-12, batch 260)
+
+- **Compiled** (10 new in PF2e; 3 adventure abilities that were the GM's):
+  - **Exposures:**
+    - "Creatures within a 15-foot emanation must save against the vaspercham's hallucinatory brine" is an area exposure. When the named ability is its own save rather than an affliction, as Hallucinatory Brine is, that save is made in the area (Mindwarping Tide).
+    - "… in a 15-foot cone or targeting an individual creature within 30 feet" is the cone, with the one creature instead as a note (Spray Pus).
+    - "… but gains a +2 circumstance bonus to its initial saving throw" lowers that first save's DC by 2; the affliction's later saves keep its DC (Venom Spritz).
+    - "… of a creature within 30 feet. The creature must save against the curse of the frozen heart" is that curse on one creature (Kiss of Rime).
+    - "If any creature is cursed by …, the wraith can't impose … on another creature" is a note (Robes of Welcome).
+    - A one-creature exposure at a range ("a single creature within 30 feet") no longer misreads the range as a condition the creature must be in (Venomous Gaze).
+  - **Damage to a creature that's down:** "a kiss to an Unconscious or willing creature, dealing 3d6 void damage" is that damage with no roll. Who it may be is a requirement the simulator doesn't plan; three rounds in a row is a note (Kiss of Death).
+  - **A safe dash:** "Strides; this movement doesn't trigger reactions. Once the Stride is complete, … a +5-status bonus to their Speed until the start of their next turn" is a move that triggers no reactions, with the Speed as a note (Plane-Hopper Dash).
+  - **Its own initiative:** "is about to roll initiative … gaining a +4 circumstance bonus to the triggering roll" is offered as initiative is rolled. Applying it adds the bonus to its own initiative; acting first and being Quickened is a note (All This Has Happened Before).
+  - **After two hits in a row:** "hits the same enemy with two consecutive sting Strikes in the same round" is a follow-up to its sting Strikes, with the requirement as a note. Its damage is dealt with no roll (Mind-Rending Sting).
+  - **Spice in the eyes:** an adjacent creature is Dazzled with no roll, until it Interacts to clear its eyes (Spice Mix).
+- **Simulator:** see B260 in its ability decisions.

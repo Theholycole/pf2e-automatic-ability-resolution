@@ -2057,7 +2057,23 @@ export function readInitiativeWarning(text, item = null) {
     const body = String(text).trim().replace(/\s*(?:@UUID\[[^\]]*\]\{)?Effect: [^.}]+\}?$/i, "")
         .replace(/^When ([^,]+? is about to roll [^,]+?), (?:it|they|he|she) can alert (?:its|their|his|her) allies as a free action\. /i, (_all, when) => `Trigger ${when} Effect `);
     const free = item?.system?.actionType?.value === "free" || /^When [^,]+?, (?:it|they|he|she) can alert [^.]+? as a free action\./i.test(String(text).trim());
-    const split = /^Trigger (.+?)[.;]? Effect (.+)$/.exec(body);
+    const split = /^Trigger (.+?)[.;]? Effect (.+)$/.exec(body.replace(/^Frequency [^.]+?\s+(?=Trigger\b)/i, ""));
+    // (Batch 260, All This Has Happened Before: "Trigger The samsaran anchorite is about to roll initiative Effect The anchorite experiences a flash of
+    // recognition …, gaining a +4 circumstance bonus to the triggering roll. If this causes the anchorite to be the first creature to act, they also
+    // become Quickened for 1 round, but they can use the extra action only to Recall Knowledge or Step." — its own initiative higher (self); acting
+    // first, a note.)
+    if (split && /^(?:The )?[\w'" -]+? is about to roll initiative$/i.test(split[1].trim())) {
+        const [first, ...rest] = split[2].trim().split(/(?<=\.)\s+(?=[A-Z])/);
+        const bonus = /^(?:The )?[^.]+?, gaining an? \+(\d+) circumstance bonus to the triggering roll\.$/i.exec(first ?? "");
+        if (!bonus) return null;
+        const notes = [];
+        for (const sentence of rest) {
+            const first = /^If this causes (?:the [\w' -]+?|it|them) to be the first creature to act, (?:it|they) also becomes? Quickened for 1 round, but (?:it|they) can use the extra action only to ([^.]+)\.$/i.exec(sentence);
+            if (!first) return null;
+            notes.push(`If that makes it act first, it's also Quickened for 1 round, its extra action only to ${first[1]} (the GM's).`);
+        }
+        return { builtin: "initiative-warning", value: Number(bonus[1]), skills: [], self: true, ...(free ? { free: true } : {}), ...(notes.length ? { notes } : {}) };
+    }
     // (Batch 178, Warning Ears: "Trigger The lucky courser rolls initiative using Perception or Survival Effect Their expressive ears twitch in alarm,
     // granting allies within 10 feet a +2 circumstance bonus to initiative rolls.")
     const trigger = split ? /^(?:The )?[\w'" -]+? is about to roll (?:an? )?(Perception(?: or Survival)?)(?: check)? (?:to determine (?:(?:its|their|his|her) )?initiative|for initiative)$/i.exec(split[1])

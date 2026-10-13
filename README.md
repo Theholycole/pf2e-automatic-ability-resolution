@@ -361,6 +361,11 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - cover beside an ally (Animal Shield), and a bonus after moving (Rev Up);
   - what it does to a creature it holds: a throw (Deadly Throw), a tooth (Broken Barb), a gulp into Swallow Whole (Toss Up and Gulp Down), a venom transfer (Tentacle Transfer);
   - a retreat when hurt (Detach), temporary Hit Points after a bite (Devour Wealth), and an ally's boost after a spell (Inspiring Display).
+- **Exposures in other words, initiative, two hits in a row** (2026-10-12, batch 260): 10 new in PF2e and 3 adventure abilities that were the GM's. They include:
+  - exposures said as "must save against", in a cone or at one creature, with an easier first save, by a curse at range (Mindwarping Tide, Spray Pus, Venom Spritz, Kiss of Rime, Robes of Welcome);
+  - damage to a downed creature (Kiss of Death), and a dash that triggers no reactions (Plane-Hopper Dash);
+  - a bonus to its own initiative (All This Has Happened Before);
+  - a follow-up after two hits in a row (Mind-Rending Sting), and Dazzled until cleared (Spice Mix).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

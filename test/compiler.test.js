@@ -4207,3 +4207,32 @@ test("held creatures, retreats and one-offs: initiative reactions using an abili
     const display = plan("<p><strong>Requirements</strong> The test adept's previous action was to Cast a Spell</p><hr /><p><strong>Effect</strong> The test adept uses their sparkling lights to inspire another gnoll within 20 feet. That gnoll gains 3 temporary Hit Points that last until the start of the test adept's next turn.</p><p>@UUID[Compendium.pf2e.bestiary-effects.Item.testEffect000001]{Effect: Test Display}</p>");
     assert.deepEqual([display?.requires, display?.targeting?.range, display?.resolution?.applications?.[0]?.recipients], ["after-cast", "20 feet", "allies-in-area"]);
 });
+
+test("exposures in other words, a downed creature's damage, a safe dash, its own initiative, a sting after two hits, spice in the eyes (2026-10-12, batch 260)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const rot = item("<p><strong>Saving Throw</strong> @Check[fortitude|dc:20]</p><hr /><p><strong>Maximum Duration</strong> 4 rounds</p><p><strong>Stage 1</strong> @UUID[Compendium.pf2e.conditionitems.Item.MIRkyAjyBeXivMa7]{Enfeebled 1} (1 round)</p>", "passive", 1, "Test Rot");
+    const own = (html, name = "Test Use") => compileMonsterAbility(item(html, "action", 1, name), { basicActions: {}, actor: { name: "Test Toad", items: [rot] } });
+    const either = own("<p>The test toad squeezes a gland, squirting slime in a @Template[cone|distance:15] or targeting an individual creature within 30 feet. A creature targeted or in the area is exposed to test rot.</p>");
+    assert.deepEqual([either?.targeting?.area, either?.notes], [{ type: "cone", value: 15 }, ["Or, instead of the area, one creature within 30 feet."]]);
+    const milder = own("<p>The test toads puff a mist. Each creature in a @Template[type:cone|distance:10] is exposed to test rot but gains a +2 circumstance bonus to its initial saving throw against the poison.</p>");
+    assert.deepEqual([milder?.resolution?.check?.against?.value, milder?.resolution?.afflictionHandoff?.dc], [18, 20]);
+    const saving = own("<p>The test toad belches marsh gas. Creatures within a @Template[type:emanation|distance:15] must save against the test toad's test rot.</p>");
+    assert.deepEqual(saving?.targeting?.area, { type: "emanation", value: 15 });
+    const shard = own("<p><strong>Frequency</strong> once per hour</p><hr /><p><strong>Effect</strong> A sliver of cold glass lodges itself in the skin of a creature within 30 feet. The creature must save against the test rot.</p>");
+    assert.deepEqual([shard?.targeting?.range, shard?.resolution?.outcomes?.failure?.affliction?.name], [30, "Test Rot"]);
+    const wrap = own("<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test toad wraps its tongue around an adjacent living creature, exposing it to test rot. If any creature is cursed by the test toad's test rot, the test toad can't impose test rot on another creature.</p>");
+    assert.deepEqual([wrap?.targeting?.range, wrap?.notes], ["touch", ["Not while another creature is cursed by it: one at a time."]]);
+    const sting = item("<p>A creature hit by the test toad's Strikes or Test Cloud must attempt a @Check[fortitude|dc:24] save. On a failure, the creature is @UUID[Compendium.pf2e.conditionitems.Item.yblD8fOR1J8rDwEQ]{Confused} for 1 round.</p>", "passive", 1, "Test Spores");
+    const cloud = compileMonsterAbility(item("<p>The test toad exhales a cloud. Creatures within a @Template[type:emanation|distance:10] must save against the test toad's test spores.</p>", "action", 1, "Test Cloud"), { basicActions: {}, actor: { name: "Test Toad", items: [sting] } });
+    assert.deepEqual([cloud?.targeting?.area, cloud?.trigger, cloud?.resolution?.kind], [{ type: "emanation", value: 10 }, { event: "use" }, "save"]);
+    const kiss = plan("<p>The test ghoul delivers a cold bite to an Unconscious or willing creature, dealing @Damage[2d6[void]] damage. A creature bitten three rounds in a row stops breathing.</p>", "action", 2);
+    assert.deepEqual([kiss?.requires, kiss?.resolution?.outcomes?.success?.damage?.formulas, kiss?.notes], ["requirement", [{ formula: "2d6[void]" }], ["Only at an Unconscious or willing creature.", "A creature bitten three rounds in a row stops breathing."]]);
+    assert.deepEqual(plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test runner slips sideways through the world. The test runner Strides; this movement doesn't trigger reactions. Once the Stride is complete, the test runner gains a +10-status bonus to their Speed until the start of their next turn.</p>"), { builtin: "safe-move", actions: 1, notes: ["Then a +10 status bonus to its Speed until the start of its next turn."] });
+    const deja = plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Trigger</strong> The test seer is about to roll initiative</p><hr /><p><strong>Effect</strong> The test seer remembers this moment, gaining a +3 circumstance bonus to the triggering roll. If this causes the test seer to be the first creature to act, they also become Quickened for 1 round, but they can use the extra action only to Step.</p>", "reaction");
+    assert.deepEqual([deja?.builtin, deja?.value, deja?.self, deja?.notes?.length], ["initiative-warning", 3, true, 1]);
+    const pierce = plan("<p><strong>Requirements</strong> The test wasp hits the same enemy with two consecutive stinger Strikes in the same round</p><hr /><p><strong>Effect</strong> The test wasp deals @Damage[(2d8+4)[poison]] damage to the enemy.</p>");
+    assert.deepEqual([pierce?.trigger?.followUp, pierce?.resolution?.outcomes?.success?.damage?.formulas], [{ strike: "stinger", melee: false, on: ["success", "criticalSuccess"], twice: true }, [{ formula: "(2d8+4)[poison]" }]]);
+    const spice = plan("<p>The test cook flings pepper into an adjacent creature's eyes, causing the creature to be Dazzled until it Interacts to clear its vision.</p>");
+    assert.deepEqual(spice?.resolution?.outcomes?.success?.effects, [{ kind: "condition", slug: "dazzled", value: null, duration: null }]);
+});
