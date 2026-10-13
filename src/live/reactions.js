@@ -139,8 +139,8 @@ export function offerHTML(state) {
         // (Batch 88: a basic maneuver, "Use it: Disarm (−2)".)
         if (state.kind === "skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(String(state.skill?.slug ?? "").replace(/^\w/, (letter) => letter.toUpperCase()))}${state.skill?.shift ? ` (${state.skill.shift > 0 ? "+" : "−"}${Math.abs(state.skill.shift)})` : ""}</button>`);
         if (state.kind === "reroll") buttons.push(`<button type="button" data-aar-reaction="use">${state.attack?.keep === "new" ? "Reroll, take the new result" : "Reroll, keep the better"}</button>`);
-        // (Batch 170: "Use it: +1 to its allies' initiative".)
-        if (state.kind === "initiative") buttons.push(`<button type="button" data-aar-reaction="use">Use it: +${escape(state.attack?.value ?? 1)} to its allies' initiative</button>`);
+        // (Batch 170: "Use it: +1 to its allies' initiative"; batch 260: "+4 to its own initiative".)
+        if (state.kind === "initiative") buttons.push(`<button type="button" data-aar-reaction="use">Use it: +${escape(state.attack?.value ?? 1)} to its ${state.attack?.self ? "own" : "allies'"} initiative</button>`);
         // (Batch 168: "Use it: roll Performance".)
         if (state.kind === "save-skill") buttons.push(`<button type="button" data-aar-reaction="use">Use it: roll ${escape(String(state.skill?.slug ?? "the check").replace(/^\w/, (letter) => letter.toUpperCase()))}</button>`);
         if (state.kind === "boost") buttons.push(`<button type="button" data-aar-reaction="use">Use it: ${escape(state.attack?.label ?? "one degree better")}</button>`);
