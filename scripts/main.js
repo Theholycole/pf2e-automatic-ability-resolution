@@ -14,6 +14,8 @@ import { setUpZones, zoneEvent } from "./zones.js";
 import { setUpConjure } from "./conjure.js";
 import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
+import { setUpBravery } from "./bravery.js";
+import { initiativeSkills } from "../src/compiler/initiative.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -76,6 +78,8 @@ Hooks.once("ready", () => {
     setUpSwallow();
     setUpRecharge({ compileItem });
     setUpReactions({ compileItem });
+    // (Batch 302: Bravery's lower frightened, from whatever adds it.)
+    setUpBravery({ compileItem });
     setUpHazards({ compileItem });
     setUpZones();
     setUpConjure({ compileItem });
@@ -89,5 +93,6 @@ Hooks.once("ready", async () => {
     await loadBasicActions();
     const module = game.modules.get(MODULE_ID);
     // (zoneEvent: the zones' Region script behaviours call it, batch 256.)
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, zoneEvent });
+    // (initiativeSkills, batch 302: the skills an ability names for its creature's own initiative — the simulator's.)
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent });
 });

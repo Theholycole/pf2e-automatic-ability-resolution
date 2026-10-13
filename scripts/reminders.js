@@ -7,7 +7,7 @@
 import { reminderFor, reminderHTML } from "../src/live/reactions.js";
 import { htmlToPlainText } from "../../pf2e-resolution-core/src/text/plain-text.js";
 import { isActiveGM } from "./live.js";
-import { markUsed, reactionAvailable } from "./reactions.js";
+import { markUsed, reactionAvailable, reactionsLeft } from "./reactions.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const SETTING = "reactionReminders";
@@ -84,7 +84,9 @@ function reminders(combat) {
             if (!reminder) continue;
             entries.push({ ability: item.name, trigger: reminder.trigger, free: type === "free", used: false, key: `${token.uuid}|${item.id}` });
         }
-        if (entries.length) groups.push({ creature: token.name, entries });
+        // (Batch 302: a creature with more than one a round — how many it has left.)
+        const { total, left } = reactionsLeft(actor);
+        if (entries.length) groups.push({ creature: token.name, entries, ...(total > 1 ? { reactions: { total, left } } : {}) });
     }
     return groups;
 }
@@ -115,6 +117,7 @@ async function useReminded(message, key) {
     await item.toMessage(undefined, { speaker: ChatMessage.getSpeaker({ token }) });
     if (item.system?.actionType?.value === "reaction") await markUsed(token.actor, token, item.name);
     const card = message.getFlag(MODULE_ID, "reminderCard");
-    const groups = (card?.groups ?? []).map((group) => ({ ...group, entries: group.entries.map((entry) => (entry.key === key ? { ...entry, used: true } : entry)) }));
+    // (Batch 302: its count of reactions left, after this one.)
+    const groups = (card?.groups ?? []).map((group) => ({ ...group, entries: group.entries.map((entry) => (entry.key === key ? { ...entry, used: true } : entry)), ...(group.reactions && group.entries.some((entry) => entry.key === key) ? { reactions: reactionsLeft(token.actor) } : {}) }));
     await message.update({ content: reminderHTML(groups), [`flags.${MODULE_ID}.reminderCard`]: { ...card, groups } });
 }

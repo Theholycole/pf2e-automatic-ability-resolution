@@ -63,8 +63,8 @@ test("Mobility and Extra Reaction from their words; a reaction for one thing onl
     assert.deepEqual(compileMonsterAbility(passive("Time Slip", "<p>The test sage gains an additional reaction each round, though he still can't use more than one reaction on the same triggering action.</p>")).reactions, { perRound: 2 });
     assert.deepEqual(compileMonsterAbility(passive("Ready Shield", "<p>The test knight gains an additional reaction each round that can be used only for Shield Block.</p>")).reactions, { extra: 1, only: "Shield Block" });
     assert.deepEqual(compileMonsterAbility(passive("Quick Feet", "<p>The test dancer gains an additional reaction each turn that she can only use to Slip.</p>")).reactions, { extra: 1, only: "Slip" });
-    // (A head each: not read.)
-    assert.equal(compileMonsterAbility(passive("Many Heads", "<p>The test beast gains 2 extra reactions each round that it can use only to make Reactive Strikes. It must use a different head for each reaction.</p>")), null);
+    // (A head each: read since batch 302 — what a reaction is anyway.)
+    assert.deepEqual(compileMonsterAbility(passive("Many Heads", "<p>The test beast gains 2 extra reactions each round that it can use only to make Reactive Strikes. It must use a different head for each reaction.</p>")).reactions, { extra: 2, only: "Reactive Strikes" });
 });
 
 test("live: a monster's reactions this round — one, an Extra Reaction's count, one for a single reaction spent on it first (batch 301)", () => {

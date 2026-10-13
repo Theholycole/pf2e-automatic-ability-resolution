@@ -500,6 +500,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 
   Live, Extra Reaction now counts: a monster with more reactions a round still gets offers after its first, and one with a reaction for a single thing only (Quick Shield Block, Shadow Blend) spends that one on it first.
 
+- **More reactions, Bravery, initiative skills** (2026-10-13, batch 302, the user's calls):
+  - **Reactions:** extra reactions are read in more wordings. That covers "3 reactions each round", a Reactive Strike or Shield Block that grants more of itself (on its plan as `reactions`), "a Reactive Strike or Shield Block", and a head each beyond the first, counted from the stat block ("has five heads").
+  - **Tracking:** live, a monster with more than one reaction a round has "Reaction used (2 of 3)", and the reminder card shows "1 of 3 reactions left".
+  - **Bravery:** any frightened a creature with it gains (a spell, Demoralize, the simulator's morale card, the GM) comes 1 lower; one that would be 0 isn't added (`scripts/bravery.js`). PF2e's rules give Bravery only the save.
+  - **Initiative skills:** `api.initiativeSkills(item)` reads the skills an ability names for its creature's own initiative ("rolls Deception or Stealth for initiative", "Warfare Lore for initiative"), for the simulator.
+
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

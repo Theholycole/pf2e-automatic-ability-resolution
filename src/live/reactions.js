@@ -224,9 +224,10 @@ export function reminderFor({ type, plan, text }) {
     return { trigger: noted ?? written ?? null };
 }
 
-// The reminder card: [{ creature, entries: [{ ability, trigger, free, used, key }] }] → its HTML, a Use button on each.
+// The reminder card: [{ creature, entries: [{ ability, trigger, free, used, key }], reactions? }] → its HTML, a Use button on each.
+// (Batch 302: reactions { total, left } — "3 of 4 reactions left" beside a creature with more than one.)
 export function reminderHTML(groups) {
-    const rows = groups.map((group) => `<li><strong>${escape(group.creature)}</strong><ul>${group.entries.map((entry) => `<li>${escape(entry.ability)}${entry.free ? " (free)" : ""}${entry.trigger ? ` — ${escape(entry.trigger)}` : ""} ${entry.used ? "<em>used</em>" : `<button type="button" data-aar-remind="${escape(entry.key)}">Use</button>`}</li>`).join("")}</ul></li>`).join("");
+    const rows = groups.map((group) => `<li><strong>${escape(group.creature)}</strong>${group.reactions ? ` (${group.reactions.left} of ${group.reactions.total} reactions left)` : ""}<ul>${group.entries.map((entry) => `<li>${escape(entry.ability)}${entry.free ? " (free)" : ""}${entry.trigger ? ` — ${escape(entry.trigger)}` : ""} ${entry.used ? "<em>used</em>" : `<button type="button" data-aar-remind="${escape(entry.key)}">Use</button>`}</li>`).join("")}</ul></li>`).join("");
     return `<section class="pf2e-aar-reminders"><p><strong>Reactions to watch for</strong> (their triggers aren't ones the module sees)</p><ul>${rows}</ul></section>`;
 }
 
@@ -234,8 +235,13 @@ export function reminderHTML(groups) {
 // Reaction's count a round (passive-rules' reactions: { perRound }), and reactions for one thing only ({ extra, only: "Shield Block" }),
 // spent on that first. allowances: those entries; used: the reactions it spent this round, by name (null when not known); name: the
 // reaction it's about to use — null, any.
-const reactionWord = (text) => String(text ?? "").toLowerCase().replace(/^an? /, "").replace(/s\b/g, "").trim();
-const onlyFor = (only, name) => Boolean(name) && String(only).split(/,\s*|\s+or\s+/).some((entry) => reactionWord(entry) === reactionWord(name));
+// (Batch 302: Attack of Opportunity is Reactive Strike's older name; "your champion's reaction", whichever that is.)
+const reactionWord = (text) => {
+    const word = String(text ?? "").toLowerCase().replace(/\s*\(.*\)$/, "").replace(/^(?:an?|the) /, "").replace(/s\b/g, "").trim();
+    return word === "attack of opportunity" ? "reactive strike" : word;
+};
+const CHAMPION_REACTIONS = new Set(["retributive strike", "glimpse of redemption", "liberating step", "selfish shield", "destructive vengeance", "iron command", "ash"].map(reactionWord));
+const onlyFor = (only, name) => Boolean(name) && String(only).split(/,?\s+or\s+|,\s*/).some((entry) => reactionWord(entry) === reactionWord(name) || (/champion['’]s reaction/i.test(entry) && CHAMPION_REACTIONS.has(reactionWord(name))));
 export function reactionOpen(allowances, used, name = null) {
     const general = Math.max(1, ...allowances.map((entry) => entry.perRound ?? 1));
     const pools = allowances.filter((entry) => entry.only).map((entry) => ({ only: entry.only, left: entry.extra ?? 1 }));
@@ -247,4 +253,19 @@ export function reactionOpen(allowances, used, name = null) {
     }
     if (pools.some((entry) => entry.left > 0 && (name === null || onlyFor(entry.only, name)))) return true;
     return generalUsed < general;
+}
+
+// (Batch 302, the user's call: "track monsters with multiple reactions": how many it has a round and how many are left — its Extra
+// Reaction's count and those kept for one thing — for "Reaction used (2 of 3)" and the reminder card. { total, left }.)
+export function reactionCount(allowances, used) {
+    const general = Math.max(1, ...allowances.map((entry) => entry.perRound ?? 1));
+    const pools = allowances.filter((entry) => entry.only).map((entry) => ({ only: entry.only, left: entry.extra ?? 1 }));
+    const total = general + pools.reduce((sum, pool) => sum + pool.left, 0);
+    let generalUsed = 0;
+    for (const spent of used) {
+        const pool = pools.find((entry) => entry.left > 0 && onlyFor(entry.only, spent));
+        if (pool) pool.left--;
+        else generalUsed++;
+    }
+    return { total, left: Math.max(0, general - generalUsed) + pools.reduce((sum, pool) => sum + pool.left, 0) };
 }

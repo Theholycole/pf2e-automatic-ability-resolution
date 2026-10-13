@@ -14,7 +14,7 @@ import { gmFallback } from "./gm-fallback.js";
 import { gmDecided } from "./gm-decided.js";
 import { readSummon } from "./summons.js";
 import { withWatchedTrigger } from "./watch.js";
-import { passiveRules } from "./passive-rules.js";
+import { passiveRules, readReactions } from "./passive-rules.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -10460,7 +10460,18 @@ export function compileMonsterAbility(source, options = {}) {
     // (Batch 301: a passive PF2e's own rules hold — Evasion, Deny Advantage, Surprise Attack, Construct Armor — or Mobility, Extra Reaction; for
     // the simulator.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) : null;
-    return withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
+    const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
+    return withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null);
+}
+
+// (Batch 302: a reaction or passive that also grants extra reactions — the grindylow's Reactive Strike "gains 1 extra reaction … only to make a
+// Reactive Strike", a hardscale's Shield Block, Retributive Rune — its plan with { reactions }, as passive-rules has them.)
+function withExtraReactions(item, plan, actor) {
+    if (!plan || plan.builtin === "passive-rules" || !["reaction", "passive"].includes(item.system?.actionType?.value)) return plan;
+    const html = String(item.system?.description?.value ?? "");
+    if (!/\breactions?\b[^.]*\b(?:additional|extra)\b|\b(?:additional|extra)\b[^.]*\breactions?\b|\b\w+ reactions (?:at the start|each|per)\b/i.test(html)) return plan;
+    const reactions = readReactions(htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ").trim(), actor);
+    return reactions ? { ...plan, reactions } : plan;
 }
 
 // A reaction whose trigger reads but no reading plays as a whole (2026-10-13, batch 273): its Effect compiled as an action, with that trigger — on the

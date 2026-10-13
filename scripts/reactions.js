@@ -26,7 +26,7 @@
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { REACTION_KINDS, blocksReactions, reactionOpen, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
+import { REACTION_KINDS, blocksReactions, reactionCount, reactionOpen, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { startZone } from "./zones.js";
 import { startConjure } from "./conjure.js";
@@ -109,8 +109,12 @@ function reactionsOf(actor) {
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
 const running = (effect) => !(effect.remainingDuration?.expired ?? effect.isExpired);
 // (Batch 301: Extra Reaction's count a round, and reactions for one thing only — by name, the one it's about to use; null, any.)
-const allowances = (actor) => (actor.itemTypes?.action ?? []).filter((item) => item.system?.actionType?.value === "passive").map((item) => compile(item)).filter((plan) => plan?.builtin === "passive-rules" && plan.reactions).map((plan) => plan.reactions);
-const reactionUsed = (actor, name = null) => !reactionOpen(allowances(actor), actor.itemTypes.effect.filter((effect) => effect.flags?.[MODULE_ID]?.reactionUsed && running(effect)).map((effect) => effect.flags[MODULE_ID].reactionFor ?? null), name);
+// (Batch 302: and those a reaction grants with itself — the grindylow's Reactive Strike, a hardscale's Shield Block.)
+const allowances = (actor) => (actor.itemTypes?.action ?? []).filter((item) => ["passive", "reaction"].includes(item.system?.actionType?.value)).map((item) => compile(item)).filter((plan) => plan?.reactions).map((plan) => plan.reactions);
+const usedNames = (actor) => actor.itemTypes.effect.filter((effect) => effect.flags?.[MODULE_ID]?.reactionUsed && running(effect)).map((effect) => effect.flags[MODULE_ID].reactionFor ?? null);
+const reactionUsed = (actor, name = null) => !reactionOpen(allowances(actor), usedNames(actor), name);
+// (Batch 302: how many reactions it has a round and has left — { total, left } — for a creature with more than one.)
+export const reactionsLeft = (actor) => reactionCount(allowances(actor), usedNames(actor));
 // (Batch 296: whether it can react now — for the reminders, scripts/reminders.js.)
 export const reactionAvailable = (actor, name = null) => !(blocksReactions(actor.conditions.active.map((condition) => condition.slug)) || reactionUsed(actor, name));
 
@@ -1565,13 +1569,16 @@ export async function markUsed(actor, token, name = null) {
     const combat = game.combat?.started ? game.combat : null;
     const position = combat ? combat.turns.findIndex((entry) => entry.tokenId === token.id) : -1;
     const rounds = combat && position >= 0 ? reactionRounds(position, combat.turn) : 1;
+    // (Batch 302: a creature with more than one a round — "Reaction used (2 of 3)".)
+    const { total, left } = reactionCount(allowances(actor), [...usedNames(actor), name]);
+    const count = total > 1 ? ` (${total - left} of ${total})` : "";
     await actor.createEmbeddedDocuments("Item", [{
-        name: "Reaction used",
+        name: `Reaction used${count}`,
         type: "effect",
         img: "icons/svg/clockwork.svg",
         flags: { [MODULE_ID]: { reactionUsed: true, reactionFor: name } },
         system: {
-            description: { value: "<p>It has used its reaction; it gets it back at the start of its turn.</p>" },
+            description: { value: total > 1 ? `<p>It has used ${total - left} of its ${total} reactions this round${name ? ` (this one on ${name})` : ""}; they come back at the start of its turn.</p>` : "<p>It has used its reaction; it gets it back at the start of its turn.</p>" },
             duration: { value: rounds, unit: "rounds", expiry: "turn-start", sustained: false },
             start: { value: game.time.worldTime, initiative: position >= 0 ? combat.turns[position].initiative ?? null : null },
             tokenIcon: { show: true },

@@ -3126,6 +3126,31 @@ The user's call: "the crash, traps and then passives" (the simulator's census: S
 - **PCs:** the reader takes a PC's passive feats too (a rogue's Deny Advantage and Surprise Attack, a fighter's Bravery, a barbarian's Juggernaut; 78 class features and feats). The simulator calls it through `api.compileAbility`, since the core's registry hands the module only a PC's check actions.
 - **Live check (pftest, 2026-10-13):** compendium creatures read through the simulator's snapshot gave Animated Armor's Hardness 9 and −4 below 50%, the Gang Leader's Evasion, Deny Advantage 7 and Surprise Attacker, the Burglar's Mobility, the Hydra's All-Around Vision and the Ancient Gold Dragon's 2 reactions. The iconics gave Merisiel's Deny Advantage and Surprise Attack, Valeros's Bravery and Amiri's Juggernaut.
 
+## More reactions, Bravery, initiative skills (2026-10-13, batch 302)
+
+The user's calls: "Have Bravery apply as intended even if it changes how morale works on that creature", "use different initiative skills such as deception if they have a passive mentioning it and the skill is higher than their normal perception initiative", "Expand reactions and track monsters with multiple reactions".
+
+- **Extra reactions** (`readReactions` in `src/compiler/passive-rules.js`):
+  - **Wordings read:**
+    - "gains 3 reactions each round", with "one reaction per trigger" as a reaction is anyway;
+    - "receives two additional reactions … only to perform a Shield Block";
+    - "only to make a Reactive Strike or to Shield Block" (either), "can only be used for X";
+    - "an extra reaction per round for each of its heads beyond the first", its heads counted from the stat block ("has five heads", "the orochi's eight heads", "begins combat with two tentacles"), or "each of its nine heads";
+    - "only for your champion's reaction".
+  - **Not read:** grants that come with a state (while raging, in a frenzy, for a Mythic Point), or a limit it can't count (still-working limbs, "a guardian's feats").
+  - **On a reaction's own plan:** a reaction or passive that grants more of itself (the grindylow's and lusca's Reactive Strike, a marilith's, a hardscale's Shield Block, Retributive Rune) carries them as `reactions` (`withExtraReactions` in `src/compiler/monster.js`).
+- **Live tracking:**
+  - Those count for offers too.
+  - "Reaction used" says "(2 of 3)" for a creature with more than one a round.
+  - The reminder card shows "1 of 3 reactions left" beside it (`reactionCount`, `reactionsLeft`).
+- **Bravery** (`scripts/bravery.js`): PF2e's rules give Bravery only its save. Now `preCreateItem` and `preUpdateItem` lower any frightened a creature with `lessFrightened` gains, a monster's or a PC's (a fighter's Bravery). One that would come to 0 isn't added, and the GM gets a note. The simulator's morale card shows "(Bravery: 1 lower)".
+- **Initiative skills** (`src/compiler/initiative.js`, `api.initiativeSkills`): the skills an ability names for its creature's own initiative (Surprise Attack, Raise a Glass, Roaring Initiative, Temporal Sense's Lore, Guide's Warning's Survival). Not Perception, and not another creature's roll.
+- **Live check (pftest, 2026-10-13):**
+  - **Bravery** (on a temporary NPC Core Pirate): frightened 1 never landed, frightened 2 landed as 1, a +1 from 1 stayed at 1, setting 3 landed as 2, and lowering it was untouched. Each gain brought a GM note.
+  - **Reaction tracking** (on a temporary Hellfire Hydra, five heads): two Reactive Strikes gave "Reaction used (1 of 5)" and "(2 of 5)", with 3 of 5 left and its own reaction still open.
+  - **Simulator snapshot:** the Bandit's Stealth initiative, Kylix's Diplomacy, the grindylow's and marilith's kept Reactive Strikes, and the Tarrasque's 3 a round.
+  - **Cleanup:** the temporary actors and their notes were removed.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

@@ -11,7 +11,7 @@ const OFF_GUARD = "Compendium.pf2e.conditionitems.Item.AJh5ex99aV6VTggg";
 const SAVES = { fortitude: ["fortitude"], reflex: ["reflex"], will: ["will"], "saving-throw": ["fortitude", "reflex", "will"] };
 const DEGREES = new Set(["criticalFailure", "failure", "success", "criticalSuccess", "all"]);
 const STEPS = new Set(["one-degree-better", "one-degree-worse", "two-degrees-better", "two-degrees-worse", "to-critical-failure", "to-failure", "to-success", "to-critical-success"]);
-const NUMBERS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5 };
+const NUMBERS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
 // A predicate the simulation can test against a spell or ability's roll options: its traits ("fear", "item:trait:light"), its slug, magical.
 // (Not an origin's traits, what it inflicts, a toggle: never true there, so not read.)
@@ -138,17 +138,8 @@ export function passiveRules(item, actor = null) {
         if (/\bStrides?\b[^.]*\bhalf (?:its|their|his|her|your) [sS]peed or less\b[^.]*\b(?:does not|doesn't|do not|don't) trigger reactions\b|\b(?:does not|doesn't) trigger reactions(?: from movement)? when (?:it|they|he|she|you) Strides?(?: to move)? half (?:its|their|his|her|your) [sS]peed or less\b/i.test(text)) {
             plan.mobility = { moves: ["stride", ...["climb", "fly", "swim"].filter((move) => new RegExp(`\\b${move === "fly" ? "Fl(?:y|ying|ies)" : move[0].toUpperCase() + move.slice(1) + "(?:s|ing)?"}\\b`).test(text))] };
         }
-        // Extra Reaction: "The dragon gains 2 reactions at the start of its turn each round." — that many a round; "an additional reaction
-        // each turn, but can use this extra reaction only for Divert Strike", "2 extra reactions each round that it can use only to make
-        // Reactive Strikes" — more, for that only. (Not one whose limit isn't read: a head each, nine heads.)
-        const count = /\b(?:gains?|gets?) (\w+) reactions at the start of (?:(?:its|their|his|her) turn|each of (?:its|their|his|her) turns)\b/i.exec(text);
-        const extra = /\b(?:gains?|has|gives (?:him|her|it|them)) (an?|one|two|three|\d) (?:additional|extra) reactions? (?:each|per) (?:turn|round)\b|\bturns, [\w' -]+? gains? an (?:additional|extra) reaction\b|\bhas an (?:additional|extra) reaction (?:they|it|he|she) can use only\b/i.exec(text);
-        const only = /\bonly (?:use (?:it |this reaction )?)?(?:for|to) (?:make )?([A-Z][\w' -]*?)(?=\.|,|\s+with\b|$)/.exec(text);
-        const limited = /\bonly\b|\bfor each of\b|\bdifferent head\b|\bloses one of\b/i.test(text);
-        const total = count ? NUMBERS[count[1].toLowerCase()] ?? Number(count[1]) : 0;
-        const more = extra ? (NUMBERS[String(extra[1] ?? "a").toLowerCase()] ?? (Number(extra[1]) || 1)) : 0;
-        if (total > 1 && !limited) plan.reactions = { perRound: total };
-        else if (more && !/\bfor each of\b|\bdifferent head\b|\bloses one of\b/i.test(text) && (!limited || only)) plan.reactions = only ? { extra: more, only: only[1].trim() } : { perRound: 1 + more };
+        const reactions = readReactions(text, actor);
+        if (reactions) plan.reactions = reactions;
         // All-Around Vision by PF2e's glossary alone: can't be flanked.
         if (/@Localize\[PF2E\.NPC\.Abilities\.Glossary\.AllAroundVision\]/.test(html)) plan.flanking = { flankable: false };
         // Surprise Attack in words alone: "On the first round of combat, if it rolls Deception or Stealth for initiative, creatures that
@@ -158,4 +149,54 @@ export function passiveRules(item, actor = null) {
     }
     if (!Object.keys(plan).length) return null;
     return { builtin: "passive-rules", ...plan };
+}
+
+// How many heads (tentacles, limbs) its stat block gives it: "A hellfire hydra has five heads", "the orochi's eight heads", "begins combat
+// with two tentacles". null when no text numbers them.
+function partsOf(actor, part) {
+    for (const item of actor?.items ?? []) {
+        const text = String(item.system?.description?.value ?? "").replace(/<[^>]+>/g, " ");
+        const found = new RegExp(`\\b(?:has|ordinarily has|begins combat with|['’]s) (\\w+) ${part}s\\b`, "i").exec(text);
+        const count = found ? NUMBERS[found[1].toLowerCase()] ?? Number(found[1]) : NaN;
+        if (Number.isFinite(count) && count > 0) return count;
+    }
+    return null;
+}
+
+// Extra reactions in its words (2026-10-13, batch 301; batch 302, the user's call: "expand reactions and track monsters with multiple
+// reactions"):
+//   "The dragon gains 2 reactions at the start of its turn each round", "Tarrasque gains 3 reactions each round" → { perRound };
+//   "an additional reaction each turn, but can use this extra reaction only for Divert Strike", "2 extra reactions … only to make Reactive
+//   Strikes", "two additional reactions he can use only to perform a Shield Block", "only to make a Reactive Strike or to Shield Block",
+//   "an extra reaction per round for each of its heads beyond the first, which it can use only to make Reactive Strikes" (its heads
+//   counted from its stat block) → { extra, only }.
+// "One reaction per trigger", "a different head for each reaction" are what a reaction is anyway. null when its limit isn't read (still-
+// working limbs, a guardian's feats), or when the reactions only come with a state (a rage, a frenzy, a mythic point).
+export function readReactions(text, actor = null) {
+    const plain = String(text ?? "")
+        .replace(/(?:,\s*(?:though|but|and)\s+|(?<=^|\.\s*))[^.,]*\b(?:one|1) (?:reaction|Reactive Strike|Attack of Opportunity)s? (?:per trigger|(?:on|for) the same triggering action)\b[^.,]*(?:,[^.]*)?\.?/gi, "")
+        .replace(/[^.]*\b(?:a )?different head for each reaction\b[^.]*\.?/gi, "")
+        .replace(/[^.]*\bloses? one of (?:its|their|his|her) heads\b[^.]*\.?/gi, "")
+        .replace(/[^.]*\bon only (?:its|their|his|her) first turn each round\b[^.]*\.?/gi, "");
+    const grant = /[^.]*\b(?:gains?|gets?|has|receives?|gives? (?:him|her|it|them))\b[^.]*\breactions?\b[^.]*/i.exec(plain)?.[0] ?? "";
+    if (!grant || /\b(?:while|during|if|until|for the next|spend)\b/i.test(grant)) return null;
+    const count = /\b(?:gains?|gets?|has) (\w+) reactions (?:at the start of (?:(?:its|their|his|her) turn|each of (?:its|their|his|her) turns)|(?:each|per|every) (?:round|turn))\b/i.exec(plain);
+    const extra = /\b(?:gains?|gets?|has|receives?|gives? (?:him|her|it|them)) (an?|one|two|three|four|five|\d+) (?:additional|extra) reactions?\b/i.exec(plain);
+    const perPart = /\b(?:gains?|has) an? (?:additional|extra) reaction (?:per|each) (?:round|turn) for each of (?:its|their|his|her) (?:(\w+) )?(head|tentacle|limb)s?\b(?:[^.,]*?(beyond the first))?|\bFor each (head|tentacle|limb) (?:it|he|she|they) ha(?:s|ve)\b[^.]*\bgains? an? (?:additional|extra) reaction/i.exec(plain);
+    // (A champion's: "only for your champion's reaction", whichever it is.)
+    const only = /\bonly (?:be used |use (?:it |this (?:extra |additional )?reaction |these reactions |them )?)?(?:for|to) (?:make |perform |attempt |use )?(?:an? |the )?([A-Z][\w' -]*?)(?=\.|,|\s+(?:with|against|when)\b|$)/.exec(plain)
+        ?? (/\bonly for (?:your|its|their|his|her) champion['’]s reaction\b/i.test(plain) ? [null, "champion's reaction"] : null);
+    if (/\bonly\b/i.test(plain) && !only) return null;
+    const total = count ? NUMBERS[count[1].toLowerCase()] ?? Number(count[1]) : 0;
+    let more = extra ? NUMBERS[extra[1].toLowerCase()] ?? Number(extra[1]) : 0;
+    if (perPart) {
+        const part = (perPart[2] ?? perPart[4]).toLowerCase();
+        const parts = perPart[1] ? NUMBERS[perPart[1].toLowerCase()] ?? Number(perPart[1]) : partsOf(actor, part);
+        if (!Number.isFinite(parts) || !parts) return null;
+        more = perPart[3] ? parts - 1 : parts;
+    }
+    if (only && (more || total > 1)) return { extra: more || total - 1, only: only[1].replace(/\s+or\s+to\s+/g, " or ").trim() };
+    if (total > 1) return { perRound: total };
+    if (more > 0) return { perRound: 1 + more };
+    return null;
 }
