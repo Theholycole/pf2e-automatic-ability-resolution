@@ -239,7 +239,8 @@ async function playAbility(item, plan, sourceToken) {
     }
     // Used in one of several ways (two breath weapons): the GM picks the way on the card.
     // (Batch 179: or one that casts a spell, Hilarious Exhalation's Laughing Gas.)
-    if (plan?.builtin === "modes" && plan.modes.some((mode) => mode.plan && (mode.plan.builtin === "cast-spell" || ((mode.plan.trigger?.event ?? "use") === "use" && cardCheck(mode.plan))))) {
+    // (Batch 273: or ways that are builtins — a stance or a self-effect of its choice, a maneuver against everyone around it.)
+    if (plan?.builtin === "modes" && plan.modes.some((mode) => mode.plan && (mode.plan.builtin === "cast-spell" || (mode.plan.builtin && !["no-effect", "modes"].includes(mode.plan.builtin)) || ((mode.plan.trigger?.event ?? "use") === "use" && cardCheck(mode.plan))))) {
         const state = createModeCard({
             modes: plan.modes,
             ability: { name: item.name, uuid: item.uuid },
@@ -269,7 +270,7 @@ async function playAbility(item, plan, sourceToken) {
     // not when the ability links PF2e's own effect (its card offers that).
     // (Batch 39: a bonus to its AC for a while, Dueling Parry; a plan with its own time only, not a rage's, whose PF2e effect is linked.)
     // (Batch 235: with no time of its own, its model's rounds — Raise Shields, Blood Fury, a rage with no PF2e effect; its healing too.)
-    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp || plan.model?.regeneration) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp || plan.model?.regeneration || plan.model?.materials?.length) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
         await strikeBuff(item, plan, sourceToken);
         if (Number(plan.heal) > 0) {
             const actor = sourceToken?.actor ?? item.actor;
@@ -1028,11 +1029,20 @@ async function chooseMode(message, state, index) {
     if (!mode) return null;
     const name = `${state.ability.name} (${mode.name})`;
     if (!mode.plan) {
-        const lines = [`${name}: resolve it by hand.`];
+        // (Batch 273: with what that way does, in words.)
+        const lines = [`${name}: resolve it by hand.`, ...(mode.notes ?? [])];
         const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
         const formula = item ? rechargeFormula(item) : null;
         if (item && formula) lines.push(await startRecharge({ actor: item.actor, item, formula, tokenUuid: state.source.tokenUuid }));
         const next = { ...state, status: "chosen", results: lines };
+        return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    }
+    // (Batch 273: a way that's a builtin — played as the ability itself would be; the card says which.)
+    if (mode.plan.builtin && mode.plan.builtin !== "cast-spell") {
+        const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+        const token = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid).catch(() => null) : null;
+        if (item) await playAbility(item, mode.plan, token);
+        const next = { ...state, status: "chosen", results: [`${name}.`] };
         return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
     }
     // (Batch 179: a way that casts a spell — its cast card, at the ability's rank and DC.)

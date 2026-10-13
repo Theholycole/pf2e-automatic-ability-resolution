@@ -50,7 +50,8 @@ export function selfEffectDuration(plan) {
 
 export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null, toggles = [] } = {}) {
     // (Batch 196: resistance and temporary Hit Points on itself too — Reef Armor, Shifting Form, Harden Chitin.)
-    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration)) return null;
+    // (Batch 273: a precious material for its Strikes, of its choice — PF2e's ChoiceSet and AdjustStrike, as its Adaptive Strike effect has them.)
+    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration && !plan.model?.materials?.length)) return null;
     const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
     if (plan.damage?.length && !toggles.length && !selector) return null;
     const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
@@ -58,6 +59,7 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
         : [...(plan.damage ?? []).map((formula) => buffRule(formula, selector, name)).map((rule) => (rule && plan.vsTrait ? { ...rule, predicate: [`target:trait:${plan.vsTrait}`] } : rule)), ...(plan.model?.modifiers ?? []).map((modifier) => modifierRule(modifier, name)),
             ...(plan.model?.resistances ?? []).map((entry) => ({ key: "Resistance", type: entry.type, value: Number(entry.value), ...(entry.exceptions?.length ? { exceptions: [...entry.exceptions] } : {}) })),
             ...(plan.model?.tempHp ? [{ key: "TempHP", value: Number(plan.model.tempHp) }] : []),
+            ...(plan.model?.materials?.length ? [{ key: "ChoiceSet", flag: "material", choices: plan.model.materials.map((value) => ({ label: value.replace(/-/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()), value })) }, { key: "AdjustStrike", mode: "add", property: "materials", value: "{item|flags.system.rulesSelections.material}", definition: ["item:melee"] }] : []),
             // (Batch 248: regeneration, and the damage that switches it off.)
             ...(plan.model?.regeneration ? [{ key: "FastHealing", type: "regeneration", value: Number(plan.model.regeneration.value), ...(plan.model.regeneration.deactivatedBy?.length ? { deactivatedBy: [...plan.model.regeneration.deactivatedBy] } : {}) }] : [])];
     if (rules.some((rule) => !rule)) return null;
@@ -68,6 +70,7 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
     const said = [plan.damage?.length ? `${which}: ${plan.damage.join(", ")} more damage${plan.vsTrait ? ` against ${plan.vsTrait} creatures` : ""}.` : null, ...(plan.model?.modifiers ?? []).map((modifier) => `${modifier.value > 0 ? "+" : ""}${modifier.value} ${modifier.type ?? ""} to ${modifier.on}.`.replace(/ {2,}/g, " ")),
         ...(plan.model?.resistances ?? []).map((entry) => `Resistance ${entry.value} to ${entry.type.replace(/-/g, " ")}${entry.exceptions?.length ? ` (except ${entry.exceptions.join(", ").replace(/-/g, " ")})` : ""}.`),
         plan.model?.tempHp ? `${plan.model.tempHp} temporary Hit Points.` : null,
+        plan.model?.materials?.length ? `Its Strikes count as ${plan.model.materials.join(", ").replace(/-/g, " ")} (its choice).` : null,
         plan.model?.regeneration ? `Regeneration ${plan.model.regeneration.value}${plan.model.regeneration.deactivatedBy?.length ? ` (deactivated by ${plan.model.regeneration.deactivatedBy.join(", ")})` : ""}.` : null].filter(Boolean).join(" ");
     return {
         name,

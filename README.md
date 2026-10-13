@@ -419,6 +419,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a tortoise's shell, a crushing pull on every creature it holds, and a big heal once a day;
   - reactions: a reroll for itself or an ally, roots that hinder a creature striding near it, and a failed save turned to a success at the cost of Sickened 1.
 - **The user's choices of 2026-10-13** (batch 272): 252 abilities named in `src/compiler/gm-decided.js` stay the GM's (out of combat, items, forms, counterspell kin, summons, unseen states, plane shifts, copies, nothing to play, and those that control another creature or order its allies about). A save with no DC in the data takes the one hidden in broken markup, else the creature's level DC (hard); a troop's breath with no save, a basic Reflex save at its level DC.
+- **The long tail after the user's choices, part 1** (2026-10-13, batch 273): 20 new in PF2e, with new pieces:
+  - choices whose ways are builtins (a stance or self-effect of its choice, one maneuver against everyone around it): the GM picks on the card, the simulator takes the first;
+  - Strikes counting as a precious material of its choice (PF2e's ChoiceSet and AdjustStrike);
+  - a reaction to a foe failing its save against the creature's own ability, spell, or an effect of a trait near it — live and in the simulator;
+  - a reaction whose trigger reads but nothing else plays: its Effect read as an action;
+  - trails of burning hoofprints as a line zone, an attack or check at its own fixed modifier, and hazards' mud, doors, frozen time and animated objects.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

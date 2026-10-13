@@ -774,9 +774,27 @@ async function saveAnswers(message, context, scene, combat, saver) {
     const grid = gridOf(scene);
     // (Batch 107: the effect's traits, for an ally's reroll or bonus against a mental, emotion or illusion effect.)
     const effectTraits = new Set([...(context.options ?? []).map((option) => /^(?:origin:)?item:trait:([\w-]+)$/.exec(option)?.[1]).filter(Boolean), ...(context.traits ?? []).map((trait) => trait?.name ?? trait)]);
+    // (Batch 273: what the save was against — its item, for a reaction to a foe's failed save against the monster's own ability or spell.)
+    const originUuid = message.flags?.pf2e?.origin?.uuid ?? context.origin?.uuid ?? null;
+    const origin = originUuid ? fromUuidSync(originUuid) : null;
+    const originActor = origin?.actor?.uuid ?? message.flags?.pf2e?.origin?.actor ?? context.origin?.actor ?? null;
     for (const { token, actor, reactions } of reactors(scene, combat)) {
         const self = token.id === saver.id;
         for (const { item, plan } of reactions) {
+            // (Batch 273: Mass Improved Grab, Siphon Faith — a foe's failed save against its own ability (by name), spell or effect of a trait: its card at
+            // that creature.)
+            if (plan.trigger?.reaction && plan.trigger.event === "foe-failed-save" && isFoe(token, saver)) {
+                const its = originActor && originActor === actor.uuid;
+                const named = !plan.trigger.ability || String(origin?.name ?? "").toLowerCase() === plan.trigger.ability.toLowerCase();
+                const spellOk = !plan.trigger.spell || origin?.type === "spell" || message.flags?.pf2e?.origin?.type === "spell";
+                const traitOk = !plan.trigger.traits?.length || plan.trigger.traits.some((trait) => effectTraits.has(trait));
+                const near = !plan.trigger.within || distanceFeet(box(token, grid.size), box(saver, grid.size), grid) <= plan.trigger.within;
+                if ((plan.trigger.anyone || its) && named && spellOk && traitOk && near) {
+                    await offer({ kind: "card", item, monster: token, actor, target: saver, trigger: `failed a save against ${origin?.name ?? "its effect"}`, free: !!plan.trigger.free });
+                    break;
+                }
+                continue;
+            }
             // (Batch 107: Hold Fast, Distracting Frolic, Guide to Fortune — an ally's failed save rerolled, keeping the better; Stay Strong!,
             // Free Mind — a bonus to it, offered when it turns the failure around.)
             if (plan.ally && ["save-reroll", "save-bonus-reaction"].includes(plan.builtin) && (!self || plan.self)) {
