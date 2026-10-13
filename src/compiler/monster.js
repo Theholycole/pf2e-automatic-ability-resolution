@@ -12,6 +12,7 @@
 
 import { gmFallback } from "./gm-fallback.js";
 import { gmDecided } from "./gm-decided.js";
+import { readSummon } from "./summons.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -10399,6 +10400,9 @@ export function compileMonsterAbility(source, options = {}) {
     // (2026-10-13: the user's own choices come first — an ability they kept the GM's stays so, whatever a later reading makes of it.)
     const decided = source.type === "action" ? gmDecided((options.actor ?? source.actor ?? source.parent)?.name, source.name) : null;
     if (decided) return { builtin: "no-effect", gm: decided };
+    // (Batch 297, the user's call: creatures it summons, before the readings that kept them the GM's.)
+    const summoned = source.type === "action" ? readSummon(modernItem(source), options) : null;
+    if (summoned) return summoned;
     source = fillMissingDCs(source, options.actor ?? source.actor ?? source.parent);
     const html = String(modernItem(source).system?.description?.value ?? "");
     // (Batch 75: "If the creature was already Slowed …, a failed save causes it to be Petrified permanently" — read on its own, set aside

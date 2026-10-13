@@ -78,7 +78,7 @@ Hooks.once("ready", () => {
     setUpReactions({ compileItem });
     setUpHazards({ compileItem });
     setUpZones();
-    setUpConjure();
+    setUpConjure({ compileItem });
     setUpReminders({ compileItem });
 });
 

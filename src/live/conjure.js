@@ -1,6 +1,8 @@
 // Creatures an ability makes or becomes (2026-10-13, batch 295): tokens of their own beside their maker. Pure: their actor's data, where they
 // stand, and how a merged creature's Hit Points go back to the creatures it was made of.
 
+import { SUMMON_LEVELS } from "../compiler/summons.js";
+
 const SIZE_SQUARES = { tiny: 1, sm: 1, small: 1, med: 1, medium: 1, lg: 2, large: 2, huge: 3, grg: 4, gargantuan: 4 };
 const PF2E_SIZES = { tiny: "tiny", small: "sm", medium: "med", large: "lg", huge: "huge", gargantuan: "grg" };
 
@@ -8,8 +10,8 @@ const PF2E_SIZES = { tiny: "tiny", small: "sm", medium: "med", large: "lg", huge
 export const conjuredName = (maker, name, index, count) => `${maker}'s ${name}${count > 1 ? ` ${index + 1}` : ""}`;
 
 // A creature with only the numbers the ability gives (AC, Hit Points, Speeds; none for a marker): an NPC's data at its maker's level.
-// alliance: its maker's side ("party", "opposition", null for neutral), when given.
-export function conjuredActorData({ name, size = "tiny", stats = null, level = 0, alliance, img = "icons/svg/mystery-man.svg", moduleId, flags = {} }) {
+// alliance: its maker's side ("party", "opposition", null for neutral), when given. (Batch 297: its saves, and traits.)
+export function conjuredActorData({ name, size = "tiny", stats = null, level = 0, alliance, traits = [], img = "icons/svg/mystery-man.svg", moduleId, flags = {} }) {
     const speeds = stats?.speeds ?? {};
     const others = Object.entries(speeds).filter(([type]) => type !== "land").map(([type, value]) => ({ type, value: Number(value) }));
     return {
@@ -23,7 +25,8 @@ export function conjuredActorData({ name, size = "tiny", stats = null, level = 0
                 hp: { value: Number(stats?.hp) || 1, max: Number(stats?.hp) || 1 },
                 speed: { value: Number(speeds.land) || 0, otherSpeeds: others }
             },
-            traits: { size: { value: PF2E_SIZES[String(size).toLowerCase()] ?? "tiny" }, value: [] }
+            ...(stats?.saves ? { saves: Object.fromEntries(["fortitude", "reflex", "will"].map((save) => [save, { value: Number(stats.saves[save]) || 0 }])) } : {}),
+            traits: { size: { value: PF2E_SIZES[String(size).toLowerCase()] ?? "tiny" }, value: [...traits] }
         },
         prototypeToken: { name, actorLink: false, width: SIZE_SQUARES[String(size).toLowerCase()] ?? 1, height: SIZE_SQUARES[String(size).toLowerCase()] ?? 1, texture: { src: img } },
         flags: { [moduleId]: { conjured: flags } }
@@ -64,11 +67,57 @@ export function shares(total, count) {
     return Array.from({ length: count }, (_value, index) => (index < hp ? 1 : 0));
 }
 
-// The ones to remove when more would be out than it can keep (Eye Probe's six): the farthest from it first. tokens: [{ id, x, y }].
-export function beyondMax(tokens, { max, adding, from }) {
+// The ones to remove when more would be out than it can keep (Eye Probe's six): the farthest from it first; (batch 297) the oldest first when
+// the text says so (Undead, Arise!). tokens: [{ id, x, y, made }].
+export function beyondMax(tokens, { max, adding, from, oldest = false }) {
     if (!Number.isFinite(max)) return [];
     const extra = tokens.length + adding - max;
     if (extra <= 0) return [];
     const distance = (token) => Math.hypot(token.x - from.x, token.y - from.y);
-    return [...tokens].sort((a, b) => distance(b) - distance(a)).slice(0, extra).map((token) => token.id);
+    const order = oldest ? (a, b) => (Number(a.made) || 0) - (Number(b.made) || 0) : (a, b) => distance(b) - distance(a);
+    return [...tokens].sort(order).slice(0, extra).map((token) => token.id);
+}
+
+// (Batch 297.) Numbers from its maker's (Undead, Arise!'s "the same AC and saves as the necromancer", a mount 4 lower with a third of its Hit
+// Points): stats.maker { ac, saves } added to the maker's, { hp } a fraction of its maximum; the rest as given. maker: { ac, saves, hp }.
+export function makerStats(stats, maker) {
+    if (!stats?.maker) return stats;
+    const { maker: from, ...rest } = stats;
+    const out = { ...rest };
+    if (Number.isFinite(from.ac) && Number.isFinite(maker?.ac)) out.ac = maker.ac + from.ac;
+    if (Number.isFinite(from.saves) && maker?.saves) out.saves = Object.fromEntries(["fortitude", "reflex", "will"].map((save) => [save, (Number(maker.saves[save]) || 0) + from.saves]));
+    if (Number.isFinite(from.hp) && Number.isFinite(maker?.hp)) out.hp = Math.max(1, Math.floor(maker.hp * from.hp));
+    return out;
+}
+
+// (Batch 297.) The levels a pick allows: { level } (a rune's "specific 1st-level creature") or { maxLevel }, with the rank a summon reached when
+// the damage it took heightens it (Detach Soul's "for every additional 10 damage … heightened by 1"): context.damage. { rank, level, maxLevel }.
+export function pickLevels(pick, context = {}) {
+    if (Number.isFinite(pick?.level)) return { level: pick.level };
+    if (Number.isFinite(pick?.maxLevel)) return { maxLevel: pick.maxLevel };
+    const by = pick?.rank;
+    if (!by) return {};
+    const damage = Number(context.damage);
+    const rank = Number.isFinite(damage) && by.from === "damage" ? Math.min(by.max ?? 10, by.base + Math.max(0, Math.floor((damage - by.over) / by.per))) : by.base;
+    return { rank, maxLevel: SUMMON_LEVELS[rank] ?? null };
+}
+
+// (Batch 297.) The creatures a pick offers, from the compendiums' index entries [{ uuid, name, level, traits, type }]: creatures of its level (or
+// up to it), with one of `any` traits and all of `all`; one per name (the first pack's), highest level first.
+export function pickable(entries, pick, context = {}) {
+    const { level, maxLevel } = pickLevels(pick, context);
+    const seen = new Set();
+    const out = [];
+    for (const entry of entries) {
+        const traits = entry.traits ?? [];
+        if (entry.type && entry.type !== "npc") continue;
+        if (Number.isFinite(level) && entry.level !== level) continue;
+        if (Number.isFinite(maxLevel) && !(entry.level <= maxLevel)) continue;
+        if (pick?.any?.length && !pick.any.some((trait) => traits.includes(trait))) continue;
+        if (pick?.all?.length && !pick.all.every((trait) => traits.includes(trait))) continue;
+        if (seen.has(entry.name)) continue;
+        seen.add(entry.name);
+        out.push(entry);
+    }
+    return out.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
 }

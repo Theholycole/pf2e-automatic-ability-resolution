@@ -2990,3 +2990,50 @@ Checked in pftest with nine Lantern Archons, a Hyakume, a Bikkhasura, Rhevanna a
   - reminder cards are found by their flags after a reload;
   - reminder calls and endings run once, even when PF2e starts a turn several times at once.
 
+## Summons (2026-10-13, batch 297)
+
+The user's call: "Automate the summoning of creatures but leave spawn rules or adventure premade sets up to the GM to determine if the summon can work", and a rune trap that asks for its creature as it's placed.
+
+- **Compiler** (`src/compiler/summons.js`, read right after the user's own GM choices, before the readings that had kept these the GM's): `{ builtin: "conjure" }` plans, as batch 295's, with more on them.
+  - **Creature fields:**
+    - `from`: `{ uuid }` when the text links the creature, `{ name }` when it only names it (looked up in the compendiums live), `{ self: true }` for another of the maker.
+    - `stats`: may include `maker` offsets taken from the maker's own numbers.
+    - `adjust`: PF2e's elite or weak.
+    - `traits`: added to the creature's own.
+    - `initiative`: `"roll"` or `"maker"`.
+    - `look: "target"`: it looks like the GM's target.
+  - **Plan fields:**
+    - `options`: creatures the GM chooses between.
+    - `pick`: the GM picks a creature from the compendiums by traits and level.
+    - `needs`: what must be there, such as corpses or a tree.
+    - `max` / `oldest`.
+    - `endsWithMaker`, `vanishAtZero`, `makerDamage`, `at: "maker"`.
+    - `trigger`: death, or damage of at least `min`.
+  - **Adventure rune traps:** `no-effect` with the gm reason "adventure".
+  - **Mirrored Summons:** a `cast-spell` of Summon Fiend at the monster's own innate rank.
+- **Live** (`scripts/conjure.js`):
+  - **Choice card first:** the GM chooses on a whispered card when there's something to decide: one creature of the options; how many of a rolled count ("Raise 3, 2, 1"); "Summon" once what it needs is there; or "Choose a creature…", which opens a filterable list of the creatures that fit (PF2e's rulebook bestiaries, Monster Core first, and Battlezoo's).
+  - **Making them:** each creature becomes a world actor on its maker's side (taken from the maker token's disposition, since a hazard has no alliance) with a token beside the maker. Creatures that act on their own join the turns, either rolling initiative or at their maker's. A rolled time ("2d6 rounds") is counted from the maker's turn, or from the creature's own when the maker isn't in the turns.
+  - **At 0 HP:** a summoned creature is removed (a toy guardian's maker gets the damage roll the text gives), and a maker at 0 HP takes its `endsWithMaker` creatures with it.
+  - **Offers:** a summon set off by death or by damage gets a reaction offer (`scripts/reactions.js`: death in `onDown`; damage, at least the minimum, in `onDamaged`). Its "Use it" starts the summon with the damage taken, which sets the rank of a summon heightened by damage.
+- **The rune:** a hazard whose summon is "determined when the trap is created" asks the GM to pick when its token is placed (`createToken`, the placing GM). The pick is kept on the token (`flags.pf2e-automatic-ability-resolution.runeCreature`). When the trap goes off, that creature appears with initiative and its rolled time. The card's Dismiss covers a disabled trap.
+- **Still the GM's:** spawn rules (a slain creature rising later as the monster's spawn), adventure set pieces (rune traps in adventure packs, summoning circles, murals, mirrors, haunts, locks, Divide, unique adventure summons), duplicates of itself (copies), the Living Blade's phantom warrior (its own form), and God Caller's eidolon (no statistics).
+- **Numbers:** 49 PF2e abilities and 6 Battlezoo abilities changed. 12 adventure rune traps that the GM handled with no reason recorded now carry "adventure", so the simulator lists them as left out.
+
+## Live check of batch 297 (2026-10-13)
+
+Checked in pftest:
+
+- **Summoning Rune:** placing it opened the picker (216 level-1 creatures, filterable; "wolf" left Sarkorian Wolf and Wolf). The Wolf was kept on the token. When the trap went off, the Wolf appeared beside it, rolled initiative 26, and was set to end at its turn in round 6 (2d6 gave 6).
+- **Dullahan:** an elite War Horse (AC 19, 51 HP) with the fiend and unholy traits.
+- **Morrigna:** the card's "Spider Swarm" made one, for 10 minutes.
+- **Undead, Arise!:** "Skeletons" made two entities with the necromancer's AC 20 and saves 11/12/11. Both vanished when it dropped to 0 HP.
+- **Wight Commander at 0 HP:** a Final Spite offer. "Use it" rolled 1d4 (3), and "Raise 3" made three Wights with initiatives 28, 26 and 12.
+- **Triton:** "Choose a creature…" listed ten aquatic animals of level 1 or lower. A Reef Octopus was summoned.
+- **Toyblox's guardian:** Animated Armor found by name. At 0 HP it was removed and the Toyblox got a 10-damage roll.
+- **Adachros:** 30 damage brought the Splinter Sycophant offer. "Use it" made an Ioton for 10 rounds and spent the reaction.
+- **Graveknight:** a Large Phantom Mount with AC 27, 58 HP, saves 17/15/14, and Speed and fly Speed 60 (rank 5).
+- **Fixed during the check:**
+  - the rune's Wolf came out neutral (a hazard has no alliance), so the side is now taken from the maker token's disposition;
+  - the picker's list was squashed to one row, so it now has a set height.
+

@@ -1271,7 +1271,7 @@ async function targetOf(state, id) {
     return { target, token, actor: token?.actor ?? (await fromUuid(target.actorUuid)) };
 }
 
-const damageRollClass = () => (CONFIG.Dice?.rolls ?? []).find((roll) => roll?.name === "DamageRoll");
+export const damageRollClass = () => (CONFIG.Dice?.rolls ?? []).find((roll) => roll?.name === "DamageRoll");
 
 // One change from the core, applied in Foundry. Returns an extra line for the card, or null.
 async function applyChange(change, state) {

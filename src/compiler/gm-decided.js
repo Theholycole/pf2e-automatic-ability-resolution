@@ -236,29 +236,9 @@ export const GM_DECIDED = [
     ["Wordsmith", "Word Warp", "counterspell"],
     ["Worm Prophet", "A Thousand Mouths In Prayer", "counterspell"],
     ["Zhuraita", "Deconstruct", "counterspell"],
-    // Summons (group B).
-    ["Adachros", "Splinter Sycophant", "summons"],
-    ["Arboreal Husk", "Raise Tree", "summons"],
-    ["Arboreal Regent", "Awaken Tree", "summons"],
-    ["Bone Prophet", "Raise Serpent", "summons"],
+    // Summons (group B). (2026-10-13, batch 297, the user's call: summons are built now, src/compiler/summons.js; this one has no statistics
+    // for its eidolon anywhere, so it stays the GM's.)
     ["God Caller", "Manifest Eidolon", "summons"],
-    ["Graveknight", "Phantom Mount", "summons"],
-    ["Graveknight Warmaster", "Phantom Mount", "summons"],
-    ["Katpaskir", "Mirrored Summons", "summons"],
-    ["Morrigna", "Spider Minions", "summons"],
-    // (2026-10-13, batch 286: statues made as decoys, by the same rule; batch 289: fey summoned from its torn suit; batch 290: phantasms that act
-    // on their own.)
-    ["Fragmentor", "Phantasms", "summons"],
-    ["Matrona", "Detach Soul", "summons"],
-    ["Rictus Mask", "Echoes of the Damned", "summons"],
-    ["Necromancer", "Undead, Arise!", "summons"],
-    ["Nonsequitaur", "At Least That's Over", "summons"],
-    ["Nonsequitaur", "Forget about Me?", "summons"],
-    ["Nonsequitaur", "MORE! CENTAURS!", "summons"],
-    ["Nonsequitaur", "You Should Have Paid Attention to the Centaur", "summons"],
-    ["Toyblox", "Conjure Guardian", "summons"],
-    ["Triton", "Summon Aquatic Ally", "summons"],
-    ["Xenarian", "Summon Fractrix", "summons"],
     // Unseen states (group B).
     ["Arrester Squadron", "Sweep the Area", "state"],
     ["Equestrian Constable", "Vigilant Vantage", "state"],

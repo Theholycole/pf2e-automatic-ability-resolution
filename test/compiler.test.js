@@ -1466,8 +1466,9 @@ test("trap falls into cards, summoning traps the GM's (2026-10-11, batch 50; the
     assert.deepEqual([ramp?.resolution?.check?.statistic, ramp?.resolution?.check?.against?.value, ramp?.resolution?.outcomes?.success?.damage?.mode, ramp?.resolution?.outcomes?.failure?.damage?.formulas?.[0]?.formula], ["reflex", 22, "none", "40[bludgeoning]"]);
     // Not with more than a fall: a Strike, a basic save against spikes.
     assert.equal(compileMonsterAbility(item("Pitfall", `<p><strong>Trigger</strong> A creature walks onto the trapdoor.</p><hr /><p><strong>Effect</strong> The triggering creature falls in and takes falling damage (@Damage[10[bludgeoning]] damage) and is targeted by a spike's Strike. A falling creature can attempt to ${edge} with a @Check[reflex|dc:20] save.</p>`)), null);
-    // A trap that summons a creature: the GM's.
-    assert.deepEqual(compileMonsterAbility(item("Summon Monster", "<p><strong>Trigger</strong> A creature enters the cloud of magical sensors</p><hr /><p><strong>Effect</strong> The trap summons a @UUID[Compendium.pf2e.pathfinder-monster-core.Actor.MrzlaE7k1PEsd3iQ]{Cockatrice}. The cockatrice rolls initiative and remains for [[/gmr 2d6 #Summoning Duration]]{2d6 rounds}.</p>")), { builtin: "no-effect" });
+    // A trap that summons a creature: the GM's then; (batch 297, the user's call) summoned now, unless it's an adventure's.
+    const summoning = compileMonsterAbility(item("Summon Monster", "<p><strong>Trigger</strong> A creature enters the cloud of magical sensors</p><hr /><p><strong>Effect</strong> The trap summons a @UUID[Compendium.pf2e.pathfinder-monster-core.Actor.MrzlaE7k1PEsd3iQ]{Cockatrice}. The cockatrice rolls initiative and remains for [[/gmr 2d6 #Summoning Duration]]{2d6 rounds}.</p>"));
+    assert.deepEqual([summoning.builtin, summoning.creatures[0].name, summoning.lasts.formula], ["conjure", "Cockatrice", "2d6"]);
 });
 
 test("Wicked Bite: a GM button for each way, each a save after the jaws hit (2026-10-11, batch 51; the user's choice)", () => {
@@ -2072,9 +2073,9 @@ test("a basic maneuver back in place of a Strike (2026-10-11, batch 88)", () => 
 test("summoned steeds and summoning traps; Strikes at different creatures; two Strikes, both at full bonus, a third's damage when both land (2026-10-11, batch 89)", () => {
     const item = (description, actions = 1, type = "action") => ({ type: "action", name: "Test", system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: description } } });
     const compile = (description, actions, type) => compileMonsterAbility(item(description, actions, type), { basicActions: {} });
-    const none = { builtin: "no-effect" };
-    assert.deepEqual(compile("<p>The test rider summons a war horse with elite adjustments. This steed remains until it is slain, the test rider Dismisses this effect, or the test rider summons another steed.</p>", 2), none);
-    assert.deepEqual(compile("<p><strong>Trigger</strong> A creature enters the test circle.</p><hr /><p><strong>Effect</strong> This trap summons a specific level 1 creature, determined when the trap is created. The creature rolls initiative and remains for 4 rounds.</p>", null, "reaction"), none);
+    // (Batch 297, the user's call: summoned now — a war horse with PF2e's elite adjustment; the trap's creature the GM's pick as it's placed.)
+    assert.deepEqual(compile("<p>The test rider summons a war horse with elite adjustments. This steed remains until it is slain, the test rider Dismisses this effect, or the test rider summons another steed.</p>", 2).creatures[0].adjust, "elite");
+    assert.deepEqual(compile("<p><strong>Trigger</strong> A creature enters the test circle.</p><hr /><p><strong>Effect</strong> This trap summons a specific level 1 creature, determined when the trap is created. The creature rolls initiative and remains for 4 rounds.</p>", null, "reaction").pick, { level: 1, when: "placed" });
     assert.deepEqual(compile("<p>The test wraith makes three melee Strikes, each against a different target within reach. The multiple attack penalty applies to each attack but increases only after all the attacks have been made.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: [null, null, null], sameMap: true, each: true, max: 3 });
     assert.deepEqual(compile("<p>The test matriarch makes a scimitar attack against each enemy within reach. Each attack counts toward their multiple attack penalty, but the penalty does not increase until after all the attacks. The first enemy they damage is subject to Test Caress.</p>", 3), { builtin: "multi-strike", actions: 3, strikes: ["scimitar"], each: true, sameMap: true });
     assert.deepEqual(compile("<p>The test monk Flies and makes up to four fist Strikes against different targets at any points during this movement. The attacks count toward its multiple attack penalty normally, but the penalty does not increase until after Test Fists is complete.</p>", 2), { builtin: "multi-strike", actions: 2, strikes: ["fist"], each: true, max: 4, strides: 1, sameMap: true });
@@ -5049,7 +5050,8 @@ test("group D, built, part 13 (2026-10-13, batch 285): mythic skill toggles, mor
 
 test("an ally ordered to give itself up, and decoy statues made: the GM's (2026-10-13, batch 286)", async () => {
     const { gmDecided } = await import("../src/compiler/gm-decided.js");
-    assert.deepEqual([gmDecided("Rothive", "Consume Swarm"), gmDecided("Rictus Mask", "Echoes of the Damned")], ["control", "summons"]);
+    // (Batch 297, the user's call: the statues are summoned now.)
+    assert.deepEqual([gmDecided("Rothive", "Consume Swarm"), gmDecided("Rictus Mask", "Echoes of the Damned")], ["control", null]);
 });
 
 test("an emotion action nearby as a provoking trigger, worded as one it would take (2026-10-13, batch 287)", async () => {
