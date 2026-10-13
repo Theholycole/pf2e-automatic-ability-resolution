@@ -272,7 +272,11 @@ async function onMessage(message) {
         // (Batch 104, Shoot First: "a firearm Strike", any firearm it has.)
         const firearm = (action) => conductor.plan.strike === "firearm" && action.item?.isRanged && (action.item?.group === "firearm" || /\b(?:pistol|musket|rifle|arquebus|blunderbuss|pepperbox|firearm|gun)\b/i.test(action.label));
         const strikes = conductor ? (mine.actor.system.actions ?? []).filter((action) => action.type === "strike" && (action.label.toLowerCase().includes(conductor.plan.strike) || firearm(action))).map((action) => ({ slug: action.slug, label: action.label })) : [];
-        if (strikes.length) await offer({ kind: "strike", item: conductor.item, monster: mine.token, actor: mine.actor, target: event.attacker, strikes, penalty: conductor.plan.penalty ?? 0, trigger: `aimed ${event.spell ? "a spell" : "an attack"} at it`, note: conductor.plan.disrupts === "critical" ? "Before the triggering action: on a critical hit, that action is disrupted (ignore its result)." : "At any range." });
+        // (Live check of batch 258, Roiling Rebuke: only within its distance, "within 120 feet"; a hit disrupts the triggering action.)
+        const grid = gridOf(scene);
+        const near = !conductor?.plan.within || distanceFeet(box(mine.token, grid.size), box(event.attacker, grid.size), grid) <= conductor.plan.within;
+        const disrupting = conductor?.plan.disrupts === "critical" ? "Before the triggering action: on a critical hit, that action is disrupted (ignore its result)." : conductor?.plan.disrupts ? "Before the triggering action: on a hit, that action is disrupted (ignore its result)." : null;
+        if (strikes.length && near) await offer({ kind: "strike", item: conductor.item, monster: mine.token, actor: mine.actor, target: event.attacker, strikes, penalty: conductor.plan.penalty ?? 0, trigger: `aimed ${event.spell ? "a spell" : "an attack"} at it`, note: [disrupting, conductor.plan.within ? `Only within ${conductor.plan.within} feet.` : "At any range."].filter(Boolean).join(" ") });
     }
     // (Batch 65: a failed Escape from a monster that answers it; batch 81: one it makes harder. PF2e rolls the Escape with the best of
     // Acrobatics, Athletics and an unarmed attack: a skill check or an attack roll.)
@@ -1301,8 +1305,9 @@ async function use(message, action, slug) {
         const taking = running ? inEncounter(running) : new Set();
         const tokens = plan.targeting?.target === "self" || ownEffect ? [monster.object ?? monster]
             : allyEffect ? monster.parent.tokens.filter((token) => taking.has(token.id) && token.id !== monster.id && !token.hidden && token.disposition === monster.disposition && token.actor && !token.actor.isDead).map((token) => token.object ?? token)
-            // (Batch 132: "an adjacent creature", Electric Reflexes — the offer's creature when it was beside it.)
-            : ["the attacker", "the creature the Strike hits", "an adjacent creature"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
+            // (Batch 132: "an adjacent creature", Electric Reflexes — the offer's creature when it was beside it; live check of batch 254, Objection!'s
+            // "the triggering creature".)
+            : ["the attacker", "the creature the Strike hits", "an adjacent creature", "the triggering creature"].includes(plan.targeting?.target) ? (target?.object ? [target.object] : [])
             : area?.around === "target" && target ? [target.object ?? target, ...tokensAround(target, Number(area.value) || 0)].filter((token) => token.id !== monster.id)
             : area?.type === "emanation" ? tokensAround(monster, Number(area.value) || 0, { foes: !!area.foes }) : [];
         if (applications.length) await postEffectCard({ plan, item, sourceActor: actor, sourceToken: monster, tokens: ownEffect ? [] : tokens });

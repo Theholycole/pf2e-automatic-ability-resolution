@@ -1474,8 +1474,12 @@ function durationText(duration, source) {
 // tracks it from the affliction item, as for the spell module's afflictions.
 async function handOffAffliction(state, target, actor, data) {
     if (game.modules.get(AFFLICTIONS)?.active !== true) return `${target.name}: Pseudo Afflictions isn't active, so track ${data?.name ?? "the affliction"} by hand (stage ${data?.stage ?? 1}).`;
-    const item = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
+    const ability = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
     const source = await fromUuid(state.source.actorUuid);
+    // (Live check of batch 257: an exposure that another ability brings, Spit Venom's jungle drake venom, goes on with the affliction's own item,
+    // whose stages Pseudo Afflictions reads; the ability's text has none.)
+    const own = (entry) => entry !== ability && String(entry.name ?? "").toLowerCase() === String(data?.name ?? "").toLowerCase() && /Stage\s*1/i.test(entry.system?.description?.value ?? "");
+    const item = (data?.name ? source?.items?.find?.(own) : null) ?? ability;
     if (!item) return `${target.name}: the affliction's item is gone; track it by hand.`;
     Hooks.callAll(`${AFFLICTIONS}.processMessage`, {
         actor,
