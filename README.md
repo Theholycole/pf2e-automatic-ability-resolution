@@ -439,6 +439,13 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - casting read in more words ("suffers the effects of", "is identical to", "This is a … spell"), a spell and a grab at once, Hunt Prey's kin without an edge;
   - a Gestalt merge is kept for the user's call (a new creature from nine, as summons are).
 - **Live check of batches 272–275** (2026-10-13): all their new pieces played in pftest; fixed on the way: Color Shift through PF2e's own toggle, groups kept on the mode card, the card's lines for note Effects and marked bonuses (`docs/live-play.md`).
+- **The long tail after the user's choices, part 4** (2026-10-13, batch 276): 28 of the next 30 rows of the list (30 new abilities in PF2e with their kin, 11 more that were the GM's):
+  - ways listed as items, each with its own save (a moan of fear, nausea or stupor);
+  - PF2e's plain toggles: switched on and off as two ways (strands out or in), or turned on by an effect for the ability's time (a rage whose AC and damage PF2e already holds);
+  - a cast card for one of the creature's own spells, the GM naming it (several in turn);
+  - a spell cast near it read as a trigger ("A creature within 60 feet Casts a Spell"), its card offered at the caster;
+  - its own save ability at one creature with each result one degree worse; Disarm at a Strike's modifier; moving every creature it holds; a cage that grapples from afar; a whirlwind form and what it does to creatures it passes through;
+  - two left for the user's call (hands that become weapons, weapons steeped in flesh: items).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

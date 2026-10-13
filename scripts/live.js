@@ -205,7 +205,8 @@ async function playAbility(item, plan, sourceToken) {
     }
     // (Batch 274: a choice PF2e holds as the ability's own toggle — Ablative Adaptation's material: the toggle set to it.)
     if (plan?.builtin === "roll-option") {
-        await item.actor?.toggleRollOption?.("all", plan.option, item.id, true, plan.suboption);
+        // (Batch 276: a plain toggle switched on or off — Extend Strands.)
+        await item.actor?.toggleRollOption?.("all", plan.option, item.id, plan.value ?? true, plan.suboption ?? null);
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.label ?? plan.suboption}.`, ...(plan.notes ?? [])]);
         return;
     }
@@ -478,14 +479,23 @@ async function castFromCard(message, state, data) {
     // (Batch 275, Endless Spellscales: a spell the GM names on the card — found by name in PF2e's spells, within the ability's rank and rarity.)
     if (state.pick && !state.spell?.uuid) {
         const named = String(data.spell ?? "").trim().toLowerCase();
-        const pack = game.packs.get("pf2e.spells-srd");
-        const index = named && pack ? await pack.getIndex({ fields: ["system.level.value", "system.traits.rarity"] }) : null;
-        const found = index ? [...index].find((entry) => entry.name.toLowerCase() === named) : null;
-        if (!found) throw new Error(named ? `No spell called "${data.spell}" in PF2e's spells.` : "Name the spell first.");
-        if (state.pick.maxRank && Number(found.system?.level?.value) > state.pick.maxRank) throw new Error(`${found.name} is above rank ${state.pick.maxRank}.`);
-        if (state.pick.rarity === "common" && (found.system?.traits?.rarity ?? "common") !== "common") throw new Error(`${found.name} isn't a common spell.`);
-        state = { ...state, spell: { uuid: found.uuid ?? `Compendium.pf2e.spells-srd.Item.${found._id}`, name: found.name } };
+        if (!named) throw new Error("Name the spell first.");
+        // (Batch 276, Emotional Frenzy: one of its own spells — the creature must have it.)
+        if (state.pick.own) {
+            const mine = actor.itemTypes.spell.find((spell) => spell.name.toLowerCase() === named);
+            if (!mine) throw new Error(`${actor.name} has no spell called "${data.spell}".`);
+            state = { ...state, spell: { uuid: mine.sourceId ?? mine._stats?.compendiumSource ?? mine.uuid, name: mine.name }, dc: mine.spellcasting?.statistic?.dc?.value ?? state.dc };
+        } else {
+            const pack = game.packs.get("pf2e.spells-srd");
+            const index = pack ? await pack.getIndex({ fields: ["system.level.value", "system.traits.rarity"] }) : null;
+            const found = index ? [...index].find((entry) => entry.name.toLowerCase() === named) : null;
+            if (!found) throw new Error(`No spell called "${data.spell}" in PF2e's spells.`);
+            if (state.pick.maxRank && Number(found.system?.level?.value) > state.pick.maxRank) throw new Error(`${found.name} is above rank ${state.pick.maxRank}.`);
+            if (state.pick.rarity === "common" && (found.system?.traits?.rarity ?? "common") !== "common") throw new Error(`${found.name} isn't a common spell.`);
+            state = { ...state, spell: { uuid: found.uuid ?? `Compendium.pf2e.spells-srd.Item.${found._id}`, name: found.name } };
+        }
     }
+
     const source = (await fromUuid(state.spell.uuid).catch(() => null))?.toObject();
     if (!source) throw new Error(`${state.spell.name} isn't in PF2e's compendium.`);
     const cantrip = (source.system?.traits?.value ?? []).includes("cantrip");

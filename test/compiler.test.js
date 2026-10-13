@@ -806,9 +806,9 @@ test("reactions to a hit, a critical hit or damage on the monster, or its death 
     assert.equal(blood.targeting.target, "the attacker");
     const caustic = compileMonsterAbility(reaction("Test Caustic", "<p><strong>Trigger</strong> The test beast takes piercing or slashing damage</p><hr /><p><strong>Effect</strong> The beast sprays its acidic blood on adjacent creatures, dealing @Damage[6d6[acid]] damage (@Check[reflex|dc:29|basic] save).</p>"));
     assert.deepEqual([caustic.trigger.event, caustic.targeting.area], ["damaged", { type: "emanation", value: 5 }]);
-    // Any other reaction stays the GM's to use.
+    // (Batch 276: a spell cast within its distance reads too — a cast provoke.)
     const other = compileMonsterAbility(reaction("Test Gaze", "<p><strong>Trigger</strong> A creature within 30 feet casts a spell</p><hr /><p><strong>Effect</strong> The test beast glares. The creature takes @Damage[2d6[mental]] damage (@Check[will|dc:20|basic] save).</p>"));
-    assert.equal(other.trigger.reaction, undefined);
+    assert.deepEqual(other.trigger, { event: "provoke", reaction: true, triggers: ["cast"], within: 30 });
 });
 
 test("AC reactions in other wordings (2026-10-10, batch 17): no rule, no Effect label, more after the bonus, melee or ranged only", () => {
@@ -4778,4 +4778,48 @@ test("live check of batches 272–275 (2026-10-13): an element choice PF2e holds
     const rules = [{ key: "RollOption", option: "test-hue", toggleable: true, alwaysActive: true, selection: "none", suboptions: [{ value: "none" }, { value: "water" }, { value: "fire" }] }, { key: "FlatModifier", selector: "saving-throw", value: 2, type: "status", predicate: ["fire", "test-hue:fire"] }];
     const plan = compileMonsterAbility({ type: "action", name: "Test Hue", system: { slug: "test-hue", actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, rules, description: { value: "<p><strong>Frequency</strong> once per round</p><hr /><p><strong>Effect</strong> The test moth attunes itself to one of two elements, glowing to match (blue for water, or orange for fire). It gains that trait and a +2 status bonus to saving throws against effects with that trait until the beginning of its next turn.</p>" } } }, { basicActions: {} });
     assert.deepEqual(plan?.modes?.map((mode) => [mode.name, mode.plan?.builtin, mode.plan?.suboption]), [["Water", "roll-option", "water"], ["Fire", "roll-option", "fire"]]);
+});
+
+test("group D, built, part 4 (2026-10-13, batch 276): listed ways with saves, toggles on and off, rage toggles, mud, moving held creatures, Disarm at a Strike's modifier, whirlwinds, cages, several own spells, praise, rusting attacks, skill counteracts, beams one degree worse, dim-light hiding, yanks, dancing weapons, curses, venom, merges, summoning casts, GM reactions", () => {
+    const item = (html, type = "action", actions = 1, name = "Test", rules = []) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, rules, description: { value: html } } });
+    const plan = (html, type, actions, actor, basicActions = {}, rules = []) => compileMonsterAbility(item(html, type, actions, "Test", rules), { basicActions, ...(actor ? { actor } : {}) });
+    const react = (trigger, effect, type = "reaction", actor) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type, 1, actor);
+    const U = (id, label) => `@UUID[Compendium.pf2e.conditionitems.Item.${id}]{${label}}`;
+    const moan = plan(`<p>The test bat lets out a deep hum that has one of the effects below. A creature that succeeds at a Will save is unaffected. Any creature that attempts this save becomes temporarily immune for 1 hour.</p><ul><li><strong>Dread</strong> (fear) @Check[will|dc:20] Each creature within a @Template[emanation|distance:20] becomes ${U("TBSHQspnbcqxsmjL", "Frightened 1")} (or, on a critical failure, ${U("TBSHQspnbcqxsmjL", "Frightened 2")}).</li><li><strong>Daze</strong> @Check[will|dc:20] The test bat targets a single creature within 30 feet. The creature becomes ${U("e1XGnhKNSQIm5IXg", "Stupefied 1")} for 1 minute.</li></ul>`, "action", 2);
+    assert.deepEqual(moan?.modes?.map((mode) => [mode.name, mode.plan?.targeting?.area?.value ?? mode.plan?.targeting?.range, mode.plan?.resolution?.outcomes?.criticalFailure?.effects?.map((effect) => `${effect.slug}${effect.value ?? ""}`)]), [["Dread", 20, ["frightened2"]], ["Daze", "30 feet", ["stupefied1"]]]);
+    const strands = plan("<p>The test lurker extends or retracts its sticky threads. While they're out, it takes a penalty to Stealth.</p>", "action", 1, null, {}, [{ key: "RollOption", option: "test-threads", toggleable: true }]);
+    assert.deepEqual(strands?.modes?.map((mode) => [mode.name, mode.plan?.option, mode.plan?.value]), [["Extend", "test-threads", true], ["Retract", "test-threads", false]]);
+    const rage = plan("<p>The test badger enters a state of pure rage that lasts either for 1 minute, until no foes are near, whichever comes first. While raging, the test badger has AC 18. While raging, it can't use concentrate actions.</p>", "action", 1, null, {}, [{ key: "RollOption", option: "test-rage", toggleable: true }]);
+    assert.deepEqual([rage?.builtin, rage?.model?.toggle, rage?.duration, rage?.notes], ["self-effect", true, { value: 1, unit: "minutes", expiry: null }, ["While raging, it can't use concentrate actions."]]);
+    const mud = plan("<p>The test blob causes stone and earth under its body to grow soft and muddy, remaining so for 1 minute after the blob moves off the location. Others find it hard going.</p>", "action", 2);
+    assert.deepEqual([mud?.zone?.terrain, mud?.zone?.others, mud?.zone?.lasts?.unit], [[{ movement: ["walk"], difficulty: 2 }], true, "minutes"]);
+    const shift = plan("<p>The test beast attempts to move all creatures that it has Grabbed into other spaces within the reach of its arms, rolling a single @Check[athletics] check and comparing the result against each creature's Fortitude DC. On a failure, the creature remains in place, and on a critical failure, the creature is no longer grabbed.</p>");
+    assert.deepEqual([shift?.resolution?.check?.against?.statistic, shift?.resolution?.outcomes?.criticalFailure?.effects], ["fortitude", [{ kind: "end-condition", slugs: ["grabbed"] }]]);
+    const disarm = { resolution: { kind: "check", check: { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "reflex" } }, outcomes: {} } };
+    const rusty = { name: "Test Rust Bug", items: [{ type: "melee", name: "Feeler", system: { bonus: { value: 11 } } }] };
+    const antenna = plan("<p>The test rust bug attempts to Disarm a metal item a creature is holding using its feeler (with the same modifier as a feeler Strike). On a success, the item rusts.</p>", "action", 1, rusty, { disarm });
+    assert.deepEqual([antenna?.resolution?.check?.modifier, antenna?.notes], [11, ["Only a metal item a creature is holding.", "On a success, the item rusts."]]);
+    const cage = plan("<p>Once per day, a test hag can cause a cage of iron to spring up at a range of up to 30 feet, attempting an Athletics check to [[/act grapple]] against the target's Fortitude DC; if the target has a weakness to cold iron, the test hag gains a +2 circumstance bonus to this check. Unlike a normal Grapple, the test hag needn't be near, and a successful attempt lasts until the creature [[/act escape dc=20]]{Escapes}, freeing it.</p>", "action", 2);
+    assert.deepEqual([cage?.targeting?.range, cage?.resolution?.outcomes?.success?.effects?.[0]?.slug, cage?.notes?.[1]], ["30 feet", "grabbed", "Escape DC 20."]);
+    const frenzy = plan("<p>The test sprite casts up to two spells chosen from its innate spells.</p>", "action", 3);
+    assert.deepEqual([frenzy?.all, frenzy?.modes?.map((mode) => [mode.name, mode.plan?.pick])], [true, [["Spell 1", { own: true }], ["Spell 2", { own: true }]]]);
+    const praise = plan("<p>The test herald cheers an ally. The test herald attempts to counteract one fear effect on the ally (with a counteract modifier of +15), and the test herald and the ally both gain a +1 status bonus to attack rolls and saving throws for 1 round.</p>");
+    assert.deepEqual(praise?.resolution?.outcomes?.success?.modifiers?.map((entry) => [entry.selector, entry.recipient ?? "target"]), [["attack", "target"], ["saving-throw", "target"], ["attack", "self"], ["saving-throw", "self"]]);
+    const rust = plan("<p><strong>Frequency</strong> once per hour</p><hr /><p><strong>Effect</strong> The test gremlin makes a [[/r {1d20+7}#Spell Attack]]{+7 spell attack} against a creature or unattended object. If they succeed, the test gremlin deals [[/r 1d4]] damage (doubled on a critical hit) to a metal item the target is wearing or holding, ignoring its Hardness.</p>", "action", 2);
+    assert.deepEqual([rust?.resolution?.check?.modifier, rust?.resolution?.outcomes?.success?.manualInstructions], [7, ["A metal item {target} wears or holds takes 1d4 damage, ignoring its Hardness."]]);
+    const menace = react("A creature within 30 feet Casts a Spell", "The test beast attempts an @Check[intimidation] check to counteract the triggering spell.");
+    assert.deepEqual(menace?.trigger, { event: "provoke", reaction: true, triggers: ["cast"], within: 30 });
+    const beam = item("<p>A creature within 30 feet takes @Damage[3d6[fire]] damage (@Check[reflex|dc:22|basic] save).</p>", "action", 2, "Test Beam");
+    const beams = react("The test archon hits a creature twice", "The test archon fires its Test Beam at only the creature it hit twice. The creature's save result is one degree of success worse than the result it rolled.", "free", { name: "Test Archon", items: [beam] });
+    assert.deepEqual(["criticalSuccess", "success", "failure", "criticalFailure"].map((degree) => beams?.resolution?.outcomes?.[degree]?.damage?.multiplier), [0.5, 1, 2, 2]);
+    const blend = plan("<p>The test shade Strides up to twice their speed. If the test shade ends their movement in an area of dim light, they become Hidden as long as they don't move.</p>", "action", 2);
+    assert.deepEqual([blend?.targeting?.target, blend?.resolution?.outcomes?.success?.effects?.[0]?.slug], ["self", "hidden"]);
+    const yank = react("An enemy targets the test choker with an attack", "The test choker tries to pull a creature it has Grabbed or Restrained into the path of the attack. The test choker attempts an Athletics check, including its bonus to Grapple. If it succeeds against the grabbed or restrained creature's Fortitude DC, the test choker redirects the attack to that creature, and the attacker rerolls nothing.");
+    assert.deepEqual([yank?.trigger, yank?.targeting?.target, yank?.resolution?.check?.against?.statistic], [{ event: "use", reaction: true }, "the creature it holds", "fortitude"]);
+    const curse = react("The test spark is about to damage a creature that resists it", "Sparks fly. The target must succeed at a @Check[will|dc:30] save or lose any fire resistance it has until this curse is lifted.");
+    assert.deepEqual(curse?.resolution?.outcomes?.failure?.noteEffects?.[0]?.label, "No fire resistance");
+    const venom = react("A creature within 30 feet attempts a saving throw against test venom", "The creature takes an additional @Damage[1d8[poison]] damage even if it succeeds at its save.");
+    assert.deepEqual(venom?.resolution?.outcomes?.success?.damage?.formulas, [{ formula: "1d8[poison]" }]);
+    const wormhole = react("A creature the test worm is aware of uses a teleportation effect", "The test worm creates an extradimensional wormhole at the triggering creature's initial location that persists for up to 1 minute. Entering it, the test worm follows.");
+    assert.deepEqual([wormhole?.builtin, wormhole?.zone?.area, wormhole?.trigger], ["zone", { type: "square", value: 5 }, { event: "use", reaction: true }]);
 });

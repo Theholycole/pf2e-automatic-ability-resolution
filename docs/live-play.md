@@ -2824,3 +2824,13 @@ Fixed on the way:
 - **Groups:** the mode card dropped each way's `group`, so a pick didn't use up its group; it keeps it now.
 - **The card's lines:** a note Effect and a bonus against one creature now say so ("gets a note: …", "+2 circumstance to AC against Valeros") instead of "Nothing to apply".
 
+## The long tail after the user's choices, part 4 (2026-10-13, batch 276)
+
+- **New pieces:**
+  - **Listed ways:** an ability that "has one of the effects below" with a list, each item named and with its own check, becomes a way each: its save, its conditions on a failure, "(or, on a critical failure, …)" on a critical one; an area or a single creature; the save's immunity from the lead.
+  - **Plain toggles:** `{ builtin: "roll-option", option, value }` switches a toggle with no suboptions on or off (Extend and Retract). A self-effect with `model.toggle: true` and nothing else turns the ability's own toggle on through its Effect for the plan's time (Wolverine Rage, whose AC and damage PF2e holds behind the toggle).
+  - **Own spells:** a cast card's `pick: { own: true }` takes a spell the creature has, by name, cast through its own entry; Emotional Frenzy's three are three such ways in turn.
+  - **Cast near it:** "A creature within N feet casts a spell" reads as `{ event: "provoke", triggers: ["cast"], within: N }` (live and in the simulator since batch 265).
+  - **Notes written out:** a batch-276 reading's notes show a check as "DC 32 Reflex" and damage as its dice.
+- **Compiled** (28 of 30 rows; 30 new in PF2e, 11 more that were the GM's): a wind-ride Will save; a grab on a creature moving near it; strands out or in; a moan of three kinds; mud where it lies; moving held creatures; a rusting Disarm at its antenna's modifier; a whirlwind form and its passage; a cold-iron cage; three own spells; an emotion stripped after a failed save; a wolverine's rage; a summoning cast; praise (+1 to attacks and saves for both, the counteract the GM's); a rusting spell attack; counteracting by Intimidation; a beam one degree worse; hiding in dim light; a yank into an attack's path; a dancing weapon; a curse that strips electricity resistance; worse venom; a leshy merge; a lizard's boost, a copied song, a pod prison, a wormhole. Left for the user: Morphic Hands and Steep Weapon (items).
+

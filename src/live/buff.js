@@ -52,7 +52,8 @@ export function selfEffectDuration(plan) {
 export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = null, toggles = [] } = {}) {
     // (Batch 196: resistance and temporary Hit Points on itself too — Reef Armor, Shifting Form, Harden Chitin.)
     // (Batch 273: a precious material for its Strikes, of its choice — PF2e's ChoiceSet and AdjustStrike, as its Adaptive Strike effect has them.)
-    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration && !plan.model?.materials?.length)) return null;
+    // (Batch 276, Wolverine Rage: nothing of its own but PF2e's toggle on the ability, its AC and damage waiting on it — model.toggle.)
+    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration && !plan.model?.materials?.length && !(plan.model?.toggle && toggles.length))) return null;
     const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
     if (plan.damage?.length && !toggles.length && !selector) return null;
     const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
