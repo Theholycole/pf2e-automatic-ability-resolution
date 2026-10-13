@@ -156,6 +156,8 @@ export const GM_DECIDED = [
     // Disguises and forms (group B).
     // (2026-10-13, batch 288: a body shed to fight on as a swarm, by the same rule; batch 290: a meld that hides which is the original.)
     ["Tahagata", "Envisage", "form"],
+    // (Batch 291: a body switched between liquid and solid as a blow lands.)
+    ["Mercurial Knight", "Reform", "form"],
     ["Mogadb", "Slough Skin", "form"],
     ["Dewdrop Ooze", "Disincorporate", "form"],
     ["Elder Outcrop", "Natural Formation", "form"],
@@ -267,7 +269,9 @@ export const GM_DECIDED = [
     ["Phase Tiger", "Ethereal Step (Free on Turn 1)", "plane-shift"],
     ["Planar Rift", "Into the Great Beyond", "plane-shift"],
     // Copies (group B).
-    // (2026-10-13, batch 282: one more copy, by the user's rule of 2026-10-12 — a creature's action duplicated.)
+    // (2026-10-13, batch 282: one more copy, by the user's rule of 2026-10-12 — a creature's action duplicated; batch 291: a spell, item or speech
+    // replicated.)
+    ["Writer's Block", "Creative Plagiarism", "copies"],
     ["Mirror Seer", "Rightfully Mine", "copies"],
     ["Eldritch Emeritus", "Didactic Arcanism", "copies"],
     ["Clone Mirrors", "Spawn Reflection", "copies"],
