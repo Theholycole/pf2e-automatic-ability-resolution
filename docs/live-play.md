@@ -2943,3 +2943,8 @@ Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check agains
 ## The long tail after the user's choices, part 19 (2026-10-13, batch 291)
 
 - **Compiled** (28 new, all Battlezoo; Reform the GM's as a form, Creative Plagiarism as a copy): Joint-Locking Strike, Unlock Ailment, Tyrant's Desire, Vengeance Surge, Ascending Gift, Taste Reflection, Cannibalize Plague, Pestilent Assault, Forceful Seizure, Opportune Chomp, Issue Challenge, Trickster's Feint, Devour Laughter, Pouncing Swallow, Demon Soul, Head Toss, Hoist, Pilfering Strike, Imaginary Shield, Together, Charge!, Knee Whack, Gluttonous Capture, Plea for Help, Split Skull, Hunger Frenzy, Now You Know How I Feel, Latch, Swallow. No new runtime pieces: strike riders (PF2e's linked effects, saves, follow-up Trips), outcome modifiers with a predicate (saves against fear), scoped off-guard for one Strike, intercept and the user's level-DC rule.
+
+## The long tail after the user's choices, part 20 (2026-10-13, batch 292)
+
+- **New pieces:** a roll-option way can name the item whose toggle it switches (`itemName`, Sphere Shift: its Elemental Attunement's); a reaction's trigger after a requirement that has no closing mark ("Requirements … Trigger … Effect …").
+- **Compiled** (28 new, all Battlezoo; Show Vision the GM's, out of combat): Siphon Life, Sip of Air, Desperate Assault, Two Dimensional Reorientation, Withdraw into Rock, Elastic Bounce, Ebirath's Wrath, Eat Curse, Soul's Anguish, Reform, All-Seeing Eyes, Sphere Shift, Geometric Evocation, Tangle Hair, Attach, Break Off, Charging Curse, Mighty Leap, Last Respects, Reactive Blink, Noxious Kiss, Conduct Electricity, Air Joust, Somatic Flailing, Writhing Crawl, Snatch and Dive, Melt Time, Retributive Torrent.

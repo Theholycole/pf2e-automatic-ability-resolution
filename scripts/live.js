@@ -207,8 +207,10 @@ async function playAbility(item, plan, sourceToken) {
     // (Batch 274: a choice PF2e holds as the ability's own toggle — Ablative Adaptation's material: the toggle set to it.)
     if (plan?.builtin === "roll-option") {
         // (Batch 276: a plain toggle switched on or off — Extend Strands. Its domain, the rule's own: "skill-check" there.)
-        const rule = (item.system?.rules ?? []).find((entry) => entry?.key === "RollOption" && entry.option === plan.option);
-        await item.actor?.toggleRollOption?.(plan.domain ?? rule?.domain ?? "all", plan.option, item.id, plan.value ?? true, plan.suboption ?? null);
+        // (Batch 292, Sphere Shift: the toggle on another of its items, by name — its Elemental Attunement's.)
+        const holder = plan.itemName ? item.actor?.items?.find?.((entry) => entry.name === plan.itemName) ?? item : item;
+        const rule = (holder.system?.rules ?? []).find((entry) => entry?.key === "RollOption" && entry.option === plan.option);
+        await item.actor?.toggleRollOption?.(plan.domain ?? rule?.domain ?? "all", plan.option, holder.id, plan.value ?? true, plan.suboption ?? null);
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.label ?? plan.suboption}.`, ...(plan.notes ?? [])]);
         return;
     }

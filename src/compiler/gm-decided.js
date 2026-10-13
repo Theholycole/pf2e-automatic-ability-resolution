@@ -36,6 +36,8 @@ export const GM_DECIDED = [
     ["Zombie Lord", "Command Zombie", "control"],
     ["Zombie Lord", "Shamble Forth!", "control"],
     // Out of combat (group B).
+    // (2026-10-13, batch 292: a vision of a penitent's deeds, by the same rule.)
+    ["Atoning Spirit", "Show Vision", "out-of-combat"],
     ["Arrongtata Swarm (Bridge)", "Bridge Formation", "out-of-combat"],
     ["Balisse", "Guiding Angel", "out-of-combat"],
     ["Barkeep", "Barkeep's Advice", "out-of-combat"],
