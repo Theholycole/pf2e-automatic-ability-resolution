@@ -96,6 +96,11 @@ export function passiveRules(item, actor = null) {
             plan.flanking = { ...plan.flanking, flankable: false };
             continue;
         }
+        // (Batch 306, Gang Up: a foe within reach of it and one of its allies is off-guard to it, as if flanked.)
+        if (rule?.key === "ActiveEffectLike" && !rule.predicate?.length && rule.path === "system.attributes.flanking.canGangUp" && rule.value === true) {
+            plan.flanking = { ...plan.flanking, gangUp: true };
+            continue;
+        }
         if (rule?.key === "ActiveEffectLike" && rule.mode === "override" && !rule.predicate?.length && rule.path === "system.attributes.flanking.offGuardable") {
             const value = rule.value === "@actor.level" ? "level" : Number(rule.value);
             if (value !== "level" && !Number.isFinite(value)) return null;

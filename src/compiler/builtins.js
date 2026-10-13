@@ -30,16 +30,36 @@ const EXTRA_WHEN = new Map([
     ["target:condition:frightened", "frightened"]
 ]);
 
+// (Batch 306: any condition on the target — Gang Up's Grabbed, Punch Down's Prone; a damage bonus too, and Mauler's "against creatures it
+// has Grabbed", its own toggle.)
+function extraWhen(item, term) {
+    if (typeof term !== "string") return null;
+    if (EXTRA_WHEN.has(term)) return EXTRA_WHEN.get(term);
+    const condition = /^target:condition:([a-z-]+)$/.exec(term)?.[1];
+    if (condition) return `condition:${condition}`;
+    const rules = item?.system?.rules ?? [];
+    const toggle = rules.find((rule) => rule?.key === "RollOption" && rule.toggleable && rule.option === term);
+    const text = String(item?.system?.description?.value ?? "").replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1");
+    if (toggle && /\bagainst (?:a )?creatures? (?:it|they|he|she|the [\w' -]+?) (?:has|have) Grabbed\b/i.test(text)) return "grabbing";
+    return null;
+}
+
 function strikeExtras(item) {
     const extras = [];
     for (const rule of item?.system?.rules ?? []) {
-        if (rule?.key !== "DamageDice" || !/(^|,)strike-damage$/.test(String(rule.selector ?? ""))) continue;
-        const predicate = rule.predicate ?? [];
-        if (predicate.length !== 1 || typeof predicate[0] !== "string" || !EXTRA_WHEN.has(predicate[0])) continue;
-        const dice = Number(rule.diceNumber);
-        const die = Number(String(rule.dieSize ?? "").replace(/^d/, ""));
-        if (!Number.isFinite(dice) || dice <= 0 || !Number.isFinite(die) || die <= 0) continue;
-        extras.push({ when: EXTRA_WHEN.get(predicate[0]), dice, die, precision: rule.category === "precision", type: rule.damageType ?? null });
+        const selector = [].concat(rule?.selector ?? []).join();
+        const predicate = rule?.predicate ?? [];
+        if (predicate.length !== 1) continue;
+        const when = extraWhen(item, predicate[0]);
+        if (!when) continue;
+        if (rule?.key === "DamageDice" && /(^|,)strike-damage$/.test(selector)) {
+            const dice = Number(rule.diceNumber);
+            const die = Number(String(rule.dieSize ?? "").replace(/^d/, ""));
+            if (!Number.isFinite(dice) || dice <= 0 || !Number.isFinite(die) || die <= 0) continue;
+            extras.push({ when, dice, die, precision: rule.category === "precision", type: rule.damageType ?? null });
+        } else if (rule?.key === "FlatModifier" && ["strike-damage", "damage"].includes(selector) && Number(rule.value) > 0 && !rule.damageType) {
+            extras.push({ when, dice: 0, die: 0, bonus: Number(rule.value), precision: rule.damageCategory === "precision", type: null });
+        }
     }
     return extras;
 }

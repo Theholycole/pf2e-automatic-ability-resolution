@@ -3181,6 +3181,33 @@ The user's call: "build everything you brought up" (tier 1: Fast Healing and reg
 - **Live:** unchanged. PF2e applies its own Fast Healing.
 - **Checked in pftest** (2026-10-13): the simulator's snapshot of a temporary Vampire Count read its Fast Healing 7 with "not in mist form" (mist off, so it heals). A temporary Doprillu's regeneration came with Mask of Power, which was on.
 
+## Creature rules for the simulator (2026-10-13, batch 306)
+
+The user's call: "build everything you brought up" (tier 2).
+
+- **Reader** (`creatureRules` in `src/compiler/creature-rules.js`; after `passiveRules` in `compileMonsterAbility`): a passive no other reading has → `{ builtin: "creature-rules", … }` with:
+  - `critRider` (a critical hit's conditions and push: Brutal Beating);
+  - `swiftness` (its movement triggers no reactions);
+  - `inexorable` (conditions it recovers from at the end of its turn; immune to Speed penalties; ignores difficult terrain);
+  - `strikeTypes` (a damage type it "can choose to deal instead": Phantom Touch);
+  - `hpRules` (resistances and Speed predicated on `hp-percent`: Abandon Armor);
+  - `protean` (PF2e's `proteanResistance` flag; senses regrown; immune to polymorph);
+  - `critSpec` (a CriticalSpecialization rule: Weapon Master);
+  - `troop` (Troop Defenses' thresholds; the glossary's when it only links it);
+  - `split`, `attach`, `berserk` (by their words);
+  - `elemental` (an elemental dragon's Countered by and Fed by);
+  - `permanent` (a condition its rules grant it: Relentless's quickened, only when the extra action can Strike).
+- **Strike extras** (`strikeExtras` in `src/compiler/builtins.js`): any `target:condition:<slug>` (Gang Up's grabbed, Punch Down's prone), FlatModifier damage bonuses (a precision one stays precision), and Mauler's own toggle when its words say "against creatures it has Grabbed". **Passive rules:** Gang Up's `canGangUp` flanking rule.
+- **Not read:** a bond that changes a creature's damage type (not a choice), a quickened action only for moving or a siege weapon, Countered by Metal (woodland passage: a `no-effect`).
+- **Coverage:** 408 rulebook and 14 Battlezoo passives that compiled to nothing, none lost; two Sneak Attacks gained their flat off-guard bonus.
+- **Live:** unchanged. PF2e's rules and the GM play them.
+- **Checked in pftest** (2026-10-13): the simulator's snapshot read temporary copies of 13 creatures, among them:
+  - the Grizzly Bear's Mauler (+2 against a creature it holds) and the Ruffian's Brutal Beating (frightened 1 and a 10-foot push — first read without the push, since Monster Core says "push the target up to 10 feet"; fixed);
+  - the Graveknight's Weapon Master (critical specialization on its greatsword and longbow) and the Gang Leader's Gang Up;
+  - the Living Whirlwind's Swiftness, the Phantom Knight's Phantom Touch, the Azuretzi's Protean Anatomy;
+  - the Charnel Creation's Berserk, the String Slime's Split, the Ghostly Mob's troop thresholds (70 and 35);
+  - the Adamantine Dragon's Abandon Armor and the Sky Dragon's Countered by Fire and Fed by Earth.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

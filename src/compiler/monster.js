@@ -15,6 +15,7 @@ import { gmDecided } from "./gm-decided.js";
 import { readSummon } from "./summons.js";
 import { withWatchedTrigger } from "./watch.js";
 import { passiveRules, readReactions } from "./passive-rules.js";
+import { creatureRules } from "./creature-rules.js";
 import { readNeeds } from "./needs.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
@@ -10460,7 +10461,9 @@ export function compileMonsterAbility(source, options = {}) {
     // (Batch 300: a reaction's trigger the module can watch, read for a plan that had none — offered when it happens, not only reminded.)
     // (Batch 301: a passive PF2e's own rules hold — Evasion, Deny Advantage, Surprise Attack, Construct Armor — or Mobility, Extra Reaction; for
     // the simulator.)
-    const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) : null;
+    // (Batch 306: Brutal Beating, Swiftness, Inexorable, Phantom Touch, Abandon Armor, Protean Anatomy, Weapon Master, Troop Defenses, Split,
+    // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
+    const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
     return withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null));
 }
