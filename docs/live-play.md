@@ -2921,3 +2921,7 @@ Fixed on the way:
   - The card's check line shows a set modifier, a save's own bonus or penalty and a misfortune save.
   - Abilities from the older Battlezoo bestiary read through its modernized links (`@Compendium[…]`, `@Check[type:…]`, `[[/r …]]`), its own linked effects too (Unravel's weapon Effect).
 - **Compiled** (29 new, all Battlezoo; Slough Skin the GM's as a form change): Six Palms Stance, Telekinetic Shove, Telekinetic Trip, Heroic Rally, Divinity Beam, Project and Serve, Consume the Dead, Entropic Reprisal, Focus Entropy, Protect and Preserve, Song of the Earth, Snag Weapon, Turn the Screws, Enucleate, Deny Shield, Lightning Horns, Fling Spines, Gliding Drop, Diseased Wake, Desperate Dive, Envelop, Angry Flutter, Drag Off, Leaping Strike, Blinking Slice, Warp Lash, Regurgitate, Swallow Evidence, Expel Air.
+
+## Live check of batch 288 (2026-10-13)
+
+Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check against Valeros's Reflex DC 21 and recorded the success on the card; Telekinetic Shove's card (Spell Attack +25) rolled `1d20 + 25` against his Fortitude DC and recorded a critical success. Both through the new set-modifier roll; nothing to fix.
