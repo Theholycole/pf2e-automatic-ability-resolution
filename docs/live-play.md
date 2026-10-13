@@ -3165,6 +3165,7 @@ The user's call: "work through your recommendations in order" (item 1: requireme
 - **Not read:** a creature that doesn't realize it's an enemy, a body it inhabits, its segments, spectators, a named earlier ability, a Mythic Point's cost. The requirement stays as text, and the simulator leaves it out.
 - **Coverage:** 109 rulebook and 24 Battlezoo plans.
 - **Live:** unchanged. The card's "Only if" line shows the requirement, and the GM judges it.
+- **Batch 304:** a riposte that needs its parry stance ("Requirements … is benefiting from Twin Parry") carries `requiresEffect`, so the simulator plays it only while that effect is on the creature.
 
 ## Live check of batches 299–300 (2026-10-13)
 

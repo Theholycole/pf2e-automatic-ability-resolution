@@ -2481,9 +2481,10 @@ export function readReaction(item, text) {
     // fails a Strike against him Effect Ledorick makes a melee Strike against the triggering creature or attempts to Disarm the triggering
     // creature.")
     const riposte = /^A creature within (?:your|(?:the )?[\w' -]+?['’]s) reach critically fails (?:a (?:melee )?Strike against (?:you|him|her|them|it)|to Strike (?:you|him|her|them|it))$/i.test(trigger.trim().replace(/\s*Requirements? .*$/i, "").replace(/\.$/, ""));
+    // (Batch 304: the stance it needs, by name — requiresEffect, which the simulator checks.)
     const parried = /\bRequirements? (?:The )?[\w' -]+? is (?:benefiting from|using) ([A-Z][\w' -]+?)\.? (?:Effect|Trigger)\b/i.exec(text)?.[1] ?? null;
     if (riposte && /^(?:A clever parry with one weapon leaves your opponent open to an attack with the other weapon\. )?(?:(?:The )?[\w' -]+? attempts a melee Strike or uses a Disarm action|Make a melee Strike or Disarm action) against the triggering opponent\.$|^(?:The )?[\w' -]+? makes a melee Strike against the triggering creature or attempts to (?:\[\[\/act disarm\]\]|Disarm) the triggering creature\.$/i.test(effect.trim())) {
-        return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, note: `${parried ? `Only while it benefits from ${parried}. ` : ""}Or it can Disarm the attacker instead.`, ...(parried ? { requires: "requirement" } : {}) };
+        return { builtin: "reaction-strike", triggers: ["critical-miss"], strike: null, penalty: 0, disrupts: false, note: `${parried ? `Only while it benefits from ${parried}. ` : ""}Or it can Disarm the attacker instead.`, ...(parried ? { requires: "requirement", requiresEffect: parried } : {}) };
     }
     // (Batch 103: Retaliatory Strike — "Trigger A creature within reach of the frost drake's tail successfully damages the frost drake with a
     // Strike Effect The frost drake attempts to Strike with their tail. If the Strike hits, it deals an additional 1d6 damage." → its tail
