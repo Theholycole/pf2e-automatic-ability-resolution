@@ -5849,7 +5849,7 @@ function bzReactions(item, actor) {
         const row = { ...none(), effects: [{ kind: "condition", slug: tangled[1].toLowerCase(), value: null, duration: null }] };
         return { ...base(item), targeting: { target: "the triggering creature", range: null, area: null }, trigger: { ...trigger, reaction: true }, resolution: { ...save, outcomes: { criticalSuccess: none(), success: none(), failure: row, criticalFailure: structuredClone(row) } }, notes: [`It ${tangled[2]}.`] };
     }
-    const weeds = trigger?.event === "provoke" && trigger.triggers?.includes("move") ? /^(?:[^.]+\. )*The triggering creature treats (?:all|every) squares? as difficult terrain until (?:the end of its turn|its turn ends) unless it (?:succeeds at|makes) an? @C save\. On a failure, ((?:if|when) [^.]+?\bGrabbed\b[^.]*)\.$/i.exec(split[2].trim()) : null;
+    const weeds = trigger?.event === "provoke" && trigger.triggers?.includes("move") ? /^(?:[^.]+\. )*The triggering creature treats (?:all|every) squares? as difficult terrain until (?:the end of its turn|its turn ends) unless it (?:succeeds at|makes) an? @C save(?: to avoid [^.]+)?\. On a failure, ((?:if|when) [^.]+?\bGrabbed\b[^.]*)\.$/i.exec(split[2].trim()) : null;
     if (weeds) {
         const hindered = { ...none(), manualInstructions: ["{target} treats every square as difficult terrain until the end of its turn."] };
         return { ...base(item), targeting: { target: "the triggering creature", range: trigger.within ? `${trigger.within} feet` : null, area: null }, trigger: { ...trigger, reaction: true }, resolution: { ...save, outcomes: { criticalSuccess: none(), success: none(), failure: hindered, criticalFailure: structuredClone(hindered) } }, notes: [`On a failure, ${weeds[1]}.`] };
