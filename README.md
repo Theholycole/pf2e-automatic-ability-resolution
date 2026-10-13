@@ -393,6 +393,11 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a diving charge and the stinger after it (Powerful Dive, Punishing Momentum), a coil that grants itself Reactive Strike (Coil), and healing for an undead ally (Bound in Death);
   - traps that tip a creature over or soak it (Flip, Downpour);
   - conditions shrugged off (Unstoppable), invisibility until it acts (Fade from View), and a spell sung away as it's cast (Elegy of the Faithless).
+- **The long tail, part 4** (2026-10-12, batch 266): 14 new in PF2e and 6 abilities that were the GM's. They include:
+  - a rolled-up stance with its own numbers (Roll), and a flattened form (Flatten);
+  - held creatures caged or enveloped (Encage in Tentacles, Envelop), a grappling cage at range (Bonds of Iron), and a Strike that grabs for a second head (Collaborative Chomp);
+  - a gaze whose save comes from its aura (Consume Death), venom from its own blood (Envenom), and a material of its choice (Adaptive Strike);
+  - conditions confined to one head (Partitioned Anatomy), a reroll against one kind of effect (All This Will Happen Again), a brain eaten for healing (Collect Brain), and two Strikes at a helpless creature (the xoarian's Ravage).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -815,6 +815,8 @@ async function saveAnswers(message, context, scene, combat, saver) {
                 // (Batch 217: only against a spell where it says so.)
                 const fromSpell = message.flags?.pf2e?.origin?.type === "spell" || (context.options ?? []).some((option) => /^origin:item:type:spell$|^item:type:spell$/.test(option));
                 if (plan.against === "spell" && !fromSpell) continue;
+                // (Batch 266, All This Will Happen Again: only against an effect with that trait.)
+                if (plan.against && plan.against !== "spell" && !effectTraits.has(plan.against)) continue;
                 const left = Number(item.system?.frequency?.value);
                 if (Number.isFinite(left) && left <= 0) continue;
                 return offer({ kind: "reroll", item, monster: token, actor, target: null, trigger: `failed its ${statistic ?? ""} save`.replace(/ {2,}/g, " "), attack: { messageId: message.id, keep: plan.keep ?? "higher" }, free: !!plan.free, note: [plan.mythic ? "It costs a Mythic Point." : null, ...(plan.notes ?? [])].filter(Boolean).join(" ") || null });

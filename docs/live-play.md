@@ -2673,3 +2673,25 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
   - **Traps:** a save or 1d8 damage and Prone, the push a note (Flip); Clumsy 1 on the creatures in a pool, kept while they stay in it (Downpour, a note).
   - **A spell cast near it:** a save, the spell disrupted on a failure, only for its tradition, with the higher DC a note (Elegy of the Faithless). In live play, any spell cast within its distance brings the offer, unless the spell's tradition is known and differs.
 - **Simulator:** see B265 in its ability decisions.
+
+## The long tail, part 4 (2026-10-12, batch 266)
+
+- **Compiled** (14 new in PF2e; 6 adventure abilities that were the GM's):
+  - **On itself:**
+    - a stance whose AC and saves become the numbers it lists, as bonuses or penalties over its own, its Speed a note (Roll);
+    - Clumsy 2 while flattened, kept until it Dismisses it (Flatten);
+    - PF2e's linked effect that asks which material its Strikes count as (Adaptive Strike);
+    - listed conditions negated, the dormant head a note (Partitioned Anatomy);
+    - its failed Will save against an emotion effect rerolled with a +1 bonus, the new result kept (All This Will Happen Again; live offers it only when the effect has that trait, with the bonus as a note);
+    - 20 healing after it takes a brain, its requirement the GM's (Collect Brain).
+  - **Held creatures:**
+    - the creature it holds swallowed with no check, the exceptions as notes (Encage in Tentacles);
+    - engulfed with no check, at its Escape DC and Rupture (Envelop).
+  - **At range and in reach:**
+    - an Athletics check against the Fortitude DC of a creature within 30 feet, Grabbed on a success and Restrained on a critical success (Bonds of Iron);
+    - a claw Strike that grabs, the other head's jaws Strike a note (Collaborative Chomp);
+    - two tentacle Strikes at a helpless creature (the xoarian's Ravage).
+  - **Saves from elsewhere:**
+    - a gaze whose save is its aura's, with the degrees written in the gaze, and a critical failure's drain set to the amount it names (Consume Death);
+    - its venom on a weapon it holds, with the blood cost a note (Envenom).
+- **Simulator:** see B266 in its ability decisions.

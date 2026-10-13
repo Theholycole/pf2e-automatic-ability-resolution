@@ -2676,6 +2676,15 @@ export function readReaction(item, text) {
         if (/^The result of the saving throw is improved (?:by )?one degree\.(?: (?:The )?[^.]+? can(?:'t|not) [\w' -]+? for \d+d\d+ rounds\.)?$|^(?:The )?[^.]+? treats a critical failure as a failure,? or a failure as a success\.$/i.test(plain)) return { builtin: "save-boost", ...(wait ? { recharge: wait } : {}), ...once, ...free };
         if (ownSave[1].toLowerCase() === "critically fails" && /^The critical failure becomes a (?:normal )?failure\.$/i.test(plain)) return { builtin: "save-boost", criticalOnly: true, ...free };
     }
+    // (Batch 266, All This Will Happen Again: "Trigger The samsaran anchorite fails or critically fails a Will save against an emotion effect Effect …
+    // They reroll the saving throw with a +1 status bonus; they must use the second result." → that save rerolled, the new result kept, only against
+    // that trait; the bonus, a note.)
+    const typedSave = /^(?:The )?[^.]+? (?:fails or critically fails|fails) an? (Fortitude|Reflex|Will) save against an? (\w+) effect\.?$/i.exec(trigger.trim().replace(/\s*Frequency once per (?:day|minute|hour)\.?$/i, ""));
+    const rerolled = typedSave ? /(?:^|[.!?]\s*)(?:They|It|The [\w' -]+?) rerolls? the saving throw with a \+(\d+) status bonus; (?:they|it) must use the second result\.$/i.exec(effect.trim()) : null;
+    if (rerolled) {
+        const trait = typedSave[2].toLowerCase();
+        return { builtin: "save-reroll", save: typedSave[1].toLowerCase(), keep: "new", against: trait, bonus: Number(rerolled[1]), ...(/\bFrequency once per (?:day|minute|hour)\b/i.test(text) ? { uses: 1 } : {}), notes: [`With a +${rerolled[1]} status bonus: add it to the new roll.`, `Only against ${/^[aeiou]/.test(trait) ? "an" : "a"} ${trait} effect.`] };
+    }
     // (Batch 133, Gardener's Resolve: "Trigger The worm prophet rolls a failure (but not a critical failure) on a Will save against an effect with the
     // mental or fear trait Requirements … features are obscured by a mask or hood Effect The worm prophet takes 3d8 mental damage, and the saving
     // throw is a success." → its failed save (only a failure, that save, those traits) made a success, the damage on itself; the mask the GM's.)
@@ -2713,6 +2722,12 @@ export function readReaction(item, text) {
     if (unstoppable && /^The persistent damage or condition from the triggering effect doesn't affect (?:the )?[\w' -]+?\.$/i.test(effect.trim())) {
         return { builtin: "negate-condition", conditions: unstoppable[1].split(/,\s*(?:or\s+)?|\s+or\s+/).map((word) => word.trim().toLowerCase()).filter(Boolean), notes: ["Also persistent damage it would take: the GM ends it."] };
     }
+    // (Batch 266, Partitioned Anatomy: "Trigger The mukradi would be Confused, Paralyzed, Slowed, or Stunned Effect The mukradi confines the
+    // debilitating effect to a certain portion of its nervous system, ignoring the effect but causing a maw of its choice to go dormant for the effect's
+    // duration. …" — those conditions negated; the price, notes.)
+    const partitioned = /^(?:The )?[\w' -]+? would be ([A-Z][a-z-]+(?:, [A-Z][a-z-]+)*,? or [A-Z][a-z-]+)\.?$/.exec(trigger.trim());
+    const confined = partitioned ? /^(?:The )?[\w' -]+? confines the debilitating effect to [^.]+?, ignoring the effect but ([^.]+)\.((?: [^.]+\.)*)$/i.exec(effect.trim()) : null;
+    if (confined) return { builtin: "negate-condition", conditions: partitioned[1].split(/,\s*(?:or\s+)?|\s+or\s+/).map((word) => word.trim().toLowerCase()).filter(Boolean), notes: [`It ignores the condition, ${confined[1]}.`, ...(confined[2].trim() ? [confined[2].trim()] : [])] };
     const labeled = /\bTrigger (.+?) Effect (?=[A-Z])(.+)$/.exec(text);
     const negates = labeled ? /^(?:The )?[^.]+? would be affected by (?:a condition or adverse effect(?: \([^)]*\))?|the ([\w, ]+?) conditions?(?:, or by an effect that would give it a penalty to its Speeds)?(?:, from a source of \d+(?:st|nd|rd|th) level or less)?)\.?$/i.exec(labeled[1].trim()) : null;
     if (negates && /^(?:The )?[^.]+? negates the triggering condition or effect(?: by [^.]+)?\.(?: Effects from artifacts, deities, or a similarly powerful source can't be avoided in this way\.)?$/i.test(labeled[2].trim())) {
@@ -3406,10 +3421,12 @@ export function compileBuiltin(item, slug) {
     // (Batch 186, Ravage: "makes two talon Strikes against a Paralyzed, Restrained, or Unconscious creature, using the same attack modifier as its highest
     // attack modifier. These Strikes gain the death trait. If Ravage kills the target, the intellect devourer may use Body Thief against it as a free
     // action." → both at its full bonus, only at a helpless creature (requires "helpless"); the rest notes.)
-    const ravage = /^(?:The )?[\w' -]+? makes two ([\w' -]+?) Strikes against a Paralyzed, Restrained, or Unconscious creature, using the same attack modifier as (?:its|their|his|her) highest attack modifier\.(.*)$/i.exec(text.trim());
-    const ravaged = ravage ? ravage[2].trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean) : null;
-    if (ravaged && ravaged.every((sentence) => /^These Strikes gain the death trait\.$|^If [\w' -]+? kills the target, (?:the [\w' -]+?|it) may use [A-Z][\w' -]+? against it as a free action\.$/i.test(sentence))) {
-        return { builtin: "multi-strike", actions, strikes: [ravage[1].toLowerCase(), ravage[1].toLowerCase()], sameTarget: true, noMap: true, requires: "helpless", notes: ["Only at a Paralyzed, Restrained or Unconscious creature.", ...ravaged] };
+    // (Batch 266, the xoarian's: "… against a single Paralyzed, Restrained, or Unconscious creature. If the target has 0 Hit Points after Ravage, the
+    // xoarian can use a free action with the death trait to kill the target and occupy it with Body Thief." — no attack modifier named: its own.)
+    const ravage = /^(?:The )?[\w' -]+? makes two ([\w' -]+?) Strikes against a (?:single )?Paralyzed, Restrained, or Unconscious creature(, using the same attack modifier as (?:its|their|his|her) highest attack modifier)?\.(.*)$/i.exec(text.trim());
+    const ravaged = ravage ? ravage[3].trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean) : null;
+    if (ravaged && ravaged.every((sentence) => /^These Strikes gain the death trait\.$|^If [\w' -]+? kills the target, (?:the [\w' -]+?|it) may use [A-Z][\w' -]+? against it as a free action\.$|^If the target has 0 Hit Points after [\w' -]+?, (?:the [\w' -]+?|it) can use a free action with the death trait to kill the target and occupy it with [A-Z][\w' -]+?\.$/i.test(sentence))) {
+        return { builtin: "multi-strike", actions, strikes: [ravage[1].toLowerCase(), ravage[1].toLowerCase()], sameTarget: true, ...(ravage[2] ? { noMap: true } : {}), requires: "helpless", notes: ["Only at a Paralyzed, Restrained or Unconscious creature.", ...ravaged] };
     }
     // (Batch 89, Claw Rake: "makes two claw Strikes at the same target, using the same attack bonus as their highest melee attack. If both attacks
     // deal damage, the target takes extra damage equal to one claw Strike." → both at its full bonus; both hits, a claw's damage more.)
