@@ -8,7 +8,7 @@
 //     look: "target" (it looks like the GM's target).
 // And on the plan: options ([{ label, creatures }], the GM's pick on a card), pick (a creature from the compendiums, the GM's: { any, all,
 // level | maxLevel | rank, when }), needs (what must be there, for the GM to see to), max, lasts, endsWithMaker, vanishAtZero, makerDamage,
-// oldest (the oldest go past max, not the farthest), trigger. A rune trap of an adventure's: the GM's ("adventure"); null otherwise.
+// oldest (the oldest go past max, not the farthest), trigger. Another adventure trap that summons: the GM's ("adventure"); null otherwise.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { isAdventurePack, sourcePack } from "./gm-fallback.js";
@@ -98,15 +98,20 @@ export function readSummon(item, options = {}) {
     }
 
     // A rune trap ("This trap summons a specific 1st-level creature, determined when the trap is created. The creature rolls initiative and
-    // remains for 2d6 rounds"): the creature it names, or the GM's pick as the trap is placed; an adventure's runes stay the GM's.
+    // remains for 2d6 rounds"): the GM's pick as the trap is placed. (Batch 298, the user's call: an adventure's runes too, "just like the other
+    // summoning rune" — the creature it names offered first, "with the elite adjustment" PF2e's own; "one of the creatures previously
+    // encountered in area B with the weak adjustment" any creature, weak.) Another adventure trap that summons stays the GM's.
     if (/^Trigger .+? Effect (?:The|This) trap summons\b/.test(plain)) {
-        if (isAdventurePack(sourcePack(actor, options))) return { builtin: "no-effect", gm: "adventure" };
-        const rune = new RegExp(String.raw`Effect (?:The|This) trap summons (?:an? ([A-Z][\w' -]+?)|a specific (?:level (-?\d+)|${ORDINAL}-level) creature, determined when the trap is created)\. (?:The|This) [\w' -]+? rolls initiative and remains for (\d+d\d+|\d+) (rounds?|minutes?)\b`).exec(plain);
-        if (!rune) return null;
-        const unit = /^minute/.test(rune[5]) ? "minutes" : "rounds";
-        const lasts = /d/.test(rune[4]) ? { ...lasting(null, unit), formula: rune[4] } : lasting(Number(rune[4]), unit);
-        const creature = { name: rune[1] ? titled(rune[1]) : "Summoned creature", count: 1, size: null, stats: null, from: rune[1] ? creatureOf(html, rune[1]) : null, traits: ["summoned"], initiative: "roll" };
-        return { builtin: "conjure", actions, creatures: [creature], ...(rune[1] ? {} : { pick: { level: Number(rune[2] ?? rune[3]), when: "placed" } }), lasts, vanishAtZero: true, notes: ["It has 3 actions a round and can use reactions.", "It also goes if the trap is disabled first (Dismiss)."] };
+        const rune = new RegExp(String.raw`Effect (?:The|This) trap summons (?:an? ([A-Z][\w' -]+?(?: \([^)]*\))?)(?: with the (elite|weak) adjustment)?|a specific (?:level (-?\d+)|${ORDINAL}-level) creature, determined when the trap is created|one of the creatures previously encountered in [^.]+? with the (elite|weak) adjustment)\.(?: [^.]+?\.)*? (?:The|This) [\w' -]+? rolls initiative and remains for (\d+d\d+|\d+) (rounds?|minutes?)\b`).exec(plain);
+        if (!rune) return isAdventurePack(sourcePack(actor, options)) ? { builtin: "no-effect", gm: "adventure" } : null;
+        const unit = /^minute/.test(rune[7]) ? "minutes" : "rounds";
+        const lasts = /d/.test(rune[6]) ? { ...lasting(null, unit), formula: rune[6] } : lasting(Number(rune[6]), unit);
+        const named = rune[1] ? creatureOf(html, rune[1]) : null;
+        const adjust = rune[2] ?? rune[5] ?? null;
+        const creature = { name: rune[1] ? titled(rune[1]) : "Summoned creature", count: 1, size: null, stats: null, from: named, ...(adjust ? { adjust } : {}), traits: ["summoned"], initiative: "roll" };
+        const level = rune[3] ?? rune[4];
+        const pick = named ? { default: { ...named, name: rune[1] }, when: "placed" } : level !== undefined ? { level: Number(level), when: "placed" } : { when: "placed" };
+        return { builtin: "conjure", actions, creatures: [creature], pick, lasts, vanishAtZero: true, notes: [...(adjust ? [`With PF2e's ${adjust} adjustment.`] : []), "It has 3 actions a round and can use reactions.", "It also goes if the trap is disabled first (Dismiss)."] };
     }
 
     // Summon Steed: "The dullahan summons a war horse with elite adjustments and the fiend and unholy traits. This steed remains until it is

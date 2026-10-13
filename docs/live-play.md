@@ -3037,3 +3037,34 @@ Checked in pftest:
   - the rune's Wolf came out neutral (a hazard has no alliance), so the side is now taken from the maker token's disposition;
   - the picker's list was squashed to one row, so it now has a set height.
 
+## Rune traps chosen on placement (2026-10-13, batch 298)
+
+The user's call: "Make the rune traps choose when placed just like the other summoning rune."
+
+- **Compiler:** every rune trap in the standard wording (`… trap summons … The … rolls initiative and remains for …`) now reads, adventure packs included:
+  - **Named creature** (Cockatrice, Mukradi, Krooth, Sod Hound, Living Landslide, Goliath Spider, Invisible Stalker): the pick is `{ default, when: "placed" }`.
+  - **"A specific level N creature"**: `{ level, when: "placed" }`. Sentences between the summon and the initiative (the Minor rune's coloured squares) are allowed.
+  - **"One of the creatures previously encountered … with the weak adjustment"**: `{ when: "placed" }`, any creature, weak.
+  - **Adjustments:** "With the elite adjustment" and "with the weak adjustment" become the creature's `adjust`.
+  - **Still the GM's ("adventure"):** other adventure traps that summon, such as four Vanths at once, a rune whose door slams shut, or a mural.
+- **Live:**
+  - **Picker order:** the trap's own creature comes first and selected, found even in an adventure's pack. The others listed are creatures of its level.
+  - **Nothing picked:** a rune that names its creature summons that one ("it summons Goliath Spider, as written").
+  - **Cancel:** Foundry's dialog answers with the button's action, "cancel", when the callback returns nothing. The picker now accepts only a creature from its own list. Without this, a cancelled "Choose a creature…" would have made a blank placeholder.
+  - **Hostile:** a trap's creature is now always hostile (opposition), because PF2e keeps a hazard's token neutral and gives it no alliance. Batch 297's fix took the side from the token, which made trap creatures neutral; this replaces it.
+
+## Live check of batch 298 (2026-10-13)
+
+Checked in pftest:
+
+- **Muesello's Best Summoning Rune (PFS):** placing it opened the picker at level 5 with its own Living Landslide (PFS 3-11) first and selected.
+- **Spider Summoning Rune:** the picker was cancelled; the note said it summons Goliath Spider, as written.
+- **Ancient Summoning Rune:** listed every creature (3,084). Goblin Warrior was chosen.
+- **Set off in a combat:**
+  - an elite Living Landslide (110 HP), initiative 25, seven rounds;
+  - a Goliath Spider, initiative 24, 2d6 rolled as 10 rounds;
+  - a weak Goblin Warrior (6 HP), initiative 12, seven rounds.
+- **Fixed during the check:**
+  - the cancel bug above;
+  - trap creatures came out neutral, and are now hostile (checked again: opposition, disposition −1).
+

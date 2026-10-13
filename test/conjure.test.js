@@ -45,11 +45,18 @@ test("summons (2026-10-13, batch 297): steeds, horns, swarms from the remains, m
     assert.deepEqual([pair.options.map((option) => option.label), pair.lasts.value], [["Giant Tarantula", "Spider Swarm"], 10]);
     const ally = compileMonsterAbility(ability("Call the Deep", "<p><strong>Effect</strong> The test diver blows a horn, casting a 2nd-rank Summon Animal spell. The test diver can summon only an aquatic creature. This creature remains until it is slain, the test diver Dismisses it, or the test diver summons another ally.</p>", 3), { actor: actor("Test Diver", 2), pack: "pathfinder-bestiary-2" });
     assert.deepEqual(ally.pick, { any: ["animal"], all: ["aquatic"], maxLevel: 1 });
-    // A rune trap: the creature it names; one "determined when the trap is created" asked for as it's placed; an adventure's, the GM's.
+    // A rune trap: one "determined when the trap is created" asked for as it's placed; (batch 298, the user's call) an adventure's too, the creature
+    // it names offered first, elite or weak as written; another adventure trap that summons, the GM's.
     const rune = (text, pack) => compileMonsterAbility(ability("Summon Monster", `<p><strong>Trigger</strong> A creature steps on it</p><hr /><p><strong>Effect</strong> ${text}</p>`, 0, "reaction"), { actor: { name: "Test Rune", type: "hazard", system: { details: { level: { value: 1 } } } }, pack });
     const asked = rune("This trap summons a specific 1st-level creature, determined when the trap is created. The creature rolls initiative and remains for [[/br 2d6 #rounds]]{2d6 rounds}, after which the spell ends.", "hazards");
     assert.deepEqual([asked.pick, asked.lasts.formula, asked.creatures[0].initiative], [{ level: 1, when: "placed" }, "2d6", "roll"]);
-    assert.deepEqual(rune("The trap summons a @UUID[Compendium.pf2e.pathfinder-monster-core.Actor.MrzlaE7k1PEsd3iQ]{Cockatrice}. The cockatrice rolls initiative and remains for 1 minute.", "some-adventure-bestiary"), { builtin: "no-effect", gm: "adventure" });
+    const named = rune("This trap summons a @UUID[Compendium.pf2e.pathfinder-monster-core.Actor.MrzlaE7k1PEsd3iQ]{Cockatrice} with the elite adjustment. The cockatrice rolls initiative and remains for 1 minute.", "some-adventure-bestiary");
+    assert.deepEqual([named.pick, named.creatures[0].adjust, named.lasts.value, named.lasts.unit], [{ default: { uuid: "Compendium.pf2e.pathfinder-monster-core.Actor.MrzlaE7k1PEsd3iQ", name: "Cockatrice" }, when: "placed" }, "elite", 1, "minutes"]);
+    const between = rune("This trap summons a specific level -1 creature, determined when the trap is created. The red squares summon one kind, the green squares another. The creature rolls initiative and remains for [[/br 2d4 #rounds]]{2d4 rounds}.", "some-adventure-bestiary");
+    assert.deepEqual([between.pick, between.lasts.formula], [{ level: -1, when: "placed" }, "2d4"]);
+    const earlier = rune("The trap summons one of the creatures previously encountered in the hall with the weak adjustment. The creature rolls initiative and remains for 5 rounds.", "some-adventure-bestiary");
+    assert.deepEqual([earlier.pick, earlier.creatures[0].adjust], [{ when: "placed" }, "weak"]);
+    assert.deepEqual(rune("The trap summons four test guards, who then roll initiative and remain for up to 1 minute.", "some-adventure-bestiary"), { builtin: "no-effect", gm: "adventure" });
     // A reaction that uses its summon, and one that casts its own summon spell unlinked.
     const more = ability("More Of Me", "<p>It causes another test twin to spontaneously come into being in an unoccupied space within 30 feet.</p>", 2);
     const twin = compileMonsterAbility(ability("Not Yet", "<p><strong>Trigger</strong> The test twin is reduced to 0 Hit Points</p><hr /><p><strong>Effect</strong> The test twin uses More Of Me as a reaction.</p>", 0, "reaction"), { actor: actor("Test Twin", 3, [more]), pack: "blog-bestiary" });
@@ -74,6 +81,9 @@ test("summons live (batch 297): the maker's numbers, a pick's levels and creatur
     ];
     assert.deepEqual(pickable(entries, { any: ["animal"], all: ["aquatic"], maxLevel: 1 }).map((entry) => entry.uuid), ["a", "e"]);
     assert.deepEqual(pickable(entries, { level: 1 }).map((entry) => entry.uuid), ["a", "b"]);
+    // (Batch 298: a rune's own creature first, then the others of its level; one from an adventure's pack, as found live.)
+    assert.deepEqual(pickable(entries, { default: { uuid: "b", name: "Wolf" } }).map((entry) => entry.uuid), ["b", "a"]);
+    assert.deepEqual(pickable(entries, { default: { uuid: "x", name: "Test Hound (Adventure)" } }, { defaultEntry: { uuid: "x", name: "Test Hound (Adventure)", level: 0, traits: [], type: "npc" } }).map((entry) => entry.uuid), ["x", "e"]);
     assert.deepEqual(beyondMax([{ id: "new", x: 0, y: 0, made: 3 }, { id: "old", x: 0, y: 0, made: 1 }, { id: "mid", x: 900, y: 0, made: 2 }], { max: 4, adding: 2, from: { x: 0, y: 0 }, oldest: true }), ["old"]);
 });
 

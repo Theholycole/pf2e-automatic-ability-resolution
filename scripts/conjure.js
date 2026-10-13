@@ -197,13 +197,17 @@ async function findCreature(name) {
 
 // The GM's pick of a creature the plan allows: a list to filter by name. { uuid, name } or null.
 async function pickCreature({ title, pick, context = {} }) {
-    const entries = pickable(await creatureIndex(), pick, context);
+    // (Batch 298: the rune's own creature, from wherever it is — an adventure's pack too.)
+    const named = pick.default?.uuid ? await fromUuid(pick.default.uuid).catch(() => null) : null;
+    const defaultEntry = named ? { uuid: pick.default.uuid, name: named.name, level: Number(named.system?.details?.level?.value), traits: named.system?.traits?.value ?? [], type: named.type } : null;
+    const entries = pickable(await creatureIndex(), pick, { ...context, defaultEntry });
     if (!entries.length) {
         ui.notifications.warn(`${title}: no creature in the compendiums fits.`);
         return null;
     }
     const { level, maxLevel, rank } = pickLevels(pick, context);
-    const what = [Number.isFinite(level) ? `level ${level}` : Number.isFinite(maxLevel) ? `level ${maxLevel} or lower` : null, rank ? `(rank ${rank})` : null, pick.any?.length ? pick.any.join(" or ") : null, pick.all?.length ? pick.all.join(" and ") : null].filter(Boolean).join(", ");
+    const own = pick.default ? entries[0] : null;
+    const what = [Number.isFinite(level) ? `level ${level}` : Number.isFinite(maxLevel) ? `level ${maxLevel} or lower` : own && Number.isFinite(own.level) ? `level ${own.level}` : null, rank ? `(rank ${rank})` : null, pick.any?.length ? pick.any.join(" or ") : null, pick.all?.length ? pick.all.join(" and ") : null, own ? `its own ${own.name} first` : null].filter(Boolean).join(", ");
     const options = entries.map((entry, index) => `<option value="${escape(entry.uuid)}"${index ? "" : " selected"}>${escape(entry.name)} (${entry.level})</option>`).join("");
     const content = `<p>A creature: ${escape(what || "any")}.</p><input type="search" name="filter" placeholder="Filter by name" autocomplete="off"><select name="creature" size="12" style="width: 100%; height: 18em; margin-top: 4px">${options}</select>`;
     const DialogV2 = foundry.applications.api.DialogV2;
@@ -225,8 +229,9 @@ async function pickCreature({ title, pick, context = {} }) {
         },
         rejectClose: false
     }).catch(() => null);
-    if (!uuid) return null;
-    return { uuid, name: entries.find((entry) => entry.uuid === uuid)?.name ?? null };
+    // (Foundry's dialog answers with the button's action, "cancel", when its callback gives nothing: only a creature from the list counts.)
+    const chosen = entries.find((entry) => entry.uuid === uuid);
+    return chosen ? { uuid: chosen.uuid, name: chosen.name } : null;
 }
 
 // A rune trap placed: its creature asked for and kept on the token.
@@ -238,7 +243,7 @@ async function askRune(token) {
         if (plan?.builtin !== "conjure" || plan.pick?.when !== "placed") continue;
         const picked = await pickCreature({ title: `${token.name}: ${item.name}`, pick: plan.pick });
         if (!picked) {
-            await noteToGM(actor, token, [`<strong>${escape(item.name)}</strong>: no creature chosen yet; it's asked for when the trap goes off.`]);
+            await noteToGM(actor, token, [`<strong>${escape(item.name)}</strong>: ${plan.pick.default ? `it summons ${escape(plan.pick.default.name)}, as written` : "no creature chosen yet; it's asked for when the trap goes off"}.`]);
             continue;
         }
         await token.update({ [`flags.${MODULE_ID}.runeCreature`]: { ...picked, itemId: item.id } });
@@ -254,7 +259,8 @@ export async function startConjure({ item, plan, sourceToken, context = {} }) {
     const preset = plan.pick?.when === "placed" ? token.flags?.[MODULE_ID]?.runeCreature ?? null : null;
     const counted = (plan.creatures ?? []).find((creature) => creature.count?.formula);
     const rolled = counted ? (await new Roll(counted.count.formula).evaluate()).total : null;
-    if (plan.options?.length || plan.needs || counted || (plan.pick && !preset)) return summonCard({ item, plan, token, context, rolled, formula: counted?.count?.formula ?? null });
+    // (Batch 298: a rune that names its creature summons that one when none was picked.)
+    if (plan.options?.length || plan.needs || counted || (plan.pick && !preset && !plan.pick.default)) return summonCard({ item, plan, token, context, rolled, formula: counted?.count?.formula ?? null });
     return makeConjured({ item, plan, token, context, picked: preset });
 }
 
@@ -333,9 +339,9 @@ async function makeConjured({ item, plan, token, context = {}, picked = null }) 
     let endsAt = combatant && plan.lasts ? zoneEndsAt(plan.lasts, { round: combat.round, combatantId: combatant.id, acted, rolled: lastRoll }) : null;
     const made = [];
     // (On its maker's side: PF2e sets an NPC token's disposition from its actor's alliance, and a compendium creature's is its own. Batch 297: the
-    // side its maker's token shows — a hazard has no alliance of its own.)
+    // side its maker's token shows. Batch 298: a trap's, against those who set it off — PF2e keeps a hazard's token neutral, with no alliance.)
     const makerActor = token.actor ?? item.actor;
-    const alliance = { [-1]: "opposition", 0: null, 1: "party" }[token.disposition] ?? makerActor?.alliance;
+    const alliance = makerActor?.type === "hazard" ? "opposition" : ({ [-1]: "opposition", 0: null, 1: "party" }[token.disposition] ?? makerActor?.alliance);
     const maker = { ac: Number(makerActor?.armorClass?.value ?? makerActor?.system?.attributes?.ac?.value), saves: Object.fromEntries(["fortitude", "reflex", "will"].map((save) => [save, Number(makerActor?.saves?.[save]?.mod ?? makerActor?.system?.saves?.[save]?.value) || 0])), hp: Number(makerActor?.system?.attributes?.hp?.max) };
     const target = [...(game.user.targets ?? [])][0] ?? null;
     const occupied = scene.tokens.filter((other) => !other.hidden).map((other) => ({ x: other.x, y: other.y, width: other.width, height: other.height }));

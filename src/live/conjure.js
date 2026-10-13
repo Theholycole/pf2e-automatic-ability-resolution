@@ -103,9 +103,14 @@ export function pickLevels(pick, context = {}) {
 }
 
 // (Batch 297.) The creatures a pick offers, from the compendiums' index entries [{ uuid, name, level, traits, type }]: creatures of its level (or
-// up to it), with one of `any` traits and all of `all`; one per name (the first pack's), highest level first.
+// up to it), with one of `any` traits and all of `all`; one per name (the first pack's), highest level first. (Batch 298: a rune's own creature,
+// pick.default, first — found among them, or context.defaultEntry when it's in an adventure's pack — and the others of its level after it.)
 export function pickable(entries, pick, context = {}) {
-    const { level, maxLevel } = pickLevels(pick, context);
+    const wanted = pick?.default ? String(pick.default.name ?? "").toLowerCase() : null;
+    const known = pick?.default ? entries.find((entry) => (pick.default.uuid && entry.uuid === pick.default.uuid) || entry.name.toLowerCase() === wanted) ?? context.defaultEntry ?? null : null;
+    const levels = pickLevels(pick, context);
+    const level = Number.isFinite(levels.level) ? levels.level : Number.isFinite(known?.level) ? known.level : undefined;
+    const { maxLevel } = levels;
     const seen = new Set();
     const out = [];
     for (const entry of entries) {
@@ -119,5 +124,6 @@ export function pickable(entries, pick, context = {}) {
         seen.add(entry.name);
         out.push(entry);
     }
-    return out.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+    out.sort((a, b) => b.level - a.level || a.name.localeCompare(b.name));
+    return known ? [known, ...out.filter((entry) => entry.uuid !== known.uuid && entry.name !== known.name)] : out;
 }
