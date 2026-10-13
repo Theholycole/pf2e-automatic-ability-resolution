@@ -2934,3 +2934,8 @@ Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check agains
   - A reaction's own trigger after a requirement or a lead-in sentence ("Requirements …; Trigger …; Effect …").
   - The simulation's AC reactions can require holding a creature (`requires: "grabbed"`, Meat Shield).
 - **Compiled** (28 new, all Battlezoo; Sudden Infusion the GM's as items, Detach Soul as summons): Strangle, Toss Away, Reap, Meat Shield, Drop Tentacle, Spawn Tentacles, Cloud Cover, Unleash Hive, Spore Burst, Frenzied Hiss, Increase Infestation, Vermicular Surge, Execute, Malignant Entropy, Accelerate Fall, Quick Escape, Double Kick, Prodigious Leap, Springing Leap, Inflame Fever, Spear Snag, Seep Venom, Consume Poison, Selfish Protection, Proclaim Ward, Pull Taut, Swap Energy, Leap and Catch.
+
+## The long tail after the user's choices, part 18 (2026-10-13, batch 290)
+
+- **New pieces:** a check card against a target's AC (Feather Strike's attack at its own bonus) reads the target's armor class for its DC.
+- **Compiled** (26 new, all Battlezoo; Envisage the GM's as a form, Subject of Horror as a plane shift, Phantasms as summons): Swinging Swipe, Withering Whistle, Mutable Combatant, Juxtapose, Illuminate, Douse Lure, Frog Swarm, Snatch and Drag, Branches Up, Psychic Sunder, Bolster Ally, Share Attunement, Feather Strike, Wave Formation, Hermetic Organs, Amplify Forest, Falling Branch, Flame Shroud, Grow Limb, Limb Whirlwind, Bounce Back, Pain Link, Painful Determination, Efficient Takedown, Omnipunch, Crawl Down Throat.

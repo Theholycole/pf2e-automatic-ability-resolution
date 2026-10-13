@@ -91,7 +91,8 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
 function targetEntry(token, check) {
     const actor = token.actor;
     const entry = { actorUuid: actor.uuid, tokenUuid: token.document?.uuid ?? token.uuid ?? null, name: token.name ?? actor.name };
-    if (check?.kind === "check") entry.dc = actor.getStatistic?.(check.against)?.dc?.value ?? null;
+    // (Batch 290, Feather Strike: an attack at its own bonus against AC — the armor class itself.)
+    if (check?.kind === "check") entry.dc = actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
     return entry;
 }
 

@@ -154,7 +154,8 @@ export const GM_DECIDED = [
     ["Woodpluck", "Cultivate Imagination", "items"],
     ["Woodpluck Elder", "Cultivate Imagination", "items"],
     // Disguises and forms (group B).
-    // (2026-10-13, batch 288: a body shed to fight on as a swarm, by the same rule.)
+    // (2026-10-13, batch 288: a body shed to fight on as a swarm, by the same rule; batch 290: a meld that hides which is the original.)
+    ["Tahagata", "Envisage", "form"],
     ["Mogadb", "Slough Skin", "form"],
     ["Dewdrop Ooze", "Disincorporate", "form"],
     ["Elder Outcrop", "Natural Formation", "form"],
@@ -233,7 +234,9 @@ export const GM_DECIDED = [
     ["Graveknight Warmaster", "Phantom Mount", "summons"],
     ["Katpaskir", "Mirrored Summons", "summons"],
     ["Morrigna", "Spider Minions", "summons"],
-    // (2026-10-13, batch 286: statues made as decoys, by the same rule; batch 289: fey summoned from its torn suit.)
+    // (2026-10-13, batch 286: statues made as decoys, by the same rule; batch 289: fey summoned from its torn suit; batch 290: phantasms that act
+    // on their own.)
+    ["Fragmentor", "Phantasms", "summons"],
     ["Matrona", "Detach Soul", "summons"],
     ["Rictus Mask", "Echoes of the Damned", "summons"],
     ["Necromancer", "Undead, Arise!", "summons"],
@@ -256,6 +259,8 @@ export const GM_DECIDED = [
     ["Stormadillo", "Static Cling", "state"],
     ["The Weaver in Dreams", "Stalker in Dreams", "state"],
     // Plane shifts (group B).
+    // (2026-10-13, batch 290: a creature drawn into a painted world, by the same rule.)
+    ["Sorrow Portrait", "Subject of Horror", "plane-shift"],
     ["Bannog Thief", "Lucid Step", "plane-shift"],
     ["Ether Spider", "Ethereal Step", "plane-shift"],
     ["Jikou", "Open Dream Gate", "plane-shift"],
