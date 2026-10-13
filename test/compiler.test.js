@@ -5031,3 +5031,18 @@ test("group D, built, part 12 (2026-10-13, batch 284): kinesis, traps, faith-che
     const regret = react("A creature fails an attack against the test genie", "The test genie asks the triggering creature if it wishes it had hit. If the creature indicates yes, the test genie takes damage as if the attack had hit and the regret makes the test genie @UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened} for [[/gmr 1d4 #Rounds]]{1d4 rounds}; they can use the extra action to Stride.");
     assert.deepEqual([regret?.resolution?.outcomes?.success?.effects?.[0]?.slug, regret?.resolution?.outcomes?.success?.effects?.[0]?.duration?.valueRoll], ["quickened", "1d4"]);
 });
+
+test("group D, built, part 13 (2026-10-13, batch 285): mythic skill toggles, mortal bonds, past echoes with a control way left to the GM, primal surges on a hazard", () => {
+    const item = (html, type = "action", actions = 1, name = "Test", rules = []) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, rules, description: { value: html } } });
+    const plan = (html, type, actions, actor, basicActions = {}, rules = []) => compileMonsterAbility(item(html, type, actions, "Test", rules), { basicActions, ...(actor ? { actor } : {}) });
+    const skill = plan("<p><strong>Cost</strong> 1 Mythic Point</p><hr /><p><strong>Effect</strong> The Test Titan attempts its next Athletics skill check with a +4 bonus and is considered to have mythic proficiency for that check.</p>", "free", 1, null, {}, [{ key: "RollOption", option: "test-mythic", toggleable: true }]);
+    assert.deepEqual([skill?.model?.toggle, skill?.requires], [true, "It spends 1 Mythic Point"]);
+    const bond = plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The Test Fox forms a bond with a mortal creature. While the bond exists, the mortals bonded to the Test Fox increase their current and maximum Hit Points by 5 and gain a +1 status bonus to their attack and damage rolls, as well as to skill checks they make using Stealth. It can speak to them.</p>", "action", 2);
+    assert.deepEqual([bond?.targeting?.allies, bond?.resolution?.outcomes?.success?.modifiers?.map((entry) => entry.selector), bond?.resolution?.outcomes?.success?.noteEffects?.[0]?.label], [true, ["attack", "damage"], "Bonded"]);
+    const S = (id, name) => `@UUID[Compendium.pf2e.spells-srd.Item.${id}]{${name}}`;
+    const echo = plan(`<p>The test stone calls forth a remnant of a lost people. A new use ends the last. The test stone casts one of the following occult innate spells (DC 30) for the listed purpose.</p><p><strong>${S("OsOhx3TGIZ7AhD0P", "Dominate")}</strong> A role.</p><p><strong>${S("kOa055FIrO9Smnya", "Wall of Stone")}</strong> A wall.</p>`, "action", 2);
+    assert.deepEqual(echo?.modes?.map((mode) => [mode.name, mode.plan?.dc ?? null, mode.notes ?? null]), [["Dominate", null, ["The GM's: it controls the creature (the user's rule)."]], ["Wall of Stone", 30, null]]);
+    const aura = { name: "Test Aura", type: "hazard", items: [] };
+    const surge = plan("<p><strong>Trigger</strong> A character casts a primal spell within the hazard's area</p><hr /><p><strong>Effect</strong> Each living creature in the area gains [[/r 1d4 #Temporary Hit Points]] temporary Hit Points that last for 1 minute as life wells up, and the hazard rolls initiative.</p>", "reaction", 1, aura);
+    assert.deepEqual([surge?.trigger?.event, surge?.resolution?.outcomes?.success?.effects?.[0]?.formula], ["hazard", "1d4"]);
+});

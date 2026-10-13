@@ -2882,3 +2882,7 @@ Fixed on the way:
 
 - **Compiled** (30 rows; 28 new in PF2e, 2 more that were the GM's): Base Kinesis, Channel Elements, Kick Away, Construct Trap, False Blessing, Divine Protection, Behead, Felling Shot, Crack the Shell, Pantomime, Repentant Defiance, Spiritual Edge, Return Throw, Crystal Refraction, Metallurgic Adaptation, Magnetic Disarm, Evaporate, Conductive Redirection (twice), Dissolve, Overflow, Vacuum, Exploit Regret, Rhythmic Stomp, Magnetic Reposition, Consume Magic, Blazing Rush, Rock Stride.
 
+## The long tail after the user's choices, part 13 (2026-10-13, batch 285)
+
+- **Compiled** (30 rows; 13 new in PF2e, 15 in Battlezoo, 7 more PF2e that were the GM's). A spell link with no label is cast by its id (the cast card names it). Readers that read generic wordings stay narrow where earlier GM categories hold the same words (a mythic cost, temporary Hit Points as a turn ends).
+
