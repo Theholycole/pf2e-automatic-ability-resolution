@@ -2531,3 +2531,15 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
 - **Live:** a follow-up from a card (the venom's save after a failed Reflex save) is posted as its own card on that creature. Applying its failure hands the affliction to Pseudo Afflictions, as an affliction's card does.
 - **Simulator:** follow-ups resolve as before, now with the affliction (B257 in its ability decisions).
 
+## Strikes and reactions in more words (2026-10-12, batch 258)
+
+- **Compiled** (8 new in PF2e; 5 adventure abilities that were the GM's):
+  - **Pounces by other moves:** "Strides up to his Speed, Leaps up to his Speed, or casts Translocate; at the end of that movement, the warden Strikes" and "Astral Blinks or Strides and makes a Strike … then Astral Blinks or Strides again". These are a charge of one move; the other ways to move and the move after are notes.
+  - **A volley:** "makes an eye beam Strike against every creature in a 120-foot cone. These attacks count toward its multiple attack penalty, but the penalty doesn't increase until after all its attacks" is a Strike at each creature there with one penalty. Its recharge is the multi-Strike's own (live, the recharge note; the simulator waits it out).
+  - **Strike activities:** "If it hits, the target is tangled … It's Immobilized, can't leave the ground …" gives Immobilized on a hit, the rest notes. "If the target is an aberration …, this attack deals an additional 2d12 force damage" gives the damage only against that trait (`onHit.vsTraits`, live and in the simulator).
+  - **A buff with regeneration:** "gains regeneration 15 (deactivated by force or holy), and he deals an extra 1d8 spirit damage on his Strikes" gives the extra damage and the regeneration on itself for that time.
+  - **Allies Quickened:** "causes all other ankhravs within a 100-foot emanation to become Quickened until the start of its next turn, and they can use the extra action only for …" gives Quickened on its allies there; its own kind and the extra action's limits are notes.
+  - **An allies' effect with a rolled time:** "This lasts for 2d4 rounds" and "Affected allies must use at least one of their actions to Strike each round" are notes beside PF2e's effect.
+  - **Reaction Strikes:** "A creature within 200 feet targets the titan with or includes the titan in the area of an attack, spell, or other effect" is targeted (that far), disrupting on a hit. "A creature within reach of the kun's tail uses an action to attack or heal another creature" is an attack on it or healing beside it, disrupting on a hit, with the push a note.
+- **Simulator:** see B258 in its ability decisions.
+

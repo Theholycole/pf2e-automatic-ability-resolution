@@ -254,3 +254,9 @@ test("random tables live: the ways a roll picks (again without itself), a bomb's
     assert.deepEqual([chill.success.nativeEffects?.[0]?.label, chill.criticalSuccess.nativeEffects?.length, chill.failure.nativeEffects], ["Test Chill", 1, undefined]);
     assert.deepEqual(strikesFor({ faces: { 3: "claw", 4: "tail" } }, [1, 4]), [null, "tail"]);
 });
+
+test("a Strike activity's damage against a trait: only on a creature with it (2026-10-12, batch 258)", () => {
+    const kick = { builtin: "strike-activity", strike: "fist", onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null, vsTraits: [{ traits: ["aberration"], damage: ["2d12[force]"] }] } };
+    assert.equal(activityRider(kick, { targetTraits: ["humanoid"] }), null);
+    assert.deepEqual(activityRider(kick, { targetTraits: new Set(["aberration"]) }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "2d12[force]" }]);
+});

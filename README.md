@@ -348,6 +348,13 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a hit's follow-up that moves the creature and knocks it Prone (Pitch Bale);
   - a save to dodge an exposure, then the venom's own save as a follow-up (Spit Venom, Spray Pollen).
   - A degree's own PF2e effect link now applies to that row, and "As critical success, but affected for only one round" shortens its time.
+- **Strikes and reactions in more words** (2026-10-12, batch 258): 8 new in PF2e and 5 adventure abilities that were the GM's. They include:
+  - pounces by other moves (Magical Pounce, Astral Pounce);
+  - a volley at everyone in a cone, with its recharge (Gaze Upon);
+  - Immobilized on a hit (Tangle-Topple), and damage against a trait (Resonating Kick);
+  - a Strike buff with regeneration (Bully the Departed);
+  - allies Quickened around it (Frenzy Pheromone), and an allies' effect that lasts 2d4 rounds (Stoke the Fervent);
+  - reaction Strikes when it's targeted from afar (Roiling Rebuke) or when a creature attacks or heals beside it (Spite).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

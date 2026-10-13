@@ -1249,6 +1249,15 @@ const CHARGE_TELLS = /^During (?:this|the) movement, [^.]*?\bmaking (?:it|them|h
 // bonus to its attack roll" → attackBonus; "the Strike's damage is increased
 // to 3d10+20" → damage. Any other sentence: null.
 export function readCharge(text) {
+    // (Batch 258, Magical Pounce: "The warden Strides up to his Speed, Leaps up to his Speed, or casts Translocate; at the end of that movement,
+    // the warden Strikes. If the warden began this action Hidden, he remains hidden until after this ability's Strike."; Astral Pounce: "…
+    // Astral Blinks or Strides and makes a Strike at the end of that movement. … then Astral Blinks or Strides again, whichever it did not
+    // already do." — a move and its Strike; the other ways to move, staying hidden and the move after, notes.)
+    const hidden = String.raw`(?: If (?:the [\w' -]+?|it|they|he|she) began this action Hidden, (?:it|they|he|she) remains? hidden until after this ability's Strike\.)?`;
+    const pounce = new RegExp(String.raw`^(?:The )?[^.]+? Strides up to (?:its|their|his|her) Speed, Leaps up to (?:its|their|his|her) Speed, or casts Translocate; at the end of that movement, (?:the [\w' -]+?|it|they|he|she) Strikes\.${hidden}$`, "i").exec(String(text).trim());
+    if (pounce) return { strides: 1, strike: null, notes: ["It can Leap or cast Translocate instead of Striding.", ...(/\bHidden\b/.test(pounce[0]) ? ["If it began Hidden, it stays hidden until after the Strike."] : [])] };
+    const blinkPounce = new RegExp(String.raw`^(?:Requirements? (?:The )?[^.]+? hasn't used ([\w' -]+?) this round Effect )?(?:The )?[^.]+? ([\w' -]+?) or Strides and makes a Strike at the end of that movement\.${hidden} (?:The [\w' -]+?|It|They|He|She) then \2 or Strides again, whichever (?:it|they|he|she) did not already do\.$`, "i").exec(String(text).trim());
+    if (blinkPounce) return { strides: 1, strike: null, notes: [`It can ${blinkPounce[2].replace(/s$/, "")} instead of Striding, then moves again the other way after the Strike.`, ...(/\bHidden\b/.test(blinkPounce[0]) ? ["If it began Hidden, it stays hidden until after the Strike."] : [])] };
     // (Batch 55, Breach: "The megalodon Swims up to its swim Speed, then Leaps vertically out of the water up to 25 feet high, making a
     // Strike against a creature at any point during the jump (this lets it attack …). After the Strike, the megalodon splashes back down
     // into the water.": two moves and a Strike; "It can use Improved Grab on this Strike and follow it up with Fast Swallow" (its own).)
@@ -2504,6 +2513,18 @@ export function readReaction(item, text) {
         const immune = said.slice(1).every((sentence) => /^This ignores any temporary immunity [^.]+ and (?:doesn't|does not) make (?:them|it) temporarily immune to Demoralize\.$|^Immunity to (?:its|this) Demoralize neither stops it nor follows from it\.$/i.test(sentence));
         if (scare && immune) return { builtin: "reaction-strike", triggers: ["attacked"], strike: null, skill: "demoralize", penalty: 0, disrupts: false, rangedAttack: true, ...(said.length > 1 ? { note: "Temporary immunity to its Demoralize neither stops this nor follows from it." } : {}) };
     }
+    // (Batch 258, Roiling Rebuke: "A creature within 200 feet targets the titan with or includes the titan in the area of an attack, spell, or other
+    // effect" — targeted, that close; "makes a benthic wave Strike against the triggering creature. If the Strike hits, the titan disrupts the
+    // triggering action." — disrupting on a hit.)
+    const aimed = /^A creature within (\d+) feet targets (?:the [\w' -]+?|it) with or includes (?:the [\w' -]+?|it) in the area of an attack, spell, or other effect$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const rebuke = aimed ? /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against the triggering creature\. If the Strike hits, (?:the [\w' -]+?|it|they) disrupts? the triggering action\.$/i.exec(effect.trim()) : null;
+    if (rebuke) return { builtin: "reaction-strike", triggers: ["targeted"], strike: rebuke[1].toLowerCase(), penalty: 0, disrupts: true, within: Number(aimed[1]) };
+    // (Batch 258, Spite: "A creature within reach of the kun's tail uses an action to attack or heal another creature (including the kun)" — an attack on
+    // it, or healing beside it; "bats the triggering creature away with their tail, making a tail Strike against the creature. On a hit, the action is
+    // disrupted and the creature is pushed 10 feet." — disrupting on a hit, the push a note.)
+    const meddles = /^A creature within reach of (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?) uses an action to attack or heal another creature(?: \(including (?:the [\w' -]+?|it)\))?$/i.exec(trigger.trim().replace(/\.$/, ""));
+    const bats = meddles ? /^(?:The )?[^.]+?, making an? ([\w' -]+?) Strike against the creature\. On a hit, the action is disrupted and the creature is pushed (\d+) feet\.$/i.exec(effect.trim()) : null;
+    if (bats) return { builtin: "reaction-strike", triggers: ["attacked", "healing"], strike: bats[1].toLowerCase(), penalty: 0, disrupts: true, note: `On a hit, the creature is also pushed ${bats[2]} feet.` };
     const more = readMoreReactionStrikes(trigger.trim().replace(/\.$/, ""), effect.trim());
     if (more) return more;
     // (Superconductor's first sentence only tells it; batch 63's first sentences too.)
@@ -3064,7 +3085,11 @@ export function readStrikeBuff(item) {
         .replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1");
     // (Batch 63: three or more of its Strikes named in a list that each gain a property rune's effects and extra damage until its next
     // turn: read as its melee Strikes, the rune a note.)
+    // (Batch 258, Bully the Departed: "…, the soul skelm gains regeneration 15 (deactivated by force or holy), and he deals an extra 1d8 spirit damage on
+    // his Strikes." — the regeneration on itself too, for that time.)
+    const regrows = /, (?:the [\w' -]+?|it|they|he|she) gains? regeneration (\d+) \(deactivated by ([^)]+)\), and (?:it|they|he|she) deals? an (?:extra|additional) /i.exec(htmlToPlainText(marked));
     const text = htmlToPlainText(marked).replace(/\s+/g, " ").trim()
+        .replace(/, (?:the [\w' -]+?|it|they|he|she) gains? regeneration \d+ \(deactivated by [^)]+\), and (?:it|they|he|she) deals? an (extra|additional) (\u0001\d+\u0001|\d+d\d+ [a-z]+)(?: damage)? on (?:its|their|his|her) Strikes\./i, ", its Strikes deal an $1 $2 damage.")
         .replace(/\bUntil the beginning of /g, "Until the start of ")
         // (Batch 147, Primal Weapon: "…, the priestess deals an extra 1d6 slashing damage with her melee Strikes.")
         .replace(/, (?:the [\w' -]+?|it|they|he|she) deals? an? (extra|additional) (\u0001\d+\u0001) damage with (?:its|their|his|her) (melee |ranged )?Strikes\./i, ", its $3Strikes deal an $1 $2 damage.")
@@ -3176,7 +3201,7 @@ export function readStrikeBuff(item) {
     return {
         builtin: "self-effect",
         actions: item.system?.actionType?.value === "reaction" ? 0 : Number(item.system?.actions?.value) || (item.system?.actionType?.value === "free" ? 0 : 1),
-        model: { name: item.name, rounds, modifiers: [], tempHp: 0 },
+        model: { name: item.name, rounds, modifiers: [], tempHp: 0, ...(regrows ? { fastHealing: Number(regrows[1]), regeneration: { value: Number(regrows[1]), deactivatedBy: regrows[2].split(/,\s*|\s+or\s+/).map((type) => type.trim().toLowerCase()).filter(Boolean) } } : {}) },
         damage,
         strike: name,
         melee: /^melee$/i.test(found[5] ?? ""),
@@ -3360,6 +3385,11 @@ export function compileBuiltin(item, slug) {
     // Strike against the same creature." — two at one creature; the Stride between the GM's.)
     const strafing = /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against a creature within range\. (?:The [\w' -]+?|It|They|He|She) can then Stride and make a second \1 Strike against the same creature\.$/i.exec(text.trim());
     if (strafing) return { builtin: "multi-strike", actions, strikes: [strafing[1].toLowerCase(), strafing[1].toLowerCase()], sameTarget: true, notes: ["It can Stride between the two Strikes."] };
+    // (Batch 258, Gaze Upon: "… makes an eye beam Strike against every creature in a 120-foot cone. These attacks count toward its multiple
+    // attack penalty, but the multiple attack penalty doesn't increase until after it makes all its attacks." — a Strike at each creature
+    // there, one penalty; its recharge its own; what it may do meanwhile, a note.)
+    const volley = /^(?:The )?[^.]+? makes an? ([\w' -]+?) Strike against every creature in an? @Template\[(?:type:)?(?:cone|line|burst|emanation)\|distance:\d+[^\]]*\](?:\{[^}]*\})?\. These attacks count toward (?:[\w' -]+?['’]s|its|their) multiple attack penalty, but the multiple attack penalty doesn't increase until after (?:[\w' -]+?|it|they) makes? all (?:its|their) attacks\.(?: (?:It|They|[\w' -]+?) can(?:'t|not) use [\w' -]+? again for \[\[\/(?:gm)?r (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?(?:, but (until [^.]+?, (?:it|they) can use [^.]+?))?\.)?$/i.exec(text.trim());
+    if (volley) return { builtin: "multi-strike", actions, strikes: [volley[1].toLowerCase()], each: true, sameMap: true, ...(volley[2] ? { recharge: volley[2] } : {}), ...(volley[3] ? { notes: [`${volley[3][0].toUpperCase()}${volley[3].slice(1)}.`] } : {}) };
     const multi = readMultiStrikes(text);
     // (Batch 152, Hellfire Flurry: the flourish trait — one flourish a turn.)
     const flourish = (item.system?.traits?.value ?? []).includes("flourish");

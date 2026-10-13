@@ -400,7 +400,7 @@ async function playAbility(item, plan, sourceToken) {
     // (Batch 112: what its text leaves the GM — the armor it damages, the cover it ignores.)
     if (plan?.builtin === "strike-activity" && (plan.deadly || plan.fatal || plan.countsAs > 1 || plan.targetTraits?.length || plan.attackBonus || plan.notes?.length)) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${[plan.targetTraits?.length ? `only at ${plan.targetTraits.map((trait) => (/^[aeiou]/.test(trait) ? `an ${trait}` : `a ${trait}`)).join(" or ")}` : null, plan.attackBonus ? `its Strike at ${plan.attackBonus > 0 ? "+" : "−"}${Math.abs(plan.attackBonus)} to the attack roll` : null, plan.deadly ? `its Strike gains deadly d${plan.deadly}` : null, plan.fatal ? `its Strike gains fatal d${plan.fatal}` : null, plan.countsAs > 1 ? `it counts as ${plan.countsAs} attacks for the multiple attack penalty` : null].filter(Boolean).join("; ") || "its Strike as usual"}.`, ...(plan.notes ?? [])]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
-    if (plan?.builtin === "strike-activity" && activityRider(plan, { targetProne: true })) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
+    if (plan?.builtin === "strike-activity" && activityRider(plan, { targetProne: true, targetTraits: (plan.onHit?.vsTraits ?? []).flatMap((entry) => entry.traits) })) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
     if (plan?.builtin === "cast-spell") {
         const spell = await fromUuid(plan.spell.uuid).catch(() => null);
@@ -842,7 +842,7 @@ export function tokensAround(token, radius, { foes = false } = {}) {
 async function activityCard(message, pending, { actor, strike, target, targetToken, context }) {
     // (Extra dice of the Strike's own type: the type of the Strike that hit, batch 27.)
     const strikeType = Object.values(strike.system?.damageRolls ?? {})[0]?.damageType ?? null;
-    const rider = activityRider(pending.plan, { strikeType, targetProne: Boolean(target?.actor?.hasCondition?.("prone")) });
+    const rider = activityRider(pending.plan, { strikeType, targetProne: Boolean(target?.actor?.hasCondition?.("prone")), targetTraits: [...(target?.actor?.traits ?? [])] });
     if (!rider) return;
     const sourceToken = message.token ?? pending.token ?? null;
     if (rider.plan) await activityResults(message, pending, rider, { actor, strike, target, targetToken, context, sourceToken });

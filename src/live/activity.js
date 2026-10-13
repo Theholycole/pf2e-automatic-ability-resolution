@@ -10,7 +10,8 @@ const NONE = { mode: "none", multiplier: 0, sourceComponentIds: [] };
 // (batch 27: "deals an additional 2d6 mental damage, and the target must succeed at a … save"), or null when a hit adds
 // nothing. Extra dice of the Strike's own type ("2d8[strike]") take strikeType, the type of the Strike that hit.
 // (Batch 83, Stomp: proneDamage, more damage on a creature already Prone — targetProne: the creature hit is.)
-export function activityRider(activity, { strikeType = null, targetProne = false } = {}) {
+// (Batch 258, Resonating Kick: vsTraits, more damage against a creature with a trait — targetTraits: the creature hit's.)
+export function activityRider(activity, { strikeType = null, targetProne = false, targetTraits = [] } = {}) {
     const onHit = activity?.builtin === "strike-activity" ? activity.onHit ?? {} : null;
     if (!onHit) return null;
     // (A skill action after the hit, batch 35: its basic action's card, "demoralize", "trip", "shove".)
@@ -22,7 +23,9 @@ export function activityRider(activity, { strikeType = null, targetProne = false
     const hit = [...conditions(onHit.conditions), ...healSelf];
     const critical = onHit.critical ? [...conditions(onHit.critical), ...healSelf] : hit;
     // (Precision damage too, "4d6[precision]", batch 37: the Strike's type.)
-    const formulas = [...(onHit.damage ?? []), ...(targetProne ? onHit.proneDamage ?? [] : [])].filter(Boolean).map((formula) => String(formula).replace(/\[strike\]/g, `[${strikeType ?? "untyped"}]`).replace(/\[precision\]/g, `[precision,${strikeType ?? "untyped"}]`));
+    const traits = new Set([...(targetTraits ?? [])].map((trait) => String(trait).toLowerCase()));
+    const againstTrait = (onHit.vsTraits ?? []).filter((entry) => entry.traits.some((trait) => traits.has(trait))).flatMap((entry) => entry.damage);
+    const formulas = [...(onHit.damage ?? []), ...(targetProne ? onHit.proneDamage ?? [] : []), ...againstTrait].filter(Boolean).map((formula) => String(formula).replace(/\[strike\]/g, `[${strikeType ?? "untyped"}]`).replace(/\[precision\]/g, `[precision,${strikeType ?? "untyped"}]`));
     const pushOf = (distance) => (Number(distance) > 0 ? { kind: "push", distance: Number(distance), upTo: false, optional: false, direction: "away" } : null);
     const push = pushOf(onHit.push);
     const criticalPush = pushOf(onHit.criticalPush) ?? push;

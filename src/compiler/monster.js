@@ -1065,6 +1065,24 @@ function strikeActivity(item, actor, { after = null } = {}) {
                 return "[told]";
             })
             .replace(/^If (?:their|its|his|her) hands are full when the [\w' -]+? returns, it falls to the ground in (?:their|its|his|her) space\.$/i, "[told]")
+            // (Batch 258, Tangle-Topple: "If it hits, the target is tangled in ragged scrap. It's Immobilized, can't leave the ground, and falls to the
+            // ground if it's flying. This ends if the creature Escapes or the metal is Forced Open." — Immobilized on a hit; the rest, notes.)
+            .replace(/^If it hits, the target is tangled in [^.]+\.$/i, "[told]")
+            .replace(/^It['’]s Immobilized, can['’]t leave the ground, and falls to the ground if it['’]s flying\.$/i, () => {
+                (activity.notes ??= []).push("The creature hit can't leave the ground, and falls if it's flying.");
+                return "If it hits, the target is Immobilized.";
+            })
+            .replace(/^This ends if the creature (?:\[\[\/act escape[^\]]*\]\]\{)?Escapes\}? or the [\w' -]+? is (?:\[\[\/act force-open[^\]]*\]\]\{)?Forced Open\}?\.$/i, () => {
+                (activity.notes ??= []).push("It ends when the creature Escapes, or the hold is Forced Open.");
+                return "[told]";
+            })
+            // (Batch 258, Resonating Kick: "If the target is an aberration or is capable of casting spells from the arcane tradition, this attack deals an
+            // additional 2d12 force damage." — the damage against that trait; the casters, the GM's.)
+            .replace(/^If the target is an? (\w+)(?: or (is capable of casting spells from the \w+ tradition|[^,.]+?))?, this attack deals an additional (\d+d\d+) (\w+) damage\.$/i, (_all, trait, other, dice, type) => {
+                activity.onHit.vsTraits = [...(activity.onHit.vsTraits ?? []), { traits: [trait.toLowerCase()], damage: [`${dice}[${type.toLowerCase()}]`] }];
+                if (other) (activity.notes ??= []).push(`The ${dice} ${type.toLowerCase()} damage also against a creature that ${other.replace(/^is /, "is ")} (the GM's).`);
+                return "[told]";
+            })
             .replace(/^(?:He|She|It|They) gains? a \+(\d+) circumstance bonus to damage on that Strike\.$/i, (_all, value) => {
                 activity.damageBonus += Number(value);
                 return "[told]";
@@ -1973,7 +1991,7 @@ function strikeActivity(item, actor, { after = null } = {}) {
     activity.strike = sheetStrikeName(actor, activity.strike);
     // (A follow-up's Strike, batch 36: the Strike itself is what it adds, "makes another greatclub Strike against the same target".)
     if (after && opened) return { ...activity, after };
-    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage && !rider.allyStrike && !activity.noDamage && !activity.afterStrike && !activity.damageTimes;
+    const bare = !activity.selfAfter?.length && !rider.conditions.length && !rider.critical && !rider.push && !rider.criticalPush && !rider.follow && !rider.damage.length && !rider.proneDamage?.length && !rider.vsTraits?.length && !rider.save && !activity.offGuard && !activity.attackBonus && !activity.damageBonus && !activity.damage && !activity.extraWeaponDice && !activity.noMap && !activity.fatal && !activity.deadly && !activity.halfDamage && !rider.allyStrike && !activity.noDamage && !activity.afterStrike && !activity.damageTimes;
     // (Batch 90, Feathered Charge: every sentence read, and only a Stride and a Strike for as many actions — terrain it ignores, a fall the
     // GM's: nothing more than its Strike.)
     if (opened && bare && activity.strides && !activity.requires && activity.actions >= activity.strides + 1) return { builtin: "no-effect", strikeOnly: true };
@@ -2719,7 +2737,18 @@ function effectAbility(item) {
     const raw = item.system?.description?.value ?? "";
     const triggerText = type === "reaction" ? /<strong>\s*Trigger\s*<\/strong>([\s\S]*?)(?=<hr|<\/p>\s*<p>\s*<strong>\s*Effect|<strong>\s*Effect)/i.exec(raw)?.[1] : null;
     const triggered = triggerText ? readReactionTrigger(htmlToPlainText(triggerText).trim()) : null;
-    const html = triggered ? raw.replace(/<p[^>]*>\s*<strong>\s*Trigger\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "") : raw;
+    // (Batch 258, Stoke the Fervent: "This lasts for 2d4 rounds." — PF2e's effect keeps its own time; "Affected allies must use at least one of their
+    // actions to Strike each round, …" — a note.)
+    const told = [];
+    const html = (triggered ? raw.replace(/<p[^>]*>\s*<strong>\s*Trigger\s*<\/strong>[\s\S]*?<\/p>\s*(?:<hr\s*\/?>)?/i, "").replace(/<strong>\s*Effect\s*<\/strong>/i, "") : raw)
+        .replace(/\s*This lasts for \[\[\/(?:b|gm)?r (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?\./i, (_all, dice) => {
+            told.push(`It lasts ${dice} rounds: roll it and set the effect's time.`);
+            return "";
+        })
+        .replace(/\s*Affected (?:allies|creatures) must use at least one of their actions to Strike each round[^.]*\./i, (all) => {
+            told.push(htmlToPlainText(all).trim());
+            return "";
+        });
     if (!(["action", "free"].includes(type) || triggered) || /<strong>\s*Trigger\s*<\/strong>/i.test(html)) return null;
     if (inlineTags(html, "Check").length || inlineTags(html, "Damage").length || /\[\[\//.test(html)) return null;
     const links = [...html.matchAll(EFFECT_LINK)];
@@ -2776,7 +2805,8 @@ function effectAbility(item) {
         ...base(item),
         targeting,
         trigger: triggered ?? { event: "use" },
-        resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: uuids[0], label, recipients, ...(own ? { selfEffect: true } : {}) }] }
+        resolution: { kind: "effect", applications: [{ kind: "native-spell-effect", uuid: uuids[0], label, recipients, ...(own ? { selfEffect: true } : {}) }] },
+        ...(told.length ? { notes: told } : {})
     };
 }
 
@@ -4791,6 +4821,29 @@ function exposedOnFail(item, actor) {
     };
 }
 
+// Its allies around it quickened (2026-10-12, batch 258, Frenzy Pheromone): "… unleashes a pheromone that causes all other ankhravs within a
+// 100-foot emanation to become Quickened until the start of the hive mother's next turn, and they can use the extra action only for Burrow,
+// Stride, or Strike actions." → Quickened on its allies in that emanation for that time; its own kind only and the extra action's limits,
+// notes; its recharge. null otherwise.
+function alliesQuickened(item) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const template = inlineTags(html, "Template").map(readTemplate).find(Boolean);
+    if (template?.type !== "emanation" || inlineTags(html, "Check").length || inlineTags(html, "Damage").length) return null;
+    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br) [^\]]*\]\](?:\{([^}]*)\})?/g, "$1")).replace(/\s+/g, " ").trim();
+    const match = /^(?:The )?[^.]+? (?:unleashes|releases|emits|lets out) [^.]+? that causes all other ([\w' -]+?) within an? @T to become Quickened (until the (?:start|end) of (?:the [\w' -]+?['’]s|its|their) next turn), and they can use the extra action only for ([^.]+?) actions\.(?: (?:The )?[^.]+? can(?:'t|not) [^.]+? again for \d+d\d+ rounds\.)?$/i.exec(plain);
+    if (!match) return null;
+    const recharge = readRecharge(html);
+    const quick = { ...none(), effects: [{ kind: "condition", slug: "quickened", value: null, duration: readDuration(match[2].replace(/\bof (?:the [\w' -]+?['’]s|their) next turn/i, "of its next turn")) }] };
+    return {
+        ...base(item),
+        targeting: { target: null, range: null, area: { type: "emanation", value: Number(template.value) }, allies: true },
+        trigger: { event: "use", ...(recharge ? { recharge: { formula: recharge, unit: "rounds" } } : {}) },
+        resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: quick, failure: none(), criticalFailure: none() } },
+        notes: [`Only its own kind (${match[1]}), not itself.`, `The extra action only for ${match[3]} actions.`]
+    };
+}
+
 // A zone of its own used on a trigger, once or more (Master of Clouds: "Trigger The dragon rolls initiative Effect … The dragon uses Dragonmist
 // twice."): that zone's plan, with the trigger and how many (times). Words before it with no rolls in them are flavour. null otherwise.
 function zoneOnTrigger(item, actor, options) {
@@ -5489,7 +5542,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
     // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
     if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
         const zone = readZone(item, actor);

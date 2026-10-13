@@ -4143,3 +4143,26 @@ test("Saves and checks in other words: a song against two enemies' Will DCs, a g
     const follow = spit?.resolution?.outcomes?.failure?.followUps?.[0];
     assert.deepEqual([spit?.resolution?.check?.statistic, follow?.check?.statistic, follow?.afflictionHandoff?.name, follow?.outcomes?.failure?.affliction?.stage], ["reflex", "fortitude", "Test Toad Slime", 1]);
 });
+
+test("Strikes and reactions in more words: pounces by other moves, a volley at everyone in a cone, Immobilized on a hit, damage against a trait, a buff with regeneration, allies quickened, reaction Strikes when targeted or meddled with (2026-10-12, batch 258)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, type, actions), { basicActions: {}, ...(actor ? { actor } : {}) });
+    const pounce = plan("<p>The test lynx Strides up to its Speed, Leaps up to its Speed, or casts Translocate; at the end of that movement, the test lynx Strikes.</p>");
+    assert.deepEqual([pounce?.builtin, pounce?.strides, pounce?.notes?.length], ["charge", 1, 1]);
+    const blink = plan("<p><strong>Requirements</strong> The test hunter hasn't used Shadow Step this round</p><hr /><p><strong>Effect</strong> The test hunter Shadow Steps or Strides and makes a Strike at the end of that movement. The test hunter then Shadow Steps or Strides again, whichever it did not already do.</p>", "action", 2);
+    assert.deepEqual([blink?.builtin, blink?.notes?.[0]], ["charge", "It can Shadow Step instead of Striding, then moves again the other way after the Strike."]);
+    const volley = plan("<p>The test eye makes a ray Strike against every creature in a @Template[type:cone|distance:30]. These attacks count toward its multiple attack penalty, but the multiple attack penalty doesn't increase until after it makes all its attacks. It can't use Test Volley again for [[/gmr 1d4 #Recharge Test Volley]]{1d4 rounds}.</p>", "action", 2);
+    assert.deepEqual([volley?.builtin, volley?.strikes, volley?.each, volley?.sameMap, volley?.recharge], ["multi-strike", ["ray"], true, true, "1d4"]);
+    const snare = plan("<p>The test troll makes a net Strike. If it hits, the target is tangled in rope. It's @UUID[Compendium.pf2e.conditionitems.Item.eIcWbB5o3pP6OIMe]{Immobilized}, can't leave the ground, and falls to the ground if it's flying. This ends if the creature [[/act escape]]{Escapes} or the rope is [[/act force-open dc=20]]{Forced Open}.</p>");
+    assert.deepEqual([snare?.strike, snare?.onHit?.conditions?.map((entry) => entry.slug), snare?.notes?.length], ["net", ["immobilized"], 2]);
+    const kick = plan("<p>The test monk makes a knee Strike. If the target is an undead, this attack deals an additional 2d6 vitality damage.</p>", "action", 2);
+    assert.deepEqual(kick?.onHit?.vsTraits, [{ traits: ["undead"], damage: ["2d6[vitality]"] }]);
+    const bully = plan("<p>The test wraith feeds. Until the end of its next turn, the test wraith gains regeneration 10 (deactivated by fire or holy), and it deals an extra 1d6 void damage on its Strikes.</p>");
+    assert.deepEqual([bully?.builtin, bully?.damage, bully?.model?.regeneration], ["self-effect", ["1d6[void]"], { value: 10, deactivatedBy: ["fire", "holy"] }]);
+    const frenzy = plan("<p>The test queen lets out a buzz that causes all other test ants within a @Template[emanation|distance:60] to become Quickened until the start of the test queen's next turn, and they can use the extra action only for Stride or Strike actions.</p>", "action", 2);
+    assert.deepEqual([frenzy?.targeting?.allies, frenzy?.targeting?.area?.value, frenzy?.resolution?.outcomes?.success?.effects?.[0]?.slug, frenzy?.resolution?.outcomes?.success?.effects?.[0]?.duration?.expiry], [true, 60, "quickened", "turn-start"]);
+    const rebuke = plan("<p><strong>Trigger</strong> A creature within 120 feet targets the test giant with or includes the test giant in the area of an attack, spell, or other effect</p><hr /><p><strong>Effect</strong> The test giant makes a wave Strike against the triggering creature. If the Strike hits, the test giant disrupts the triggering action.</p>", "reaction");
+    assert.deepEqual(rebuke, { builtin: "reaction-strike", triggers: ["targeted"], strike: "wave", penalty: 0, disrupts: true, within: 120 });
+    const spite = plan("<p><strong>Trigger</strong> A creature within reach of the test lizard's tail uses an action to attack or heal another creature (including the test lizard)</p><hr /><p><strong>Effect</strong> The test lizard lashes out, making a tail Strike against the creature. On a hit, the action is disrupted and the creature is pushed 5 feet.</p>", "reaction");
+    assert.deepEqual([spite?.triggers, spite?.strike, spite?.disrupts], [["attacked", "healing"], "tail", true]);
+});
