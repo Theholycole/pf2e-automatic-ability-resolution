@@ -3167,6 +3167,20 @@ The user's call: "work through your recommendations in order" (item 1: requireme
 - **Live:** unchanged. The card's "Only if" line shows the requirement, and the GM judges it.
 - **Batch 304:** a riposte that needs its parry stance ("Requirements … is benefiting from Twin Parry") carries `requiresEffect`, so the simulator plays it only while that effect is on the creature.
 
+## Fast Healing that holds only sometimes (2026-10-13, batch 305)
+
+The user's call: "build everything you brought up" (tier 1: Fast Healing and regeneration with a predicate).
+
+- **Reader** (`compileBuiltin` in `src/compiler/builtins.js`): a passive whose FastHealing rule has a predicate compiles to `fast-healing` or `regeneration` with PF2e's predicate as `when`. A passive's strike extras and save bonuses are still read first, so a curse that lowers saves keeps its save bonus. Fast Healing without a predicate is unchanged.
+- **Kinds of predicate:**
+  - not in a state: `{ not: "turn-to-mist" }` (vampires), a lost red cap, a ruptured cartridge;
+  - its own toggle: a scamp's "While Underground", Mask of Power, Planar Fast Healing, Filth Wallow;
+  - the terrain: `terrain:underwater`, `environment:extreme-cold`.
+- **Coverage:** 64 rulebook passives that compiled to nothing, none lost or changed. No Battlezoo passive has one.
+- **Simulator:** it tests `when` on the creature's roll options: its toggles that are on (in Foundry, as the GM set them; in the bestiary sweeps, its rules' defaults), the effects on it, and the fight's own state.
+- **Live:** unchanged. PF2e applies its own Fast Healing.
+- **Checked in pftest** (2026-10-13): the simulator's snapshot of a temporary Vampire Count read its Fast Healing 7 with "not in mist form" (mist off, so it heals). A temporary Doprillu's regeneration came with Mask of Power, which was on.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

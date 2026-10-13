@@ -198,7 +198,8 @@ test("rules the simulator plays itself: extra Strike damage, save bonuses, regen
     assert.deepEqual(ability("Yamaraj", "+1 Status to All Saves vs. Magic"), { builtin: "save-bonus", bonuses: [{ saves: ["fortitude", "reflex", "will"], value: 1, type: "status", predicate: ["item:magical"] }] });
     assert.deepEqual(ability("Tor Linnorm", "Regeneration"), { builtin: "regeneration", value: 20, deactivatedBy: ["cold-iron"] });
     assert.deepEqual(ability("Yamaraj", "Fast Healing"), { builtin: "fast-healing", value: 20 });
-    assert.equal(ability("Earth Scamp", "Fast Healing"), null, "only while underground");
+    // (Batch 305: only while underground — its toggle, PF2e's predicate kept for the simulation.)
+    assert.deepEqual(ability("Earth Scamp", "Fast Healing"), { builtin: "fast-healing", value: 2, when: ["fast-healing"] });
     assert.deepEqual(ability("Frost Drake", "Draconic Frenzy"), { builtin: "multi-strike", actions: 2, strikes: ["fangs", "fangs", "tail"] });
     assert.deepEqual(ability("Smilodon", "Pounce"), { builtin: "charge", actions: 1, strides: 1, strike: null });
     assert.deepEqual(ability("Horned Dragon (Young)", "Draconic Momentum"), { builtin: "momentum", recharges: ["Poison Breath"] });

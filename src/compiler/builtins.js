@@ -3362,17 +3362,23 @@ export function readStrikeBuff(item) {
 
 export function compileBuiltin(item, slug) {
     const rules = item?.system?.rules ?? [];
-    const fastHealing = rules.find((rule) => rule?.key === "FastHealing");
-    if (fastHealing && !fastHealing.predicate?.length && Number.isFinite(Number(fastHealing.value))) {
-        if (fastHealing.type === "regeneration") return { builtin: "regeneration", value: Number(fastHealing.value), deactivatedBy: [...(fastHealing.deactivatedBy ?? [])] };
-        return { builtin: "fast-healing", value: Number(fastHealing.value) };
-    }
     const type = item?.system?.actionType?.value;
+    const fastHealing = rules.find((rule) => rule?.key === "FastHealing");
+    // (Batch 305: a passive's Fast Healing or regeneration only while something holds — its own toggle ("While Underwater", Mask of Power),
+    // not in a form (Turn to Mist), the terrain — with PF2e's predicate, for the simulation to test; after a passive's other readings.)
+    const when = fastHealing?.predicate?.length ? fastHealing.predicate : null;
+    const healing = () => {
+        const condition = when ? { when: structuredClone(when) } : {};
+        if (fastHealing.type === "regeneration") return { builtin: "regeneration", value: Number(fastHealing.value), deactivatedBy: [...(fastHealing.deactivatedBy ?? [])], ...condition };
+        return { builtin: "fast-healing", value: Number(fastHealing.value), ...condition };
+    };
+    if (fastHealing && !when && Number.isFinite(Number(fastHealing.value))) return healing();
     if (type === "passive") {
         const extras = strikeExtras(item);
         if (extras.length) return { builtin: "strike-extra", extras };
         const bonuses = saveBonuses(item);
         if (bonuses.length) return { builtin: "save-bonus", bonuses };
+        if (fastHealing && Number.isFinite(Number(fastHealing.value))) return healing();
     }
     // (Links as their labels for every reading here, batch 23: "@UUID[…]{Grab}" as "Grab".)
     const text = htmlToPlainText(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\s+/g, " ").trim();
