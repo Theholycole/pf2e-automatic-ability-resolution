@@ -410,6 +410,10 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a persistent-fire glob in a small burst, a creature trapped in cooling rock with PF2e's linked effect, and a Grapple at range by telekinesis;
   - two Strikes at one target (one with a second roll after a miss, one with combined damage), a spinning sweep that stuns itself after, a coated-blade Strike and a jumping kick;
   - Quickened for a round, ice armor after a cold spell, an ally's reroll, and a jinx that disrupts a manipulate action and hurts the creature.
+- **Battlezoo's long tail, part 2** (2026-10-12, batch 270): 10 new in Battlezoo. They include:
+  - a save before its venom on an attacker, a tangle on a critical miss, and a flip after a Strike;
+  - Strikes at every creature in its space, several claws at a held creature, thrown shards at up to three creatures, and a fortune bite;
+  - temporary Hit Points and Quickened for its allies around it, a Swallow Whole with its numbers in brackets, and a gaze that dazzles.
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

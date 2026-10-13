@@ -1140,7 +1140,7 @@ export function readSweep(text) {
     // (Batch 102: "… against every creature in its reach, whether that creature is an ally or not" — Rampage, behind its requirement; "… a
     // single pseudopod Strike against each target within range it hasn't already Grabbed" — not at those it holds.)
     // (Batch 129: "They make a melee Strike against each enemy within reach", "against all creatures within his reach".)
-    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes?|attempts?) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:(?:each|every) (?:creature|enemy|foe|target)|all (?:creatures|enemies|foes|targets))(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?(?:reach|range))?( it (?:hasn't already Grabbed|doesn't already have Grabbed))?(, whether that creature is an ally or not)?\.$/i;
+    const SWEEP = /^(?:The )?[^.]+? (?:(?:makes?|attempts?) (?:a|an|one) (?:([\w' -]+?) )??(?:Strike|attack) (?:once )?|attempts individual Strikes |Strikes once )against (?:(?:each|every) (?:creature|enemy|foe|target)|all (?:creatures|enemies|foes|targets))(?: (?:within|in) (?:(?:its|their|his|her|the [\w' -]+?'s) )?(?:melee )?(?:reach|range|space))?( it (?:hasn't already Grabbed|doesn't already have Grabbed))?(, whether that creature is an ally or not)?\.$/i;
     if (!counted && sentences.length > 1 && !SWEEP.test(sentences[0]) && SWEEP.test(sentences[1]) && !/\b(?:damage|bonus|penalty|save|check|DC|Strikes?)\b|\d/i.test(sentences[0])) sentences.shift();
     const match = counted ? null : SWEEP.exec(sentences[0] ?? "");
     sentences.shift();

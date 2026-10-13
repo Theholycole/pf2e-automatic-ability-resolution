@@ -4540,3 +4540,29 @@ test("Battlezoo's long tail, part 1, in our own words: gobs, twin strikes, rock 
     const lift = plan("<p>The test ghost attempts an Athletics check to Grapple a creature it can see within 20 feet. On a success, besides being grabbed, the creature floats 10 feet up.</p>");
     assert.deepEqual([lift?.targeting?.range, lift?.resolution?.outcomes?.success?.effects?.[0]?.slug, lift?.notes], ["20 feet", "grabbed", ["On a success, also the creature floats 10 feet up."]]);
 });
+
+test("Battlezoo's long tail, part 2, in our own words: stings, crowded jaws, tempos, lucky bites, tangles, flips, gulps, mauls, shards, gazes (2026-10-12, batch 270)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, type, actions), { basicActions: {}, ...(actor ? { actor } : {}) });
+    const venom = item("<p><strong>Saving Throw</strong> @Check[fortitude|dc:18]</p><hr /><p><strong>Stage 1</strong> @Damage[1d6[poison]] damage (6 rounds)</p>", "passive", 1, "Test Wasp Venom");
+    const sting = plan("<p><strong>Trigger</strong> A creature hits the test hive with a melee Strike</p><hr /><p><strong>Effect</strong> Wasps pour out of the wound. The attacker must succeed at a @Check[reflex|dc:16] save or be afflicted with test wasp venom.</p>", "reaction", 1, { name: "Test Hive", items: [venom] });
+    assert.deepEqual([sting?.trigger?.event, sting?.resolution?.check?.statistic, sting?.resolution?.outcomes?.failure?.followUps?.[0]?.afflictionHandoff?.name], ["hit-by", "reflex", "Test Wasp Venom"]);
+    const crowd = plan("<p>The test cupboard makes a door Strike against all creatures in its space. The penalty for multiple attacks does not increase until every attack is done.</p>", "action", 3);
+    assert.deepEqual([crowd?.builtin, crowd?.each, crowd?.sameMap], ["multi-strike", true, true]);
+    const tempo = plan("<p>The test maestro speeds up the beat. It and all its allies within a @Template[type:emanation|distance:30] gain 5 temporary Hit Points and become Quickened for 1 round; that extra action may only be used to Strike.</p>", "action", 2);
+    assert.deepEqual([tempo?.targeting?.allies, tempo?.targeting?.area, tempo?.resolution?.outcomes?.success?.effects?.map((effect) => effect.kind)], [true, { type: "emanation", value: 30 }, ["temp-hp", "condition"]]);
+    const lucky = plan("<p>The test snake makes a fang Strike, rolling it twice and keeping the higher. The attack ignores concealment.</p>", "action", 2);
+    assert.deepEqual([lucky?.strike, lucky?.notes?.[0]], ["fang", "Roll the attack twice and keep the better (fortune)."]);
+    const tangle = plan("<p><strong>Trigger</strong> An adjacent foe critically misses with a melee Strike against the test net</p><hr /><p><strong>Effect</strong> The triggering creature must attempt a @Check[reflex|dc:18] save. On a failure, the net wraps it. The creature is @UUID[Compendium.pf2e.conditionitems.Item.kWc1fhmv9LBiTuei]{Grabbed} and stays put until it Escapes.</p>", "reaction");
+    assert.deepEqual([tangle?.trigger, tangle?.resolution?.outcomes?.failure?.effects?.[0]?.slug], [{ event: "foe-mishap", reaction: true, within: 5, onSelf: true }, "grabbed"]);
+    const flip = plan("<p><strong>Trigger</strong> The test stagehand's last action was a successful hook Strike against a Medium or smaller creature</p><hr /><p><strong>Effect</strong> The test stagehand heaves. The creature must succeed at a @Check[fortitude|dc:20] save or it's moved to a free space on its far side (on a critical failure, it also falls @UUID[Compendium.pf2e.conditionitems.Item.j91X7x0XSomq8d60]{Prone}).</p>", "free");
+    assert.deepEqual([flip?.trigger?.followUp?.strike, flip?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.slug], ["hook", "prone"]);
+    const gulp = plan("<p>The test toad uses Swallow Whole on a Small or smaller creature it holds with its maw (@Damage[(1d8+2)[bludgeoning]], Rupture 6). Its belly holds two.</p>");
+    assert.deepEqual([gulp?.resolution?.outcomes?.success?.effects?.[0], gulp?.notes], [{ kind: "swallow", damage: "(1d8+2)[bludgeoning]", rupture: 6, size: "small" }, ["Its belly holds two."]]);
+    const maul = plan("<p>The test bear makes three claw Strikes, each at a -1 penalty, against a creature it holds. All count toward its multiple attack penalty, which does not rise until after the last one.</p>", "action", 2);
+    assert.deepEqual([maul?.strikes, maul?.penalty, maul?.sameTarget], [["claw", "claw", "claw"], 1, true]);
+    const shards = plan("<p>The test golem hurls stones, making two stone Strikes against one to two creatures within 60 feet. The multiple attack penalty does not increase until after all two attacks. The stones crack where they land.</p>", "action", 2);
+    assert.deepEqual([shards?.strikes, shards?.sameMap, shards?.notes?.length], [["stone", "stone"], true, 2]);
+    const gaze = plan("<p>The painted eyes on the test mask turn their stare on a creature within 20 feet. That creature must attempt a @Check[will|dc:18] save. On a failure, the creature is Dazzled for 1 round; if it is already dazzled, it becomes Blinded for 1 round instead.</p>");
+    assert.deepEqual([gaze?.resolution?.check?.statistic, gaze?.resolution?.outcomes?.failure?.effects?.[0]?.slug, gaze?.notes?.length], ["will", "dazzled", 1]);
+});

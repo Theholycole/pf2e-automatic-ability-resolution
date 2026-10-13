@@ -2747,3 +2747,14 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
     - +4 AC for a minute straight after a cold spell (requires "after-cast"), its fire weakness and the melting as notes;
     - an ally's failed save rerolled, the new result kept (a skill check, the GM's).
   - **Reactions:** a manipulate action within 30 feet sets off a Will save; on a failure the action is disrupted and the creature takes the set damage (its type, the GM's).
+
+## Battlezoo's long tail, part 2 (2026-10-12, batch 270)
+
+- **Compiled** (10 new in Battlezoo; described in our words):
+  - **Reactions:**
+    - a save for an attacker that hit it, its poison's own save on a failure (an exposure follow-up);
+    - an adjacent creature's critical miss against it: a save or Grabbed (played as a foe's mishap on itself, within 5 feet);
+    - after its Strike hits, a save or the creature moves to its other side, Prone too on a critical failure (a follow-up; the move is the GM's).
+  - **Strikes:** at every creature in its space with the penalty held; several claws at a penalty on the creature it holds; up to three thrown Strikes, with what the shards do after as notes; a bite rolled twice (notes, its rolled wait too).
+  - **Allies and held creatures:** temporary Hit Points and Quickened for 1 round for it and its allies in an emanation (allies only); its Swallow Whole with the size, damage and Rupture given in brackets.
+  - **A gaze:** a save or Dazzled, Blinded if it already was (a note).
