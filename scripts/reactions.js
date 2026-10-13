@@ -29,6 +29,7 @@ import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/mode
 import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { startZone } from "./zones.js";
+import { zoneDamagePlan } from "../src/live/zones.js";
 import { endRecharge } from "./recharge.js";
 import { fitsSize } from "../src/live/activity.js";
 import { resistEffects } from "../src/live/buff.js";
@@ -297,6 +298,7 @@ async function onMessage(message) {
         await allyHitAnswers(context, scene, combat, token);
         await withdrawAnswers(context, scene, combat, token);
         await redirectAnswers(context, scene, combat, token);
+        await hitBackAnswers(context, token);
         await critAnswers(context, scene, combat, token);
         if (context.outcome === "criticalFailure") await mishapAnswers(scene, token, "critically failed a Strike", context.target?.token ? fromUuidSync(context.target.token)?.id ?? null : null);
         return;
@@ -425,13 +427,27 @@ async function redirectAnswers(context, scene, combat, attacker) {
     // (Batch 191, Hop-Dodge: as a melee Strike is made at it, whatever it rolled — the Strike goes to the other creature instead.)
     const targeted = entry.plan.when === "targeted";
     if (targeted ? (context.options ?? []).includes("item:ranged") : !["failure", "criticalFailure"].includes(context.outcome)) return;
+    // (Batch 286, Bouncy: only a critical failure; any creature in the attack's reach or range from it — any: the encounter's others, the GM's pick.)
+    if (entry.plan.when === "critical" && context.outcome !== "criticalFailure") return;
     const grid = gridOf(scene);
     const taking = inEncounter(combat);
-    const beside = scene.tokens.filter((token) => token.id !== mine.token.id && token.id !== attacker.id && taking.has(token.id) && !token.hidden && token.actor && distanceFeet(box(mine.token, grid.size), box(token, grid.size), grid) <= 5);
+    const beside = scene.tokens.filter((token) => token.id !== mine.token.id && token.id !== attacker.id && taking.has(token.id) && !token.hidden && token.actor && (entry.plan.any || distanceFeet(box(mine.token, grid.size), box(token, grid.size), grid) <= 5));
     if (!beside.length) return;
     const besideNames = beside.map((token) => token.name).join(", ");
     if (targeted) return offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: "made a melee Strike at it", move: { label: "redirect the Strike" }, note: [`The Strike goes to a creature beside it within the Strike's reach (${besideNames}) instead: ${attacker.name} rolls it against that one, and its result here doesn't count.`, entry.plan.note ?? null].filter(Boolean).join(" ") });
-    await offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it`, move: { label: entry.plan.step ? "redirect the attack (or Step)" : "redirect the attack" }, note: [`It sends the attack at a creature beside it within the attack's reach (${besideNames}): ${attacker.name} rerolls the Strike's attack roll against that one.`, entry.plan.step ? "Or it Steps instead: move its token." : null].filter(Boolean).join(" ") });
+    await offer({ kind: "move", item: entry.item, monster: mine.token, actor: mine.actor, target: attacker, trigger: `${context.outcome === "failure" ? "failed" : "critically failed"} a Strike against it`, move: { label: entry.plan.step ? "redirect the attack (or Step)" : "redirect the attack" }, note: [entry.plan.any ? `It sends the attack on from itself at another creature within the attack's reach or range (${besideNames}): ${attacker.name} rerolls the attack against that one.` : `It sends the attack at a creature beside it within the attack's reach (${besideNames}): ${attacker.name} rerolls the Strike's attack roll against that one.`, entry.plan.step ? "Or it Steps instead: move its token." : null].filter(Boolean).join(" ") });
+}
+
+// A melee hit on a creature whose effect hurts its attackers (batch 286, Conductive Shell: the module's self-effect with hitBack): that damage's card
+// on the attacker. Not a reaction — no use spent.
+async function hitBackAnswers(context, attacker) {
+    if (!["success", "criticalSuccess"].includes(context.outcome) || (context.options ?? []).includes("item:ranged")) return;
+    const target = context.target?.token ? fromUuidSync(context.target.token) : null;
+    const hurting = target?.actor ? (target.actor.itemTypes?.effect ?? []).filter((effect) => effect.flags?.[MODULE_ID]?.hitBack?.formula) : [];
+    for (const effect of hurting) {
+        const hit = effect.flags[MODULE_ID].hitBack;
+        await postCard({ plan: zoneDamagePlan(hit.name, [hit.formula]), item: { name: hit.name, uuid: effect.flags[MODULE_ID].strikeBuff?.uuid ?? null }, sourceActor: target.actor, sourceToken: target, tokens: [attacker], warning: `${attacker.name} hit ${target.name} in melee.` });
+    }
 }
 
 // A critical hit on it (batch 100: Hellish Revenge, Spitting Rage), its breath recharged; its own hit (Flash of Brutality), made a critical one.

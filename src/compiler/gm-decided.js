@@ -24,6 +24,8 @@ export const GM_DECIDED = [
     ["Kizidhar Shuyookh", "Seed of Ambition", "control"],
     ["Monster Hunter", "Hunter's Onslaught", "control"],
     ["Puppeteer", "Manipulate Puppets", "control"],
+    // (2026-10-13, batch 286: a swarm made to give up its reaction and its Hit Points — an ally ordered, by the same rule.)
+    ["Rothive", "Consume Swarm", "control"],
     ["Slaugh", "Tyrant's Command", "control"],
     ["Standard Bearer", "Signal the Advance!", "control"],
     ["Starborn", "Gravity Well", "control"],
@@ -227,6 +229,8 @@ export const GM_DECIDED = [
     ["Graveknight Warmaster", "Phantom Mount", "summons"],
     ["Katpaskir", "Mirrored Summons", "summons"],
     ["Morrigna", "Spider Minions", "summons"],
+    // (2026-10-13, batch 286: statues made as decoys, by the same rule.)
+    ["Rictus Mask", "Echoes of the Damned", "summons"],
     ["Necromancer", "Undead, Arise!", "summons"],
     ["Nonsequitaur", "At Least That's Over", "summons"],
     ["Nonsequitaur", "Forget about Me?", "summons"],

@@ -287,7 +287,7 @@ async function playAbility(item, plan, sourceToken) {
     // not when the ability links PF2e's own effect (its card offers that).
     // (Batch 39: a bonus to its AC for a while, Dueling Parry; a plan with its own time only, not a rage's, whose PF2e effect is linked.)
     // (Batch 235: with no time of its own, its model's rounds — Raise Shields, Blood Fury, a rage with no PF2e effect; its healing too.)
-    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp || plan.model?.regeneration || plan.model?.materials?.length || plan.model?.toggle) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
+    if (plan?.builtin === "self-effect" && (plan.duration || plan.model) && (plan.damage?.length || plan.model?.modifiers?.length || plan.model?.resistances?.length || plan.model?.tempHp || plan.model?.regeneration || plan.model?.materials?.length || plan.model?.toggle || plan.model?.hitBack) && !/@UUID\[Compendium\.[\w-]+\.[\w-]*effects?\.Item\./i.test(item.system?.description?.value ?? "")) {
         await strikeBuff(item, plan, sourceToken);
         if (Number(plan.heal) > 0) {
             const actor = sourceToken?.actor ?? item.actor;
@@ -490,6 +490,8 @@ async function castFromCard(message, state, data) {
             // (A name without its sheet suffix too: "fear" for "Fear (At Will)".)
             const mine = actor.itemTypes.spell.find((spell) => spell.name.toLowerCase() === named) ?? actor.itemTypes.spell.find((spell) => spell.name.toLowerCase().replace(/\s*\([^)]*\)\s*$/, "") === named);
             if (!mine) throw new Error(`${actor.name} has no spell called "${data.spell}".`);
+            // (Batch 286, Two Step Waltz: one of its cantrips.)
+            if (state.pick.cantrip && !(mine.isCantrip ?? (mine.system?.traits?.value ?? []).includes("cantrip"))) throw new Error(`${mine.name} isn't a cantrip.`);
             state = { ...state, spell: { uuid: mine.sourceId ?? mine._stats?.compendiumSource ?? mine.uuid, name: mine.name }, dc: mine.spellcasting?.statistic?.dc?.value ?? state.dc };
         } else {
             const pack = game.packs.get("pf2e.spells-srd");
@@ -964,7 +966,9 @@ async function rollTarget(message, target) {
     if (state.check.kind === "save") {
         const statistic = actor?.getStatistic?.(state.check.statistic);
         if (!statistic) throw new Error(`${target.name} has no ${statisticLabel(state.check.statistic)} save.`);
-        return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source });
+        // (Batch 286: its own bonus or penalty on the save, and a save rolled twice keeping the worse — PF2e's rollTwice.)
+        const saveBonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
+        return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}) });
     }
     const statistic = source?.getStatistic?.(state.check.statistic);
     if (!statistic) throw new Error(`${state.source.name} has no ${statisticLabel(state.check.statistic)}.`);

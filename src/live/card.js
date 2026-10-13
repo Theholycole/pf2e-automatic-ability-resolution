@@ -19,7 +19,8 @@ const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) =>
 export function cardCheck(plan) {
     const check = plan?.resolution?.check;
     if (!check) return null;
-    if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic };
+    // (Batch 286: the save's own bonus or penalty, Inject Venom's −2 after a critical hit; a save rolled twice, the worse kept: misfortune.)
+    if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.misfortune ? { misfortune: true } : {}) };
     // No roll ("The target takes 3d8 fire damage"): every target is affected (2026-10-10).
     if (check.roll === "automatic") return { kind: "automatic" };
     // (A bonus of its own, "a +4 status bonus to the Athletics check", batch 36: added to the roll.)

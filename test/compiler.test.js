@@ -5046,3 +5046,8 @@ test("group D, built, part 13 (2026-10-13, batch 285): mythic skill toggles, mor
     const surge = plan("<p><strong>Trigger</strong> A character casts a primal spell within the hazard's area</p><hr /><p><strong>Effect</strong> Each living creature in the area gains [[/r 1d4 #Temporary Hit Points]] temporary Hit Points that last for 1 minute as life wells up, and the hazard rolls initiative.</p>", "reaction", 1, aura);
     assert.deepEqual([surge?.trigger?.event, surge?.resolution?.outcomes?.success?.effects?.[0]?.formula], ["hazard", "1d4"]);
 });
+
+test("an ally ordered to give itself up, and decoy statues made: the GM's (2026-10-13, batch 286)", async () => {
+    const { gmDecided } = await import("../src/compiler/gm-decided.js");
+    assert.deepEqual([gmDecided("Rothive", "Consume Swarm"), gmDecided("Rictus Mask", "Echoes of the Damned")], ["control", "summons"]);
+});

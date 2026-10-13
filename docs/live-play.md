@@ -2886,3 +2886,14 @@ Fixed on the way:
 
 - **Compiled** (30 rows; 13 new in PF2e, 15 in Battlezoo, 7 more PF2e that were the GM's). A spell link with no label is cast by its id (the cast card names it). Readers that read generic wordings stay narrow where earlier GM categories hold the same words (a mythic cost, temporary Hit Points as a turn ends).
 
+
+## The long tail after the user's choices, part 14 (2026-10-13, batch 286)
+
+- **New pieces:**
+  - A save's own bonus or penalty (`check.bonus`, Inject Venom's −2 after a critical hit) and a save rolled twice keeping the worse (`check.misfortune`, Twice for Bad Luck). Live, the save roll gets PF2e's modifier and `rollTwice: "keep-lower"`; the core passes `bonus` and `misfortune` on the roll's options, and the simulation rolls the d20 twice.
+  - A self-effect's `model.hitBack` (Conductive Shell): its Effect carries the flag, and each melee hit on the creature while it lasts posts a damage card on the attacker. The simulation deals that damage and values the effect by the foes in its Melee.
+  - `redirect-attack` with `when: "critical"` and `any: true` (Bouncy): only a critically failed Strike, at any creature in the attack's reach or range.
+  - Ferocity's kin with `atOne` and `perTurn` (Fractions of Life): only from 1 HP, once on each creature's turn.
+  - A cast pick with `cantrip: true` (Two Step Waltz): one of its own cantrips.
+  - The simulation skips the ways of a choice whose requirement it can't check, like single abilities.
+- **Compiled** (30 rows; 28 new in Battlezoo, 2 the GM's — Consume Swarm as control, Echoes of the Damned as summons): Focus Beauty, Ride the Lightning, Inject Venom, Shifting Tempo, Leading Step, Bouncy, Fair Trade?, Mists of the Styx, Biobombardment, Overwhelming Infection, Conductive Shell, Two Step Waltz, Retreat into Shell, Tentacle Forest, Unfathomable Leap, Fractions of Life, Withdraw, Twice for Bad Luck (twice), Put That Away!, Analyze Armor, Cascading Disaster, Sap Spray, Shadow Step, Just Won't Die, Running Charge, Tendril Explosion.

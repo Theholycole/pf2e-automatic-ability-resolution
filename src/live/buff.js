@@ -54,7 +54,8 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
     // (Batch 196: resistance and temporary Hit Points on itself too — Reef Armor, Shifting Form, Harden Chitin.)
     // (Batch 273: a precious material for its Strikes, of its choice — PF2e's ChoiceSet and AdjustStrike, as its Adaptive Strike effect has them.)
     // (Batch 276, Wolverine Rage: nothing of its own but PF2e's toggle on the ability, its AC and damage waiting on it — model.toggle.)
-    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration && !plan.model?.materials?.length && !(plan.model?.toggle && toggles.length))) return null;
+    // (Batch 286, Conductive Shell: damage on the creatures that hit it in melee while it lasts — model.hitBack, flagged for the module's hit hook.)
+    if (plan?.builtin !== "self-effect" || (!plan.damage?.length && !plan.model?.modifiers?.length && !plan.model?.resistances?.length && !plan.model?.tempHp && !plan.model?.regeneration && !plan.model?.materials?.length && !(plan.model?.toggle && toggles.length) && !plan.model?.hitBack)) return null;
     const selector = plan.damage?.length && !toggles.length ? buffSelector(plan, strikes) : null;
     if (plan.damage?.length && !toggles.length && !selector) return null;
     const rules = toggles.length ? toggles.map(({ domain, option }) => ({ key: "RollOption", domain, option }))
@@ -74,12 +75,13 @@ export function strikeBuffEffect(plan, { name, img = null, strikes = [], uuid = 
         ...(plan.model?.resistances ?? []).map((entry) => `Resistance ${entry.value} to ${entry.type.replace(/-/g, " ")}${entry.exceptions?.length ? ` (except ${entry.exceptions.join(", ").replace(/-/g, " ")})` : ""}.`),
         plan.model?.tempHp ? `${plan.model.tempHp} temporary Hit Points.` : null,
         plan.model?.materials?.length ? `Its Strikes count as ${plan.model.materials.join(", ").replace(/-/g, " ")} (its choice).` : null,
-        plan.model?.regeneration ? `Regeneration ${plan.model.regeneration.value}${plan.model.regeneration.deactivatedBy?.length ? ` (deactivated by ${plan.model.regeneration.deactivatedBy.join(", ")})` : ""}.` : null].filter(Boolean).join(" ");
+        plan.model?.regeneration ? `Regeneration ${plan.model.regeneration.value}${plan.model.regeneration.deactivatedBy?.length ? ` (deactivated by ${plan.model.regeneration.deactivatedBy.join(", ")})` : ""}.` : null,
+        plan.model?.hitBack ? `A creature that hits it in melee takes ${String(plan.model.hitBack).replace(/\[([\w,]+)\]/g, (_all, type) => ` ${type.replace(/,/g, " ")}`)} damage.` : null].filter(Boolean).join(" ");
     return {
         name,
         type: "effect",
         img: img ?? "icons/svg/upgrade.svg",
-        flags: { "pf2e-automatic-ability-resolution": { strikeBuff: { uuid } } },
+        flags: { "pf2e-automatic-ability-resolution": { strikeBuff: { uuid }, ...(plan.model?.hitBack ? { hitBack: { formula: plan.model.hitBack, name } } : {}) } },
         system: {
             slug: `aar-${sluggify(name)}`,
             description: { value: `<p>${escape(said)}</p>${notes}` },

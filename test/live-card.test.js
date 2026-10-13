@@ -227,3 +227,10 @@ test("a cast card where the GM names the spell (2026-10-13, batch 275)", () => {
     assert.deepEqual([state.spell, state.pick], [{ uuid: null, name: "a spell the GM names" }, { maxRank: 7, rarity: "common" }]);
     assert.ok(cardHTML(state).includes('data-aar-field="spell"'));
 });
+
+test("a save's own bonus and a save rolled twice reach the card (2026-10-13, batch 286)", () => {
+    const save = (check) => ({ resolution: { kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: 23 }, ...check } } });
+    assert.deepEqual(cardCheck(save({ bonus: { value: -2, type: "circumstance" } })), { kind: "save", statistic: "fortitude", dc: 23, basic: false, bonus: { value: -2, type: "circumstance" } });
+    assert.deepEqual(cardCheck(save({ misfortune: true })), { kind: "save", statistic: "fortitude", dc: 23, basic: false, misfortune: true });
+    assert.deepEqual(cardCheck(save({})), { kind: "save", statistic: "fortitude", dc: 23, basic: false });
+});

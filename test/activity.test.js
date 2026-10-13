@@ -260,3 +260,11 @@ test("a Strike activity's damage against a trait: only on a creature with it (20
     assert.equal(activityRider(kick, { targetTraits: ["humanoid"] }), null);
     assert.deepEqual(activityRider(kick, { targetTraits: new Set(["aberration"]) }).plan.resolution.outcomes.success.damage.formulas, [{ formula: "2d12[force]" }]);
 });
+
+test("a self-effect that hurts its melee attackers: flagged hitBack, told on the Effect (2026-10-13, batch 286)", () => {
+    const shell = { builtin: "self-effect", actions: 1, model: { name: "Test Shell", rounds: 1, modifiers: [], tempHp: 0, hitBack: "3d6[electricity]" }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" } };
+    const effect = strikeBuffEffect(shell, { name: "Test Shell", uuid: "Actor.a.Item.b" });
+    assert.deepEqual(effect.flags["pf2e-automatic-ability-resolution"], { strikeBuff: { uuid: "Actor.a.Item.b" }, hitBack: { formula: "3d6[electricity]", name: "Test Shell" } });
+    assert.deepEqual([effect.system.rules, effect.system.duration.value, effect.system.duration.expiry], [[], 1, "turn-start"]);
+    assert.match(effect.system.description.value, /A creature that hits it in melee takes 3d6 electricity damage\./);
+});
