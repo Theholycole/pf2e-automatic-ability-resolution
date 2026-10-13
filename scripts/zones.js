@@ -87,6 +87,7 @@ export async function startZone({ item, plan, sourceToken }) {
         zone.saves?.length ? "a save on whoever it says" : null,
         zone.effect ? `${escape(zone.effect.label)} on ${zone.effect.allies ? "its allies" : "those"} inside` : null,
         zone.modifiers?.length ? "a penalty inside" : null,
+        zone.adjustments?.length ? "its allies' and foes' checks changed inside" : null,
         zone.damage?.length ? "damage at a turn's end inside" : null
     ].filter(Boolean);
     const placed = made.length ? "" : " <em>Not placed.</em>";
@@ -119,7 +120,7 @@ export async function zoneEvent(region, behavior, event) {
     const target = token.object ?? token;
     for (const action of zoneActions(flags.zone, event.name, { own, allied, initial })) {
         if (action.kind === "clear") await clearZone(token.actor, region.uuid, flags.zone);
-        else if (action.kind === "conceal" || action.kind === "modifiers") await token.actor.createEmbeddedDocuments("Item", [zoneMemberEffect({ name, kind: action.kind, modifiers: action.modifiers, concealedUuid: CONCEALED, regionUuid: region.uuid, moduleId: MODULE_ID })]);
+        else if (action.kind === "conceal" || action.kind === "modifiers" || action.kind === "adjust") await token.actor.createEmbeddedDocuments("Item", [zoneMemberEffect({ name, kind: action.kind, modifiers: action.modifiers, adjustments: action.adjustments, concealedUuid: CONCEALED, regionUuid: region.uuid, moduleId: MODULE_ID })]);
         else if (action.kind === "effect") {
             const source = await fromUuid(action.uuid).catch(() => null);
             if (!source) continue;
@@ -132,7 +133,7 @@ export async function zoneEvent(region, behavior, event) {
     }
 }
 
-const eventWords = (name, initial) => (initial ? "in the area as it's made" : name === "tokenEnter" ? "entering it" : name === "tokenTurnStart" ? "starting its turn in it" : "ending its turn in it");
+const eventWords = (name, initial) => (initial ? "in the area as it's made" : name === "tokenEnter" ? "entering it" : name === "tokenTurnStart" ? "starting its turn in it" : name === "tokenMoveWithin" ? "moving within it" : "ending its turn in it");
 
 // Leaving (or the zone ending): what the zone gave the creature, and PF2e's effects of the zone's own on it (its "while inside" ones).
 async function clearZone(actor, regionUuid, zone) {

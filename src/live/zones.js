@@ -76,7 +76,8 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
     const difficulties = zoneDifficulties(zone.terrain);
     const behaviors = [
         ...(Object.keys(difficulties).length ? [{ name: `${name}: difficult terrain`, type: "modifyMovementCost", system: { difficulties } }] : []),
-        { name: `${name}: zone`, type: "executeScript", system: { events: ["tokenEnter", "tokenExit", "tokenTurnStart", "tokenTurnEnd"], source: zoneScript(moduleId) } }
+        // (Batch 274: a save on each move within it, Tempest Downdrafts': its moves too.)
+        { name: `${name}: zone`, type: "executeScript", system: { events: ["tokenEnter", "tokenExit", "tokenTurnStart", "tokenTurnEnd", ...((zone.saves ?? []).some((save) => save.when?.includes("move")) ? ["tokenMoveWithin"] : [])], source: zoneScript(moduleId) } }
     ];
     const color = zone.hazard || zone.damage?.length ? "#a0412d" : zone.concealed ? "#8a94a0" : zone.terrain?.length ? "#7a5c3a" : "#5b6f8c";
     return {
@@ -100,13 +101,16 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
 // as it's made (a save "as it's made" only, not one on entering). Leaving: clear what the zone gave.
 export function zoneActions(zone, event, { own = false, allied = false, initial = false } = {}) {
     if (event === "tokenExit") return [{ kind: "clear" }];
-    const when = event === "tokenEnter" ? (initial ? "initial" : "enter") : event === "tokenTurnStart" ? "start" : event === "tokenTurnEnd" ? "end" : null;
+    const when = event === "tokenEnter" ? (initial ? "initial" : "enter") : event === "tokenTurnStart" ? "start" : event === "tokenTurnEnd" ? "end" : event === "tokenMoveWithin" ? "move" : null;
     if (!when) return [];
     const actions = [];
     if (event === "tokenEnter") {
         if (zone.concealed) actions.push({ kind: "conceal" });
         if (zone.effect && (!zone.effect.allies || allied)) actions.push({ kind: "effect", uuid: zone.effect.uuid, label: zone.effect.label });
         if (zone.modifiers?.length) actions.push({ kind: "modifiers", modifiers: zone.modifiers.map((modifier) => ({ ...modifier })) });
+        // (Batch 274, Sink or Swim: PF2e's degree adjustments, its allies' on its allies, its foes' on the others; not on itself.)
+        const adjustments = (zone.adjustments ?? []).filter((entry) => (entry.allies ? allied : !allied && !own));
+        if (adjustments.length) actions.push({ kind: "adjust", adjustments: adjustments.map((entry) => ({ ...entry })) });
     }
     if (own) return actions;
     // (A zone of its allies' gifts, Cleansing Earth's: nothing more on them.)
@@ -135,11 +139,14 @@ export function zoneDamagePlan(name, formulas) {
     };
 }
 
-// The Effect a creature holds while inside: concealed (PF2e's condition, granted; a note on its attacks out), or the zone's penalties.
-export function zoneMemberEffect({ name, kind, modifiers = [], concealedUuid, regionUuid, moduleId, img = "icons/svg/mystery-man.svg" }) {
+// The Effect a creature holds while inside: concealed (PF2e's condition, granted; a note on its attacks out), the zone's penalties, or (batch 274)
+// PF2e's degree adjustments ("a success … to Swim is a critical success instead").
+export function zoneMemberEffect({ name, kind, modifiers = [], adjustments = [], concealedUuid, regionUuid, moduleId, img = "icons/svg/mystery-man.svg" }) {
     const rules = kind === "conceal"
         ? [{ key: "GrantItem", uuid: concealedUuid, flag: "concealed", allowDuplicate: true, onDeleteActions: { granter: "cascade", grantee: "cascade" } }, { key: "Note", selector: ["attack-roll"], title: name, text: `Creatures outside ${name} are concealed to you: DC 5 flat check.` }]
-        : modifiers.map((modifier) => ({ key: "FlatModifier", selector: modifier.selector, value: modifier.value, type: modifier.type ?? "untyped", label: name }));
+        : kind === "adjust"
+            ? adjustments.map((entry) => ({ key: "AdjustDegreeOfSuccess", selector: entry.selector, ...(entry.predicate?.length ? { predicate: [...entry.predicate] } : {}), adjustment: { ...entry.adjustment } }))
+            : modifiers.map((modifier) => ({ key: "FlatModifier", selector: modifier.selector, value: modifier.value, type: modifier.type ?? "untyped", label: name }));
     return {
         name: kind === "conceal" ? `${name}: inside (concealed)` : `${name}: inside`,
         type: "effect",

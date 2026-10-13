@@ -425,6 +425,13 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a reaction to a foe failing its save against the creature's own ability, spell, or an effect of a trait near it — live and in the simulator;
   - a reaction whose trigger reads but nothing else plays: its Effect read as an action;
   - trails of burning hoofprints as a line zone, an attack or check at its own fixed modifier, and hazards' mud, doors, frozen time and animated objects.
+- **The long tail after the user's choices, part 2** (2026-10-13, batch 274): the next 30 rows of the list, 39 new abilities in PF2e with their kin; 13 more PF2e abilities that were the GM's (PF2e's toggles, a second trembling building) and 1 Battlezoo picked up by the new pieces:
+  - PF2e's own toggle with suboptions on an ability that says the creature chooses (a material, an energy type, a resonance): a way for each, setting the toggle — only when nothing else reads the ability;
+  - every way in turn (Dragonspeech's three Words, each on its own ally): the mode card stays until each way is used;
+  - note Effects: a rule-less Effect on the creature for what the module can't play (an ally absorbed into a carriage, a trill for the next spell);
+  - zones that change checks by side (PF2e's degree adjustments: a success to Swim made a critical success for its allies, a failure a critical failure for its foes), and saves on each move within a zone (winds as a creature flies);
+  - a table drawn for a spell's caster, a +2 to saves against one trait only, and reactions whose trigger the module can't see, used by the GM as they happen (the trigger first on the card);
+  - also fixed: the mode card had dropped builtin ways and their words (batch 273's stances played by hand).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

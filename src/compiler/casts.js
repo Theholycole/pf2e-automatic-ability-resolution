@@ -28,7 +28,8 @@ const CASTS = [
     // (Batch 188, a leshy's Change Shape: "The leshy transforms into a Small plant. This ability otherwise uses the effects of One with Plants.")
     new RegExp(String.raw`\b(?:otherwise )?uses the effects? of\s+${LEAD}\u0001`, "i"),
     // (Batch 204, a banshee's Wail: "The banshee unleashes a soul-chilling Wails of the Damned (… save, … damage)".)
-    new RegExp(String.raw`\bunleashes (?:an? )?(?:[\w-]+ )?\u0001`, "i"),
+    // (Batch 274: "The trap releases an arcane wail of the banshee (DC 40) …".)
+    new RegExp(String.raw`\b(?:unleashes|releases) (?:an? )?(?:[\w-]+ )?\u0001`, "i"),
     new RegExp(String.raw`\bsame effects? as\s+${LEAD}\u0001`, "i"),
     new RegExp(String.raw`\bas\s+(?:the|an?)\s+(?:${ORDINAL}\s+)?\u0001 spell\b`, "i"),
     new RegExp(String.raw`\bas per\s+\u0001`, "i"),
@@ -55,9 +56,25 @@ const SAVE_CHECK = /@Check\[(?:type:)?(?:fortitude|reflex|will)\b/i;
 const rolls = (html) => String(html).replace(/\[\[\/(?:r|gmr|br|roll|gmroll) [^\]]*\]\]\{([^}]*)\}/g, "$1").replace(/\[\[\/(?:r|gmr|br|roll|gmroll) \{?([^\]#}]+?)\}?(?: #[^\]]*)?\]\](?!\{)/g, "$1");
 const ordinal = (text) => Number(/(\d+)(?:st|nd|rd|th)/.exec(text)?.[1]);
 
+// Spells some abilities name without a link (2026-10-13, batch 274): their PF2e ids, the old names too ("wail of the banshee" is Wails of the Damned).
+const NAMED_SPELLS = [
+    [/\bwails? of the (?:banshee|damned)\b/i, "FEsuyf203wTNE2et", "Wails of the Damned"],
+    [/\bcursed metamorphosis\b/i, "dN8QBNuTiaBHCKUe", "Cursed Metamorphosis"],
+    [/\bprismatic spray\b/i, "d6o52BnjViNz7Gub", "Prismatic Spray"],
+    [/\bdivine decree\b/i, "sX2o0HH4RjJDAZ8C", "Divine Decree"],
+    [/\brevealing light\b/i, "0qaqksrGGDj74HXE", "Revealing Light"]
+];
+const linkNamed = (html) => {
+    if (SPELL_LINK.test(html)) return html;
+    for (const [pattern, id, name] of NAMED_SPELLS) if (pattern.test(html)) return html.replace(pattern, `@UUID[Compendium.pf2e.spells-srd.Item.${id}]{${name}}`);
+    return html;
+};
+
 export function castSpell(item, actor = null) {
     if (!["action", "reaction", "free"].includes(item.system?.actionType?.value)) return null;
-    const html = String(item.system?.description?.value ?? "");
+    SPELL_LINK.lastIndex = 0;
+    const html = linkNamed(String(item.system?.description?.value ?? ""));
+    SPELL_LINK.lastIndex = 0;
     // The spell named in a trigger or a requirement: the ability answers a casting, it isn't one.
     const lead = html.split(/<strong>\s*Effect\s*<\/strong>/i);
     if (lead.length > 1 && /@UUID\[Compendium\.pf2e\.spells-srd\./.test(lead.slice(0, -1).join(" "))) return null;

@@ -32,14 +32,17 @@ export function cardCheck(plan) {
 // warning: a line for the GM ("Avalanche Breath is still recharging: 2 rounds left.").
 // An ability used in one of several ways (a dragon's two breath weapons): a card where the GM picks the way, which then
 // becomes that way's card (createCard). modes: [{ name, plan }], plan null for a way the GM resolves by hand.
-export function createModeCard({ modes, ability, source, targets, warning = null }) {
+export function createModeCard({ modes, ability, source, targets, warning = null, all = false }) {
     return {
         version: CARD_VERSION,
         kind: "modes",
         ability: { name: ability?.name ?? "Ability", uuid: ability?.uuid ?? null, slug: null },
         source,
-        // (Batch 179: a way that casts a spell keeps its plan, for its cast card.)
-        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && (mode.plan.builtin === "cast-spell" || cardCheck(mode.plan)) ? mode.plan : null })),
+        // (Batch 179: a way that casts a spell keeps its plan, for its cast card. Batch 274: so does a way that's a builtin — a stance, a
+        // self-effect — and a way played by hand keeps its words.)
+        // (Every way in turn: a PF2e effect's way too, played as its own ability.)
+        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && (mode.plan.builtin === "cast-spell" || (mode.plan.builtin && !["no-effect", "modes"].includes(mode.plan.builtin)) || cardCheck(mode.plan) || (all && mode.plan.resolution?.kind === "effect")) ? mode.plan : null, ...(mode.notes?.length ? { notes: [...mode.notes] } : {}) })),
+        ...(all ? { all: true, used: [] } : {}),
         warning,
         targets: targets.map((target) => ({ actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name })),
         status: "choose",
@@ -237,12 +240,13 @@ function castCardHTML(state) {
 // A choice of ways: a GM button for each ("Flame", "Weakening Gas (by hand)").
 function modeCardHTML(state) {
     const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";
+    // (Batch 274: every way in turn — the ones not used yet.)
     const buttons = state.status === "choose"
-        ? `<footer class="aar-controls aar-modes">${state.modes.map((mode, index) => `<button type="button" data-aar-action="mode" data-mode="${index}" data-gm-only="true">${escape(mode.name)}${mode.plan ? "" : " (by hand)"}</button>`).join("")}</footer>`
+        ? `<footer class="aar-controls aar-modes">${state.modes.map((mode, index) => ((state.used ?? []).includes(index) ? "" : `<button type="button" data-aar-action="mode" data-mode="${index}" data-gm-only="true">${escape(mode.name)}${mode.plan ? "" : " (by hand)"}</button>`)).join("")}</footer>`
         : "";
     const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
     const targets = state.targets.length ? `<p class="aar-hint">Targets: ${escape(state.targets.map((target) => target.name).join(", "))}</p>` : "";
-    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${state.status === "choose" ? `which way? (${state.modes.length})` : ""}</span></header>${warning}${targets}${results}${buttons}</section>`;
+    return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${state.status === "choose" ? (state.all ? `each in turn (${state.modes.length - (state.used ?? []).length} left)` : `which way? (${state.modes.length})`) : ""}</span></header>${warning}${targets}${results}${buttons}</section>`;
 }
 
 // Plain lines for what Apply did, from the core's changes. names: { id: name }.

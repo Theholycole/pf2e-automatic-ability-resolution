@@ -197,3 +197,27 @@ test("zones live: the Region at the token or for the GM to place, its terrain, i
     assert.deepEqual([hidden.system.rules[0].key, hidden.system.rules[0].uuid, hidden.flags.mod.zone], ["GrantItem", "Compendium.pf2e.conditionitems.Item.DmAIPqOBomZ7H95W", "Scene.s.Region.r"]);
     assert.deepEqual(zoneMemberEffect({ name: "Test", kind: "modifiers", modifiers: [{ selector: "reflex", value: -2, type: "status" }], regionUuid: "r", moduleId: "mod" }).system.rules, [{ key: "FlatModifier", selector: "reflex", value: -2, type: "status", label: "Test" }]);
 });
+
+test("a choice of ways keeps its builtins and words; every way in turn; zones that change checks by side and save on moving (2026-10-13, batch 274)", async () => {
+    const source = { actorUuid: "Actor.m", tokenUuid: null, name: "Test Mantis" };
+    const stance = { builtin: "self-effect", actions: 1, model: { name: "Iron", modifiers: [{ on: "ac", type: "circumstance", value: 2 }] } };
+    const ways = createModeCard({ modes: [{ name: "Iron", plan: stance }, { name: "Odd", plan: null, notes: ["Do it by hand."] }], ability: { name: "Test Stances" }, source, targets: [] });
+    assert.deepEqual([ways.modes[0].plan?.builtin, ways.modes[1].notes, ways.all], ["self-effect", ["Do it by hand."], undefined]);
+    const effect = { resolution: { kind: "effect", applications: [] } };
+    const all = createModeCard({ modes: [{ name: "Calm", plan: effect }, { name: "Iron", plan: stance }], ability: { name: "Test Words" }, source, targets: [], all: true });
+    assert.deepEqual([all.all, all.used, all.modes[0].plan?.resolution?.kind], [true, [], "effect"]);
+    const html = cardHTML({ ...all, used: [0] });
+    assert.ok(html.includes("each in turn (1 left)") && !html.includes('data-mode="0"') && html.includes('data-mode="1"'));
+    const { zoneActions, zoneMemberEffect, zoneRegion } = await import("../src/live/zones.js");
+    const swim = { area: { type: "emanation", value: 30 }, adjustments: [{ allies: true, selector: "athletics", predicate: ["action:swim"], adjustment: { success: "one-degree-better" } }, { allies: false, selector: "athletics", predicate: ["action:swim"], adjustment: { failure: "one-degree-worse" } }] };
+    assert.deepEqual(zoneActions(swim, "tokenEnter", { allied: true }).map((action) => action.adjustments.map((entry) => entry.allies)), [[true]]);
+    assert.deepEqual(zoneActions(swim, "tokenEnter", {}).map((action) => action.adjustments.map((entry) => entry.allies)), [[false]]);
+    assert.deepEqual(zoneActions(swim, "tokenEnter", { own: true }), []);
+    assert.deepEqual(zoneMemberEffect({ name: "Test Sea", kind: "adjust", adjustments: [swim.adjustments[1]], regionUuid: "r", moduleId: "mod" }).system.rules, [{ key: "AdjustDegreeOfSuccess", selector: "athletics", predicate: ["action:swim"], adjustment: { failure: "one-degree-worse" } }]);
+    const winds = { area: { type: "emanation", value: 30 }, saves: [{ when: ["move"], plan: { id: "gust" } }] };
+    assert.deepEqual(zoneActions(winds, "tokenMoveWithin", {}), [{ kind: "save", plan: { id: "gust" } }]);
+    assert.deepEqual(zoneActions(winds, "tokenTurnStart", {}), []);
+    const region = zoneRegion({ name: "Test Winds", zone: winds, token: { id: "t", x: 0, y: 0, width: 1, height: 1 }, grid: { size: 100, distance: 5 }, moduleId: "mod", flags: {} });
+    assert.ok(region.data.behaviors.at(-1).system.events.includes("tokenMoveWithin"));
+    assert.ok(!zoneRegion({ name: "Test Sea", zone: swim, token: { id: "t", x: 0, y: 0, width: 1, height: 1 }, grid: { size: 100, distance: 5 }, moduleId: "mod", flags: {} }).data.behaviors.at(-1).system.events.includes("tokenMoveWithin"));
+});

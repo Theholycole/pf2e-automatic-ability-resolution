@@ -31,8 +31,9 @@ export function buffRule(formula, selector, label) {
 }
 
 // A bonus to its own statistic (batch 39: Dueling Parry's "+2 circumstance bonus to AC"): its FlatModifier.
-const MODIFIER_SELECTORS = { ac: "ac", attack: "attack", damage: "damage", reflex: "reflex", fortitude: "fortitude", will: "will" };
-const modifierRule = (modifier, label) => (MODIFIER_SELECTORS[modifier.on] ? { key: "FlatModifier", selector: MODIFIER_SELECTORS[modifier.on], type: modifier.type ?? "untyped", value: Number(modifier.value), label } : null);
+// (Batch 274: all saves, and a modifier only against effects of a trait — its predicate, PF2e's "item:trait:fire".)
+const MODIFIER_SELECTORS = { ac: "ac", attack: "attack", damage: "damage", reflex: "reflex", fortitude: "fortitude", will: "will", "saving-throw": "saving-throw" };
+const modifierRule = (modifier, label) => (MODIFIER_SELECTORS[modifier.on] ? { key: "FlatModifier", selector: MODIFIER_SELECTORS[modifier.on], type: modifier.type ?? "untyped", value: Number(modifier.value), label, ...(modifier.vsTrait ? { predicate: [`item:trait:${modifier.vsTrait}`] } : {}) } : null);
 
 // The effect's data (PF2e's effect item), or null when it can't be made (no such Strike, a part it can't write). toggles: the
 // ability's own switch, when PF2e gives it one ([{ domain, option }] from its toggleable RollOption rules, batch 39: Hydraulic

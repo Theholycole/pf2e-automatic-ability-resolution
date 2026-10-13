@@ -203,6 +203,19 @@ async function playAbility(item, plan, sourceToken) {
         if (recharge) await noteToGM(item.actor, sourceToken, [rechargeWarning(item.actor, item.name), await startRecharge({ actor: item.actor, item, formula: recharge, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
         return;
     }
+    // (Batch 274: a choice PF2e holds as the ability's own toggle — Ablative Adaptation's material: the toggle set to it.)
+    if (plan?.builtin === "roll-option") {
+        await item.actor?.toggleRollOption?.("all", plan.option, item.id, true, plan.suboption);
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.label ?? plan.suboption}.`, ...(plan.notes ?? [])]);
+        return;
+    }
+    // (Batch 274: a table rolled — Unstable Feedback's Wellspring Surge for the caster: PF2e's table drawn to chat, for the GM to apply.)
+    if (plan?.builtin === "roll-table") {
+        const table = plan.table?.uuid ? await fromUuid(plan.table.uuid).catch(() => null) : null;
+        if (table?.draw) await table.draw();
+        await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${table ? `${plan.table.name} rolled` : `roll ${plan.table?.name ?? "its table"} by hand`}, on ${plan.target ?? "its target"}.`, ...(plan.notes ?? [])]);
+        return;
+    }
     const formula = rechargeFormula(item, plan);
     // Used again while it recharges: the card says so (the GM decides).
     const warning = formula ? rechargeWarning(item.actor, item.name) : null;
@@ -246,7 +259,9 @@ async function playAbility(item, plan, sourceToken) {
             ability: { name: item.name, uuid: item.uuid },
             source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
             targets: [...game.user.targets].map((token) => targetEntry(token, null)),
-            warning
+            // (Batch 274: every way in turn, Dragonspeech's three Words; its notes on the card.)
+            warning: [warning, ...(plan.all ? plan.notes ?? [] : [])].filter(Boolean).join(" ") || null,
+            all: Boolean(plan.all)
         });
         await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
@@ -1028,6 +1043,18 @@ async function chooseMode(message, state, index) {
     const mode = state?.kind === "modes" && state.status === "choose" ? state.modes[index] : null;
     if (!mode) return null;
     const name = `${state.ability.name} (${mode.name})`;
+    // (Batch 274: every way in turn — Dragonspeech's Words, each on its own ally: each way's own card (the creature's own ability by that name,
+    // when it has one), on the targets of the moment; the card stays until each is used.)
+    if (state.all) {
+        if ((state.used ?? []).includes(index)) return null;
+        const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+        const token = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid).catch(() => null) : null;
+        const own = item?.actor?.items?.find?.((entry) => entry.name === mode.name && entry.id !== item.id) ?? null;
+        if (item && mode.plan) await playAbility(own ?? item, mode.plan, token);
+        const used = [...(state.used ?? []), index];
+        const next = { ...state, used, status: used.length >= state.modes.length ? "chosen" : "choose", results: [...state.results, ...(mode.plan ? [`${name}.`] : [`${name}: resolve it by hand.`, ...(mode.notes ?? [])])] };
+        return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    }
     if (!mode.plan) {
         // (Batch 273: with what that way does, in words.)
         const lines = [`${name}: resolve it by hand.`, ...(mode.notes ?? [])];
@@ -1259,6 +1286,7 @@ async function applyChange(change, state) {
             if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
             if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state);
             if (change.effect?.kind === "native") return nativeEffect(actor, change.effect, state, state.targets.find((entry) => entry.id === change.target)?.degree ?? null);
+            if (change.effect?.kind === "note") return noteEffect(actor, change.effect.note, state);
             return null;
         case "end": {
             // Escape: the user's grabbed or restrained ends (an effect granting it goes with it).
@@ -1363,6 +1391,27 @@ async function nativeEffect(actor, effect, state, degree = null) {
     source.system.context = { ...(source.system.context ?? {}), origin: { ...(source.system.context?.origin ?? {}), actor: state.source.actorUuid, token: state.source.tokenUuid ?? null, item: state.ability.uuid ?? null } };
     source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true } };
     await actor.createEmbeddedDocuments("Item", [source]);
+    return null;
+}
+
+// A note Effect (batch 274): what the module can't play, on the creature as a rule-less Effect that says it (Rescue's "inside the carriage", Arcane
+// Harmony's choice for the next spell), lasting as the note says (until removed when it doesn't).
+async function noteEffect(actor, note, state) {
+    if (!note?.text) return null;
+    const duration = note.duration?.mode === "fixed" ? { value: note.duration.value, unit: note.duration.unit, expiry: note.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
+    const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    await actor.createEmbeddedDocuments("Item", [{
+        name: `${state.ability.name}: ${note.label ?? "note"}`,
+        type: "effect",
+        img: "icons/svg/book.svg",
+        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid } } },
+        system: {
+            description: { value: `<p>${escape(note.text)}</p><p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
+            duration,
+            start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
+            rules: []
+        }
+    }]);
     return null;
 }
 
