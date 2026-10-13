@@ -65,13 +65,14 @@ function reminders(combat) {
         const token = combatant.token;
         const actor = token?.actor;
         if (!actor || !["npc", "hazard"].includes(actor.type) || combatant.defeated || combatant.hidden || token.hidden || actor.isDead || (actor.hitPoints?.value ?? 1) <= 0) continue;
-        const open = reactionAvailable(actor);
+        // (Batch 301: by name — an Extra Reaction's for one thing only.)
+        const open = (item) => reactionAvailable(actor, item.name);
         const entries = [];
         for (const item of actor.itemTypes?.action ?? []) {
             const type = item.system?.actionType?.value;
             if (!["reaction", "free"].includes(type)) continue;
             // (A spent reaction waits for its turn; a free action doesn't.)
-            if (type === "reaction" && !open) continue;
+            if (type === "reaction" && !open(item)) continue;
             let plan = null;
             try {
                 plan = compile(item);
@@ -112,7 +113,7 @@ async function useReminded(message, key) {
     const item = token?.actor?.items?.get(itemId);
     if (!item) throw new Error("That reaction isn't there any more.");
     await item.toMessage(undefined, { speaker: ChatMessage.getSpeaker({ token }) });
-    if (item.system?.actionType?.value === "reaction") await markUsed(token.actor, token);
+    if (item.system?.actionType?.value === "reaction") await markUsed(token.actor, token, item.name);
     const card = message.getFlag(MODULE_ID, "reminderCard");
     const groups = (card?.groups ?? []).map((group) => ({ ...group, entries: group.entries.map((entry) => (entry.key === key ? { ...entry, used: true } : entry)) }));
     await message.update({ content: reminderHTML(groups), [`flags.${MODULE_ID}.reminderCard`]: { ...card, groups } });

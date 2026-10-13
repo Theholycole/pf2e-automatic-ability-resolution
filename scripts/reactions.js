@@ -26,7 +26,7 @@
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { REACTION_KINDS, blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
+import { REACTION_KINDS, blocksReactions, reactionOpen, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { startZone } from "./zones.js";
 import { startConjure } from "./conjure.js";
@@ -108,9 +108,11 @@ function reactionsOf(actor) {
 
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
 const running = (effect) => !(effect.remainingDuration?.expired ?? effect.isExpired);
-const reactionUsed = (actor) => actor.itemTypes.effect.some((effect) => effect.flags?.[MODULE_ID]?.reactionUsed && running(effect));
+// (Batch 301: Extra Reaction's count a round, and reactions for one thing only — by name, the one it's about to use; null, any.)
+const allowances = (actor) => (actor.itemTypes?.action ?? []).filter((item) => item.system?.actionType?.value === "passive").map((item) => compile(item)).filter((plan) => plan?.builtin === "passive-rules" && plan.reactions).map((plan) => plan.reactions);
+const reactionUsed = (actor, name = null) => !reactionOpen(allowances(actor), actor.itemTypes.effect.filter((effect) => effect.flags?.[MODULE_ID]?.reactionUsed && running(effect)).map((effect) => effect.flags[MODULE_ID].reactionFor ?? null), name);
 // (Batch 296: whether it can react now — for the reminders, scripts/reminders.js.)
-export const reactionAvailable = (actor) => !(blocksReactions(actor.conditions.active.map((condition) => condition.slug)) || reactionUsed(actor));
+export const reactionAvailable = (actor, name = null) => !(blocksReactions(actor.conditions.active.map((condition) => condition.slug)) || reactionUsed(actor, name));
 
 // Monsters in the encounter on this scene that can react now: [{ token, actor, reactions }].
 function reactors(scene, combat, { atZero = false } = {}) {
@@ -966,7 +968,7 @@ async function onInitiative(combat) {
         if (!actor || actor.type !== "npc" || monster.hidden || !taking.has(monster.id) || actor.isDead) continue;
         const item = (actor.itemTypes?.action ?? []).find((entry) => compile(entry)?.builtin === "initiative-warning");
         const plan = item ? compile(item) : null;
-        if (!plan || (!plan.free && reactionUsed(actor))) continue;
+        if (!plan || (!plan.free && reactionUsed(actor, item.name))) continue;
         const skills = plan.skills.map((skill) => skill[0].toUpperCase() + skill.slice(1));
         await offer({ kind: "initiative", item, monster, actor, target: null, trigger: "rolls initiative", free: !!plan.free, attack: { value: plan.value, ...(plan.within ? { within: plan.within } : {}), ...(plan.self ? { self: true } : {}) }, note: [plan.self ? "Its own initiative roll." : `Only if it rolled initiative with ${skills.join(" or ")}, and for the allies ${plan.within ? `within ${plan.within} feet` : "that can hear or see it"}.`, ...(plan.notes ?? [])].join(" ") });
     }
@@ -1279,7 +1281,7 @@ async function use(message, action, slug) {
     const monster = await fromUuid(state.monster.tokenUuid);
     const actor = monster?.actor;
     if (!actor) throw new Error(`${state.monster.name} isn't there any more.`);
-    if (!state.attack?.free && !state.free && reactionUsed(actor)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
+    if (!state.attack?.free && !state.free && reactionUsed(actor, state.ability?.name ?? null)) return settle(message, state, "declined", `${state.monster.name} has already used its reaction this round.`);
     let result;
     if (state.kind === "strike") {
         result = await rollStrike(state, actor, slug);
@@ -1538,7 +1540,7 @@ async function use(message, action, slug) {
         result = `${state.monster.name} stays at ${actor.system?.attributes?.hp?.value ?? 1} HP${rule.wounded ? `; wounded ${actor.getCondition?.("wounded")?.value ?? 1}` : ""}.`;
         if (state.free) return settle(message, state, "used", result);
     }
-    await markUsed(actor, monster);
+    await markUsed(actor, monster, state.ability?.name ?? null);
     return settle(message, state, "used", result);
 }
 
@@ -1558,8 +1560,8 @@ async function rollStrike(state, actor, slug) {
 
 const settle = (message, state, status, result) => message.update({ content: offerHTML({ ...state, status, result }), [`flags.${MODULE_ID}.${FLAG}`]: { ...state, status, result } });
 
-// "Reaction used" until the start of its next turn.
-export async function markUsed(actor, token) {
+// "Reaction used" until the start of its next turn. name: the reaction (batch 301: one for that only, an Extra Reaction's, is spent first).
+export async function markUsed(actor, token, name = null) {
     const combat = game.combat?.started ? game.combat : null;
     const position = combat ? combat.turns.findIndex((entry) => entry.tokenId === token.id) : -1;
     const rounds = combat && position >= 0 ? reactionRounds(position, combat.turn) : 1;
@@ -1567,7 +1569,7 @@ export async function markUsed(actor, token) {
         name: "Reaction used",
         type: "effect",
         img: "icons/svg/clockwork.svg",
-        flags: { [MODULE_ID]: { reactionUsed: true } },
+        flags: { [MODULE_ID]: { reactionUsed: true, reactionFor: name } },
         system: {
             description: { value: "<p>It has used its reaction; it gets it back at the start of its turn.</p>" },
             duration: { value: rounds, unit: "rounds", expiry: "turn-start", sustained: false },

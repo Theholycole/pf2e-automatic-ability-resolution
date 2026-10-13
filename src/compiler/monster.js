@@ -14,6 +14,7 @@ import { gmFallback } from "./gm-fallback.js";
 import { gmDecided } from "./gm-decided.js";
 import { readSummon } from "./summons.js";
 import { withWatchedTrigger } from "./watch.js";
+import { passiveRules } from "./passive-rules.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -10456,7 +10457,10 @@ export function compileMonsterAbility(source, options = {}) {
     // (Batch 194, Improved Vex: a free action's follow-up to a Strike, when no other reading has it.)
     const free = !read && modernItem(source).system?.actionType?.value === "free" ? followUp(modernItem(source), options.actor ?? null, options.basicActions ?? {}) : null;
     // (Batch 300: a reaction's trigger the module can watch, read for a plan that had none — offered when it happens, not only reminded.)
-    return withWatchedTrigger(modernItem(source), read ?? free ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
+    // (Batch 301: a passive PF2e's own rules hold — Evasion, Deny Advantage, Surprise Attack, Construct Armor — or Mobility, Extra Reaction; for
+    // the simulator.)
+    const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) : null;
+    return withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
 }
 
 // A reaction whose trigger reads but no reading plays as a whole (2026-10-13, batch 273): its Effect compiled as an action, with that trigger — on the

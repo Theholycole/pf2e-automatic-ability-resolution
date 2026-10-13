@@ -3106,6 +3106,26 @@ The user's call: "work on item 2" (reactions on the reminder card whose trigger 
   - Most has nothing to roll: Change Shape (389), feigned deaths, troop formations, plane and form shifts, extinguished fires, capsized boats, glossary-only entries.
   - The rest are earlier batches' deliberate readings: a Strike that's only a Strike (Quick Draw, Skirmish Strike, Lunge) is played from the sheet; adamantine claws matter only against objects; Hunt Prey worded with only Seek and Track bonuses deals no damage.
 
+## Passives for the simulator (2026-10-13, batch 301)
+
+The user's call: "the crash, traps and then passives" (the simulator's census: Surprise Attack, Deny Advantage, Evasion, Mobility, Bravery, Extra Reaction and Construct Armor were the commonest passives it didn't play).
+
+- **Compiler** (`passiveRules` in `src/compiler/passive-rules.js`, after every other reading, for passives only) → `{ builtin: "passive-rules", saveDegrees?, flanking?, offGuardTo?, constructArmor?, lessFrightened?, mobility?, reactions? }`.
+  - **From PF2e's rules:**
+    - `saveDegrees`: each AdjustDegreeOfSuccess on a save, with its predicate when the simulation can test it (traits, slugs, magical). Not one about what the effect inflicts, a trap's traits or a GM's toggle.
+    - `flanking`: `flankable: false` (All-Around Vision) and `offGuardable`, a level or "level" (Deny Advantage, Watchful).
+    - `offGuardTo`: PF2e's off-guard EphemeralEffect, its predicate in what the simulation sees. That covers the first round before the target acts, the initiative it rolled with (Surprise Attack), and the target's conditions (Dread Striker: frightened; Slash the Suffering: confused or stupefied).
+    - `constructArmor`: its Hardness (the creature's own, its name's, or one set only while the armor holds), the AC it loses (−4) and below what share of its HP (50%).
+  - **From the text:**
+    - `lessFrightened` (Bravery's "reduce its value by 1");
+    - `mobility` (a Stride, and a Climb, Fly or Swim it names, of half its Speed or less triggers no reactions);
+    - `reactions`: `{ perRound }` for "gains 2 reactions at the start of its turn" and "an additional reaction each round"; `{ extra, only }` for one usable only for a named reaction.
+  - **Not read:** an ability with any other rule beside these (damage dice, a GM's toggle, an aura), and extra reactions with limits the text adds (a head each, nine heads).
+  - **Coverage:** 545 rulebook and 54 Battlezoo abilities that compiled to nothing, none lost.
+- **Live:** PF2e plays these rules itself, so nothing new is posted. One change: reactions now count by `reactionOpen` in `src/live/reactions.js`. "Reaction used" records the reaction it was spent on; a monster gets its Extra Reaction's count a round, and a reaction for one thing only is spent on that thing first.
+- **PCs:** the reader takes a PC's passive feats too (a rogue's Deny Advantage and Surprise Attack, a fighter's Bravery, a barbarian's Juggernaut; 78 class features and feats). The simulator calls it through `api.compileAbility`, since the core's registry hands the module only a PC's check actions.
+- **Live check (pftest, 2026-10-13):** compendium creatures read through the simulator's snapshot gave Animated Armor's Hardness 9 and −4 below 50%, the Gang Leader's Evasion, Deny Advantage 7 and Surprise Attacker, the Burglar's Mobility, the Hydra's All-Around Vision and the Ancient Gold Dragon's 2 reactions. The iconics gave Merisiel's Deny Advantage and Surprise Attack, Valeros's Bravery and Amiri's Juggernaut.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

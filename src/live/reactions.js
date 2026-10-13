@@ -229,3 +229,22 @@ export function reminderHTML(groups) {
     const rows = groups.map((group) => `<li><strong>${escape(group.creature)}</strong><ul>${group.entries.map((entry) => `<li>${escape(entry.ability)}${entry.free ? " (free)" : ""}${entry.trigger ? ` — ${escape(entry.trigger)}` : ""} ${entry.used ? "<em>used</em>" : `<button type="button" data-aar-remind="${escape(entry.key)}">Use</button>`}</li>`).join("")}</ul></li>`).join("");
     return `<section class="pf2e-aar-reminders"><p><strong>Reactions to watch for</strong> (their triggers aren't ones the module sees)</p><ul>${rows}</ul></section>`;
 }
+
+// Whether a monster can still react this round (2026-10-13, batch 301; the user's call: "the crash, traps and then passives"): its Extra
+// Reaction's count a round (passive-rules' reactions: { perRound }), and reactions for one thing only ({ extra, only: "Shield Block" }),
+// spent on that first. allowances: those entries; used: the reactions it spent this round, by name (null when not known); name: the
+// reaction it's about to use — null, any.
+const reactionWord = (text) => String(text ?? "").toLowerCase().replace(/^an? /, "").replace(/s\b/g, "").trim();
+const onlyFor = (only, name) => Boolean(name) && String(only).split(/,\s*|\s+or\s+/).some((entry) => reactionWord(entry) === reactionWord(name));
+export function reactionOpen(allowances, used, name = null) {
+    const general = Math.max(1, ...allowances.map((entry) => entry.perRound ?? 1));
+    const pools = allowances.filter((entry) => entry.only).map((entry) => ({ only: entry.only, left: entry.extra ?? 1 }));
+    let generalUsed = 0;
+    for (const spent of used) {
+        const pool = pools.find((entry) => entry.left > 0 && onlyFor(entry.only, spent));
+        if (pool) pool.left--;
+        else generalUsed++;
+    }
+    if (pools.some((entry) => entry.left > 0 && (name === null || onlyFor(entry.only, name)))) return true;
+    return generalUsed < general;
+}

@@ -491,6 +491,15 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
 
   "Use it" plays the ability as if used from its sheet, at the creature that set it off. Free Strike offers no longer spend the reaction.
 
+- **Passives for the simulator** (2026-10-13, batch 301, the user's call: "the crash, traps and then passives"): passives that PF2e's own rules already play live compile to `{ builtin: "passive-rules" }`, so the Combat Simulator can play them too (`src/compiler/passive-rules.js`). About 600 abilities across 69 names:
+  - save degrees: Evasion, Juggernaut, Resolve, Bravery, Mythic Resilience and their kin;
+  - flanking: All-Around Vision, Deny Advantage;
+  - off-guard to it: Surprise Attack, Sudden Strike, Dread Striker;
+  - Construct Armor's Hardness and broken AC;
+  - from the text: Bravery's lower frightened, Mobility, Extra Reaction.
+
+  Live, Extra Reaction now counts: a monster with more reactions a round still gets offers after its first, and one with a reaction for a single thing only (Quick Shield Block, Shadow Blend) spends that one on it first.
+
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
