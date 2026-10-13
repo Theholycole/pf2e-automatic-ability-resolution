@@ -6117,6 +6117,9 @@ function chunk274(item, actor, basicActions) {
         if (repel) return { builtin: "self-effect", actions, model: { name: item.name, rounds: 1, modifiers: [], tempHp: 0, resistances: [{ type: repel[2].toLowerCase(), value: Number(repel[1]) }] }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" } };
         const colours = /^(?:Frequency [^.]+?\.? Effect )?(?:The [\w' -]+?|It) attunes (?:itself|themselves) to one of (?:five|four|three|two|several) elements, [^(]*\(([^)]+)\)\. (?:It|They) gains? that trait and an? \+(\d+) (circumstance|status) bonus to saving throws against effects with that trait until the (?:beginning|start) of (?:its|their) next turn\.((?: [^.]+\.)*)$/i.exec(tagged);
         const elements = colours ? [...colours[1].matchAll(/\b(\w+) for (\w+)\b/g)].map((match) => ({ colour: match[1], element: match[2].toLowerCase() })) : [];
+        // (Live, 2026-10-13: PF2e already holds the choice as the ability's toggle, its +2s waiting on "color-shift:fire" — its own ways then.)
+        const toggled = colours && elements.length > 1 ? ownToggle(item) : null;
+        if (toggled && elements.every(({ element }) => toggled.modes.some((mode) => mode.plan?.suboption === element))) return { ...toggled, notes: [...(toggled.notes ?? []), ...sentences(colours[4])] };
         if (colours && elements.length > 1) {
             return {
                 builtin: "modes",
@@ -6436,7 +6439,9 @@ function ownToggle(item) {
     const raw = String(item.system?.description?.value ?? "");
     if (/\battempts? to (?:\[\[\/act (?:disarm|grapple|shove|trip|reposition|feint|demoralize)\b|@UUID\[[^\]]*actionspf2e[^\]]*\]\{(?:Disarm|Grapple|Shove|Trip|Reposition|Feint|Demoralize)\})|@Check\[|\bteleports?\b|\bStrides?\b|\brerolls?\b|\bappears?\b|\bpulls out\b|\bwith the following additional effects\b|\bincreasing (?:its|their|his|her) reach\b/i.test(raw)) return null;
     const strikes = /\bmakes? an? [\w' -]*?Strike\b/i.test(plain);
-    const toggles = (item.system?.rules ?? []).filter((rule) => rule?.key === "RollOption" && rule.toggleable && rule.option && Array.isArray(rule.suboptions) && rule.suboptions.length > 1 && rule.suboptions.every((entry) => typeof entry?.value === "string" && entry.value));
+    // (A "none" suboption, the toggle's resting state, isn't a way.)
+    const toggles = (item.system?.rules ?? []).filter((rule) => rule?.key === "RollOption" && rule.toggleable && rule.option && Array.isArray(rule.suboptions) && rule.suboptions.every((entry) => typeof entry?.value === "string" && entry.value))
+        .map((rule) => ({ ...rule, suboptions: rule.suboptions.filter((entry) => entry.value !== "none") })).filter((rule) => rule.suboptions.length > 1);
     if (!toggles.length) return null;
     const words = (value) => value.split("-").map((word) => word[0].toUpperCase() + word.slice(1)).join(" ");
     const group = (toggle) => words(toggle.option.replace(new RegExp(`^${String(item.system?.slug ?? item.name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-?`), "") || toggle.option);

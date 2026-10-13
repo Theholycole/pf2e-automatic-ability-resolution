@@ -41,7 +41,7 @@ export function createModeCard({ modes, ability, source, targets, warning = null
         // (Batch 179: a way that casts a spell keeps its plan, for its cast card. Batch 274: so does a way that's a builtin — a stance, a
         // self-effect — and a way played by hand keeps its words.)
         // (Every way in turn: a PF2e effect's way too, played as its own ability.)
-        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && (mode.plan.builtin === "cast-spell" || (mode.plan.builtin && !["no-effect", "modes"].includes(mode.plan.builtin)) || cardCheck(mode.plan) || (all && mode.plan.resolution?.kind === "effect")) ? mode.plan : null, ...(mode.notes?.length ? { notes: [...mode.notes] } : {}) })),
+        modes: modes.map((mode) => ({ name: mode.name, plan: mode.plan && (mode.plan.builtin === "cast-spell" || (mode.plan.builtin && !["no-effect", "modes"].includes(mode.plan.builtin)) || cardCheck(mode.plan) || (all && mode.plan.resolution?.kind === "effect")) ? mode.plan : null, ...(mode.notes?.length ? { notes: [...mode.notes] } : {}), ...(mode.group ? { group: mode.group } : {}) })),
         ...(all ? { all: true, used: [] } : {}),
         warning,
         targets: targets.map((target) => ({ actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name })),
@@ -283,11 +283,14 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 // "Valeros takes −2 status to will (1 minutes)"
                 if (change.effect?.kind === "modifier") {
                     const modifier = change.effect.modifier;
-                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}${modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit})` : ""}`);
+                    // (Batch 275: against one creature only, the change's against.)
+                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}${change.against ? ` against ${names[change.against] ?? "that creature"}` : ""}${modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit})` : ""}`);
                 }
                 // A dropped weapon is named by the Foundry side, which knows which one fell.
                 if (change.effect?.kind === "disarm" && change.effect.what === "weaken") lines.push(`${who}'s grip is weakened (−${change.effect.penalty ?? 2} to attacks with that weapon)`);
                 if (change.effect?.kind === "native") lines.push(`${who} gets ${change.effect.label ?? "the effect"}`);
+                // (Batch 274: a note Effect, what the module can't play, on the creature.)
+                if (change.effect?.kind === "note") lines.push(`${who} gets a note: ${change.effect.note?.label ?? "the ability's words"}`);
                 if (change.effect?.kind === "swallow") lines.push(`${who} is swallowed (grabbed and slowed 1; ${change.effect.damage ? `takes ${change.effect.damage}` : "no damage"} at the end of each of its turns${change.effect.rupture ? `; Rupture ${change.effect.rupture}` : ""}${change.effect.escapeDC ? `; Escape DC ${change.effect.escapeDC}` : ""})`);
                 break;
             case "note":

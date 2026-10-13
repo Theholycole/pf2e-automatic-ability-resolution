@@ -438,6 +438,7 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a cast card where the GM names the spell (any common spell of a rank or lower), checked against PF2e's spells;
   - casting read in more words ("suffers the effects of", "is identical to", "This is a … spell"), a spell and a grab at once, Hunt Prey's kin without an edge;
   - a Gestalt merge is kept for the user's call (a new creature from nine, as summons are).
+- **Live check of batches 272–275** (2026-10-13): all their new pieces played in pftest; fixed on the way: Color Shift through PF2e's own toggle, groups kept on the mode card, the card's lines for note Effects and marked bonuses (`docs/live-play.md`).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

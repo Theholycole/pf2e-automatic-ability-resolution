@@ -204,8 +204,8 @@ test("a choice of ways keeps its builtins and words; every way in turn; zones th
     const ways = createModeCard({ modes: [{ name: "Iron", plan: stance }, { name: "Odd", plan: null, notes: ["Do it by hand."] }], ability: { name: "Test Stances" }, source, targets: [] });
     assert.deepEqual([ways.modes[0].plan?.builtin, ways.modes[1].notes, ways.all], ["self-effect", ["Do it by hand."], undefined]);
     const effect = { resolution: { kind: "effect", applications: [] } };
-    const all = createModeCard({ modes: [{ name: "Calm", plan: effect }, { name: "Iron", plan: stance }], ability: { name: "Test Words" }, source, targets: [], all: true });
-    assert.deepEqual([all.all, all.used, all.modes[0].plan?.resolution?.kind], [true, [], "effect"]);
+    const all = createModeCard({ modes: [{ name: "Calm", plan: effect, group: "words" }, { name: "Iron", plan: stance }], ability: { name: "Test Words" }, source, targets: [], all: true });
+    assert.deepEqual([all.all, all.used, all.modes[0].plan?.resolution?.kind, all.modes[0].group, all.modes[1].group], [true, [], "effect", "words", undefined]);
     const html = cardHTML({ ...all, used: [0] });
     assert.ok(html.includes("each in turn (1 left)") && !html.includes('data-mode="0"') && html.includes('data-mode="1"'));
     const { zoneActions, zoneMemberEffect, zoneRegion } = await import("../src/live/zones.js");
