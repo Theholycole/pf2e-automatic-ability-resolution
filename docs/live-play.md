@@ -2913,3 +2913,11 @@ Checked in pftest: Twice for Bad Luck's save rolled as `2d20kl` (PF2e's Misfortu
 
 Fixed on the way:
 - **Reaction cards on the creature its Strike hit:** a reaction card whose target is "the creature it damaged" (or it hit, or its Strike hit or damaged) went out with no target; it now goes on the creature that set it off.
+
+## The long tail after the user's choices, part 16 (2026-10-13, batch 288)
+
+- **New pieces:**
+  - A check at a set modifier (`check.modifier`: Envelop's +16, a spell attack modifier in place of Athletics for Telekinetic Shove and Trip): live, PF2e's check with that modifier as its base, against each target's DC; before this, such a card could not roll live.
+  - The card's check line shows a set modifier, a save's own bonus or penalty and a misfortune save.
+  - Abilities from the older Battlezoo bestiary read through its modernized links (`@Compendium[…]`, `@Check[type:…]`, `[[/r …]]`), its own linked effects too (Unravel's weapon Effect).
+- **Compiled** (29 new, all Battlezoo; Slough Skin the GM's as a form change): Six Palms Stance, Telekinetic Shove, Telekinetic Trip, Heroic Rally, Divinity Beam, Project and Serve, Consume the Dead, Entropic Reprisal, Focus Entropy, Protect and Preserve, Song of the Earth, Snag Weapon, Turn the Screws, Enucleate, Deny Shield, Lightning Horns, Fling Spines, Gliding Drop, Diseased Wake, Desperate Dive, Envelop, Angry Flutter, Drag Off, Leaping Strike, Blinking Slice, Warp Lash, Regurgitate, Swallow Evidence, Expel Air.

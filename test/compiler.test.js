@@ -5057,3 +5057,8 @@ test("an emotion action nearby as a provoking trigger, worded as one it would ta
     assert.deepEqual(readReactionTrigger("A creature within 20 feet would take an action that has the emotion trait"), { event: "provoke", reaction: true, triggers: ["emotion"], within: 20 });
     assert.deepEqual(readReactionTrigger("A creature within 20 feet uses an action that has the emotion trait"), { event: "provoke", reaction: true, triggers: ["emotion"], within: 20 });
 });
+
+test("a body shed to fight on as a swarm: the GM's, as forms are (2026-10-13, batch 288)", async () => {
+    const { gmDecided } = await import("../src/compiler/gm-decided.js");
+    assert.equal(gmDecided("Mogadb", "Slough Skin"), "form");
+});

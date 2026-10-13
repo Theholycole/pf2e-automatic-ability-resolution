@@ -234,3 +234,13 @@ test("a save's own bonus and a save rolled twice reach the card (2026-10-13, bat
     assert.deepEqual(cardCheck(save({ misfortune: true })), { kind: "save", statistic: "fortitude", dc: 23, basic: false, misfortune: true });
     assert.deepEqual(cardCheck(save({})), { kind: "save", statistic: "fortitude", dc: 23, basic: false });
 });
+
+test("a check at a set modifier, a save's penalty and a misfortune save, on the card (2026-10-13, batch 288)", () => {
+    const plan = (check) => ({ resolution: { kind: "check", check, sharedDamage: null, outcomes: {} } });
+    const enfold = plan({ roll: "skill", statistic: "enfold", modifier: 16, against: { dc: "target", statistic: "reflex" } });
+    assert.deepEqual(cardCheck(enfold), { kind: "check", statistic: "enfold", against: "reflex", modifier: 16 });
+    const card = (resolution) => createCard({ plan: { resolution: { sharedDamage: null, outcomes: {}, ...resolution } }, ability: { name: "Test" }, source: { actorUuid: "Actor.a", name: "A" }, targets: [] });
+    assert.match(cardHTML(card(enfold.resolution)), /Enfold \+16 against each target(?:'|&#39;)s Reflex DC/);
+    assert.match(cardHTML(card({ kind: "save", check: { roll: "save", statistic: "will", basic: false, against: { dc: "fixed", value: 26 }, misfortune: true } })), /DC 26 Will save, rolled twice \(the worse kept\)/);
+    assert.match(cardHTML(card({ kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: 23 }, bonus: { value: -2, type: "circumstance" } } })), /DC 23 Fortitude save \(−2 circumstance\)/);
+});

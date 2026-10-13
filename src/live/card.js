@@ -24,7 +24,8 @@ export function cardCheck(plan) {
     // No roll ("The target takes 3d8 fire damage"): every target is affected (2026-10-10).
     if (check.roll === "automatic") return { kind: "automatic" };
     // (A bonus of its own, "a +4 status bonus to the Athletics check", batch 36: added to the roll.)
-    if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}) };
+    // (Batch 288: a set modifier of its own — Envelop's "+16", a spell attack modifier in place of Athletics — rolled as that.)
+    if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(Number.isFinite(check.modifier) ? { modifier: check.modifier } : {}) };
     return null;
 }
 
@@ -168,12 +169,15 @@ export const allRolled = (state) => state.targets.length > 0 && state.targets.ev
 // The check line under the title: "DC 33 basic Reflex save" or "Athletics against each target's Fortitude DC".
 export function checkLine(state) {
     const check = state.check;
-    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} save`;
+    const signed = (value) => `${value < 0 ? "−" : "+"}${Math.abs(value)}`;
+    const bonus = check.bonus ? ` (${signed(check.bonus.value)} ${check.bonus.type})` : "";
+    // (Batch 286: its own bonus or penalty on the save, and a save rolled twice.)
+    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} save${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}`;
     if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
-    const bonus = check.bonus ? ` (+${check.bonus.value} ${check.bonus.type})` : "";
-    return `${statisticLabel(check.statistic)}${bonus} against each target's ${statisticLabel(check.against)} DC`;
+    // (Batch 288: a set modifier of its own.)
+    return `${statisticLabel(check.statistic)}${Number.isFinite(check.modifier) ? ` ${signed(check.modifier)}` : ""}${bonus} against each target's ${statisticLabel(check.against)} DC`;
 }
 
 // The card's HTML. Buttons carry data-aar-action ("roll", "roll-all", "targets",

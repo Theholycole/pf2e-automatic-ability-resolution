@@ -152,6 +152,8 @@ export const GM_DECIDED = [
     ["Woodpluck", "Cultivate Imagination", "items"],
     ["Woodpluck Elder", "Cultivate Imagination", "items"],
     // Disguises and forms (group B).
+    // (2026-10-13, batch 288: a body shed to fight on as a swarm, by the same rule.)
+    ["Mogadb", "Slough Skin", "form"],
     ["Dewdrop Ooze", "Disincorporate", "form"],
     ["Elder Outcrop", "Natural Formation", "form"],
     ["Elder Sphinx", "Guardian Monolith", "form"],

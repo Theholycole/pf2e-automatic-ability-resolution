@@ -971,6 +971,15 @@ async function rollTarget(message, target) {
         const saveBonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
         return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}) });
     }
+    // (Batch 288: a check at a set modifier, Envelop's +16 or a spell attack modifier in place of Athletics: PF2e's check with that as its base.)
+    if (Number.isFinite(state.check.modifier)) {
+        if (!Number.isFinite(target.dc)) throw new Error(`${target.name}'s ${statisticLabel(state.check.against)} DC is unknown.`);
+        const { Check, CheckModifier, Modifier } = game.pf2e ?? {};
+        if (!Check?.roll || !CheckModifier || !Modifier) throw new Error("PF2e's check roller isn't available.");
+        const extra = state.check.bonus ? [new Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
+        const check = new CheckModifier(state.ability.name, { modifiers: [] }, [new Modifier({ slug: "base", label: state.ability.name, modifier: state.check.modifier, type: "untyped" }), ...extra]);
+        return Check.roll(check, { actor: source, type: "skill-check", identifier, item, dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)} DC` }, options: new Set(), domains: [], traits: [], skipDialog: true });
+    }
     const statistic = source?.getStatistic?.(state.check.statistic);
     if (!statistic) throw new Error(`${state.source.name} has no ${statisticLabel(state.check.statistic)}.`);
     if (!Number.isFinite(target.dc)) throw new Error(`${target.name}'s ${statisticLabel(state.check.against)} DC is unknown.`);
