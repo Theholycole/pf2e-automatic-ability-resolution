@@ -168,3 +168,8 @@ test("a miss on it sets off a missed trigger, not a hit (2026-10-12, batch 246)"
     assert.equal(hitSetsOff({ ...missed, critical: true }, { outcome: "failure", distance: 5 }), false);
     assert.equal(hitSetsOff({ ...missed, critical: true }, { outcome: "criticalFailure", distance: 5 }), true);
 });
+
+test("a hit that sets off a reaction only when it isn't a critical one (2026-10-13, batch 287)", () => {
+    const trigger = { event: "hit-by", reaction: true, notCritical: true, damageTypes: ["bludgeoning", "slashing"] };
+    assert.deepEqual(["success", "criticalSuccess", "failure"].map((outcome) => hitSetsOff(trigger, { outcome })), [true, false, false]);
+});

@@ -5051,3 +5051,9 @@ test("an ally ordered to give itself up, and decoy statues made: the GM's (2026-
     const { gmDecided } = await import("../src/compiler/gm-decided.js");
     assert.deepEqual([gmDecided("Rothive", "Consume Swarm"), gmDecided("Rictus Mask", "Echoes of the Damned")], ["control", "summons"]);
 });
+
+test("an emotion action nearby as a provoking trigger, worded as one it would take (2026-10-13, batch 287)", async () => {
+    const { readReactionTrigger } = await import("../src/compiler/monster.js");
+    assert.deepEqual(readReactionTrigger("A creature within 20 feet would take an action that has the emotion trait"), { event: "provoke", reaction: true, triggers: ["emotion"], within: 20 });
+    assert.deepEqual(readReactionTrigger("A creature within 20 feet uses an action that has the emotion trait"), { event: "provoke", reaction: true, triggers: ["emotion"], within: 20 });
+});

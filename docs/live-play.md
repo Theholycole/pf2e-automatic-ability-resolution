@@ -2897,3 +2897,12 @@ Fixed on the way:
   - A cast pick with `cantrip: true` (Two Step Waltz): one of its own cantrips.
   - The simulation skips the ways of a choice whose requirement it can't check, like single abilities.
 - **Compiled** (30 rows; 28 new in Battlezoo, 2 the GM's — Consume Swarm as control, Echoes of the Damned as summons): Focus Beauty, Ride the Lightning, Inject Venom, Shifting Tempo, Leading Step, Bouncy, Fair Trade?, Mists of the Styx, Biobombardment, Overwhelming Infection, Conductive Shell, Two Step Waltz, Retreat into Shell, Tentacle Forest, Unfathomable Leap, Fractions of Life, Withdraw, Twice for Bad Luck (twice), Put That Away!, Analyze Armor, Cascading Disaster, Sap Spray, Shadow Step, Just Won't Die, Running Charge, Tendril Explosion.
+
+## The long tail after the user's choices, part 15 (2026-10-13, batch 287)
+
+- **New pieces:**
+  - A trigger worded as an action a creature is about to take reads as one it takes, and an emotion action is a provoking kind (Protect the Scene): live, an emotion spell or check (Demoralize) nearby offers the reaction; the simulation provokes on it too.
+  - A hit-by trigger with `notCritical` (Bounce): not on a critical hit.
+  - A choice of cast ways whose spell links have no label (Domain Wall): live, the mode card names each way from PF2e's compendium index.
+  - The simulation's multi-Strikes can require `prone-or-immobilized` (Radical Surgery).
+- **Compiled** (29 new, all Battlezoo): Spatial Hop, Septic Invasion, Activate Invader, Hemodermal Spray, Retrieve, Places, Please!, Protect the Scene, Bounce, Life from Death, Bounce Back, Mug of Tears, Confluence of Seasons, Refract, Experimental Defenses, Radical Surgery, Titan's Reach, Domain Wall, Spatial Shift, Take it from the Top, Resonant Carapace, Instill Loneliness, Absorb Soul, Wish Twist, Trinary Luck, Return to the Past, Instruments of War, Magnetic Hold, Extend Shadow, Snuff the Flames.

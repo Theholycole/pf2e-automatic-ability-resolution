@@ -331,7 +331,8 @@ async function onMessage(message) {
     // reaction Strikes that say so (Auditory Swipe, Disruptive Screech, Clinch Victory), not Reactive Strike.)
     const checkTraits = context?.type === "skill-check" ? (context.traits ?? []).map((trait) => trait?.name ?? trait) : [];
     // (Batch 254, Objection!: a linguistic action too.)
-    for (const [kind, words] of [["auditory", "used an auditory action"], ["healing", "used a healing action"], ["linguistic", "used a linguistic action"]]) {
+    // (Batch 287, Protect the Scene: an emotion action — Demoralize, an emotion spell.)
+    for (const [kind, words] of [["auditory", "used an auditory action"], ["healing", "used a healing action"], ["linguistic", "used a linguistic action"], ["emotion", "used an emotion action"]]) {
         if (!castTraits?.includes(kind) && !checkTraits.includes(kind)) continue;
         await reachTrigger(scene, combat, token, words, kind, { own: true });
         await provokeTrigger(scene, combat, token, kind, words);

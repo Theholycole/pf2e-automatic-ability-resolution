@@ -257,7 +257,8 @@ async function playAbility(item, plan, sourceToken) {
     // (Batch 273: or ways that are builtins — a stance or a self-effect of its choice, a maneuver against everyone around it.)
     if (plan?.builtin === "modes" && plan.modes.some((mode) => mode.plan && (mode.plan.builtin === "cast-spell" || (mode.plan.builtin && !["no-effect", "modes"].includes(mode.plan.builtin)) || ((mode.plan.trigger?.event ?? "use") === "use" && cardCheck(mode.plan))))) {
         const state = createModeCard({
-            modes: plan.modes,
+            // (Batch 287, Domain Wall: a way that casts a spell linked with no label — named by PF2e's compendium index.)
+            modes: plan.modes.map((mode) => (mode.plan?.builtin === "cast-spell" && mode.plan.spell?.uuid && !mode.plan.spell.name ? { ...mode, name: fromUuidSync(mode.plan.spell.uuid)?.name ?? mode.name } : mode)),
             ability: { name: item.name, uuid: item.uuid },
             source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
             targets: [...game.user.targets].map((token) => targetEntry(token, null)),

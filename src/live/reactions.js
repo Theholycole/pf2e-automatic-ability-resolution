@@ -59,6 +59,8 @@ export function hitSetsOff(trigger, { outcome, ranged = false, unarmed = false, 
     // (Batch 246, Robe Tangle: a miss on it instead — missed, a critical one with critical.)
     if (trigger?.event !== "hit-by" || !(trigger.missed ? ["failure", "criticalFailure"] : ["success", "criticalSuccess"]).includes(outcome)) return false;
     if (trigger.critical && outcome !== (trigger.missed ? "criticalFailure" : "criticalSuccess")) return false;
+    // (Batch 287, Bounce: not on a critical hit.)
+    if (trigger.notCritical && outcome === "criticalSuccess") return false;
     if (trigger.melee && ranged) return false;
     if (trigger.unarmed && !unarmed) return false;
     return !(trigger.within && Number.isFinite(distance) && distance > trigger.within);
