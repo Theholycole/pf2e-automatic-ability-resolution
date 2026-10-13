@@ -11,6 +11,8 @@ import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
 import { setUpHazards } from "./hazards.js";
 import { setUpZones, zoneEvent } from "./zones.js";
+import { setUpConjure } from "./conjure.js";
+import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
@@ -76,7 +78,12 @@ Hooks.once("ready", () => {
     setUpReactions({ compileItem });
     setUpHazards({ compileItem });
     setUpZones();
+    setUpConjure();
+    setUpReminders({ compileItem });
 });
+
+// (Batch 296: the reaction reminders' world setting.)
+Hooks.once("init", () => registerReminderSetting());
 
 Hooks.once("ready", async () => {
     await loadBasicActions();

@@ -191,3 +191,39 @@ export function golemAnswer(plan, { kinds, area = false }) {
     if (listed(plan?.slowed)) return { kind: "slowed", rounds: area ? 1 : null };
     return { kind: "immune" };
 }
+
+// The reactions the module offers by itself as their trigger happens (scripts/reactions.js): its builtins for them (moved here from
+// scripts/reactions.js on 2026-10-13, batch 296, so the reminders know them too), and the trigger events its hooks watch.
+export const REACTION_KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill", "redirect-attack", "heal-siphon"]);
+// (Played by their own hooks: Attack of Opportunity as Reactive Strike, Fast Swallow after a grab, the initiative warnings; Shield Block by
+// PF2e itself, as damage is applied.)
+const PLAYED_ELSEWHERE = new Set(["attack-of-opportunity", "fast-swallow", "initiative-warning", "shield-block"]);
+export const WATCHED_EVENTS = new Set(["provoke", "own-strike", "grab-turn", "damaged", "turn-start", "own-turn-start", "targeted-by", "initiative", "hit-by", "foe-mishap", "foe-failed-save", "escape-failed", "escaped", "downs", "death", "condition-lost", "condition-gained", "attacked", "aura"]);
+
+// Whether the module offers this reaction itself when its trigger happens.
+export function offeredByModule(plan) {
+    if (!plan) return false;
+    if (REACTION_KINDS.has(plan.builtin) || PLAYED_ELSEWHERE.has(plan.builtin)) return true;
+    if (plan.builtin === "mythic" && plan.kind === "undying") return true;
+    if (plan.builtin === "strike-activity" && plan.initiative) return true;
+    return Boolean(plan.trigger && WATCHED_EVENTS.has(plan.trigger.event));
+}
+
+// A reaction (or a free action with a trigger) the GM has to remember, because the module can't see its trigger (2026-10-13, batch 296, the
+// user's call): { trigger } (its trigger in words, null when the text has none), or null when the module offers it itself or it isn't one.
+// type: the item's action type; text: its description as plain text. The GM's own abilities, and those with nothing to play, get reminders
+// too: the GM still has to remember them.
+export function reminderFor({ type, plan, text }) {
+    const said = String(text ?? "");
+    const written = /\bTrigger (.+?)(?:;|\.)? (?:Requirements?|Effect)\b/.exec(said)?.[1] ?? /\bTrigger (.+?)\.(?: |$)/.exec(said)?.[1] ?? null;
+    if (type !== "reaction" && !(type === "free" && written)) return null;
+    if (offeredByModule(plan)) return null;
+    const noted = (plan?.notes ?? []).map(String).find((note) => /^Its trigger, the GM's call: /.test(note))?.replace(/^Its trigger, the GM's call: /, "").replace(/\.$/, "");
+    return { trigger: noted ?? written ?? null };
+}
+
+// The reminder card: [{ creature, entries: [{ ability, trigger, free, used, key }] }] → its HTML, a Use button on each.
+export function reminderHTML(groups) {
+    const rows = groups.map((group) => `<li><strong>${escape(group.creature)}</strong><ul>${group.entries.map((entry) => `<li>${escape(entry.ability)}${entry.free ? " (free)" : ""}${entry.trigger ? ` — ${escape(entry.trigger)}` : ""} ${entry.used ? "<em>used</em>" : `<button type="button" data-aar-remind="${escape(entry.key)}">Use</button>`}</li>`).join("")}</ul></li>`).join("");
+    return `<section class="pf2e-aar-reminders"><p><strong>Reactions to watch for</strong> (their triggers aren't ones the module sees)</p><ul>${rows}</ul></section>`;
+}

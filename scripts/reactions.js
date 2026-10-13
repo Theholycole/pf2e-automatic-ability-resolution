@@ -26,7 +26,7 @@
 // Using one marks the monster "Reaction used" until the start of its next turn.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
+import { REACTION_KINDS, blocksReactions, damageNote, degreeOf, degreeWords, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
 import { box, gridOf, inEncounter, runningCombat } from "./auras.js";
 import { startZone } from "./zones.js";
 import { zoneDamagePlan } from "../src/live/zones.js";
@@ -41,7 +41,7 @@ const FLAG = "reaction";
 export const NO_GRAB = "pf2e-automatic-ability-resolution:no-grab";
 // PF2e's actor sizes in the words a trigger uses ("A Medium creature").
 const SIZE_WORDS = { tiny: "tiny", sm: "small", med: "medium", lg: "large", huge: "huge", grg: "gargantuan" };
-const KINDS = new Set(["reactive-strike", "reaction-strike", "ac-reaction", "attack-misfortune", "death-strike", "ferocity", "retributive-strike", "champion-reaction", "crit-downgrade", "conceal-reaction", "crit-resistance", "negate-condition", "save-boost", "save-reroll", "ally-ac-reaction", "resist-damage", "escape-guard", "save-bonus-reaction", "withdraw", "follow", "crit-recharge", "crit-upgrade", "intercept", "rescue", "save-skill", "redirect-attack", "heal-siphon"]);
+const KINDS = REACTION_KINDS;
 
 let compile = () => null;
 let queue = Promise.resolve();
@@ -106,6 +106,8 @@ function reactionsOf(actor) {
 // Still running, by PF2e's live count (its stored expired flag is only as fresh as the last data preparation).
 const running = (effect) => !(effect.remainingDuration?.expired ?? effect.isExpired);
 const reactionUsed = (actor) => actor.itemTypes.effect.some((effect) => effect.flags?.[MODULE_ID]?.reactionUsed && running(effect));
+// (Batch 296: whether it can react now — for the reminders, scripts/reminders.js.)
+export const reactionAvailable = (actor) => !(blocksReactions(actor.conditions.active.map((condition) => condition.slug)) || reactionUsed(actor));
 
 // Monsters in the encounter on this scene that can react now: [{ token, actor, reactions }].
 function reactors(scene, combat, { atZero = false } = {}) {
@@ -1485,7 +1487,7 @@ async function rollStrike(state, actor, slug) {
 const settle = (message, state, status, result) => message.update({ content: offerHTML({ ...state, status, result }), [`flags.${MODULE_ID}.${FLAG}`]: { ...state, status, result } });
 
 // "Reaction used" until the start of its next turn.
-async function markUsed(actor, token) {
+export async function markUsed(actor, token) {
     const combat = game.combat?.started ? game.combat : null;
     const position = combat ? combat.turns.findIndex((entry) => entry.tokenId === token.id) : -1;
     const rounds = combat && position >= 0 ? reactionRounds(position, combat.turn) : 1;

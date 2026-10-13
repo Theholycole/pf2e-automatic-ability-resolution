@@ -14,6 +14,7 @@ import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js"
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { startZone } from "./zones.js";
+import { startConjure } from "./conjure.js";
 import { strikeBuffEffect } from "../src/live/buff.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
@@ -202,6 +203,11 @@ async function playAbility(item, plan, sourceToken) {
         await startZone({ item, plan, sourceToken });
         const recharge = rechargeFormula(item, plan);
         if (recharge) await noteToGM(item.actor, sourceToken, [rechargeWarning(item.actor, item.name), await startRecharge({ actor: item.actor, item, formula: recharge, tokenUuid: sourceToken?.uuid ?? null })].filter(Boolean));
+        return;
+    }
+    // (Batch 295: creatures it makes or becomes — Eye Probe's probes, the Gestalt: their tokens and card, scripts/conjure.js.)
+    if (plan?.builtin === "conjure") {
+        await startConjure({ item, plan, sourceToken });
         return;
     }
     // (Batch 274: a choice PF2e holds as the ability's own toggle — Ablative Adaptation's material: the toggle set to it.)

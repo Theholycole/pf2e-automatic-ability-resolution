@@ -119,6 +119,9 @@ export const GM_DECIDED = [
     ["Living Proof", "Sudden Infusion", "items"],
     // (Batch 294: a snare set under a foe.)
     ["Duhgik", "Surprise Snare", "items"],
+    // (2026-10-13, the user's call on the deferred list: saved for the item module.)
+    ["Purrodaemon", "Steep Weapon", "items"],
+    ["Shield Archon", "Morphic Hands", "items"],
     // (Batch 293: a foe's weapon drawn into a dragon's body and used.)
     ["Bionic Dragon (Great Wyrm)", "Assimilate Weapon", "items"],
     ["Bionic Dragon (Great Wyrm, Spellcaster)", "Assimilate Weapon", "items"],

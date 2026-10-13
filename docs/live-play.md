@@ -2961,3 +2961,32 @@ Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check agains
 ## Live check of batches 289–294 (2026-10-13)
 
 Checked in pftest: Unleash Hive's Effect with PF2e's FastHealing 3 for a minute; Quick Escape offered as the beetle became Grabbed (its Escape card waiting for the grabber as target) and Melt Time as the adada became Slowed (its card gave Quickened); Sphere Shift's ways naming the five attunements, the pick switching the toggle on its Elemental Attunement from ether to earth (physical resistance 10); Feather Strike's card rolling `1d20 + 11` against Valeros's AC 23 and recording the success. Nothing to fix.
+
+## Creatures an ability makes (2026-10-13, batch 295)
+
+- **New plan:** `{ builtin: "conjure", creatures: [{ name, count, size, stats, from }], merge?, lasts, max?, notes }`. `stats` holds the numbers the text gives (AC, Hit Points, Speeds), `null` for a marker; `from` names PF2e's creature when the text links one. `merge: { count, split }` is a merge; `max` caps how many there can be at once.
+- **Live** (`scripts/conjure.js`, pure parts in `src/live/conjure.js`): each creature is a world actor (PF2e's when linked, otherwise one built from the numbers) with its maker's alliance, so PF2e gives its token its maker's disposition. Its token goes on the nearest free squares around the maker. Over `max`, the farthest earlier ones go. A merge needs that many visible, living creatures of the maker's kind on its side, nearest first. They are hidden and leave the turns. The merged creature takes over one of their combatants (the one acting now, else its maker's), so the turn doesn't move. Deleting the acting combatant made Foundry move the turn, and PF2e then started the merged creature's turn in the next round, so its real start there was skipped. A timed merge ends at the start of its turn that many rounds on. Parting hands that combatant back, puts the others back at their own initiative, and shares out the Hit Points left; those with none are dead and defeated. The GM card's button dismisses or parts them. Each ends once, even when PF2e starts a turn once per defeated combatant it skips, all at the same moment.
+- **Compiled:** Eye Probe (Hyakume), Spirit Blades (Bikkhasura), Gestalt (Lantern Archon). Steep Weapon (Purrodaemon) and Morphic Hands (Shield Archon) are the GM's (`items`) until the item module.
+- **The simulator** doesn't play `conjure`: its creatures aren't in its fights.
+
+## Reaction reminders (2026-10-13, batch 296)
+
+- **How reactions work live:** the module watches a set of triggers (`WATCHED_EVENTS` in `src/live/reactions.js`): moves and manipulate actions that provoke, its own Strikes, being hit, targeted or damaged, turns and initiative, a foe's failed save or mishap, escapes, downs and deaths, conditions gained and lost, auras. When one happens, it posts a GM-only card for each monster's reaction it fits, with "Use it" and "Not now". One reaction a round is tracked with a "Reaction used" effect, cleared at the creature's turn. Attacks of Opportunity, Shield Block, swallows and initiative warnings are played elsewhere.
+- **Reminders** (`scripts/reminders.js`): at the start of each turn, for the active GM, a whispered card lists the reactions (and free actions with a trigger) of the encounter's living, visible monsters whose triggers the module doesn't watch. Each line has its trigger, from the ability's own words or the GM note, and a Use button. Spent reactions drop off until the creature's next turn. Use posts the ability as from its sheet (the module plays what it can), marks the reaction spent, and the card says "used". The earlier cards of that combat are deleted, found by their flags so a reload doesn't leave them. Calls run one at a time, because PF2e can start a turn several times at once when it skips defeated combatants.
+- **Setting:** "Reaction reminders" (world): every turn (default), once a round (at the top of the round) or off.
+- **Numbers:** about 1,510 reactions get reminders, against about 2,700 the module offers itself. 1,368 of 7,039 creatures have at least one reminder line.
+
+## Live check of batches 295–296 (2026-10-13)
+
+Checked in pftest with nine Lantern Archons, a Hyakume, a Bikkhasura, Rhevanna and Valeros in a combat.
+
+- **Reminders:** the card listed Rhevanna's Detaining Strike (free) and Lifedrinker, and Bikkhasura's Horrific Glimpse, with their triggers. Use posted Lifedrinker, gave Rhevanna "Reaction used" and marked the line. The next turn's card replaced it, without Lifedrinker. The once-a-round setting skipped mid-round turns.
+- **Eye Probe:** six Tiny probes with AC 26, 1 HP and fly 40 went on free squares around the Large hyakume. Using it again replaced them, and Dismiss removed tokens and actors.
+- **Spirit Blades:** six markers around the Huge bikkhasura, off other tokens and inside the scene.
+- **Gestalt:** merged nine archons into PF2e's Gestalt (100 HP). Parting at 50 HP gave each 5, and at 5 HP gave five of them 1 and left four dead and defeated. A timed end parted it at its turn start, repeatedly, including on a turn reached by skipping two defeated combatants.
+- **Fixed during the check:**
+  - conjured creatures now take their maker's alliance;
+  - the merged creature takes over a combatant instead of deleting the acting one (PF2e had skipped its next turn start, so it never ended);
+  - reminder cards are found by their flags after a reload;
+  - reminder calls and endings run once, even when PF2e starts a turn several times at once.
+

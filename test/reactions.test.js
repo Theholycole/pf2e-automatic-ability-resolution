@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, withdrawMove } from "../src/live/reactions.js";
+import { blocksReactions, damageNote, degreeOf, higherAC, hitSetsOff, leftReach, offerHTML, offeredByModule, onlyStrike, followMove, ownStrikeSetsOff, reactionRounds, reminderFor, reminderHTML, withdrawMove } from "../src/live/reactions.js";
 
 test("which Strike a reaction allows", () => {
     assert.equal(onlyStrike("Reactive Strike (Tail Only)"), "tail");
@@ -172,4 +172,22 @@ test("a miss on it sets off a missed trigger, not a hit (2026-10-12, batch 246)"
 test("a hit that sets off a reaction only when it isn't a critical one (2026-10-13, batch 287)", () => {
     const trigger = { event: "hit-by", reaction: true, notCritical: true, damageTypes: ["bludgeoning", "slashing"] };
     assert.deepEqual(["success", "criticalSuccess", "failure"].map((outcome) => hitSetsOff(trigger, { outcome })), [true, false, false]);
+});
+
+test("reminders for the reactions the module can't watch, not for those it offers itself (2026-10-13, batch 296)", () => {
+    // Offered by the module: its reaction builtins, the triggers its hooks watch, those played elsewhere.
+    assert.deepEqual([{ builtin: "reactive-strike" }, { trigger: { event: "hit-by", reaction: true } }, { builtin: "attack-of-opportunity" }, { builtin: "shield-block" }, { builtin: "mythic", kind: "undying" }].map(offeredByModule), [true, true, true, true, true]);
+    // The GM's call: a trigger the module can't see, written in its notes.
+    const pressed = { resolution: {}, trigger: { event: "use", reaction: true }, notes: ["Its trigger, the GM's call: The test giant is named aloud.", "Something else."] };
+    assert.deepEqual(reminderFor({ type: "reaction", plan: pressed, text: "Trigger The test giant is named aloud Effect It pushes." }), { trigger: "The test giant is named aloud" });
+    // The GM's own and those with nothing to play still get one, from the text; a free action only with a trigger; not a watched one.
+    assert.deepEqual(reminderFor({ type: "reaction", plan: { builtin: "no-effect", gm: "state" }, text: "Trigger The test drake is in its lair Effect It hides." }), { trigger: "The test drake is in its lair" });
+    assert.deepEqual(reminderFor({ type: "reaction", plan: null, text: "It does something." }), { trigger: null });
+    assert.equal(reminderFor({ type: "free", plan: null, text: "It does something." }), null);
+    assert.equal(reminderFor({ type: "reaction", plan: { builtin: "reaction-strike" }, text: "Trigger A creature leaves a square in reach. Effect Strike." }), null);
+    assert.equal(reminderFor({ type: "action", plan: null, text: "Trigger X Effect Y" }), null);
+    const html = reminderHTML([{ creature: "Test Drake", entries: [{ ability: "Rebuff", trigger: "A creature moves closer", free: false, used: false, key: "Scene.a.Token.b|c" }, { ability: "Flutter", trigger: null, free: true, used: true, key: "k" }] }]);
+    assert.match(html, /<strong>Test Drake<\/strong>/);
+    assert.match(html, /Rebuff — A creature moves closer <button type="button" data-aar-remind="Scene\.a\.Token\.b\|c">Use<\/button>/);
+    assert.match(html, /Flutter \(free\) <em>used<\/em>/);
 });
