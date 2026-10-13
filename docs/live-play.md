@@ -2869,3 +2869,7 @@ Fixed on the way:
 - **Toggle domains:** a toggle is switched in its own rule's domain (Extend Strands' is `skill-check`), not always `all`.
 - **Own spells by name:** a name without the sheet's suffix finds the spell ("Fear" for "Fear (At Will)").
 
+## The long tail after the user's choices, part 10 (2026-10-13, batch 282)
+
+- **Compiled** (30 rows; 29 new in PF2e, 2 more that were the GM's): Saving Touch, Succumb to the Void, Overambitious Spell, Herbal Poison, Guardian Shield, Diplomatic Immunity, Overacted Strike, Pragmatic Aid, "Courageous" Retreat, Somersault Attack, Distracting Escape, Retort, Cite Precedent, Disarming Shot, War Cry, Sight Prey, Borrow Time, Paper Pusher, Feline Skirmish, Shatter Spell, Fickle Prophecy, Gift of the Wild Spirits, Focused Thinker, Sic 'Em!, Smite, Energy Projector, Mid-air Collision. Rightfully Mine (copies) and Risky Upgrade (items) are added to `gm-decided.js` under the user's standing categories.
+

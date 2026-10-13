@@ -110,6 +110,8 @@ export const GM_DECIDED = [
     ["Wyrmwraith", "Ectoplasmic Form", "out-of-combat"],
     ["Zebub", "Diabolic Eye", "out-of-combat"],
     // Items: making, stealing or using them (group B; the future item module's).
+    // (2026-10-13, batch 282: a device or vehicle upgraded, by the same rule.)
+    ["Mechanic", "Risky Upgrade", "items"],
     ["Apothecary Bee", "Ingest Potion", "items"],
     ["Apothecary Bee", "Inject Potion", "items"],
     ["Einherji", "Instant Repair", "items"],
@@ -251,6 +253,8 @@ export const GM_DECIDED = [
     ["Phase Tiger", "Ethereal Step (Free on Turn 1)", "plane-shift"],
     ["Planar Rift", "Into the Great Beyond", "plane-shift"],
     // Copies (group B).
+    // (2026-10-13, batch 282: one more copy, by the user's rule of 2026-10-12 — a creature's action duplicated.)
+    ["Mirror Seer", "Rightfully Mine", "copies"],
     ["Clone Mirrors", "Spawn Reflection", "copies"],
     ["Darkside Mirror", "Reflection of Malice", "copies"],
     // Adventure creatures (group B).
