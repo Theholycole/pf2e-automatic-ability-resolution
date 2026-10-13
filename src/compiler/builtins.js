@@ -1417,7 +1417,10 @@ function readResistDamage(text, trigger, effect) {
         const riposte = /^(?:The )?[^.]+? gains? resistance (\d+) to physical damage from the attack, and if the attack hits, the attacker takes @Damage\[((?:[^[\]]|\[[^\]]*\])*)\](?:\{[^}]*\})? damage\.$/i.exec(said.at(-1) ?? "");
         if ((said.length === 1 || told) && riposte) return { builtin: "resist-damage", value: Number(riposte[1]), on: ["physical"], types: ["physical"], attack: true, foe: true, melee: true, retort: riposte[2], note: `If the attack hits, the attacker takes ${riposte[2].replace(/^\((.*)\)\[(\w+)\]$/, "$1 $2").replace(/\[(\w+)\]$/, " $1")} damage.` };
     }
-    const said = trigger.trim().replace(/\.$/, "").replace(/,? or with a spell that has the [\w ,]+? traits?$/i, "");
+    // (Batch 259, Earth Block: "… takes physical damage while adjacent to stone or earth" — that damage; where it stands, the GM's. Its "resistance
+    // physical 5 against the attack" as the usual words.)
+    const said = trigger.trim().replace(/\.$/, "").replace(/,? or with a spell that has the [\w ,]+? traits?$/i, "").replace(/ while adjacent to [\w ]+?$/i, "");
+    effect = effect.replace(/\bgains resistance (physical|[a-z]+) (\d+) against the attack\./i, "gains $1 resistance $2 against the triggering attack.");
     const self = String.raw`(?!An? |Any |One )(?:The )?[^.]+?`;
     let on = null;
     let attack = false;
@@ -2777,6 +2780,9 @@ export function readReaction(item, text) {
         return { builtin: "retributive-strike", resistance: Number(champion[1]) };
     }
     const resisting = readResistDamage(text, trigger, effect);
+    // (Batch 259, Earth Block: where it must stand, "while adjacent to stone or earth" — a note on its offer.)
+    const standing = / while adjacent to ([\w ]+?)\.?$/i.exec(String(trigger ?? "").trim());
+    if (resisting && standing) resisting.note = [resisting.note, `Only while adjacent to ${standing[1]}.`].filter(Boolean).join(" ");
     if (resisting) return resisting;
     // Harder to escape (2026-10-11, batch 81): "Trigger A creature Grabbed or Restrained by the zinba attempts to Escape Effect The DC of the
     // Escape check is increased by 2", "… The triggering creature takes a –2 circumstance penalty to the check to Escape." → { builtin:
@@ -3640,6 +3646,15 @@ export function readSelfGuard(item) {
     // Shoved or Tripped. Her Speed is reduced by 5 feet." — a stance for the fight; the rest notes.)
     const mountain = /^(?:Requirements? (?:The )?[\w' -]+? is unarmored(?: and touching the ground)?\.? Effect )?(?:The )?[\w' -]+? enters the stance of [^.]+? until (?:she|he|it|they) (?:is|are) knocked out or the encounter ends\. (?:She|He|It|They) gains? an? \+(\d) (status|circumstance) bonus to AC(?: and an? \+(\d) circumstance bonus to any defenses against being Shoved or Tripped)?\.(?: (?:Her|His|Its|Their) Speed is reduced by (\d+) feet\.)?$/i.exec(text);
     if (mountain) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: null, modifiers: [{ on: "ac", type: mountain[2].toLowerCase(), value: Number(mountain[1]) }], tempHp: 0 }, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: [...(mountain[3] ? [`+${mountain[3]} circumstance bonus to its defenses against Shove and Trip.`] : []), ...(mountain[4] ? [`Its Speed is ${mountain[4]} feet lower.`] : [])] };
+    // (Batch 259, Animal Shield: "Requirements The sedacthy speaker is adjacent to a Large or larger animal ally Effect The speaker gains cover until
+    // the start of their next turn or when they're no longer adjacent to the animal, whichever comes first." — cover's +2 AC until its next turn; where
+    // it must stand, a note. Rev Up: "Requirements The spiral centurion hasn't acted yet this turn Effect The spiral centurion Strides up to its Speed.
+    // It then gains a +2 circumstance bonus to attack and damage rolls until the end of its turn." — the bonus this turn; the Stride and its first
+    // action, notes.)
+    const shield = /^Requirements? (?:The )?[\w' -]+? is adjacent to an? ([\w' -]+? ally) Effect (?:The )?[\w' -]+? gains cover until the start of (?:its|their|his|her) next turn or when (?:it's|they're|he's|she's) no longer adjacent to the [\w' -]+?, whichever comes first\.$/i.exec(text);
+    if (shield) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0 }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, notes: [`Only beside a ${shield[1]}; it ends if it's no longer beside it.`] };
+    const revUp = /^Requirements? (?:The )?[\w' -]+? hasn't acted yet this turn Effect (?:The )?[\w' -]+? Strides up to (?:its|their|his|her) Speed\. (?:It|They|He|She) then gains? an? \+(\d+) circumstance bonus to attack and damage rolls until the end of (?:its|their|his|her) turn\.$/i.exec(text);
+    if (revUp) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 0, modifiers: [{ on: "attack", type: "circumstance", value: Number(revUp[1]) }, { on: "damage", type: "circumstance", value: Number(revUp[1]) }], tempHp: 0 }, damage: [], strike: null, melee: false, duration: { value: 0, unit: "rounds", expiry: "turn-end" }, notes: ["Its first action this turn: it Strides up to its Speed first."] };
     const required = /^Requirements? (.+?) Effect /.exec(text)?.[1] ?? "";
     // (Batch 158, Mountain Stronghold: "Requirements Evora is in Mountain Stance" — only while that stance of its own is on it.)
     const inStance = /^(?:The )?[\w' -]+? is in ([A-Z][\w' -]+? Stance)\.?$/.exec(required.trim())?.[1] ?? null;

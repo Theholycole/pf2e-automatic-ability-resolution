@@ -355,6 +355,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a Strike buff with regeneration (Bully the Departed);
   - allies Quickened around it (Frenzy Pheromone), and an allies' effect that lasts 2d4 rounds (Stoke the Fervent);
   - reaction Strikes when it's targeted from afar (Roiling Rebuke) or when a creature attacks or heals beside it (Spite).
+- **Held creatures, retreats and one-offs** (2026-10-12, batch 259): 12 new in PF2e and 4 adventure abilities that were the GM's. They include:
+  - a reaction at initiative that uses another ability (Defensive Scream);
+  - venom spat at an attacker (Spit Boiling Blood), and resistance while beside stone (Earth Block);
+  - cover beside an ally (Animal Shield), and a bonus after moving (Rev Up);
+  - what it does to a creature it holds: a throw (Deadly Throw), a tooth (Broken Barb), a gulp into Swallow Whole (Toss Up and Gulp Down), a venom transfer (Tentacle Transfer);
+  - a retreat when hurt (Detach), temporary Hit Points after a bite (Devour Wealth), and an ally's boost after a spell (Inspiring Display).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

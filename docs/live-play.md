@@ -2543,3 +2543,20 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **Reaction Strikes:** "A creature within 200 feet targets the titan with or includes the titan in the area of an attack, spell, or other effect" is targeted (that far), disrupting on a hit. "A creature within reach of the kun's tail uses an action to attack or heal another creature" is an attack on it or healing beside it, disrupting on a hit, with the push a note.
 - **Simulator:** see B258 in its ability decisions.
 
+
+## Held creatures, retreats and one-offs (2026-10-12, batch 259)
+
+- **Compiled** (12 new in PF2e; 4 adventure abilities that were the GM's):
+  - **Initiative reactions:** "rolls initiative or has taken damage before initiative" reads as initiative. A sentence that only describes the reaction before "It uses Screaming Force" is set aside, so the reaction uses that ability (Defensive Scream).
+  - **Venom spat at an attacker:** "spits blood at the creature. It must immediately attempt a Fortitude save against boiling blood" exposes the creature that hurt it to its own affliction (Spit Boiling Blood).
+  - **Resistance while beside something:** "takes physical damage while adjacent to stone or earth … gains resistance physical 5 against the attack" is the usual resist offer. Where it must stand is a note on the offer, for the GM to check (Earth Block).
+  - **Self-buffs:** cover beside a large animal ally is +2 circumstance AC until its next turn, with where it must stand as a note (Animal Shield). A +2 circumstance bonus to attack and damage rolls this turn, with the Stride first as a note (Rev Up).
+  - **What it does to a creature it holds:**
+    - A throw 100 feet up falls for 50 bludgeoning damage (Deadly Throw).
+    - A tooth broken off in the creature deals its bleed damage and ends the grab; the pin is a note (Broken Barb).
+    - Tossing the creature up to its mouth uses its own Swallow Whole, with the fall on a failure as a note (Toss Up and Gulp Down).
+    - Moving the creature into its tentacles exposes it to its own venom; the exposure each turn is a note (Tentacle Transfer).
+  - **A retreat when hurt:** "falls below half its total Hit Points … then Strides three times. This movement doesn't trigger reactions" is a move that triggers no reactions, with the requirement as a note (Detach).
+  - **Temporary Hit Points from gold:** after a jaws hit, it gains 2d12 temporary Hit Points for a minute. A note says the amount can't be more than the gold the creature carries (Devour Wealth).
+  - **An after-spell boost:** "previous action was to Cast a Spell … inspire another kobold within 30 feet" gives PF2e's effect to one ally within 30 feet, only straight after a spell (Inspiring Display).
+- **Simulator:** an ability that needs a spell just before is used only right after it casts one (B259 in its ability decisions).
