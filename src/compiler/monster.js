@@ -4582,11 +4582,17 @@ function readZone(item, actor = null) {
         let said = line;
         if (/^Effect: /i.test(said)) continue;
         if (ZONE_EFFECT.test(sentence) && /^Effect: [^.]+\.?$/i.test(said)) continue;
-        const template = inlineTags(sentence, "Template").map(readTemplate).find(Boolean);
+        // (Batch 262: a square given by its sides in feet, with how far away it may be — a square the GM places, that far away at most.)
+        const square = zone.area ? null : /\bin an? (\d+)[-\u2011]foot by \1[-\u2011]foot area(?: within (\d+) feet of (?:it|them|itself|themselves|him|her))?\b/i.exec(said);
+        const template = inlineTags(sentence, "Template").map(readTemplate).find(Boolean) ?? (square ? { type: "square", value: Number(square[1]) } : null);
         // The area it makes: where, how long, and terrain it says there.
         if (template && !zone.area) {
             said = `${lead} ${said}`.trim();
-            if (!["burst", "emanation", "cone", "line"].includes(template.type) || /@Damage\[|@Check\[/.test(sentence)) return null;
+            if (!["burst", "emanation", "cone", "line", "square"].includes(template.type) || /@Damage\[|@Check\[/.test(sentence)) return null;
+            if (template.type === "square") {
+                zone.centre = "placed";
+                zone.range = Number(square[2]) || null;
+            }
             // (Not what the creatures there get at once, an ally's bonus or extra damage for a round: War Cry's, Sic 'Em!'s.)
             if (/^(?:Each|All|Any|Every)\b/i.test(said) || /\b(?:gains?|deals?) (?:an? )?(?:additional|[+–-]\d)/i.test(said)) return null;
             zone.area = { type: template.type, value: template.value };
@@ -4644,6 +4650,13 @@ function readZone(item, actor = null) {
             if (/\buntil (?:the [\w' -]+?|it|they|he|she) uses? this (?:ability|action) again\b/i.test(said)) zone.untilReused = true;
             continue;
         }
+        // (Batch 262: a trap that vanishes on its own after a minute, which its maker may Dismiss sooner — that long; the Dismiss a note.)
+        const fades = /^This [\w' -]+? (?:naturally )?disappears after (\d+|one) minutes?(, though (?:the [\w' -]+?|it|they) can Dismiss it before the duration expires)?\.$/i.exec(said);
+        if (fades) {
+            zone.lasts = readDuration(`for ${fades[1]} minute${fades[1] === "1" || /^one$/i.test(fades[1]) ? "" : "s"}`) ?? zone.lasts;
+            if (fades[2]) zone.notes.push("It can Dismiss it sooner.");
+            continue;
+        }
         // "… can use this action again to dismiss …", "… can end the storm by taking this action again."
         if (/\b(?:can|may) (?:use this (?:action|ability) again to (?:dismiss|end)|end (?:the|this) [\w ]+? by (?:taking|using) this (?:action|ability) again)\b/i.test(said)) {
             zone.untilReused = true;
@@ -4686,9 +4699,16 @@ function readZone(item, actor = null) {
         // A save on whoever enters, starts or ends a turn in it, or is there as it's made.
         const subject = check ? said.slice(0, said.indexOf(check[0])) : "";
         if (check && /\bmust (?:attempt|succeed at|succeed on) an? $/i.test(subject)) {
-            const rest = said.slice(said.indexOf(check[0]) + check[0].length).replace(/^\s*(?:saving throw|save)\b\s*/i, "").replace(/^or\s+/i, "").replace(/\.$/, "");
+            // (Batch 262: a save to get clear "or take" the damage, then when the damage counts after a semicolon — the damage; when it counts, a
+            // note.)
+            let rest = said.slice(said.indexOf(check[0]) + check[0].length).replace(/^\s*(?:saving throw|save)\b\s*/i, "").replace(/^to [^,;@]+? or\s+/i, "").replace(/^or\s+/i, "").replace(/\.$/, "");
+            rest = rest.replace(/; (a creature takes the damage only once [^.]+)$/i, (_all, once) => {
+                zone.notes.push(`${once[0].toUpperCase()}${once.slice(1)}.`);
+                return "";
+            });
             // ("The first time each round a creature takes piercing damage from these bones, it must …": as it moves in.)
-            const when = [...(/\benters?\b|\bwho enter\b|^The first time each round an? creature takes [\w ]+? damage from (?:these|this|the)\b/i.test(subject) ? ["enter"] : []), ...(/\b(?:starts?|begins?) (?:its|their) turns?\b/i.test(subject) ? ["start"] : []), ...(/\bends? (?:its|their) turns?\b/i.test(subject) ? ["end"] : [])];
+            // (Batch 262: whoever is in the area as the ability is used, or comes in afterwards: as it's made, and on entering.)
+            const when = [...(/\bwithin the area when (?:the [\w' -]+?|it|they) uses\b/i.test(subject) ? ["initial"] : []), ...(/\benters?\b|\bwho enter\b|^The first time each round an? creature takes [\w ]+? damage from (?:these|this|the)\b/i.test(subject) ? ["enter"] : []), ...(/\b(?:starts?|begins?) (?:its|their) turns?\b/i.test(subject) ? ["start"] : []), ...(/\bends? (?:its|their) turns?\b/i.test(subject) ? ["end"] : [])];
             const there = /^(?:Each|Every|All|Any) creatures? (?:with)?in (?:the|this|that) /i.test(subject) || /^Creatures (?:with)?in (?:the|this|that) /i.test(subject);
             // (Sandstorm: "Creatures within the emanation take a –4 circumstance penalty to Perception checks and must succeed at …".)
             const penalty = /^Creatures (?:with)?in (?:the|this|that) [\w' -]+? (take an? [–-]\d+ \w+ penalty to [^.]+?) and must /i.exec(subject);
@@ -4990,6 +5010,45 @@ function heldCreature(item, actor, options = {}) {
         return { ...poison, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: poison.activation?.traits ?? [] }, targeting: grabbed, trigger: { event: "use" }, notes: [`Only when it moves the creature into its ${venom[2]}; it's exposed again at the start of each of its turns while it stays there.`] };
     }
     return null;
+}
+
+// Its Breath Weapon in another shape (2026-10-12, batch 262, Battlezoo): while enraged it uses its Breath Weapon with a line and a burst at its end
+// in place of the usual area, with persistent damage added on a critical failure and a longer recharge. → that Breath Weapon's plan with the line as
+// its area (the burst a note), the extra damage on a critical failure, its own recharge shared with the Breath Weapon (sharesRecharge), requires
+// "raging". null otherwise.
+function reshapedBreath(item, actor, options = {}) {
+    if (item.system?.actionType?.value !== "action") return null;
+    const html = String(item.system?.description?.value ?? "");
+    const templates = inlineTags(html, "Template").map(readTemplate).filter(Boolean);
+    const extra = inlineTags(html, "Damage").map(readDamage);
+    const plain = htmlToPlainText(html.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/\[\[\/(?:b|gm)?r (\d+d\d+)[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, dice, label) => label ?? dice)).replace(/\s+/g, " ").trim();
+    const match = /^(?:Frequency [^.]+?\s+)?Requirements? (?:The )?[\w' -]+? is (?:enraged|raging) and can use (?:its|their) Breath Weapon\.?\s+Effect (?:(?:The )?[^.@\d]+\. )?(?:The )?[\w' -]+? uses (?:its|their) Breath Weapon(?:, but the area is| with its area changed to) an? @T(?: and an? @T (centered on the end of the line|where the line ends))?\. On a critical failure, (?:creatures? takes? @D damage, in addition to the normal effects|an? creature also takes @D damage)\. (?:The )?[\w' -]+? can(?:'t|not) use (?:its|their) Breath Weapon again for (\d+d\d+) rounds?(?:, instead of the usual \d+d\d+ rounds?)?\.$/i.exec(plain);
+    if (!match || !templates.length || extra.length !== 1) return null;
+    const owner = actor ?? item.actor ?? item.parent;
+    const breath = [...(owner?.items?.contents ?? owner?.items ?? [])].find((other) => other !== item && /^Breath Weapon$/i.test(other?.name ?? ""));
+    let plan = null;
+    try {
+        plan = breath ? compileMonsterAbility(breath, { ...options, actor: owner }) : null;
+    } catch {
+        plan = null;
+    }
+    if (plan?.resolution?.kind !== "save" || !plan.resolution.outcomes?.criticalFailure) return null;
+    const outcomes = structuredClone(plan.resolution.outcomes);
+    const worst = outcomes.criticalFailure.damage ?? none().damage;
+    const added = [{ formula: extra[0] }];
+    outcomes.criticalFailure.damage = worst.mode === "shared" ? { mode: "mixed", shared: worst, formulas: added, rollScope: "outcome" } : worst.mode === "formulas" || worst.mode === "mixed" ? { ...worst, formulas: [...(worst.formulas ?? []), ...added] } : { mode: "formulas", formulas: added, rollScope: "outcome" };
+    const second = match[1] && templates[1] ? [`Its area also takes in a ${templates[1].value}-foot ${templates[1].type} where the line ends.`] : [];
+    return {
+        ...plan,
+        source: base(item).source,
+        activation: { time: String(Number(item.system?.actions?.value) || 2), traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.activation?.traits ?? [])])] },
+        targeting: { target: null, range: null, area: { type: templates[0].type, value: templates[0].value } },
+        trigger: { event: "use", recharge: { formula: match[2], unit: "rounds" } },
+        resolution: { ...plan.resolution, outcomes },
+        requires: "raging",
+        sharesRecharge: breath.name,
+        notes: ["Only while it's enraged.", ...(plan.notes ?? []).filter((note) => !/\bagain for\b/i.test(note)), ...second, `It uses its ${breath.name}: that recharges too.`]
+    };
 }
 
 // A retreat when hurt (2026-10-12, batch 259, Detach): "Requirements The mammoth land star falls below half its total Hit Points Effect The
@@ -5745,7 +5804,7 @@ function compileAbilityText(source, { basicActions = {}, actor = null } = {}) {
     // Results it can't apply ("The target can't use reactions for 1 round"): their text on the card, for the GM.
     if (plan?.resolution?.outcomes) noteUnread(plan.resolution.outcomes, item.system?.description?.value ?? "");
     // Nothing else read, and it casts a spell or has its effects: the spell, cast through PF2e.
-    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
+    if (!plan?.builtin && !plan?.resolution) return castSpell(item, actor) ?? riderReading(item, actor) ?? deathReading(item, actor) ?? hitByReading(item, actor) ?? grabTurnReading(item, actor) ?? selfHeal(item) ?? downsHeal(item) ?? selfCondition(item) ?? readRage(item, actor) ?? readStrikeBuff(item) ?? readSelfGuard(item) ?? readShell(item, actor) ?? readRegrowth(item) ?? focusGaze(item, actor, basicActions) ?? poisonWeapon(item, actor) ?? areaExposure(item, actor) ?? escapeBite(item, actor) ?? clingBite(item, actor) ?? grabOnMiss(item, actor) ?? linkedEffectSave(item, actor) ?? concealOther(item) ?? breathPauseSave(item, actor) ?? reactionUsesAbility(item, actor, { basicActions }) ?? actionUsesTwice(item, actor, { basicActions }) ?? areaUsesAbility(item, actor, { basicActions }) ?? moveUsesAbility(item, actor, { basicActions }) ?? betrayingTouch(item, actor, { basicActions }) ?? fling(item) ?? heldDamage(item) ?? healTouch(item) ?? areaHealing(item) ?? pullThenStrike(item, actor) ?? flightFrenzy(item, actor, { basicActions }) ?? disruptingSave(item) ?? retributiveRune(item, actor) ?? phrasedSave(item, actor) ?? passThrough(item, actor) ?? moveAndDrop(item) ?? exposedOnFail(item, actor) ?? alliesQuickened(item) ?? heldCreature(item, actor, { basicActions }) ?? reshapedBreath(item, actor, { basicActions }) ?? hurtRetreat(item) ?? downedDamage(item) ?? eyesCondition(item) ?? zoneOnTrigger(item, actor, { basicActions }) ?? readZone(item, actor) ?? plan;
     // (Batch 256: an area save that lasts — saves again each round, or on entering it, or at a turn there: its zone, the first save in it.)
     if (plan?.resolution?.kind === "save" && plan.targeting?.area && (plan.trigger?.event ?? "use") === "use" && ZONE_LASTING.test(htmlToPlainText(item.system?.description?.value ?? ""))) {
         const zone = readZone(item, actor);

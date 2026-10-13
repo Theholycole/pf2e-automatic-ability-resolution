@@ -372,6 +372,9 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - a Strike per limb it has (Flurry of Limbs);
   - a rolled time Quickened (Sugar Rush);
   - resistance until it switches back (Tilt Scales), and AC until its next turn (Arrange Scales).
+- **A square trap, a breath reshaped by rage** (2026-10-12, batch 262): 10 new in the Battlezoo bestiaries:
+  - a trap over a square area, as a zone the GM places (Natural Trap);
+  - a dragon's Breath Weapon in a new shape while enraged, which recharges the Breath Weapon too (Rage-Charged Breath).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

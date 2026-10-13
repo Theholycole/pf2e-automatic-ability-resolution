@@ -4256,3 +4256,17 @@ test("healing around it, a gulp with its own numbers, limbs, rushes and scales (
     const plates = plan("<p>The test pangolin tenses up. The test pangolin gains a +1 circumstance bonus to AC and resistance 5 to their choice of bludgeoning, piercing, or slashing damage. These benefits last until the beginning of the test pangolin's next turn or they use Test Plates again.</p>");
     assert.deepEqual([plates?.model?.modifiers, plates?.duration?.expiry, plates?.notes], [[{ on: "ac", type: "circumstance", value: 1 }], "turn-start", ["Also resistance 5 to bludgeoning, piercing or slashing damage, its choice (the GM sets it)."]]);
 });
+
+test("a square trap as a zone, a breath reshaped while raging (2026-10-12, batch 262)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const web = compileMonsterAbility(item("<p>The test spider spins sticky strands in a 10-foot by 10-foot area within 30 feet of it. The webbed ground is greater difficult terrain. Each creature within the area when it uses Test Web, or that enters it afterwards, must succeed at a @Check[reflex|dc:25] save to dodge aside or take @Damage[4d6[piercing]] damage. This web disappears after 1 minute.</p>", "action", 2, "Test Web"), { basicActions: {} });
+    assert.deepEqual([web?.builtin, web?.zone?.area, web?.zone?.centre, web?.zone?.range, web?.zone?.terrain, web?.zone?.lasts?.unit], ["zone", { type: "square", value: 10 }, "placed", 30, [{ movement: ["walk"], difficulty: 3 }], "minutes"]);
+    assert.deepEqual([web?.zone?.saves?.[0]?.when, web?.zone?.saves?.[0]?.plan?.resolution?.outcomes?.failure?.damage?.formulas], [["initial", "enter"], [{ formula: "4d6[piercing]" }]]);
+    const breath = item("<p>The test drake exhales flame in a @Template[type:cone|distance:30], dealing @Damage[6d6[fire]] damage (@Check[reflex|dc:24|basic] save).</p><p>It can't use Breath Weapon again for [[/gmr 1d4 #Recharge]]{1d4 rounds}.</p>", "action", 2, "Breath Weapon");
+    const roar = item("<p><strong>Requirements</strong> The test drake is raging and can use its Breath Weapon</p><hr /><p><strong>Effect</strong> The test drake uses its Breath Weapon with its area changed to a @Template[type:line|distance:40] and a @Template[type:burst|distance:10] where the line ends. On a critical failure, a creature also takes @Damage[1d6[persistent,fire]] damage. The test drake can't use its Breath Weapon again for [[/gmr 1d6 #Recharge]]{1d6 rounds}.</p>", "action", 2, "Test Roar");
+    const roared = compileMonsterAbility(roar, { basicActions: {}, actor: { name: "Test Drake", items: [breath, roar] } });
+    assert.deepEqual([roared?.source?.name, roared?.targeting?.area, roared?.requires, roared?.sharesRecharge, roared?.trigger?.recharge?.formula], ["Test Roar", { type: "line", value: 40 }, "raging", "Breath Weapon", "1d6"]);
+    assert.deepEqual(roared?.resolution?.outcomes?.criticalFailure?.damage?.formulas, [{ formula: "1d6[persistent,fire]" }]);
+    assert.equal(roared?.resolution?.outcomes?.criticalFailure?.damage?.mode, "mixed");
+    assert.ok(roared?.notes?.includes("Its area also takes in a 10-foot burst where the line ends."));
+});

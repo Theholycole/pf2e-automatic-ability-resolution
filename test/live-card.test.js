@@ -175,6 +175,9 @@ test("zones live: the Region at the token or for the GM to place, its terrain, i
     const own = zoneRegion({ name: "Test Puff", zone: { ...zone, area: { type: "burst", value: 10 }, centre: "self" }, token, grid, moduleId: "mod", flags: {} });
     assert.deepEqual([own.place, own.data.shapes[0].x, own.data.shapes[0].y], [false, 300, 400]);
     assert.equal(zoneRegion({ name: "Test Cone", zone: { ...zone, area: { type: "cone", value: 15 } }, token, grid, moduleId: "mod", flags: {} }).data.shapes[0].angle, 90);
+    // (Batch 262: a square the GM places.)
+    const square = zoneRegion({ name: "Test Web", zone: { ...zone, area: { type: "square", value: 15 }, centre: "placed" }, token, grid, moduleId: "mod", flags: {} });
+    assert.deepEqual([square.place, square.data.shapes[0].type, square.data.shapes[0].width, square.data.shapes[0].height, square.data.shapes[0].anchorX], [true, "rectangle", 300, 300, 0.5]);
     // Its time: rounds (a minute ten), its maker's turn; for good when it's the GM's to end.
     assert.deepEqual([zoneRounds(zone.lasts), zoneRounds({ value: 2, unit: "rounds" }, 3), zoneRounds({ value: 1, unit: "hours" }), zoneRounds(null)], [10, 3, null, null]);
     const ends = zoneEndsAt({ value: 1, unit: "rounds", expiry: "turn-end" }, { round: 2, combatantId: "c1" });

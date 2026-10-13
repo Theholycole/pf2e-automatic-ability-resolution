@@ -67,6 +67,10 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
     } else if (zone.area?.type === "line") {
         shape = { type: "line", x: centre.x, y: centre.y, length: radius, width: grid.size, rotation: 0, gridBased: true };
         place = true;
+    } else if (zone.area?.type === "square") {
+        // (Batch 262: "a 15-foot by 15-foot area": a square the GM places.)
+        shape = { type: "rectangle", x: centre.x, y: centre.y, width: radius, height: radius, anchorX: 0.5, anchorY: 0.5, rotation: 0, gridBased: true };
+        place = true;
     }
     if (!shape) return null;
     const difficulties = zoneDifficulties(zone.terrain);

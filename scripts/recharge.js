@@ -45,15 +45,18 @@ export function rechargeWarning(actor, name) {
 }
 
 // Rolls the recharge and starts it, replacing one still running. Returns the card's line.
-export async function startRecharge({ actor, item, formula, tokenUuid = null }) {
+// (Batch 262: shares, another ability's name that recharges with it — a reshaped Breath Weapon is its Breath Weapon too: the same rounds on both.)
+export async function startRecharge({ actor, item, formula, tokenUuid = null, shares = null }) {
     const roll = await new Roll(formula).evaluate();
     const rounds = Math.max(1, roll.total);
-    const old = recharging(actor, item.name);
+    const other = shares ? actor.items.find((entry) => entry.name === shares && entry !== item) : null;
+    const abilities = [item, ...(other ? [other] : [])];
+    const old = abilities.flatMap((ability) => recharging(actor, ability.name));
     if (old.length) await actor.deleteEmbeddedDocuments("Item", old.map((effect) => effect.id));
     // Counted on the monster's own turns, whoever's turn the GM applies it on.
     const combatant = game.combat?.started ? game.combat.combatants.find((entry) => (tokenUuid && entry.token?.uuid === tokenUuid) || entry.actor?.uuid === actor.uuid) : null;
-    await actor.createEmbeddedDocuments("Item", [rechargeEffect(MODULE_ID, { ability: { name: item.name, img: item.img }, rounds, formula, time: { worldTime: game.time.worldTime, initiative: combatant?.initiative ?? null } })]);
-    return rechargeLine(item.name, rounds, formula);
+    await actor.createEmbeddedDocuments("Item", abilities.map((ability) => rechargeEffect(MODULE_ID, { ability: { name: ability.name, img: ability.img }, rounds, formula, time: { worldTime: game.time.worldTime, initiative: combatant?.initiative ?? null } })));
+    return [rechargeLine(item.name, rounds, formula), ...(other ? [`${other.name} recharges with it.`] : [])].join(" ");
 }
 
 // A GM-only note, for an ability with no card.

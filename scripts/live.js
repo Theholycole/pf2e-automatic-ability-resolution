@@ -1100,7 +1100,7 @@ async function applyCard(message) {
     if (recharge && state.ability.uuid) {
         const item = await fromUuid(state.ability.uuid).catch(() => null);
         const actor = item?.actor ?? (await fromUuid(state.source.actorUuid));
-        if (item && actor) lines.push(await startRecharge({ actor, item, formula: recharge, tokenUuid: state.source.tokenUuid }));
+        if (item && actor) lines.push(await startRecharge({ actor, item, formula: recharge, tokenUuid: state.source.tokenUuid, shares: state.plan?.sharesRecharge ?? null }));
     }
     const names = { source: state.source.name, ...Object.fromEntries(state.targets.map((target) => [target.id, target.name])) };
     // What happened first, then the rolls and reminders.

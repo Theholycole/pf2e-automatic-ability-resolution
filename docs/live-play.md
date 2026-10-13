@@ -2588,3 +2588,10 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **Scales:**
     - "gains resistance 10 to physical damage, but its Speeds are reduced to 10 feet … by taking this action again" is that resistance until it uses the action again. Its Speeds and the stored blow are notes (Tilt Scales).
     - "+2 circumstance bonus to AC and resistance 15 to their choice of bludgeoning, piercing, or slashing damage … until the beginning of the manticore's next turn" is the AC bonus until then. The chosen resistance is a note for the GM (Arrange Scales).
+
+## A square trap, a breath reshaped by rage (2026-10-12, batch 262)
+
+- **Compiled** (10 new in the Battlezoo bestiaries):
+  - **A square trap as a zone:** an area given as a square, so many feet on a side and within a distance of the creature, is a square zone the GM places, drawn as a rectangle Region. Its greater difficult terrain applies. Its save is made as it's created and by each creature that enters, with damage on a failure. When the damage counts is a note. It lasts the minute the text gives, and Dismissing it sooner is a note (Natural Trap).
+  - **A breath reshaped by rage:** while enraged, it uses its own Breath Weapon in a line, with a burst at the end of the line as a note. A critical failure adds persistent fire damage, and it has a longer recharge. Using it starts the Breath Weapon's recharge too, for the same rounds (Rage-Charged Breath).
+- **Simulator:** see B262 in its ability decisions. Abilities that need a spell just before (B259), rage, or a recharging breath (B247) now load in the snapshot and the sweep. Before this, only the tests played them.
