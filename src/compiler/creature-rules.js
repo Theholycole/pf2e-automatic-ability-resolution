@@ -12,6 +12,15 @@
 //   attach: { offGuard, both, acBonus, strike } — attached to a larger creature it hits (Attach);
 //   berserk: { atMost, dc } — berserk below its Hit Points (a flesh golem's Berserk);
 //   elemental: [{ on, traits, types, spell, metal, wood, effect }] — an elemental dragon's Countered by and Fed by.
+// And (batch 307, tier 3) what light, terrain and company change:
+//   lightBlindness: { sunlightOnly } — blinded by bright light at first, then dazzled in it;
+//   sunlight: { conditions, noReactions, grows } — what direct sunlight does to it (Sunlight Powerlessness, Sunlight Petrification);
+//   terrainStride: [kind] — natural difficult terrain it ignores (plants, swamp, snow, ice, water);
+//   dimConcealDC: n — Shadow Blending's flat check in dim light; snowVision: true — no concealment from falling snow;
+//   hiddenMovement: true — starting its turn hidden, its targets are off-guard to it that turn;
+//   coven: true — a coven member, for its coven's spells;
+//   heads: { count, hp, cauterize, weaknesses } and hydraRegeneration: { perHead, dc, perSuccess } — a hydra's heads (Head Regrowth, a
+//   heads entry) and its regeneration by them.
 // Live: unchanged. PF2e's own rules and the GM play them.
 
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
@@ -19,7 +28,7 @@ import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-te
 const CONDITION_UUIDS = { nlCjDvLMf2EkV2dl: "quickened" };
 const plain = (item) => htmlToPlainText(String(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Check\[flat\|dc:(\d+)[^\]]*\](?:\{[^}]*\})?(?: check)?/g, "DC $1 flat check").replace(/@Localize\[[^\]]*\]/g, "")).replace(/\s+/g, " ").trim();
 const SUBJECT = String.raw`(?:the |a |an )?[\w' -]+?`;
-const NUMBER = { one: 1, two: 2, three: 3, four: 4 };
+const NUMBER = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
 // "When the ruffian deals damage on a critical hit, the target is Frightened 1, and the ruffian can push the target up to 10 feet" (or
 // "knock the target up to 10 feet away").
@@ -159,6 +168,91 @@ function elemental(item, text) {
     return null;
 }
 
+// Light Blindness: PF2e's glossary, or its words; one caused only by sunlight.
+function lightBlindness(item, text) {
+    const html = String(item?.system?.description?.value ?? "");
+    if (!/@Localize\[PF2E\.NPC\.Abilities\.Glossary\.LightBlindness\]/.test(html) && !/^Light Blindness$/i.test(item?.name ?? "")) return null;
+    if (!/@Localize\[PF2E\.NPC\.Abilities\.Glossary\.LightBlindness\]/.test(html) && !/\bonly (?:by )?sunlight\b|\bcaused by only sunlight\b/i.test(text)) return null;
+    return { lightBlindness: { ...(/\bonly (?:by )?sunlight\b|\bcaused by only sunlight\b/i.test(text) ? { sunlightOnly: true } : {}) } };
+}
+
+// Sunlight: "A specter caught in sunlight is Clumsy 2 and Slowed 2 for as long as it remains in the sunlight"; "If exposed to direct
+// sunlight, a cavern troll immediately becomes Slowed 1 and can't use reactions. The slowed value increases by 1 each time [it] ends its
+// turn in sunlight".
+const SUN_CONDITIONS = String.raw`(Clumsy|Slowed|Stunned|Enfeebled|Dazzled|Frightened|Sickened|Stupefied|Blinded)(?: (\d+))?`;
+function sunlight(text) {
+    const match = new RegExp(String.raw`\b(?:caught in|exposed to) (?:direct )?sunlight,? (?:${SUBJECT} )?(?:is|immediately becomes) ${SUN_CONDITIONS}(?:,? and ${SUN_CONDITIONS})?`, "i").exec(text)
+        ?? new RegExp(String.raw`^If exposed to direct sunlight, ${SUBJECT} immediately becomes ${SUN_CONDITIONS}(?:,? and ${SUN_CONDITIONS})?`, "i").exec(text)
+        // ("While in sunlight, a wraith is Blinded and Slowed 2.")
+        ?? new RegExp(String.raw`^While in (?:direct )?sunlight, ${SUBJECT} is ${SUN_CONDITIONS}(?:,? and ${SUN_CONDITIONS})?`, "i").exec(text);
+    if (!match) return null;
+    const conditions = [[match[1], match[2]], [match[3], match[4]]].filter(([slug]) => slug).map(([slug, value]) => ({ slug: slug.toLowerCase(), value: value ? Number(value) : null }));
+    // (Past its actions: petrified, a cavern troll; destroyed, a vampire.)
+    const end = /\bbecomes? (?:permanently )?Petrified\b/i.test(text) ? "petrified" : /\bdestroyed\b/i.test(text) ? "destroyed" : null;
+    return { sunlight: { conditions, ...(/\bcan't use reactions\b/i.test(text) ? { noReactions: true } : {}), ...(/\bincreases by 1 each time [^.]* ends (?:its|their) turn in sunlight\b/i.test(text) ? { grows: true } : {}), ...(end ? { end } : {}) } };
+}
+
+// Natural difficult terrain it ignores: "ignores difficult terrain caused by plants", "in swamps", "caused by snow or ice", "in forests
+// and jungles", "from a forest environment", "caused by water or swamps".
+function terrainStride(text) {
+    const match = /\b(?:ignores|isn't impeded by) (?:the effects of )?difficult terrain(?: and greater difficult terrain)?(?: caused by| in| from a)? ([^.]+?)(?:,| nor\b|\.|$)/i.exec(text);
+    if (!match) return null;
+    const words = match[1].toLowerCase();
+    const kinds = [];
+    if (/\bplants?\b|\bforests?\b|\bjungles?\b|\bundergrowth\b/.test(words)) kinds.push("plants");
+    if (/\bswamps?\b|\bbogs?\b|\bmarsh/.test(words)) kinds.push("swamp");
+    if (/\bsnow\b/.test(words)) kinds.push("snow");
+    if (/\bice\b/.test(words)) kinds.push("ice");
+    if (/\bwater\b/.test(words)) kinds.push("water");
+    if (/\brubble\b|\bstone\b|\brock/.test(words)) kinds.push("rubble");
+    if (/\bsand\b/.test(words)) kinds.push("sand");
+    return kinds.length ? { terrainStride: kinds } : null;
+}
+
+// Shadow Blending: "the flat check to target him has a DC of 7, not 5"; Snow Vision: "ignores the Concealed condition from falling snow".
+function sight(text) {
+    const dim = /\bConcealed as a result of dim light, the flat check to target (?:it|him|her|them) has a DC of (?:DC )?(\d+)/i.exec(text.replace(/@Check\[flat\|dc:(\d+)\]/g, "$1"));
+    return Object.assign({}, dim ? { dimConcealDC: Number(dim[1]) } : null, /\bignores the Concealed condition from falling snow\b/i.test(text) ? { snowVision: true } : null);
+}
+
+// Hidden Movement: "If the insidiator starts their turn undetected or Hidden to a creature, that creature is Off-Guard against the
+// insidiator's attacks until the end of the turn."
+function hiddenMovement(text) {
+    return new RegExp(String.raw`^If ${SUBJECT} starts (?:its|their|his|her) turn (?:Undetected|undetected) or Hidden to a creature, that creature is Off-Guard against ${SUBJECT}(?:'s|’s) attacks until the end of the turn\.?$`, "i").test(text) ? { hiddenMovement: true } : null;
+}
+
+// Coven: a member, by PF2e's glossary or its words ("adds … to their coven's spells").
+function coven(item, text) {
+    const html = String(item?.system?.description?.value ?? "");
+    return /@Localize\[PF2E\.NPC\.Abilities\.Glossary\.Coven\]/.test(html) || /\bto (?:their|its|her|his) coven's spells\b/i.test(text) ? { coven: true } : null;
+}
+
+// A hydra's heads: "A hydra ordinarily has five heads. A creature can attempt to sever one of the hydra's heads … A creature can prevent
+// this regrowth by dealing acid or fire damage to the stump … Hydra Head Hit Points 15 Immunities Area Damage Weaknesses Slashing 5"; or a
+// heads entry, "HP (head) 22, head regrowth Immunities area damage Weaknesses slashing 10". (A troll's Head Regrowth, only after a vorpal
+// weapon: nothing.)
+const IWR_LIST = (words) => [...String(words).matchAll(/([a-z][a-z -]*?) (\d+)/gi)].map((match) => ({ type: match[1].trim().toLowerCase().replace(/\s+/g, "-"), value: Number(match[2]) }));
+function heads(item, text) {
+    const hp = /\b(?:Head Hit Points|HP \(head\)) (\d+)/i.exec(text)?.[1];
+    const weaknesses = /\b(?:Head Hit Points|HP \(head\)) \d+[^.]*?\bWeakness(?:es)? ((?:[a-z][a-z -]* \d+(?:, )?)+)/i.exec(text)?.[1];
+    const count = /\bsever one of\b/i.test(text) ? /\b(?:ordinarily )?has (\w+) heads\b/i.exec(text)?.[1] : null;
+    const cauterize = /\bby dealing (\w+) or (\w+) damage to the stump\b/i.exec(text) ?? /\bwith an? (\w+) or (\w+) effect, snuffing\b/i.exec(text);
+    const read = {
+        ...(count && (Number(count) || NUMBER[count.toLowerCase()]) ? { count: Number(count) || NUMBER[count.toLowerCase()] } : {}),
+        ...(hp ? { hp: Number(hp) } : {}),
+        ...(cauterize ? { cauterize: [cauterize[1].toLowerCase(), cauterize[2].toLowerCase()] } : {}),
+        ...(weaknesses ? { weaknesses: IWR_LIST(weaknesses) } : {})
+    };
+    return Object.keys(read).length && (read.count || read.hp) ? { heads: read } : null;
+}
+function hydraRegeneration(item, text) {
+    const per = /\bregeneration equal to (\d+) [x×] the number of heads\b/i.exec(text)?.[1];
+    if (!per) return null;
+    const dc = /@Check\[fortitude[^\]]*\bdc:(\d+)/i.exec(String(item?.system?.description?.value ?? ""))?.[1] ?? /\bDC (\d+) Fortitude\b/i.exec(text)?.[1];
+    const regrows = /\bone uncauterized stump regrows (\w+) heads?\b/i.exec(text)?.[1];
+    return { hydraRegeneration: { perHead: Number(per), ...(dc ? { dc: Number(dc) } : {}), perSuccess: Number(regrows) || NUMBER[String(regrows ?? "one").toLowerCase()] || 1, ...(/\bnever grow more than double\b/i.test(text) ? { double: true } : {}) } };
+}
+
 // A condition its rules grant it for good (Relentless: permanently Quickened) — quickened only when its extra action can Strike, not one
 // only to move or to work a siege weapon.
 function granted(rules, text) {
@@ -172,11 +266,15 @@ export function creatureRules(item) {
     if (item?.system?.actionType?.value !== "passive") return null;
     const rules = item.system?.rules ?? [];
     const text = plain(item);
+    // (A troll's Head Regrowth: a head only a vorpal weapon severs — nothing in a fight here.)
+    if (/^Head Regrowth$/i.test(item.name ?? "") && /\bflat check\b|@Check\[flat/i.test(text + String(item.system?.description?.value ?? "")) && !/\bsever one of\b/i.test(text)) return { builtin: "no-effect" };
     // (Countered by Metal: woodland passage and Vanishing Tracks lost — nothing a fight's bands have.)
     if (/^Countered by \w+$/i.test(item.name ?? "") && new RegExp(String.raw`^If ${SUBJECT} takes damage from a metal item or effect with the metal trait, (?:they|it) loses? woodland passage\b`, "i").test(text)) return { builtin: "no-effect" };
     const read = Object.assign({},
         critRider(text), swiftness(text), inexorable(text), strikeTypes(rules, text), hpRules(rules), protean(rules, text), troop(item, text), split(text),
         attach(rules, text), berserk(text), elemental(item, text), granted(rules, text),
+        lightBlindness(item, text), sunlight(text), terrainStride(text), sight(text), hiddenMovement(text), coven(item, text),
+        heads(item, text), hydraRegeneration(item, text),
         rules.some((rule) => rule?.key === "CriticalSpecialization" && !rule.alternate && !rule.predicate?.length) ? { critSpec: true } : null);
     return Object.keys(read).length ? { builtin: "creature-rules", ...read } : null;
 }

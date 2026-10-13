@@ -3208,6 +3208,21 @@ The user's call: "build everything you brought up" (tier 2).
   - the Charnel Creation's Berserk, the String Slime's Split, the Ghostly Mob's troop thresholds (70 and 35);
   - the Adamantine Dragon's Abandon Armor and the Sky Dragon's Countered by Fire and Fed by Earth.
 
+## Light, ground, covens and hydras for the simulator (2026-10-13, batch 307)
+
+The user's call: "build everything you brought up" (tier 3).
+
+- **Reader** (`creatureRules` in `src/compiler/creature-rules.js`):
+  - `lightBlindness` (PF2e's glossary; `sunlightOnly` when only sunlight causes it);
+  - `sunlight` (its conditions; `noReactions`, `grows`, and `end` — petrified or destroyed);
+  - `terrainStride` (undergrowth, swamp, snow, ice, water, rubble, sand: the difficult terrain it ignores);
+  - `dimConcealDC` (Shadow Blending), `snowVision`, `hiddenMovement`, `coven`;
+  - `heads` (count, a head's Hit Points and weaknesses, what cauterizes a stump) and `hydraRegeneration` (per head, the regrowth save's DC, heads per stump, the double limit).
+- **Not read:** a troll's Head Regrowth (`no-effect`: its heads are severed only by a vorpal weapon), being in sunlight for an hour (outside a fight), Earth Glide and other movement the fight's bands don't have.
+- **Coverage:** 320 rulebook and 16 Battlezoo passives that compiled to nothing, none lost.
+- **Live:** unchanged.
+- **Checked in pftest** (2026-10-13): the simulator's snapshot read temporary copies of an Umbral Gnome Scout (Hidden Movement), a Caligni Skulker (Light Blindness), a Hydra (five heads of 15 Hit Points, weak to slashing, cauterized by acid or fire; regeneration 3 a head), three Sea Hags (Coven, with their Coven Spells), a Wraith, a Mobogo (Swamp Stride), a Fetchling Scout (Shadow Blending) and a Cavern Troll (Sunlight Petrification). The Wraith's "While in sunlight, a wraith is Blinded and Slowed 2" wasn't read at first; it is now.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:
