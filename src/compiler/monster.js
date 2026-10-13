@@ -5699,7 +5699,14 @@ function ownAbilitySave(item, actor, basicActions) {
 // - (batch 270) its Swallow Whole with the numbers given in brackets, as the glossary's ability; nonlethal and the rest as notes;
 // - (batch 270) several Strikes at a penalty against the creature it holds, the penalty held until after them;
 // - (batch 270) three thrown Strikes at one to three creatures, the penalty held, what the shards do after as notes;
-// - (batch 270) a gaze: a save or Dazzled for a minute (Blinded if it already was, a note).
+// - (batch 270) a gaze: a save or Dazzled for a minute (Blinded if it already was, a note);
+// - (batch 271) two Strides and a Strike that dazzles instead of hurting; a Stride, a Leap and a kick that pushes; a spit Strike whose hit means a save
+//   or Confused for a minute; two fist Strikes at one creature, the second with extra force damage (a note);
+// - (batch 271) a peck at the eyes: persistent bleed and Dazzled until the bleeding stops, Blinded in one case a note; two blade Strikes at one target
+//   while its construct armor holds, their damage combined (notes);
+// - (batch 271) one big Strike and two smaller ones, the penalty held when all go to different creatures; one check against each creature it holds,
+//   damage and a pull on a success, double and further on a critical success;
+// - (batch 271) a big heal on itself once a day, with treats thrown to its allies as a note.
 function bzOneOffs(item, actor) {
     const type = item.system?.actionType?.value;
     if (!["action", "free"].includes(type)) return null;
@@ -5773,6 +5780,42 @@ function bzOneOffs(item, actor) {
         const row = { ...none(), effects: [{ kind: "condition", slug: "dazzled", value: null, duration: { mode: "fixed", value: Number(gazed[2]), unit: `${gazed[3].toLowerCase()}s`, expiry: null, anchor: "effect-start" } }] };
         return { ...base(item), targeting: { target: "1 creature", range: `${gazed[1]} feet`, area: null }, trigger: { event: "use" }, resolution: { kind: "save", check: { roll: "save", statistic: gazeCheck.statistic, basic: false, against: { dc: "fixed", value: gazeCheck.dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: row, criticalFailure: structuredClone(row) } }, notes: [`If it was already Dazzled, it's Blinded for ${gazed[2]} ${gazed[3].toLowerCase()}${gazed[2] === "1" ? "" : "s"} instead (the GM's).`, ...gazed[4].trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean)] };
     }
+    const strikeOf = (strike, strides, onHit, notes) => ({ builtin: "strike-activity", actions, strides, strike, attackBonus: 0, damageBonus: 0, offGuard: false, requires: null, oncePerFight: false, onHit: { conditions: [], critical: null, push: null, damage: [], save: null, size: null, ...onHit }, ...(notes.length ? { notes } : {}) });
+    const cascade = type === "action" ? /^(?:[^.]+\. )?(?:The )?[\w' -]+? Strides (twice|three times),? (?:and|then) makes an? (?:melee )?([\w' -]+?) Strike (?:against|at) an adjacent (?:creature|foe) (?:at the end of (?:its|the) (?:movement|move)|afterward)\. On a hit, (?:the Strike|it) deals no damage, (?:but|and) the (?:creature|target) is (Dazzled|Off-Guard|Frightened 1|Clumsy 1) until the (?:beginning|start) of (?:the [\w' -]+?['’]s|its) next turn\.$/i.exec(plain.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")) : null;
+    if (cascade) {
+        const [slug, value] = cascade[3].toLowerCase().split(" ");
+        return strikeOf(cascade[2].toLowerCase(), cascade[1].toLowerCase() === "twice" ? 2 : 3, { conditions: [{ slug, value: value ? Number(value) : null, duration: { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "source-turn" } }] }, ["A hit only applies the condition: undo the Strike's damage."]);
+    }
+    const hop = type === "action" ? /^(?:The )?[\w' -]+? Strides,? (?:and )?then Leaps\. (?:If|When) it lands (?:adjacent to|next to|beside) a creature,? it can make an? ([\w' -]+?) Strike against (?:that creature|it)\. (?:If the Strike is successful|On a hit),? the (?:creature|target) is pushed (\d+) feet \((\d+) feet on a critical (?:success|hit)\)\.$/i.exec(plain) : null;
+    if (hop) return strikeOf(hop[1].toLowerCase(), 1, { push: Number(hop[2]) }, [`A Leap after the Stride; on a critical hit the push is ${hop[3]} feet.`]);
+    const confusing = type === "action" ? /^(?:Frequency [^.]+?\.? Effect )?(?:[^.]+\. )?(?:The [\w' -]+?|It) makes an? ([\w' -]+?) Strike\. On a hit, the target must succeed (?:at )?an? @C save or be Confused for (\d+) (minute|round)s?\.( It can attempt a new saving throw at the end of each of its turns to end the confusion\.)?$/i.exec(plain.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")) : null;
+    const confuseCheck = confusing ? inlineTags(html, "Check").map(readCheck).find((check) => check?.save && check.dc) : null;
+    if (confusing && confuseCheck) {
+        const row = { ...none(), effects: [{ kind: "condition", slug: "confused", value: null, duration: { mode: "fixed", value: Number(confusing[2]), unit: `${confusing[3].toLowerCase()}s`, expiry: null, anchor: "effect-start" } }] };
+        const save = { ...base(item, { time: "free" }), targeting: { target: "the creature the Strike hits", range: "touch", area: null }, trigger: { event: "strike-activity" }, resolution: { kind: "save", check: { roll: "save", statistic: confuseCheck.statistic, basic: false, against: { dc: "fixed", value: confuseCheck.dc } }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: none(), failure: row, criticalFailure: structuredClone(row) } } };
+        return strikeOf(confusing[1].toLowerCase(), 0, { save }, confusing[4] ? ["It attempts a new save at the end of each of its turns to end the confusion."] : []);
+    }
+    const peck = type === "action" ? /^(?:[^.]+\. )?(?:The [\w' -]+?|It) makes an? ([\w' -]+?) Strike (?:against|at) an? (?:Tiny|Small|Medium|Large|Huge)(?: or smaller)? creature with eyes\. (?:If the Strike hits|On a hit), the (?:creature|target) takes @D damage and is Dazzled until (?:it removes the bleed damage|the bleeding (?:stops|ends))\.((?: [^.]+\.)*)$/i.exec(plain.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")) : null;
+    const peckDamage = peck ? inlineTags(html, "Damage").map(readDamage) : [];
+    if (peck && peckDamage.length === 1) return strikeOf(peck[1].toLowerCase(), 0, { damage: [peckDamage[0]], conditions: [{ slug: "dazzled", value: null, duration: null }] }, ["Only a creature with eyes.", "Dazzled until the bleeding stops (remove it then).", ...peck[2].trim().split(/(?<=\.)\s+(?=[A-Z])/).filter(Boolean)]);
+    const slices = type === "action" ? /^Requirements? [^.]+?construct armor (?:isn't broken|is not broken|is intact)\.? Effect [^.]+\. (?:It|The [\w' -]+?) (?:makes|attempts) two Strikes, one (?:with|using) each of its ([\w' -]+?)s, each (?:using|at) its current multiple attack penalty\. Both (?:Strikes|attacks) must (?:have|target) the same (?:target|creature)\.((?: [^.]+\.)*)$/i.exec(plain) : null;
+    if (slices) return { builtin: "multi-strike", actions, strikes: [slices[1].toLowerCase(), slices[1].toLowerCase()], sameTarget: true, sameMap: true, countsAs: 2, notes: ["Only while its construct armor isn't broken.", "If both hit, their damage is combined (precision once) against resistances and weaknesses."] };
+    const assault = type === "action" ? /^(?:The )?[\w' -]+? makes an? ([\w' -]+?) Strike(?: and then|, then|, followed by) two (?:more )?Strikes with either its ([\w' -]+?) or its ([\w' -]+?)\. If [^.]*?\bdifferent creatures, [^.]*?\buntil after all the Strikes\b[^.]*\.(?: Otherwise, [^.]+\.)?$/i.exec(plain) : null;
+    if (assault) return { builtin: "multi-strike", actions, strikes: [assault[1].toLowerCase(), assault[2].toLowerCase(), assault[2].toLowerCase()], each: true, sameMap: true, notes: [`The last two with its ${assault[2].toLowerCase()} or its ${assault[3].toLowerCase()}.`, "The penalty is held only when every Strike is at a different creature; otherwise it rises as normal."] };
+    const squeeze = /^(?:Frequency [^.]+?\.? Effect )?(?:The )?[\w' -]+? (?:arms )?(?:squeeze and pull on|squeezes|crushes) all creatures (?:Grabbed by it|it holds), (?:rolling|with) a single Athletics check (?:and comparing the result )?against each (?:grabbed )?creature['’]s Fortitude DC\. On a success, (?:the [\w' -]+?|it) deals @D damage and (?:pulls|drags) (?:the creature|it) (\d+) feet [^(]*\((\d+) feet(?:,| and) (?:double|twice the) damage on (?:a )?critical success\)\.$/i.exec(plain.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/\[\[\/r (?:[^[\]]|\[[^\]]*\])+\]\](?:\{[^}]*\})?/g, "@D"));
+    const squeezeDamage = squeeze ? (/\[\[\/r ((?:[^[\]]|\[[^\]]*\])+)\]\]/.exec(html)?.[1] ?? inlineTags(html, "Damage").map(readDamage)[0]) : null;
+    if (type === "action" && squeeze && squeezeDamage) {
+        const pull = (feet, formula) => ({ damage: { mode: "formulas", formulas: [{ formula }] }, effects: [], forcedMovement: { kind: "pull", distance: Number(feet), upTo: false, optional: false, direction: "toward" } });
+        return { ...base(item), targeting: { target: "every creature it holds", range: null, area: null, grabbed: true }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "fortitude" } }, sharedDamage: null, outcomes: { criticalSuccess: pull(squeeze[2], `2*${squeezeDamage}`), success: pull(squeeze[1], squeezeDamage), failure: none(), criticalFailure: none() } }, notes: ["One roll compared against each creature's Fortitude DC."] };
+    }
+    const harvest = type === "action" ? /^(?:Frequency [^.]+?\.? Effect )?(?:[^.]+\. )?(?:The [\w' -]+?|It) (?:immediately )?heals @D Hit Points (?:while|and) ((?:firing off|tosses|throws|sends) [^.]+? to up to (\w+) allies within (\d+) feet)\.((?: [^.]+\.)*)$/i.exec(plain) : null;
+    const harvestHeal = harvest ? inlineTags(html, "Damage").map(readDamage) : [];
+    if (harvest && harvestHeal.length >= 1) {
+        const formula = harvestHeal[0].replace(/\[[^\]]*healing[^\]]*\]$/i, "").replace(/^\((.*)\)$/, "$1");
+        return { ...base(item), targeting: { target: "self", range: null, area: null }, trigger: { event: "use" }, resolution: { kind: "check", check: { roll: "automatic", statistic: "automatic" }, sharedDamage: null, outcomes: { criticalSuccess: none(), success: { damage: none().damage, effects: [{ kind: "heal", formula }] }, failure: none(), criticalFailure: none() } }, notes: [`Also up to ${harvest[2]} allies within ${harvest[3]} feet each get a treat that heals ${harvestHeal[1] ? harvestHeal[1].replace(/\[[^\]]*healing[^\]]*\]$/i, "").replace(/^\((.*)\)$/, "$1") : "them"} when eaten (the GM's).`] };
+    }
+    const flank = type === "action" ? /^(?:The )?[\w' -]+? makes two ([\w' -]+?) Strikes (?:against|at) (?:a creature|one creature|a foe) within [^.]+?\. (?:Whether or not|Hit or miss on) the first (?:attack|Strike)(?: hits)?, the second (?:attack|Strike) deals (\d+d\d+) (?:additional|extra) (\w+) damage\.(?: [^.]*multiple attack penalty[^.]*\.)?$/i.exec(plain) : null;
+    if (flank) return { builtin: "multi-strike", actions, strikes: [flank[1].toLowerCase(), flank[1].toLowerCase()], sameTarget: true, notes: [`The second Strike deals ${flank[2]} more ${flank[3].toLowerCase()} damage, hit or miss on the first.`] };
     const chorus = /^(?:Frequency [^.]+?\.? Effect )?(?:The )?[\w' -]+? becomes Quickened for 1 round\. ((?:This|Its) (?:additional|extra) action [^.]+)\. (?:The [\w' -]+?|It|They) (?:is|are) (?:then )?Slowed (\d) (?:on|during) (?:its|their) next turn\.$/i.exec(plain);
     if (chorus) {
         const success = { damage: none().damage, effects: [{ kind: "condition", slug: "quickened", value: null, duration: { mode: "fixed", value: 1, unit: "rounds", expiry: "turn-start", anchor: "effect-start" } }] };
@@ -5783,14 +5826,20 @@ function bzOneOffs(item, actor) {
 
 // Battlezoo reactions and follow-ups (2026-10-12, batch 270), described in our own words. null otherwise:
 // - a save for the creature that set it off, a condition on a failure, how it ends a note;
-// - after its Strike hits, a save or the creature is moved to its other side (Prone too on a critical failure).
+// - after its Strike hits, a save or the creature is moved to its other side (Prone too on a critical failure);
+// - (batch 271) a creature striding near it: a save, or its squares are hard going and it may end up held (the GM's, notes on the failure);
+// - (batch 271) its own failed save made a success, or 0 Hit Points made 1, then Sickened 1 (a note).
 function bzReactions(item, actor) {
     const type = item.system?.actionType?.value;
     if (!["reaction", "free"].includes(type)) return null;
     const html = String(item.system?.description?.value ?? "");
     const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Check\[[^\]]*\](?:\{[^}]*\})?/g, "@C")).replace(/\s+/g, " ").trim();
-    const split = /^Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
+    const split = /^(?:Frequency [^.]+? )?Trigger (.+?)[;.]? Effect (.+)$/.exec(plain);
     if (!split) return null;
+    // (A failed save made a success with a price; no check of its own.)
+    const party = type === "free" ? /^(?:The )?[\w' -]+? fails or critically fails a sav(?:ing throw|e) or (?:is reduced|drops) to 0 Hit Points(?: Requirements? (?:The )?[\w' -]+? (?:isn't|is not) (Sickened))?$/i.exec(split[1].trim()) : null;
+    const partied = party ? /\bIf (?:they|it) would (?:have been reduced|drop) to 0 Hit Points, (?:they|it) (?:remains?|stays?) at 1 Hit Point\. If (?:they|it) failed or critically failed a sav(?:ing throw|e), (?:they|it) gets? a (?:regular )?success instead\. (?:Either way|In both cases), (?:they|it) becomes? Sickened (\d)\.$/i.exec(split[2].trim()) : null;
+    if (partied) return { builtin: "save-boost", toSuccess: true, free: true, notes: [`It becomes Sickened ${partied[1]} (apply it).`, "Also when it would drop to 0 Hit Points: it stays at 1 instead (the GM's).", ...(party[1] ? ["Not while it's Sickened."] : [])] };
     const check = inlineTags(html, "Check").map(readCheck).find((entry) => entry?.save && entry.dc);
     if (!check) return null;
     const save = { kind: "save", check: { roll: "save", statistic: check.statistic, basic: false, against: { dc: "fixed", value: check.dc } }, sharedDamage: null };
@@ -5799,6 +5848,11 @@ function bzReactions(item, actor) {
     if (tangled) {
         const row = { ...none(), effects: [{ kind: "condition", slug: tangled[1].toLowerCase(), value: null, duration: null }] };
         return { ...base(item), targeting: { target: "the triggering creature", range: null, area: null }, trigger: { ...trigger, reaction: true }, resolution: { ...save, outcomes: { criticalSuccess: none(), success: none(), failure: row, criticalFailure: structuredClone(row) } }, notes: [`It ${tangled[2]}.`] };
+    }
+    const weeds = trigger?.event === "provoke" && trigger.triggers?.includes("move") ? /^(?:[^.]+\. )*The triggering creature treats (?:all|every) squares? as difficult terrain until (?:the end of its turn|its turn ends) unless it (?:succeeds at|makes) an? @C save\. On a failure, ((?:if|when) [^.]+?\bGrabbed\b[^.]*)\.$/i.exec(split[2].trim()) : null;
+    if (weeds) {
+        const hindered = { ...none(), manualInstructions: ["{target} treats every square as difficult terrain until the end of its turn."] };
+        return { ...base(item), targeting: { target: "the triggering creature", range: trigger.within ? `${trigger.within} feet` : null, area: null }, trigger: { ...trigger, reaction: true }, resolution: { ...save, outcomes: { criticalSuccess: none(), success: none(), failure: hindered, criticalFailure: structuredClone(hindered) } }, notes: [`On a failure, ${weeds[1]}.`] };
     }
     const after = type === "free" ? /^(?:The )?[\w' -]+?['’]s last action was a successful ([\w' -]+?) Strike against an? (Tiny|Small|Medium|Large|Huge)(?: or smaller)? creature$/i.exec(split[1].trim()) : null;
     const flipped = after ? /^(?:The )?[^.]+?\. The creature must succeed at an? @C save or (?:it is repositioned|it's moved) to an? (?:empty|open|free) space on (?:the [\w' -]+?['’]s|its) (?:opposite|other|far) side \(on a critical failure, (?:the creature|it) also falls Prone\)\.((?: [^.]+\.)*)$/i.exec(split[2].trim()) : null;

@@ -2018,6 +2018,10 @@ export function readAllySave(text) {
     // GM's.)
     const mien = /^Trigger An ally fails (?:a saving throw or a skill check|a save or a skill check|a check) within sight of (?:the [\w' -]+?|it)\.? Effect [^.]+\. The ally (?:can|may) reroll (?:the )?triggering check\.$/i.exec(String(text).trim());
     if (mien) return { builtin: "save-reroll", ally: true, within: 120, save: null, keep: "new", note: "The new result counts. Any ally it can see; a skill check too (the GM's)." };
+    // (Batch 271, a Battlezoo dragon's: itself or an ally that fails a roll near it rerolls with a +2 bonus, then can't be helped again for a minute — its
+    // failed save rerolled, the new result kept; the bonus and other rolls, notes.)
+    const surge = /^Trigger (?:The )?[\w' -]+? or an ally within (\d+) feet (?:that|who) (?:the [\w' -]+?|it) can see fails (?:an attack roll, skill check, Perception check, or saving throw|a roll|a check)\.? Effect [^.]*?\brerolls? [^.]*?\+(\d+) status bonus[^.]*\.(?: [^.]+\.)*$/i.exec(String(text).trim().replace(/\s*Effect: [^.]+$/i, ""));
+    if (surge) return { builtin: "save-reroll", ally: true, self: true, within: Number(surge[1]), save: null, keep: "new", perAlly: true, note: `With a +${surge[2]} status bonus on the new roll (add it). The new result counts. Also an attack roll, skill or Perception check (the GM's). Each creature once a minute.` };
     const wish = /^Trigger A creature (?:the [\w' -]+?|it) can see that['’]s within (\d+) feet attempts a saving throw or skill check\.? Frequency once per (?:hour|day|10 minutes) Effect (?:The )?[^.]+?, allowing the creature to reroll the saving throw or skill check and take the better result\.$/i.exec(String(text).trim());
     if (wish) return { builtin: "save-reroll", ally: true, within: Number(wish[1]), save: null, uses: 1, note: "The better of the two counts. Also any other creature it can see, or a skill check (the GM's)." };
     const body = String(text).trim().replace(/\s*Effect: [^.]+$/i, "").replace(/\befect\b/g, "effect");
@@ -3820,6 +3824,17 @@ export function readShell(item, actor = null) {
         }
         if (/^The only action (?:the [\w' -]+?|it|they) can take is to Stand, and the effects of [A-Z][\w' -]+? end once (?:the [\w' -]+?|it|they) Stands?\.$/i.test(sentence)) {
             notes.push("It can only Stand, which ends it.");
+            continue;
+        }
+        // (Batch 271, a Battlezoo tortoise's: its turn ends, then a circumstance bonus to AC while it waits inside, only coming out with one action.)
+        if (/^(?:The [\w' -]+?|It) then ends its turn\.$/i.test(sentence)) {
+            notes.push("Its turn ends.");
+            continue;
+        }
+        match = /^(?:Retracting into its shell|This) gives (?:the [\w' -]+?|it) an? \+(\d+) circumstance bonus to AC, but (?:the [\w' -]+?|it) can(?:'t|not) act (?:while inside its shell|meanwhile) except to (?:reemerge|come out)[^.]*\.$/i.exec(sentence);
+        if (match) {
+            modifiers.push({ on: "ac", type: "circumstance", value: Number(match[1]) });
+            notes.push("It can't act except to come out, a single action.");
             continue;
         }
         // (Retract's other sentences.)

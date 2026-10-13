@@ -2758,3 +2758,20 @@ The user's call (2026-10-12): automate every remaining ability that can be, and 
   - **Strikes:** at every creature in its space with the penalty held; several claws at a penalty on the creature it holds; up to three thrown Strikes, with what the shards do after as notes; a bite rolled twice (notes, its rolled wait too).
   - **Allies and held creatures:** temporary Hit Points and Quickened for 1 round for it and its allies in an emanation (allies only); its Swallow Whole with the size, damage and Rupture given in brackets.
   - **A gaze:** a save or Dazzled, Blinded if it already was (a note).
+
+## Battlezoo's long tail, part 3 (2026-10-12, batch 271)
+
+- **Compiled** (21 new in Battlezoo, several dragons' shared abilities among them; described in our words):
+  - **Strikes:**
+    - two Strides and a Strike whose hit only dazzles (a note says to undo the damage);
+    - a Stride, a Leap and a kick that pushes 5 feet (10 on a critical hit, a note);
+    - a spit Strike whose hit brings a save or Confused;
+    - two fists at one creature, the second's extra damage a note; two blades at one target while its armor holds, counted as two attacks;
+    - a beak Strike with persistent bleed and Dazzled until the bleeding stops;
+    - one big Strike and two smaller ones, the penalty held when all go to different creatures (a note).
+  - **Held creatures:** one Athletics check against each creature it holds, damage and a 5-foot pull, double and 10 feet on a critical success.
+  - **On itself:** a shell with +3 AC that ends its turn; a big heal once a day, the allies' treats a note.
+  - **Reactions:**
+    - itself or an ally within 30 feet rerolls a failed save with +2 (a note), the new result kept, each once a minute;
+    - a creature striding within 60 feet saves or treats every square as difficult terrain (the GM's), maybe held after (a note);
+    - its failed save made a success, then Sickened 1 (a note), or 0 Hit Points made 1 (the GM's).

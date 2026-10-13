@@ -4566,3 +4566,34 @@ test("Battlezoo's long tail, part 2, in our own words: stings, crowded jaws, tem
     const gaze = plan("<p>The painted eyes on the test mask turn their stare on a creature within 20 feet. That creature must attempt a @Check[will|dc:18] save. On a failure, the creature is Dazzled for 1 round; if it is already dazzled, it becomes Blinded for 1 round instead.</p>");
     assert.deepEqual([gaze?.resolution?.check?.statistic, gaze?.resolution?.outcomes?.failure?.effects?.[0]?.slug, gaze?.notes?.length], ["will", "dazzled", 1]);
 });
+
+test("Battlezoo's long tail, part 3, in our own words: dazzling dashes, leaping kicks, confusing spit, flanking fists, pecks, shells, paired blades, assaults, crushes, rerolls, roots, harvests, revels (2026-10-12, batch 271)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions, actor) => compileMonsterAbility(item(html, type, actions), { basicActions: {}, ...(actor ? { actor } : {}) });
+    const dash = plan("<p>The test deck spins. The test deck Strides twice, then makes a card Strike at an adjacent foe afterward. On a hit, it deals no damage, and the target is @UUID[Compendium.pf2e.conditionitems.Item.TkIyaNPgTZFBCCuh]{Dazzled} until the start of its next turn.</p>", "action", 2);
+    assert.deepEqual([dash?.strides, dash?.strike, dash?.onHit?.conditions?.[0]?.slug], [2, "card", "dazzled"]);
+    const kick = plan("<p>The test toad Strides and then Leaps. When it lands beside a creature, it can make a heel Strike against it. On a hit, the target is pushed 5 feet (10 feet on a critical hit).</p>", "action", 2);
+    assert.deepEqual([kick?.strides, kick?.strike, kick?.onHit?.push], [1, "heel", 5]);
+    const spit = plan("<p>The test frog makes a tongue Strike. On a hit, the target must succeed at a @Check[fortitude|dc:20] save or be @UUID[Compendium.pf2e.conditionitems.Item.yblD8fOR1J8rDwEQ]{Confused} for 1 round.</p>", "action", 2);
+    assert.deepEqual([spit?.strike, spit?.onHit?.save?.resolution?.outcomes?.failure?.effects?.[0]?.slug], ["tongue", "confused"]);
+    const flank = plan("<p>The test golem makes two fist Strikes at one creature within its cloud. Hit or miss on the first Strike, the second Strike deals 1d6 extra force damage.</p>", "action", 2);
+    assert.deepEqual([flank?.strikes, flank?.sameTarget], [["fist", "fist"], true]);
+    const peck = plan("<p>The test crow makes a bill Strike at a Medium or smaller creature with eyes. On a hit, the target takes @Damage[1d4[persistent,bleed]] damage and is Dazzled until the bleeding stops.</p>", "action", 2);
+    assert.deepEqual([peck?.onHit?.damage, peck?.onHit?.conditions?.[0]?.slug], [["1d4[persistent,bleed]"], "dazzled"]);
+    const shell = plan("<p>The test turtle pulls into its shell. It then ends its turn. This gives it a +2 circumstance bonus to AC, but it can't act meanwhile except to come out with one action.</p>", "action", 1, { name: "Test Turtle", system: { attributes: { ac: { value: 20 } } }, items: [] });
+    assert.deepEqual([shell?.shell, shell?.model?.modifiers], [true, [{ on: "ac", type: "circumstance", value: 2 }]]);
+    const pair = plan("<p><strong>Requirements</strong> The test sentinel's construct armor is intact</p><hr /><p><strong>Effect</strong> The test sentinel swings both. The test sentinel attempts two Strikes, one using each of its axes, each at its current multiple attack penalty. Both attacks must target the same creature.</p>", "action", 2);
+    assert.deepEqual([pair?.strikes, pair?.countsAs], [["axe", "axe"], 2]);
+    const rush = plan("<p>The test hydra makes a head Strike, then two more Strikes with either its claw or its tail. If it aims every attack at different creatures, its penalty waits until after all the Strikes are done.</p>", "action", 2);
+    assert.deepEqual([rush?.strikes, rush?.each], [["head", "claw", "claw"], true]);
+    const crush = plan("<p>The test squid crushes all creatures it holds, with a single Athletics check against each creature's Fortitude DC. On a success, the squid deals @Damage[(1d8+2)[bludgeoning]] damage and drags it 5 feet closer (10 feet, twice the damage on a critical success).</p>");
+    assert.deepEqual([crush?.resolution?.outcomes?.success?.forcedMovement?.distance, crush?.resolution?.outcomes?.criticalSuccess?.damage?.formulas], [5, [{ formula: "2*(1d8+2)[bludgeoning]" }]]);
+    const cheer = plan("<p><strong>Trigger</strong> The test muse or an ally within 20 feet who it can see fails a check</p><hr /><p><strong>Effect</strong> That creature rerolls it at a +1 status bonus.</p>", "reaction");
+    assert.deepEqual([cheer?.builtin, cheer?.self, cheer?.within, cheer?.keep], ["save-reroll", true, 20, "new"]);
+    const roots = plan("<p><strong>Trigger</strong> An enemy within 30 feet Strides</p><hr /><p><strong>Effect</strong> Roots twist up. The triggering creature treats every square as difficult terrain until its turn ends unless it makes a @Check[reflex|dc:20] save. On a failure, when it ends within 5 feet of where it began, it is Grabbed by the roots.</p>", "reaction");
+    assert.deepEqual([roots?.trigger?.triggers, roots?.resolution?.outcomes?.failure?.manualInstructions?.length], [["move"], 1]);
+    const harvest = plan("<p><strong>Frequency</strong> once per day</p><hr /><p><strong>Effect</strong> The test gardener heals @Damage[2d8[healing]] Hit Points and throws fruit to up to three allies within 30 feet. Each fruit heals @Damage[1d8[healing]] when eaten.</p>", "action", 2);
+    assert.deepEqual([harvest?.resolution?.outcomes?.success?.effects?.[0], harvest?.notes], [{ kind: "heal", formula: "2d8" }, ["Also up to three allies within 30 feet each get a treat that heals 1d8 when eaten (the GM's)."]]);
+    const revel = plan("<p><strong>Trigger</strong> The test reveler fails or critically fails a save or drops to 0 Hit Points</p><hr /><p><strong>Effect</strong> It laughs it off. If it would drop to 0 Hit Points, it stays at 1 Hit Point. If it failed or critically failed a save, it gets a success instead. In both cases, it becomes Sickened 1.</p>", "free");
+    assert.deepEqual([revel?.builtin, revel?.toSuccess, revel?.free], ["save-boost", true, true]);
+});
