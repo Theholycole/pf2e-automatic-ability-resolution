@@ -2957,3 +2957,7 @@ Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check agains
 
 - **New pieces:** Ferocity's kin with `notAtOne` (Bravo's Determination): never when it was already at 1 HP (the simulation checks; live, a note); a reaction written with its trigger and no "Effect" label.
 - **Compiled** (9 new in PF2e; Surprise Snare the GM's as items): Fearless Switch, Quicken Pestilence, Soul Dance Stance, Bravo's Determination, Revenant Reload, Vital Transfusion, Ecstatic Ululation, Tumultuous Flash, Change of Luck. Three that the last-resort fallback had left to the GM (Vital Transfusion on both excorions, Mister Moxie's Change of Luck) now read too.
+
+## Live check of batches 289–294 (2026-10-13)
+
+Checked in pftest: Unleash Hive's Effect with PF2e's FastHealing 3 for a minute; Quick Escape offered as the beetle became Grabbed (its Escape card waiting for the grabber as target) and Melt Time as the adada became Slowed (its card gave Quickened); Sphere Shift's ways naming the five attunements, the pick switching the toggle on its Elemental Attunement from ether to earth (physical resistance 10); Feather Strike's card rolling `1d20 + 11` against Valeros's AC 23 and recording the success. Nothing to fix.
