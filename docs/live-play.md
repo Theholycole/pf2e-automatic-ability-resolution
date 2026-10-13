@@ -2577,3 +2577,14 @@ Four Battlezoo dragon abilities, eight copies each; their own words stay out of 
   - **After two hits in a row:** "hits the same enemy with two consecutive sting Strikes in the same round" is a follow-up to its sting Strikes, with the requirement as a note. Its damage is dealt with no roll (Mind-Rending Sting).
   - **Spice in the eyes:** an adjacent creature is Dazzled with no roll, until it Interacts to clear its eyes (Spice Mix).
 - **Simulator:** see B260 in its ability decisions.
+
+## Healing around it, a listed gulp, limbs, rushes and scales (2026-10-12, batch 261)
+
+- **Compiled** (6 new in PF2e; 1 adventure ability that was the GM's):
+  - **Healing around it:** "This restores 5d8 Hit Points to the turtle and each living ally within 10 feet" heals itself and its allies in a 10-foot emanation. "Can't use … again for 1 minute" is a 10-round recharge, and "living" is a note (Healing Pulse).
+  - **A gulp with its own numbers:** "reels in a target Grabbed by its tentacles, pulling them into an adjacent space, and then attempts to Swallow them Whole (Large, 3d8+12 acid, Rupture 25)" is PF2e's Swallow Whole with those numbers on the creature it holds. The pull is a note (Abduct).
+  - **Limbs:** "makes a number of limb Strikes up to its number of functioning limbs, each against a different target" makes as many Strikes as its other abilities say it has ("ordinarily has four severed limbs"). Losing limbs is a note (Flurry of Limbs; the torn trio makes three).
+  - **A rush:** "For the next 1d4+1 rounds, the melixie is Quickened, and can use the additional action only to Stride or Fly" is Quickened on itself for that rolled time. The move first and the Fatigued after are notes (Sugar Rush).
+  - **Scales:**
+    - "gains resistance 10 to physical damage, but its Speeds are reduced to 10 feet … by taking this action again" is that resistance until it uses the action again. Its Speeds and the stored blow are notes (Tilt Scales).
+    - "+2 circumstance bonus to AC and resistance 15 to their choice of bludgeoning, piercing, or slashing damage … until the beginning of the manticore's next turn" is the AC bonus until then. The chosen resistance is a note for the GM (Arrange Scales).

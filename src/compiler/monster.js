@@ -2352,6 +2352,14 @@ export function headCount(actor) {
 const HEAD_WORDS = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten" };
 function withHeads(item, actor) {
     const html = item.system?.description?.value;
+    // (Batch 261, Flurry of Limbs: "… up to its number of functioning limbs" — as many as its other abilities say it has, "ordinarily has three severed
+    // limbs", in words for the multi-Strike reader.)
+    const limbs = /\bup to (?:its|their) number of functioning limbs\b/i;
+    if (typeof html === "string" && limbs.test(html)) {
+        const owner = actor ?? item.actor ?? item.parent;
+        const said = (owner?.items?.contents ?? owner?.items ?? []).map((other) => htmlToPlainText(String(other.system?.description?.value ?? ""))).map((text) => /\bordinarily has (two|three|four|five|six) (?:severed )?limbs\b/i.exec(text)?.[1]).find(Boolean);
+        return said ? withDescription(item, html.replace(limbs, (all) => `${all} (${said.toLowerCase()})`)) : item;
+    }
     const words = /\ba number of ((?:[\w' -]+? )?)Strikes up to (?:its|their|his|her) number of heads\b/gi;
     if (typeof html !== "string" || !words.test(html)) return item;
     const heads = headCount(actor ?? item.actor ?? item.parent);
@@ -3403,8 +3411,16 @@ function areaHealing(item) {
     const html = String(item.system?.description?.value ?? "");
     const tags = inlineTags(html, "Damage");
     const template = inlineTags(html, "Template").map(readTemplate).find(Boolean);
-    if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0]) || !template) return null;
     const plain = htmlToPlainText(html.replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, "@T")).replace(/\s+/g, " ").trim();
+    // (Batch 260, Healing Pulse: "… This restores 5d8 Hit Points to the turtle and each living ally within 10 feet, including creatures normally
+    // immune to electricity. The turtle can't use Healing Pulse again for 1 minute and is temporarily immune to the Healing Pulse of any lightning
+    // turtle for 1 minute." — itself and its allies around it; once a minute.)
+    const allies = tags.length === 1 && /\bhealing\b/i.test(tags[0]) ? /^(?:(?:The )?[^.@]+\. )?(?:This|It|They) (?:restores|heals) @D (?:Hit Points|HP) to (?:the [\w' -]+?|itself|themself) and each (living )?ally within (\d+) feet(?:, including [^.]+)?\.(?: (?:The )?[^.]+? can(?:'t|not) use [^.]+? again for (1|one) minutes?(?: and is temporarily immune to [^.]+? for 1 minute)?\.)?$/i.exec(plain) : null;
+    if (allies) {
+        const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
+        return { ...base(item), targeting: { target: null, range: null, area: { type: "emanation", value: Number(allies[2]) } }, trigger: { event: "use", ...(allies[3] ? { recharge: { formula: "10", unit: "rounds" } } : {}) }, resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "willing" } } }, ...(allies[1] ? { notes: ["Only living allies."] } : {}) };
+    }
+    if (tags.length !== 1 || !/\bhealing\b/i.test(tags[0]) || !template) return null;
     if (!/(?:^|\.\s)Each creature in an? @T (?:recovers|regains) @D(?: Hit Points| HP)?\.$/i.test(plain.replace(/(?:\s*(?:The )?[^.]+? can(?:'t|not) use [^.]+? again for [^.]+\.)+$/i, ""))) return null;
     const formula = readDamage(tags[0]).replace(/\[healing\]/i, "").replace(/^\((.*)\)$/, "$1");
     return { ...base(item), targeting: { target: null, range: null, area: template }, trigger: { event: "use" }, resolution: { kind: "healing", native: { healing: { components: [{ id: "0", formula, kinds: ["healing"] }], recipients: "any" } } } };
@@ -4928,6 +4944,22 @@ function heldCreature(item, actor, options = {}) {
     if (item.system?.actionType?.value !== "action") return null;
     const html = String(item.system?.description?.value ?? "");
     const plain = htmlToPlainText(html.replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1").replace(/@Damage\[(?:[^[\]]|\[[^\]]*\])*\](?:\{[^}]*\})?/g, "@D").replace(/\[\[\/act escape dc=(\d+)\]\](?:\{[^}]*\})?/g, "Escape DC $1")).replace(/\s+/g, " ").trim();
+    // (Batch 261, Abduct: "The sky fisher reels in a target Grabbed by its tentacles, pulling them into an adjacent space, and then attempts to Swallow
+    // them Whole (Large, @Damage[(3d8+12)[acid]], Rupture 25). The sky fisher can only use Swallow Whole when using Abduct." — the Swallow Whole it
+    // lists, PF2e's glossary ability with those numbers, on the creature it holds.)
+    const abduct = /^(?:The )?[^.]+? (?:reels|pulls|drags) in a (?:target|creature) Grabbed by (?:its|their) [\w' -]+?, pulling (?:them|it) into an adjacent space, and then attempts to Swallow (?:them|it) Whole \((Tiny|Small|Medium|Large|Huge|Gargantuan), @D, Rupture (\d+)\)\.(?: (?:The )?[^.]+? can only use Swallow Whole when using [^.]+\.)?$/i.exec(plain);
+    if (abduct) {
+        const damage = inlineTags(html, "Damage")[0];
+        if (!damage) return null;
+        let plan = null;
+        try {
+            plan = compileMonsterAbility({ type: "action", name: "Swallow Whole", system: { slug: "swallow-whole", actionType: { value: "action" }, actions: { value: 1 }, traits: { value: [] }, description: { value: `<p>${abduct[1]}, [[/r ${damage}]] damage, Rupture ${abduct[2]}</p><hr /><p>@Localize[PF2E.NPC.Abilities.Glossary.SwallowWhole]</p>` } } }, { ...options, actor: actor ?? item.actor ?? item.parent });
+        } catch {
+            plan = null;
+        }
+        if (!plan?.resolution) return null;
+        return { ...plan, source: base(item).source, activation: { time: String(Number(item.system?.actions?.value) || 1), traits: [...new Set([...(item.system?.traits?.value ?? []), ...(plan.activation?.traits ?? [])])] }, targeting: { ...(plan.targeting ?? {}), grabbed: true }, notes: [...(plan.notes ?? []), "It first pulls the creature into a space beside it."] };
+    }
     const held = /^Requirements? (?:(?:A|An) (?:(?:Small|Medium|Large|Tiny) or smaller )?creature is Grabbed(?: or Restrained)? in (?:the [\w' -]+?['’]s|its|their) ([\w' -]+?)|(?:The )?[\w' -]+? has an? (?:(?:Small|Medium|Large|Tiny) or smaller )?creature Grabbed(?: or Restrained)?)\.? Effect (.+)$/i.exec(plain);
     if (!held) return null;
     const effect = held[2];
@@ -5898,7 +5930,9 @@ function selfCondition(item) {
     if (trigger && !ownTurn && !reacting) return null;
     const requires = /\bRequirements? (.+?) Effect\b/.exec(plain)?.[1] ?? null;
     const effect = plain.includes("Effect ") ? plain.slice(plain.indexOf("Effect ") + 7) : plain;
-    const sentences = effect.split(/(?<=\.)\s+/);
+    // (Batch 261, Sugar Rush: "For the next 1d4+1 rounds, the melixie is Quickened, and can use the additional action only to Stride or Fly." in the
+    // usual order.)
+    const sentences = effect.replace(/\bFor the next ((?:\d+|\d+d\d+(?:\+\d+)?) rounds), ((?:the [\w' -]+?|it|they)) is (\u0001\w+\u0002), and can use the additional action only to\b/gi, (_all, time, who, slug) => `${who[0].toUpperCase()}${who.slice(1)} is ${slug} for ${time}, and can use the extra action only to`).split(/(?<=\.)\s+/);
     // (The monster itself: not "The animal", "The target", "The creature".)
     const SUBJECT = String.raw`(?:The (?!(?:animal|target|creature|ally|allies|enemy|foe|mount)\b)[\w' -]+?|It|They|He|She|[A-Z][\w'-]+(?: [A-Z][\w'-]+)?)`;
     const DURATION = String.raw`(?: (?:until the (?:end|start|beginning) of (?:its|their|his|her|that ally's|each ally's) (?:next )?turn|this turn|for (?:\d+|one|1d4|1d4\+1|1d6) (?:round|minute)s?(?: \([^)]*\))?))?`;

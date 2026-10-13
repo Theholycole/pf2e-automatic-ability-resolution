@@ -217,7 +217,13 @@ export function readMultiStrikes(text) {
     body = body.replace(/^((?:The )?[^.]+?) makes an? ([\w' -]+?) Strike against two creatures that are adjacent to each other\. The attack ignores any lesser cover one target provides the other\. Roll damage once, and apply it to each creature (?:the [\w' -]+?|it|they) hits\./i, (_all, who, name) => {
         earlyNotes.push("The two creatures must be adjacent to each other; it ignores lesser cover between them and rolls damage once for both.");
         return `${who} makes two ${name} Strikes, each against a different target.`;
-    });
+    })
+        // (Batch 261, Flurry of Limbs: "makes a number of limb Strikes up to its number of functioning limbs, each against a different target" — as many
+        // as it has when whole (its other abilities say, the compiler adds it); fewer as it loses them, the GM's.)
+        .replace(/^((?:The )?[^.]+?) makes a number of ([\w' -]+?) Strikes up to (?:its|their) number of functioning (?:limbs|\2s) \((two|three|four|five|six)\), each against a different target\./i, (_all, who, name, count) => {
+            earlyNotes.push(`One Strike for each limb it can still use: ${count} when whole, fewer as it loses limbs.`);
+            return `${who} makes ${count} ${name} Strikes, each against a different target.`;
+        });
     // (Batch 203: Sixfold Flurry's "makes up to two longsword Strikes and up to four fist Strikes. Each Strike must be against a different target. These
     // attacks count toward the calikang's multiple attack penalty, which doesn't increase until after all the attacks are complete. For 1 round, …"
     // (its AC for Strikes not taken a note); Unleash Weapon's "releases their morningstar … makes up to two morningstar Strikes, each against a different
@@ -3542,6 +3548,15 @@ function readSelfResistance(item, body) {
             return plan(types.map((type) => ({ type, value: Number(found[1]), exceptions: [] })), { rounds: null, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes });
         }
     }
+    // (Batch 261, Tilt Scales: "The zetogeki gains resistance 10 to physical damage, but its Speeds are reduced to 10 feet. If … it stores the kinetic
+    // energy of the blow. The zetogeki can realign its scales to their regular position by taking this action again. …" — the resistance until it uses
+    // the action again; its Speeds and the stored blow, notes.)
+    const tilted = said.findIndex((sentence) => /^(?:The [\w' -]+?|It|They) gains? resistance (\d+) to ([a-z, ]+?) damage, but (?:its|their) Speeds are reduced to (\d+) feet\.$/i.test(sentence));
+    if (tilted >= 0 && said.slice(0, tilted).every(told) && said.slice(tilted + 1).some((sentence) => /\bby taking this action again\b/i.test(sentence))) {
+        const found = /gains? resistance (\d+) to ([a-z, ]+?) damage, but (?:its|their) Speeds are reduced to (\d+) feet/i.exec(said[tilted]);
+        const types = resistanceTypes(found[2]);
+        if (types) return plan(types.map((type) => ({ type, value: Number(found[1]), exceptions: [] })), { rounds: null, stance: true, duration: { value: -1, unit: "unlimited", expiry: null }, notes: [`Its Speeds are ${found[3]} feet while it lasts.`, ...said.slice(tilted + 1)] });
+    }
     // Whirlwind Form.
     const form = said.findIndex((sentence) => /^(?:It|They|The [\w' -]+?) stays? in this form for (\d+) rounds or until (?:it|they) Dismiss(?:es)? the effect\.$/i.test(sentence));
     const gains = form >= 0 ? /^While in this form, (?:the [\w' -]+?|it|they) gains? resistance (\d+) to ([a-z, ]+?) damage(?: and (can move through other creatures))?\.$/i.exec(said[form + 1] ?? "") : null;
@@ -3669,6 +3684,11 @@ export function readSelfGuard(item) {
     // action, notes.)
     const shield = /^Requirements? (?:The )?[\w' -]+? is adjacent to an? ([\w' -]+? ally) Effect (?:The )?[\w' -]+? gains cover until the start of (?:its|their|his|her) next turn or when (?:it's|they're|he's|she's) no longer adjacent to the [\w' -]+?, whichever comes first\.$/i.exec(text);
     if (shield) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: 2 }], tempHp: 0 }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, notes: [`Only beside a ${shield[1]}; it ends if it's no longer beside it.`] };
+    // (Batch 261, Arrange Scales: "… The manticore gains a +2 circumstance bonus to AC and resistance 15 to their choice of bludgeoning, piercing, or
+    // slashing damage. These benefits last until the beginning of the manticore's next turn or they use Arrange Scales again." — the AC until its next
+    // turn; the resistance by its choice, a note for the GM.)
+    const scales = /^(?:(?:The )?[^.\d]+\. )?(?:The )?[\w' -]+? gains? an? \+(\d+) circumstance bonus to AC and resistance (\d+) to (?:its|their) choice of ([a-z, ]+?) damage\. These benefits last until the (?:beginning|start) of (?:the [\w' -]+?['’]s|its|their) next turn or (?:it uses|they use) [A-Z][\w' -]+? again\.$/i.exec(text);
+    if (scales) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 1, modifiers: [{ on: "ac", type: "circumstance", value: Number(scales[1]) }], tempHp: 0 }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "rounds", expiry: "turn-start" }, notes: [`Also resistance ${scales[2]} to ${scales[3].replace(/,? or /, " or ")} damage, its choice (the GM sets it).`] };
     const revUp = /^Requirements? (?:The )?[\w' -]+? hasn't acted yet this turn Effect (?:The )?[\w' -]+? Strides up to (?:its|their|his|her) Speed\. (?:It|They|He|She) then gains? an? \+(\d+) circumstance bonus to attack and damage rolls until the end of (?:its|their|his|her) turn\.$/i.exec(text);
     if (revUp) return { builtin: "self-effect", actions: Number(item.system?.actions?.value) || 1, model: { name: item.name, rounds: 0, modifiers: [{ on: "attack", type: "circumstance", value: Number(revUp[1]) }, { on: "damage", type: "circumstance", value: Number(revUp[1]) }], tempHp: 0 }, damage: [], strike: null, melee: false, duration: { value: 0, unit: "rounds", expiry: "turn-end" }, notes: ["Its first action this turn: it Strides up to its Speed first."] };
     const required = /^Requirements? (.+?) Effect /.exec(text)?.[1] ?? "";

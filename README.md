@@ -366,6 +366,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - damage to a downed creature (Kiss of Death), and a dash that triggers no reactions (Plane-Hopper Dash);
   - a bonus to its own initiative (All This Has Happened Before);
   - a follow-up after two hits in a row (Mind-Rending Sting), and Dazzled until cleared (Spice Mix).
+- **Healing around it, a listed gulp, limbs, rushes and scales** (2026-10-12, batch 261): 6 new in PF2e and 1 adventure ability that was the GM's. They include:
+  - healing for itself and its allies (Healing Pulse);
+  - a Swallow Whole with its own numbers on a held creature (Abduct);
+  - a Strike per limb it has (Flurry of Limbs);
+  - a rolled time Quickened (Sugar Rush);
+  - resistance until it switches back (Tilt Scales), and AC until its next turn (Arrange Scales).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.

@@ -4236,3 +4236,23 @@ test("exposures in other words, a downed creature's damage, a safe dash, its own
     const spice = plan("<p>The test cook flings pepper into an adjacent creature's eyes, causing the creature to be Dazzled until it Interacts to clear its vision.</p>");
     assert.deepEqual(spice?.resolution?.outcomes?.success?.effects, [{ kind: "condition", slug: "dazzled", value: null, duration: null }]);
 });
+
+test("healing around it, a gulp with its own numbers, limbs, rushes and scales (2026-10-12, batch 261)", () => {
+    const item = (html, type = "action", actions = 1, name = "Test") => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, description: { value: html } } });
+    const plan = (html, type, actions) => compileMonsterAbility(item(html, type, actions), { basicActions: {} });
+    const pulse = plan("<p>The test eel hums softly. This restores @Damage[3d8[healing]] Hit Points to the test eel and each living ally within 15 feet. The test eel can't use Test Pulse again for 1 minute.</p>", "action", 2);
+    assert.deepEqual([pulse?.targeting?.area, pulse?.resolution?.native?.healing?.recipients, pulse?.trigger?.recharge?.formula, pulse?.notes], [{ type: "emanation", value: 15 }, "willing", "10", ["Only living allies."]]);
+    const gulp = plan("<p>The test heron drags in a target Grabbed by its beak, pulling them into an adjacent space, and then attempts to Swallow them Whole (Medium, @Damage[(2d6+5)[bludgeoning]], Rupture 14). The test heron can only use Swallow Whole when using Test Gulp.</p>");
+    assert.deepEqual([gulp?.source?.name, gulp?.targeting?.grabbed, gulp?.resolution?.outcomes?.success?.effects?.[0]], ["Test", true, { kind: "swallow", damage: "(2d6+5)[bludgeoning]", rupture: 14, size: "medium" }]);
+    const flurry = item("<p>The test puppet makes a number of arm Strikes up to its number of functioning limbs, each against a different target. These attacks count toward the test puppet's multiple attack penalty, but the multiple attack penalty doesn't increase until after the test puppet makes all its attacks.</p>", "action", 2, "Test Flurry");
+    const strings = item("<p>A test puppet ordinarily has five limbs hung from its frame.</p>", "passive", 1, "Test Strings");
+    const limbs = compileMonsterAbility(flurry, { basicActions: {}, actor: { name: "Test Puppet", items: [flurry, strings] } });
+    assert.deepEqual([limbs?.builtin, limbs?.strikes?.length, limbs?.each, limbs?.sameMap], ["multi-strike", 5, true, true]);
+    assert.equal(compileMonsterAbility(flurry, { basicActions: {}, actor: { name: "Test Puppet", items: [flurry] } })?.builtin, undefined, "not without its number of limbs");
+    const rush = plan("<p>The test sprite gulps down a sweet. For the next [[/gmr 1d4+1 #Duration]]{1d4+1 rounds}, the test sprite is @UUID[Compendium.pf2e.conditionitems.Item.nlCjDvLMf2EkV2dl]{Quickened}, and can use the additional action only to Stride.</p>");
+    assert.deepEqual([rush?.resolution?.outcomes?.success?.effects?.[0]?.slug, rush?.resolution?.outcomes?.success?.effects?.[0]?.duration?.valueRoll], ["quickened", "1d4+1"]);
+    const tilt = plan("<p>The test armadillo turns its plates edge-out. The test armadillo gains resistance 5 to physical damage, but its Speeds are reduced to 15 feet. It can turn its plates back by taking this action again.</p>");
+    assert.deepEqual([tilt?.builtin, tilt?.stance, tilt?.model?.resistances, tilt?.notes?.[0]], ["self-effect", true, [{ type: "physical", value: 5, exceptions: [] }], "Its Speeds are 15 feet while it lasts."]);
+    const plates = plan("<p>The test pangolin tenses up. The test pangolin gains a +1 circumstance bonus to AC and resistance 5 to their choice of bludgeoning, piercing, or slashing damage. These benefits last until the beginning of the test pangolin's next turn or they use Test Plates again.</p>");
+    assert.deepEqual([plates?.model?.modifiers, plates?.duration?.expiry, plates?.notes], [[{ on: "ac", type: "circumstance", value: 1 }], "turn-start", ["Also resistance 5 to bludgeoning, piercing or slashing damage, its choice (the GM sets it)."]]);
+});
