@@ -2873,3 +2873,8 @@ Fixed on the way:
 
 - **Compiled** (30 rows; 29 new in PF2e, 2 more that were the GM's): Saving Touch, Succumb to the Void, Overambitious Spell, Herbal Poison, Guardian Shield, Diplomatic Immunity, Overacted Strike, Pragmatic Aid, "Courageous" Retreat, Somersault Attack, Distracting Escape, Retort, Cite Precedent, Disarming Shot, War Cry, Sight Prey, Borrow Time, Paper Pusher, Feline Skirmish, Shatter Spell, Fickle Prophecy, Gift of the Wild Spirits, Focused Thinker, Sic 'Em!, Smite, Energy Projector, Mid-air Collision. Rightfully Mine (copies) and Risky Upgrade (items) are added to `gm-decided.js` under the user's standing categories.
 
+## The long tail after the user's choices, part 11 (2026-10-13, batch 283)
+
+- **New pieces:** self-effect modifiers on `perception`, `spell-dc` and `spell-attack` (PF2e's `spell-attack-roll`). Ways nested as list items with a spell and a boon (Don Mask). A random way table from "Roll 1d20 to determine the type: 1–7 acid 8–9 cold …" (Breach the Outer Rifts).
+- **Compiled** (30 rows; 29 new in PF2e, 4 more that were the GM's): Third Contingent Sequencer, Tidal Pressure, Mind if I Borrow That?, Lucky Momentum, Tip the Scales, Evoke Pity, Glittering Distraction, Swirling Blade, Lasso, Hogtie, Bloodthirsty Plants, Verdant Aria, Harness Wickedness, Don Mask, Dramatic Exit, Noble Pride, Dash of Spice, Rearming Advance, Warding Shift, Keep Up With Me!, Magnificent…!, Following Spell, Divine Frenzy, Foresight, Breach the Outer Rifts, Animal Tandem, Unavoidable Question, Share Burden. Didactic Arcanism joins the user's "copies".
+

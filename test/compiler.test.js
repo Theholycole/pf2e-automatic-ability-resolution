@@ -4989,3 +4989,24 @@ test("group D, built, part 10 (2026-10-13, batch 282): toggled forms, poisons, r
     const copy = compileMonsterAbility(item("<p>Copies.</p>", "reaction", 1, "Rightfully Mine"), { basicActions: {}, actor: { name: "Mirror Seer", items: [] } });
     assert.deepEqual(copy, { builtin: "no-effect", gm: "copies" });
 });
+
+test("group D, built, part 11 (2026-10-13, batch 283): spell sequences, swim nudges, marked items, lucky momentum, pity, lassos and hogties, arias, wickedness, spirit masks, frenzies with Perception and spell modifiers, foresight, rift dice, questions, shared curses", () => {
+    const item = (html, type = "action", actions = 1, name = "Test", rules = []) => ({ type: "action", name, system: { slug: null, actionType: { value: type }, actions: { value: type === "action" ? actions : null }, traits: { value: [] }, rules, description: { value: html } } });
+    const plan = (html, type, actions, actor, basicActions = {}, rules = []) => compileMonsterAbility(item(html, type, actions, "Test", rules), { basicActions, ...(actor ? { actor } : {}) });
+    const react = (trigger, effect, type = "reaction", actor) => plan(`<p><strong>Trigger</strong> ${trigger}</p><hr /><p><strong>Effect</strong> ${effect}</p>`, type, 1, actor);
+    const S = (id, name) => `@UUID[Compendium.pf2e.spells-srd.Item.${id}]{${name}}`;
+    const seq = react("A creature attacks the test wizard", `Magic takes shape, casting ${S("YrzBLPLd3r9m6t1p", "Fire Shield")} and ${S("2BV2yYPfVJ5zirZt", "Mountain Resilience")} on the test wizard, each as an 8th-rank arcane spell.`);
+    assert.deepEqual([seq?.all, seq?.modes?.map((mode) => [mode.name, mode.plan?.rank, mode.plan?.self])], [true, [["Fire Shield", 8, true], ["Mountain Resilience", 8, true]]]);
+    const grapple = { resolution: { kind: "check", check: { roll: "skill", statistic: "athletics", against: { dc: "target", statistic: "fortitude" } }, outcomes: { criticalSuccess: { tag: "c" }, success: { tag: "s" }, failure: {}, criticalFailure: {} } } };
+    const lasso = plan("<p>The test rancher uses their lasso to [[/act grapple]] a Large or smaller creature up to 20 feet away. They can keep the hold. A DC 16 Athletics check frees it.</p>", "action", 2, null, { grapple });
+    assert.deepEqual([lasso?.targeting?.range, lasso?.targeting?.size], ["20 feet", "large"]);
+    const frenzy = plan("<p><strong>Requirements</strong> The test oracle isn't Fatigued</p><hr /><p><strong>Effect</strong> The test oracle enters into a divine frenzy that lasts 1 minute. They can't stop. While in a divine frenzy, the test oracle takes a –2 penalty to Perception checks and Will saves and gains a +2 status bonus to their spell DC and spell attack modifier. They can't concentrate.</p>");
+    assert.deepEqual(frenzy?.model?.modifiers?.map((entry) => `${entry.on}${entry.value}`), ["perception-2", "will-2", "spell-dc2", "spell-attack2"]);
+    const rifts = plan("<p><strong>Requirements</strong> The test cultist's last action was to cast a non-cantrip spell</p><hr /><p><strong>Effect</strong> The test cultist charges their weapon. Until the end of the turn, the weapon deals an extra 1d6 damage. Roll 1d20 to determine the type: 1–10 acid 11–20 fire.</p>", "free");
+    assert.deepEqual([rifts?.random, rifts?.modes?.map((mode) => [mode.faces.length, mode.plan?.damage?.[0]])], [{ formula: "1d20", times: 1 }, [[10, "1d6[acid]"], [10, "1d6[fire]"]]]);
+    const monger = { name: "Test Monger", items: [item("<p>It is permanently @UUID[Compendium.pf2e.conditionitems.Item.i3OJZU2nk64Df3xm]{Clumsy 1} or @UUID[Compendium.pf2e.conditionitems.Item.4D2KBtexWXa6oUMR]{Drained 1} by a curse.</p>", "passive", 1, "Test Curse")] };
+    const share = plan("<p>The test monger shares their awful burden with one creature they can see within 50 feet. The target must succeed at a @Check[will|dc:25] save or be afflicted with the same condition as the test monger's test curse for 24 hours. On a critical failure, the curse's value is 2.</p>", "action", 1, monger);
+    assert.deepEqual(share?.modes?.map((mode) => [mode.name, mode.plan?.resolution?.outcomes?.criticalFailure?.effects?.[0]?.value]), [["Clumsy", 2], ["Drained", 2]]);
+    const pity = react("An enemy reduces the test noble below half HP", "The test noble begs. The test noble attempts a single @Check[performance|against:will] check against the Will DCs of all enemies in a @Template[type:emanation|distance:30]. Any creature the attempt succeeds against takes a –2 circumstance penalty to damaging attacks against it for 10 minutes.");
+    assert.deepEqual([pity?.resolution?.check?.statistic, pity?.targeting?.area, pity?.resolution?.outcomes?.success?.noteEffects?.[0]?.label], ["performance", { type: "emanation", value: 30, foes: true }, "Pity"]);
+});

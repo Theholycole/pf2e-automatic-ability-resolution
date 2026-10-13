@@ -255,6 +255,7 @@ export const GM_DECIDED = [
     // Copies (group B).
     // (2026-10-13, batch 282: one more copy, by the user's rule of 2026-10-12 — a creature's action duplicated.)
     ["Mirror Seer", "Rightfully Mine", "copies"],
+    ["Eldritch Emeritus", "Didactic Arcanism", "copies"],
     ["Clone Mirrors", "Spawn Reflection", "copies"],
     ["Darkside Mirror", "Reflection of Malice", "copies"],
     // Adventure creatures (group B).
