@@ -268,3 +268,10 @@ test("a self-effect that hurts its melee attackers: flagged hitBack, told on the
     assert.deepEqual([effect.system.rules, effect.system.duration.value, effect.system.duration.expiry], [[], 1, "turn-start"]);
     assert.match(effect.system.description.value, /A creature that hits it in melee takes 3d6 electricity damage\./);
 });
+
+test("a self-effect with fast healing: PF2e's FastHealing while it lasts (2026-10-13, batch 289)", () => {
+    const hive = { builtin: "self-effect", actions: 2, model: { name: "Test Hive", rounds: 10, modifiers: [], tempHp: 0, fastHealing: 3 }, damage: [], strike: null, melee: false, duration: { value: 1, unit: "minutes", expiry: null } };
+    const effect = strikeBuffEffect(hive, { name: "Test Hive" });
+    assert.deepEqual(effect.system.rules, [{ key: "FastHealing", value: 3 }]);
+    assert.match(effect.system.description.value, /Fast healing 3\./);
+});

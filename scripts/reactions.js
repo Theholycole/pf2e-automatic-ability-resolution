@@ -774,6 +774,9 @@ async function onConditionGained(item) {
     if (!scene) return;
     if (slug === "prone") await mishapAnswers(scene, token, "fell prone");
     const mine = reactors(scene, game.combat).find((entry) => entry.token.id === token.id);
+    // (Batch 289, Quick Escape: a card offered as it gains the condition — its Escape as it's grabbed.)
+    const gained = mine?.reactions.find(({ plan }) => plan.trigger?.reaction && plan.trigger.event === "condition-gained" && (plan.trigger.slugs ?? []).includes(slug));
+    if (gained) await offer({ kind: "card", item: gained.item, monster: token, actor: mine.actor, target: null, trigger: `became ${item.name}`, note: gained.plan.notes?.join(" ") || null });
     const entry = mine?.reactions.find(({ plan }) => plan.builtin === "negate-condition" && (!plan.conditions || plan.conditions.includes(slug)));
     if (!entry) return;
     const left = Number(entry.item.system?.frequency?.value);

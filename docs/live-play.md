@@ -2925,3 +2925,12 @@ Fixed on the way:
 ## Live check of batch 288 (2026-10-13)
 
 Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check against Valeros's Reflex DC 21 and recorded the success on the card; Telekinetic Shove's card (Spell Attack +25) rolled `1d20 + 25` against his Fortitude DC and recorded a critical success. Both through the new set-modifier roll; nothing to fix.
+
+## The long tail after the user's choices, part 17 (2026-10-13, batch 289)
+
+- **New pieces:**
+  - A self-effect's `model.fastHealing` (Unleash Hive): PF2e's FastHealing rule on its Effect (not for a regeneration plan, which carries the number for the simulation).
+  - A reaction card with `trigger.event: "condition-gained"` and its `slugs` (Quick Escape): offered when the creature gains that condition; target the creature that grabbed it for the Escape.
+  - A reaction's own trigger after a requirement or a lead-in sentence ("Requirements …; Trigger …; Effect …").
+  - The simulation's AC reactions can require holding a creature (`requires: "grabbed"`, Meat Shield).
+- **Compiled** (28 new, all Battlezoo; Sudden Infusion the GM's as items, Detach Soul as summons): Strangle, Toss Away, Reap, Meat Shield, Drop Tentacle, Spawn Tentacles, Cloud Cover, Unleash Hive, Spore Burst, Frenzied Hiss, Increase Infestation, Vermicular Surge, Execute, Malignant Entropy, Accelerate Fall, Quick Escape, Double Kick, Prodigious Leap, Springing Leap, Inflame Fever, Spear Snag, Seep Venom, Consume Poison, Selfish Protection, Proclaim Ward, Pull Taut, Swap Energy, Leap and Catch.

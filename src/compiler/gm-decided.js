@@ -113,6 +113,8 @@ export const GM_DECIDED = [
     ["Zebub", "Diabolic Eye", "out-of-combat"],
     // Items: making, stealing or using them (group B; the future item module's).
     // (2026-10-13, batch 282: a device or vehicle upgraded, by the same rule.)
+    // (2026-10-13, batch 289: alchemical items made inert and reagents given back, by the same rule.)
+    ["Living Proof", "Sudden Infusion", "items"],
     ["Mechanic", "Risky Upgrade", "items"],
     ["Apothecary Bee", "Ingest Potion", "items"],
     ["Apothecary Bee", "Inject Potion", "items"],
@@ -231,7 +233,8 @@ export const GM_DECIDED = [
     ["Graveknight Warmaster", "Phantom Mount", "summons"],
     ["Katpaskir", "Mirrored Summons", "summons"],
     ["Morrigna", "Spider Minions", "summons"],
-    // (2026-10-13, batch 286: statues made as decoys, by the same rule.)
+    // (2026-10-13, batch 286: statues made as decoys, by the same rule; batch 289: fey summoned from its torn suit.)
+    ["Matrona", "Detach Soul", "summons"],
     ["Rictus Mask", "Echoes of the Damned", "summons"],
     ["Necromancer", "Undead, Arise!", "summons"],
     ["Nonsequitaur", "At Least That's Over", "summons"],
