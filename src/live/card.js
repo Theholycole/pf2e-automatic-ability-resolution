@@ -83,7 +83,9 @@ export function createCastCard({ plan, ability, source, spell, rank, dc, warning
         modes: null,
         ability: { name: ability?.name ?? plan.source?.name ?? "Ability", uuid: ability?.uuid ?? plan.source?.uuid ?? null, slug: null },
         source,
-        spell: { uuid: spell?.uuid ?? plan.spell.uuid, name: spell?.name ?? plan.spell.name ?? "the spell" },
+        // (Batch 275: none named — the GM names it on the card, within pick's rank and rarity.)
+        spell: { uuid: spell?.uuid ?? plan.spell?.uuid ?? null, name: spell?.name ?? plan.spell?.name ?? (plan.pick ? "a spell the GM names" : "the spell") },
+        ...(plan.pick ? { pick: { ...plan.pick } } : {}),
         rank: rank ?? plan.rank ?? null,
         dc: dc ?? plan.dc ?? null,
         attack: plan.attack ?? null,
@@ -231,7 +233,7 @@ function castCardHTML(state) {
     const notes = state.notes?.length ? `<ul class="aar-notes">${state.notes.map((note) => `<li>${escape(note)}</li>`).join("")}</ul>` : "";
     const numbers = [state.rank ? `rank ${state.rank}` : null, state.dc ? `DC ${state.dc}` : null, state.attack != null ? `+${state.attack}` : null].filter(Boolean).join(", ");
     const controls = state.status === "open"
-        ? `<footer class="aar-controls aar-cast"><label>Rank <input type="number" min="1" max="10" data-aar-field="rank" value="${escape(state.rank ?? "")}"></label><label>DC <input type="number" min="1" data-aar-field="dc" value="${escape(state.dc ?? "")}"></label><button type="button" data-aar-action="cast" data-gm-only="true">Cast ${escape(state.spell.name)}</button></footer>`
+        ? `<footer class="aar-controls aar-cast">${state.pick && !state.spell?.uuid ? `<label>Spell <input type="text" data-aar-field="spell" placeholder="its name"></label>` : ""}<label>Rank <input type="number" min="1" max="10" data-aar-field="rank" value="${escape(state.rank ?? "")}"></label><label>DC <input type="number" min="1" data-aar-field="dc" value="${escape(state.dc ?? "")}"></label><button type="button" data-aar-action="cast" data-gm-only="true">Cast ${escape(state.spell.name)}</button></footer>`
         : "";
     const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
     return `<section class="pf2e-aar-card" data-aar-status="${escape(state.status)}"><header><strong>${escape(state.ability.name)}</strong><span class="aar-check">${escape(state.spell.name)}${numbers ? ` (${escape(numbers)})` : ""}</span></header>${warning}${notes}${results}${controls}</section>`;

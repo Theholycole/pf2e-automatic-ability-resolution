@@ -221,3 +221,9 @@ test("a choice of ways keeps its builtins and words; every way in turn; zones th
     assert.ok(region.data.behaviors.at(-1).system.events.includes("tokenMoveWithin"));
     assert.ok(!zoneRegion({ name: "Test Sea", zone: swim, token: { id: "t", x: 0, y: 0, width: 1, height: 1 }, grid: { size: 100, distance: 5 }, moduleId: "mod", flags: {} }).data.behaviors.at(-1).system.events.includes("tokenMoveWithin"));
 });
+
+test("a cast card where the GM names the spell (2026-10-13, batch 275)", () => {
+    const state = createCastCard({ plan: { builtin: "cast-spell", spell: null, pick: { maxRank: 7, rarity: "common" }, dc: 40, notes: [] }, ability: { name: "Test Scales" }, source: { actorUuid: "Actor.d", tokenUuid: null, name: "Test Dragon" }, spell: null, rank: null, dc: 40 });
+    assert.deepEqual([state.spell, state.pick], [{ uuid: null, name: "a spell the GM names" }, { maxRank: 7, rarity: "common" }]);
+    assert.ok(cardHTML(state).includes('data-aar-field="spell"'));
+});

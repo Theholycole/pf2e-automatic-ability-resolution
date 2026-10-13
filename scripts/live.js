@@ -358,8 +358,9 @@ async function playAbility(item, plan, sourceToken) {
     if (plan?.builtin === "hunt-prey") {
         const prey = [...game.user.targets][0];
         // (Batch 153, Lawbringer: every Strike against the creature it marks; batch 164, Mark for Death: deadly on its Strikes against it.)
-        const marked = plan.every || plan.edge === "deadly";
-        const edgeText = plan.edge === "deadly" ? `Its ${plan.strike ?? ""} Strikes against that creature gain deadly d${plan.die}.`.replace(/ {2,}/g, " ") : plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`;
+        // (Batch 275, Punish the Naughty: a mark with no extra damage, its benefits its notes.)
+        const marked = plan.every || plan.mark || plan.edge === "deadly";
+        const edgeText = !plan.edge ? "" : plan.edge === "deadly" ? `Its ${plan.strike ?? ""} Strikes against that creature gain deadly d${plan.die}.`.replace(/ {2,}/g, " ") : plan.every ? `Each of its Strikes against that creature deals ${plan.dice}d${plan.die} more precision damage (add it to each hit).` : `The first time it hits its prey each round, it deals ${plan.dice}d${plan.die} more precision damage (add it to that hit).`;
         await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${prey ? `${prey.name} is its ${marked ? "mark" : "prey"}` : `its ${marked ? "mark" : "prey"} is the creature it named`}. ${edgeText}`, ...(plan.notes ?? [])]);
         return;
     }
@@ -421,7 +422,7 @@ async function playAbility(item, plan, sourceToken) {
     if (plan?.builtin === "strike-activity" && activityRider(plan, { targetProne: true, targetTraits: (plan.onHit?.vsTraits ?? []).flatMap((entry) => entry.traits) })) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
     if (plan?.builtin === "cast-spell") {
-        const spell = await fromUuid(plan.spell.uuid).catch(() => null);
+        const spell = plan.spell?.uuid ? await fromUuid(plan.spell.uuid).catch(() => null) : null;
         const state = createCastCard({
             plan,
             ability: { name: item.name, uuid: item.uuid },
@@ -474,6 +475,17 @@ async function castFromCard(message, state, data) {
     if (state?.kind !== "cast" || state.status !== "open") return null;
     const actor = await fromUuid(state.source.actorUuid);
     if (!actor) throw new Error("The creature isn't there any more.");
+    // (Batch 275, Endless Spellscales: a spell the GM names on the card — found by name in PF2e's spells, within the ability's rank and rarity.)
+    if (state.pick && !state.spell?.uuid) {
+        const named = String(data.spell ?? "").trim().toLowerCase();
+        const pack = game.packs.get("pf2e.spells-srd");
+        const index = named && pack ? await pack.getIndex({ fields: ["system.level.value", "system.traits.rarity"] }) : null;
+        const found = index ? [...index].find((entry) => entry.name.toLowerCase() === named) : null;
+        if (!found) throw new Error(named ? `No spell called "${data.spell}" in PF2e's spells.` : "Name the spell first.");
+        if (state.pick.maxRank && Number(found.system?.level?.value) > state.pick.maxRank) throw new Error(`${found.name} is above rank ${state.pick.maxRank}.`);
+        if (state.pick.rarity === "common" && (found.system?.traits?.rarity ?? "common") !== "common") throw new Error(`${found.name} isn't a common spell.`);
+        state = { ...state, spell: { uuid: found.uuid ?? `Compendium.pf2e.spells-srd.Item.${found._id}`, name: found.name } };
+    }
     const source = (await fromUuid(state.spell.uuid).catch(() => null))?.toObject();
     if (!source) throw new Error(`${state.spell.name} isn't in PF2e's compendium.`);
     const cantrip = (source.system?.traits?.value ?? []).includes("cantrip");
@@ -1051,7 +1063,8 @@ async function chooseMode(message, state, index) {
         const token = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid).catch(() => null) : null;
         const own = item?.actor?.items?.find?.((entry) => entry.name === mode.name && entry.id !== item.id) ?? null;
         if (item && mode.plan) await playAbility(own ?? item, mode.plan, token);
-        const used = [...(state.used ?? []), index];
+        // (Batch 275: ways in groups, Choose Weakness's damage and resistance — one from each: the others of its group go with it.)
+        const used = [...new Set([...(state.used ?? []), index, ...(mode.group ? state.modes.flatMap((entry, at) => (entry.group === mode.group ? [at] : [])) : [])])];
         const next = { ...state, used, status: used.length >= state.modes.length ? "chosen" : "choose", results: [...state.results, ...(mode.plan ? [`${name}.`] : [`${name}: resolve it by hand.`, ...(mode.notes ?? [])])] };
         return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
     }
@@ -1075,7 +1088,7 @@ async function chooseMode(message, state, index) {
     // (Batch 179: a way that casts a spell — its cast card, at the ability's rank and DC.)
     if (mode.plan.builtin === "cast-spell") {
         const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
-        const spell = await fromUuid(mode.plan.spell.uuid).catch(() => null);
+        const spell = mode.plan.spell?.uuid ? await fromUuid(mode.plan.spell.uuid).catch(() => null) : null;
         const next = createCastCard({ plan: mode.plan, ability: { name, uuid: state.ability.uuid }, source: state.source, spell: spell ? { uuid: mode.plan.spell.uuid, name: spell.name } : null, rank: mode.plan.rank ?? (spell && item ? defaultRank(spell, item.actor) : null), dc: mode.plan.dc ?? (item ? spellDC(item.actor) : null), warning: state.warning });
         return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
     }
@@ -1284,7 +1297,7 @@ async function applyChange(change, state) {
             // Swallowed: an effect granting grabbed and slowed 1, with the damage at the end of each turn (scripts/swallow.js).
             if (change.effect?.kind === "swallow") return applySwallow(state, actor, change.effect);
             if (change.effect?.kind === "disarm") return disarm(actor, change.effect, target);
-            if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state);
+            if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state, change.against ?? null);
             if (change.effect?.kind === "native") return nativeEffect(actor, change.effect, state, state.targets.find((entry) => entry.id === change.target)?.degree ?? null);
             if (change.effect?.kind === "note") return noteEffect(actor, change.effect.note, state);
             return null;
@@ -1415,11 +1428,16 @@ async function noteEffect(actor, note, state) {
     return null;
 }
 
-async function penaltyEffect(actor, modifier, state) {
+// (Batch 275, Gauge Potential: a bonus against one creature only — PF2e's TokenMark on that creature's token; attack and damage rolls predicated
+// on target:mark, AC and saves on origin:mark.)
+async function penaltyEffect(actor, modifier, state, against = null) {
+    const marked = against ? (await targetOf(state, against)).token ?? null : null;
+    const slug = marked ? `aar-${String(state.ability.name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${marked.id}`.toLowerCase() : null;
+    const outgoing = /^(?:attack|damage|strike)/.test(String(modifier.selector));
     const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const sign = modifier.value > 0 ? "+" : "−";
     await actor.createEmbeddedDocuments("Item", [{
-        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${selectorLabel(modifier.selector)}`,
+        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${selectorLabel(modifier.selector)}${marked ? ` against ${marked.name}` : ""}`,
         type: "effect",
         img: "icons/svg/downgrade.svg",
         flags: { [MODULE_ID]: { modifier: { selector: modifier.selector, source: state.source.actorUuid } } },
@@ -1427,7 +1445,9 @@ async function penaltyEffect(actor, modifier, state) {
             description: { value: `<p>${sign}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}, from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
-            rules: [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value }]
+            rules: slug
+                ? [{ key: "TokenMark", slug, uuid: marked.uuid }, { key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, predicate: [`${outgoing ? "target" : "origin"}:mark:${slug}`] }]
+                : [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value }]
         }
     }]);
     return null;

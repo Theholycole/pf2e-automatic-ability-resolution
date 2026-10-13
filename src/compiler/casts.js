@@ -31,6 +31,11 @@ const CASTS = [
     // (Batch 274: "The trap releases an arcane wail of the banshee (DC 40) …".)
     new RegExp(String.raw`\b(?:unleashes|releases) (?:an? )?(?:[\w-]+ )?\u0001`, "i"),
     new RegExp(String.raw`\bsame effects? as\s+${LEAD}\u0001`, "i"),
+    // (Batch 275: "the creature suffers the effects of Divine Decree (… save)", "Aside from the size of the cone, this effect is identical to
+    // Prismatic Spray (DC 42).", "This is a Wails of the Damned spell in a 100-foot emanation …".)
+    new RegExp(String.raw`\bsuffers? the effects? of\s+${LEAD}\u0001`, "i"),
+    new RegExp(String.raw`\b(?:is|are) identical to\s+${LEAD}\u0001`, "i"),
+    new RegExp(String.raw`^This is\s+${LEAD}\u0001 spell\b`, "i"),
     new RegExp(String.raw`\bas\s+(?:the|an?)\s+(?:${ORDINAL}\s+)?\u0001 spell\b`, "i"),
     new RegExp(String.raw`\bas per\s+\u0001`, "i"),
     // (2026-10-10, batch 23) "is subjected to a 5th-rank Phantasmal Killer spell", "is subjected to the effects of Divine Decree",

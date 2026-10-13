@@ -432,6 +432,12 @@ It needs **PF2e Resolution Core**, which Foundry offers to install with it. Foun
   - zones that change checks by side (PF2e's degree adjustments: a success to Swim made a critical success for its allies, a failure a critical failure for its foes), and saves on each move within a zone (winds as a creature flies);
   - a table drawn for a spell's caster, a +2 to saves against one trait only, and reactions whose trigger the module can't see, used by the GM as they happen (the trigger first on the card);
   - also fixed: the mode card had dropped builtin ways and their words (batch 273's stances played by hand).
+- **The long tail after the user's choices, part 3** (2026-10-13, batch 275): 29 of the next 30 rows of the list (33 new abilities in PF2e with their kin, 4 in Battlezoo), and 24 more PF2e abilities that were the GM's:
+  - PF2e's toggles widened: two toggles or more as groups (one way from each, Choose Weakness's damage and resistance), and any toggle the ability carries, not only those its words call a choice — but not an activity whose toggle is only a part (a maneuver, a check, a move, a reroll, a conjured weapon);
+  - a bonus on the creature against one creature only (attack rolls and AC against the target): PF2e's TokenMark, the core passing the target through;
+  - a cast card where the GM names the spell (any common spell of a rank or lower), checked against PF2e's spells;
+  - casting read in more words ("suffers the effects of", "is identical to", "This is a … spell"), a spell and a grab at once, Hunt Prey's kin without an edge;
+  - a Gestalt merge is kept for the user's call (a new creature from nine, as summons are).
 - **Hazard actions** compile too (2026-10-08): the registry handles hazard actors' actions as it does monsters'. 27 of the 68 actions in PF2e's hazards pack compile: save-based reactions, and poisons that ride on Strikes.
 - **Hazards in live play** (2026-10-08):
   - Regions linked on a hazard's sheet bring the GM a Fire / Not now card when a party creature steps in. Fire posts the hazard's reaction cards or rolls its Strikes, and a complex hazard joins the encounter.
