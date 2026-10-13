@@ -117,6 +117,8 @@ export const GM_DECIDED = [
     // (2026-10-13, batch 282: a device or vehicle upgraded, by the same rule.)
     // (2026-10-13, batch 289: alchemical items made inert and reagents given back, by the same rule.)
     ["Living Proof", "Sudden Infusion", "items"],
+    // (Batch 294: a snare set under a foe.)
+    ["Duhgik", "Surprise Snare", "items"],
     // (Batch 293: a foe's weapon drawn into a dragon's body and used.)
     ["Bionic Dragon (Great Wyrm)", "Assimilate Weapon", "items"],
     ["Bionic Dragon (Great Wyrm, Spellcaster)", "Assimilate Weapon", "items"],

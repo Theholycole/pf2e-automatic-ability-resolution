@@ -2952,3 +2952,8 @@ Checked in pftest: Envelop's card rolled `1d20 + 16` through PF2e's check agains
 ## The long tail after the user's choices, part 21 (2026-10-13, batch 293)
 
 - **Compiled** (the last 42 rows; 36 built, all Battlezoo dragons; Return the Gesture the GM's as copies, Assimilate Weapon as items): Duelist's Mercy, Display Triumph, Honorable Death (the inhabiting way the GM's, control), Caustic Darkness, Stoke Flames, Cleansing Surge, Denounce Nemesis, Exaggerate Strength, Credible Yarn, Celebratory Cheer, Rapturous Revel, Peregrinate, Wing By, Fool's Insight, Polymorphing Breath, Bionic Celerity. No new runtime pieces: outcome modifiers on the actor against the target (Fool's Insight), cast picks by name, zones with a hazard.
+
+## The long tail after the user's choices, part 22 (2026-10-13, batch 294)
+
+- **New pieces:** Ferocity's kin with `notAtOne` (Bravo's Determination): never when it was already at 1 HP (the simulation checks; live, a note); a reaction written with its trigger and no "Effect" label.
+- **Compiled** (9 new in PF2e; Surprise Snare the GM's as items): Fearless Switch, Quicken Pestilence, Soul Dance Stance, Bravo's Determination, Revenant Reload, Vital Transfusion, Ecstatic Ululation, Tumultuous Flash, Change of Luck. Three that the last-resort fallback had left to the GM (Vital Transfusion on both excorions, Mister Moxie's Change of Luck) now read too.

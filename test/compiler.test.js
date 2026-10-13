@@ -5062,3 +5062,12 @@ test("a body shed to fight on as a swarm: the GM's, as forms are (2026-10-13, ba
     const { gmDecided } = await import("../src/compiler/gm-decided.js");
     assert.equal(gmDecided("Mogadb", "Slough Skin"), "form");
 });
+
+test("a bravo's bluff at 0 HP, a d20 swapped for a flat check, a luck twisted (2026-10-13, batch 294)", async () => {
+    const { compileMonsterAbility } = await import("../src/compiler/index.js");
+    const ability = (name, html, actionType) => ({ type: "action", name, system: { slug: null, actionType: { value: actionType }, actions: { value: null }, traits: { value: [] }, description: { value: html } } });
+    const bluff = compileMonsterAbility(ability("Test Bluff", "<p><strong>Trigger</strong> A foe's Strike reduces you to 0 Hit Points; you were not at 1 Hit Point and you would not be killed.</p><hr /><p>You refuse to go down. Attempt a Deception check against the attack DC of the triggering Strike. You take a penalty to this check equal to twice your wounded value, if any. If the triggering attack was a critical hit, use the result one degree of success worse than what you rolled.</p><p><strong>Critical Success</strong> You avoid being knocked out and remain at 1 Hit Point.</p>", "reaction"), {});
+    assert.deepEqual([bluff.builtin, bluff.hp, bluff.wounded, bluff.notAtOne], ["ferocity", 1, true, true]);
+    const flash = compileMonsterAbility(ability("Test Flash", "<p><strong>Frequency</strong> once per day</p><p><strong>Trigger</strong> The test ghoul is about to roll a d20</p><p><strong>Effect</strong> Instead of rolling normally, the test ghoul attempts a @Check[flat|dc:11], getting a critical success on the triggering roll if the flat check succeeds or a critical failure if it fails.</p>", "free"), {});
+    assert.deepEqual([flash.trigger, flash.resolution.outcomes.success.manualInstructions[0]], [{ event: "use", reaction: true, free: true }, "In place of that d20: a DC 11 flat check — success, a critical success; failure, a critical failure."]);
+});
