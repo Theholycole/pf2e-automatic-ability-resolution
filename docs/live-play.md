@@ -3247,9 +3247,10 @@ The user's call: "build everything you brought up" (tier 3).
 
 - **Reader:** `readRecharge` in `src/compiler/inline.js` reads "can't use … again for N minutes" (10 rounds a minute; not "can't be …"); `onceAFight` in `src/compiler/monster.js`, after every other reading:
   - a recharge in the ability's own name, "again" or not ("can't use Oil Spray for 1d4 rounds"): `trigger.recharge`, or on each way of a `modes` plan;
-  - "can't use … again for N hours/days", "until an hour has passed", "again that day", "after … is spent … goes dormant": `oncePerFight: true`.
+  - "can't use … again for N hours/days", "until an hour has passed", "again that day", "after … is spent … goes dormant": `oncePerFight: true`;
+  - a frequency of once a minute or longer — PF2e's `frequency` field or "Frequency once per hour" in the text — on a multi-Strike, random Strikes, a strike activity, a charge, a safe move or a self-effect with no limit of its own: `oncePerFight: true` (a reaction's free flurry was played six times a round).
 - **Why:** the simulator used these abilities every action.
-- **Coverage:** 25 rulebook abilities and 13 Battlezoo ones (Petty Whispers, Vent Energy, Crushing Gale …).
+- **Coverage:** 36 rulebook abilities and 25 Battlezoo ones (Petty Whispers, Vent Energy, Crushing Gale …).
 - **Live:** the recharge shows on the card as other recharges do; `oncePerFight` is the simulator's.
 
 ## Live check of batches 299–300 (2026-10-13)

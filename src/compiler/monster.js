@@ -10475,10 +10475,17 @@ const COUNT_WORDS = { 1: 1, one: 1, 2: 2, two: 2, 3: 3, three: 3 };
 // again for 1 day", "… again until 1 hour has passed" — not before a fight ends. (A minute is a recharge of 10 rounds: readRecharge.)
 // (Also its recharge in its own name without "again" — "the golem can't use Oil Spray for 1d4 rounds" — on the plan or each of
 // its ways; and spent until something else refreshes it — "After the energy is vented, the energy gland goes dormant": once a fight.)
+// (And "Frequency once per hour" — PF2e's frequency or the text's alone — on a builtin, which no frequency pool holds: a reaction's free
+// Furious Assault was played six times a round.)
 function onceAFight(item, plan) {
-    if (!plan || plan.oncePerFight || plan.trigger?.recharge || (plan.builtin === "no-effect" && plan.gm)) return plan;
+    if (!plan || plan.oncePerFight || (plan.builtin === "no-effect" && plan.gm)) return plan;
     const html = String(item.system?.description?.value ?? "");
     const text = htmlToPlainText(html);
+    const frequency = item.system?.frequency;
+    const once = frequency?.per ? (Number(frequency.max) || 1) === 1 && !/^(?:turn|round)$/i.test(String(frequency.per)) : /\bFrequency once per (?:minute|10 minutes|hour|day|week)\b/i.test(text);
+    const acted = ["multi-strike", "random-strikes", "strike-activity", "charge", "safe-move", "self-effect"].includes(plan.builtin) && plan.uses === undefined && plan.perDay === undefined && !plan.oncePerTurn;
+    if (once && acted) return { ...plan, oncePerFight: true };
+    if (plan.trigger?.recharge) return plan;
     const name = String(item.name ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const own = name && new RegExp(String.raw`can(?:'?t|not) use (?:its |this |the )?${name}\b[^.]*? (?:again )?for (?:\[\[\/(?:gm|b|bl)?r(?:oll)? (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+|\d+) rounds?)`, "i").exec(html);
     if (own && !plan.modes?.some((mode) => mode.plan?.trigger?.recharge)) {

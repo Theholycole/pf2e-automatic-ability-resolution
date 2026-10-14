@@ -22,3 +22,15 @@ test("a recharge in minutes, in its own name without again; once a fight for an 
     assert.equal(immune.oncePerFight, undefined);
     assert.equal(plan("A creature that fails can't use reactions for 1d4 rounds.").trigger.recharge, undefined);
 });
+
+test("a frequency of once an hour on an action the simulator plays as it is — a free flurry — is once a fight (batch 310)", () => {
+    const flurry = compileMonsterAbility(item("Test Fury", "<p><strong>Frequency</strong> once per hour</p><p><strong>Effect</strong> The test bear makes a claw Strike and two jaws Strikes.</p>", 0));
+    assert.equal(flurry.builtin, "multi-strike");
+    assert.equal(flurry.oncePerFight, true);
+    // PF2e's own frequency field, once a day; once a round stays as it was.
+    const fielded = { ...item("Test Fury", "<p>The test bear makes a claw Strike and two jaws Strikes.</p>", 1) };
+    fielded.system = { ...fielded.system, frequency: { max: 1, per: "day" } };
+    assert.equal(compileMonsterAbility(fielded).oncePerFight, true);
+    fielded.system = { ...fielded.system, frequency: { max: 1, per: "round" } };
+    assert.equal(compileMonsterAbility(fielded).oncePerFight, undefined);
+});
