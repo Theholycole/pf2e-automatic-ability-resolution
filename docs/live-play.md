@@ -3223,6 +3223,26 @@ The user's call: "build everything you brought up" (tier 3).
 - **Live:** unchanged.
 - **Checked in pftest** (2026-10-13): the simulator's snapshot read temporary copies of an Umbral Gnome Scout (Hidden Movement), a Caligni Skulker (Light Blindness), a Hydra (five heads of 15 Hit Points, weak to slashing, cauterized by acid or fire; regeneration 3 a head), three Sea Hags (Coven, with their Coven Spells), a Wraith, a Mobogo (Swamp Stride), a Fetchling Scout (Shadow Blending) and a Cavern Troll (Sunlight Petrification). The Wraith's "While in sunlight, a wraith is Blinded and Slowed 2" wasn't read at first; it is now.
 
+## Damage by actions spent, in its own words (2026-10-13, batch 308)
+
+- **Reader** (`byActionCount` in `src/compiler/monster.js`, after every other reading): a save whose damage has one component for each count in "uses 1 action … 2 actions … 3 actions" wording → the first count's damage, with `resolution.native.byActions[n]` for each count's.
+- **Why:** before, all the components were dealt together.
+- **Coverage:** the Kayajima Guardian Dogu's Ley Line Surge, in both its versions; nothing else changed.
+- **Live:** the core asks how many actions, as it does for a troop's attacks.
+
+## Requirements the simulator can't see (2026-10-13, batch 309)
+
+- **Reader** (`withNeeds` in `src/compiler/monster.js`, `requirementText` and new clauses in `src/compiler/needs.js`):
+  - a Requirements sentence read into `needs` as before, now with more wordings: hit points ("N Hit Points or fewer", "N or more Hit Points", below half → `{ hpBelowHalf: true }`, less than its maximum), a creature held in its own words, a named Strike as its last action (hit or not), "isn't fatigued or raging";
+  - a resource it spends (full/loaded/charged/filled, with "This empties/expends/discharges …"): `oncePerFight: true`;
+  - one a fight always meets (it can see, has a hand free, wields or holds a weapon, isn't encumbered): unchanged;
+  - any other: `requirementUnread: "<the sentence>"`;
+  - a plan that already keeps its requirement its own way (`requires`, `requiresEffect`, `after`, `afterStrike`) and no-effect plans: unchanged.
+- **Requirements text:** "Effects" ends it as "Effect" does, and one that runs on into the effect keeps its first sentence.
+- **Why:** the simulator played these abilities as if their requirement were always met, which inflated some creatures in the deadliness study.
+- **Coverage:** rulebook packs 539 marked unread, 502 with needs (118 before), 2 more once a fight; Battlezoo 108 and 56 (25 before).
+- **Live:** unchanged; the fields are for the simulator.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

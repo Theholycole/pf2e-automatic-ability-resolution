@@ -16,7 +16,7 @@ import { readSummon } from "./summons.js";
 import { withWatchedTrigger } from "./watch.js";
 import { passiveRules, readReactions } from "./passive-rules.js";
 import { creatureRules } from "./creature-rules.js";
-import { readNeeds } from "./needs.js";
+import { readNeeds, requirementText } from "./needs.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
@@ -10465,15 +10465,51 @@ export function compileMonsterAbility(source, options = {}) {
     // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null));
+    return byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)));
+}
+
+// (Batch 308: "If the guardian uses 1 action …, 3d6 force; 2 actions …, 5d6; 3 actions …, 6d6" — a damage for each count of actions, read
+// before as all three at once: the first count's damage, and resolution.native.byActions[n] with each count's, as a troop's are (batch 241).)
+const COUNT_WORDS = { 1: 1, one: 1, 2: 2, two: 2, 3: 3, three: 3 };
+function byActionCount(item, plan) {
+    const shared = plan?.resolution?.sharedDamage;
+    if (!shared?.components?.length || shared.components.length < 2 || plan.resolution.native?.byActions) return plan;
+    const text = htmlToPlainText(String(item?.system?.description?.value ?? "")).replace(/@\w+\[[^\]]*\](?:\{[^}]*\})?/g, " ");
+    const counts = [...text.matchAll(/\buses? (1|2|3|one|two|three) actions?\b/gi)].map((match) => COUNT_WORDS[match[1].toLowerCase()]);
+    if (counts.length !== shared.components.length || counts.some((count, index) => count !== index + 1)) return plan;
+    const ids = shared.components.map((component) => component.id);
+    const rows = Object.values(plan.resolution.outcomes ?? {});
+    if (!rows.some((row) => ids.every((id) => (row?.damage?.sourceComponentIds ?? []).includes(id)))) return plan;
+    const first = { ...shared.components[0], id: "0" };
+    const outcomes = Object.fromEntries(Object.entries(plan.resolution.outcomes).map(([degree, row]) => [degree, { ...row, damage: { ...row.damage, sourceComponentIds: (row.damage?.sourceComponentIds ?? []).length ? ["0"] : [] } }]));
+    return {
+        ...plan,
+        resolution: {
+            ...plan.resolution,
+            sharedDamage: { ...shared, components: [first] },
+            outcomes,
+            native: { ...(plan.resolution.native ?? {}), byActions: Object.fromEntries(shared.components.map((component, index) => [index + 1, { sharedDamage: { components: [{ ...component, id: "0" }] } }])) }
+        }
+    };
 }
 
 // (Batch 303: a requirement the simulator can check, read into needs — "adjacent to the corpse of a creature that died within the last
 // hour", "has a creature Grabbed", "last action was a successful tail Strike"; src/compiler/needs.js. Live, the GM still judges it.)
 function withNeeds(item, plan) {
-    if (!plan?.requires || plan.needs || (plan.builtin === "no-effect" && plan.gm)) return plan;
+    if (!plan || plan.needs || plan.builtin === "no-effect") return plan;
+    const said = requirementText(item);
+    if (!plan.requires && !said) return plan;
     const needs = readNeeds(item);
-    return needs ? { ...plan, needs } : plan;
+    if (needs) return { ...plan, needs };
+    // (A reading that kept it its own way — a mode's or a model's "requires", a follow-up's "after" — has it already.)
+    if (plan.requires || !said || /"(?:requires|requiresEffect|after|afterStrike)":(?!null)/.test(JSON.stringify(plan))) return plan;
+    // (Batch 309: a Requirements sentence no reading kept — 1,160 of them, played by the simulator as if always met. A resource it spends,
+    // "has a full water tank" … "This empties the tank": once a fight. One a fight always meets — seeing its target, a hand free, holding its
+    // weapon, not encumbered — stays as it is. Any other: requirementUnread, for the simulator to leave out as an unseen state. Live: unchanged.)
+    const text = htmlToPlainText(String(item.system?.description?.value ?? ""));
+    if (/\b(?:full|loaded|charged|filled)\b/i.test(said) && /\bThis (?:empties|expends|discharges|uses up|depletes)\b/i.test(text)) return { ...plan, oncePerFight: true };
+    if (/\b(?:can see|see the target|hand free|hands free|free hand|wielding|holding|wields|encumbered|aware of the attack|nothing in (?:its|their|his|her) hands)\b/i.test(said)) return plan;
+    return { ...plan, requirementUnread: said };
 }
 
 // (Batch 302: a reaction or passive that also grants extra reactions — the grindylow's Reactive Strike "gains 1 extra reaction … only to make a

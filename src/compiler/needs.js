@@ -3,7 +3,7 @@
 //   { corpse: { traits? } }      a creature died in the fight ("adjacent to the corpse of a creature that died within the last hour")
 //   { grabbing: { trait? } }     it holds a creature Grabbed or Restrained (Suck Blood, Envelop, Shred Soul's incorporeal one)
 //   { swallowing: true|false }   a creature is (isn't) in its stomach or engulfed
-//   { hpAtLeast: N }, { hpBelow: N }, { regeneration: true }, { notFatigued: true }, { self: ["prone"] }, { shieldRaised: true }
+//   { hpAtLeast: N }, { hpBelow: N }, { hpBelowHalf: true }, { regeneration: true }, { notFatigued: true }, { self: ["prone"] }, { shieldRaised: true }
 //   { enemyAdjacent: true }, { allyAdjacent: true }, { freeHand: true }, { allyTrait: { trait, within } }
 //   { afterCast: { nonCantrip } }, { afterStrike: { on, melee? } } — its last action
 //   { foe: { conditions?, persistent?, within } } — a foe nearby in that state (a dying one beside it, one bleeding in its aura)
@@ -39,7 +39,13 @@ function readClause(clause) {
     if ((m = new RegExp(String.raw`^${SUBJECT} has at least (\d+) Hit Points$`).exec(c))) return { hpAtLeast: Number(m[1]) };
     if ((m = new RegExp(String.raw`^${SUBJECT} has fewer than (\d+) Hit Points$`).exec(c))) return { hpBelow: Number(m[1]) };
     if (new RegExp(String.raw`^${SUBJECT}['’]s? regeneration is (?:not currently deactivated|currently active)$`).test(c)) return { regeneration: true };
-    if (new RegExp(String.raw`^${SUBJECT} (?:isn't|is not) Fatigued(?: or [Ee]xhausted)?$`).test(c)) return { notFatigued: true };
+    if (new RegExp(String.raw`^${SUBJECT} (?:isn't|is not|aren't|are not) [Ff]atigued(?: or (?:[Ee]xhausted|raging))?$`).test(c)) return { notFatigued: true };
+    // (Batch 309: hit-point thresholds in other words — "has 30 Hit Points or fewer", "has 40 or more Hit Points", "falls below half
+    // its total Hit Points", "is at less than its maximum Hit Points".)
+    if ((m = new RegExp(String.raw`^${SUBJECT} has (?:been reduced to )?(\d+) (?:Hit Points or fewer|or fewer Hit Points(?: remaining)?)$`).exec(c))) return { hpBelow: Number(m[1]) + 1 };
+    if ((m = new RegExp(String.raw`^${SUBJECT} has (\d+) (?:Hit Points or more|or more Hit Points(?: remaining)?)$`).exec(c))) return { hpAtLeast: Number(m[1]) };
+    if (new RegExp(String.raw`^${SUBJECT} (?:is|falls|has fallen) below half (?:its|their|his|her) (?:total |maximum )?Hit Points$`).test(c)) return { hpBelowHalf: true };
+    if (new RegExp(String.raw`^${SUBJECT} (?:is at|has) less than (?:its|their|his|her) maximum Hit Points$`).test(c)) return { hurt: true };
     if ((m = new RegExp(String.raw`^${SUBJECT} is (Prone|Off-Guard)$`).exec(c))) return { self: [m[1].toLowerCase() === "off-guard" ? "offGuard" : "prone"] };
     if (new RegExp(String.raw`^${SUBJECT} has (?:its|their|his|her) shield raised$`).test(c)) return { shieldRaised: true };
     if (new RegExp(String.raw`^${SUBJECT} is adjacent to (?:a|at least one) (?:foe|enemy)$`).test(c)) return { enemyAdjacent: true };
@@ -55,6 +61,22 @@ function readClause(clause) {
         return { afterStrike: { strike: (m[2] ?? m[4]).toLowerCase(), on: /critical/.test(m[1] ?? "") ? ["criticalSuccess"] : ["success", "criticalSuccess"], ...(size ? { size } : {}) } };
     }
     if (new RegExp(String.raw`^${SUBJECT} has one or more creatures Grabbed$`).test(c)) return { grabbing: {} };
+    // (Batch 309: more of the same in other words — "has a Medium or smaller creature Grabbed", "has a creature Grabbed with its talons", "A
+    // creature is Grabbed in the tyrannosaurus's jaws"; "damaged a creature with a jaws Strike on its last action", "hit a living creature
+    // with a shadow hand Strike on its previous action", "hit with a jaws Strike on its most recent action this turn"; "has taken damage";
+    // "is not Fatigued or already in a frenzy".)
+    if (new RegExp(String.raw`^${SUBJECT} has an? (?:(?:Tiny|Small|Medium|Large|Huge) or smaller )?creature (?:Grabbed|grabbed)(?: (?:with|in) (?:its|their|his|her|one or both(?: of (?:its|their|his|her))?) [\w' -]+)?$`).test(c)) return { grabbing: {} };
+    if (new RegExp(String.raw`^${SUBJECT} has Grabbed (?:a|an|one or more) creatures?$`).test(c)) return { grabbing: {} };
+    // (A named Strike as its last action, hit or not: "the previous action was a tendril Strike against the target".)
+    if ((m = new RegExp(String.raw`^${SUBJECT}['’]s? (?:last|previous|most recent) action was (?:a|an) (successful )?([\w' -]+?) Strike against (?:the target(?: creature)?|an? (?:creature|target))$`).exec(c)))
+        return { afterStrike: { strike: m[2].toLowerCase(), on: m[1] ? ["success", "criticalSuccess"] : ["criticalFailure", "failure", "success", "criticalSuccess"] } };
+    if (/^A creature is (?:Grabbed|grabbed) (?:in|by) [\w'’ -]+$/.test(c)) return { grabbing: {} };
+    if ((m = new RegExp(String.raw`^${SUBJECT} (?:damaged|hit) (?:a|an) (?:living )?(?:creature|target) with (?:a|an|its|their) ([\w' -]+?) Strike (?:on|with) (?:its|their|his|her) (?:last|previous|most recent) action(?: this turn)?$`).exec(c)))
+        return { afterStrike: { strike: m[1].toLowerCase(), on: ["success", "criticalSuccess"] } };
+    if ((m = new RegExp(String.raw`^${SUBJECT} hit with (?:a|an|its|their) ([\w' -]+?) Strike on (?:its|their|his|her) (?:last|previous|most recent) action(?: this turn)?$`).exec(c)))
+        return { afterStrike: { strike: m[1].toLowerCase(), on: ["success", "criticalSuccess"] } };
+    if (new RegExp(String.raw`^${SUBJECT} has taken damage$`).test(c)) return { hurt: true };
+    if (new RegExp(String.raw`^${SUBJECT} (?:is|isn't|is not) (?:neither |not )?Fatigued (?:or|nor) (?:already )?in a frenzy$`).test(c)) return { notFatigued: true };
     if (new RegExp(String.raw`^${SUBJECT} (?:hasn't|has not) acted yet this turn$`).test(c)) return { firstAction: true };
     if (new RegExp(String.raw`^${SUBJECT} (?:doesn't|does not) contain a creature inside (?:it|them|him|her)$`).test(c)) return { swallowing: false };
     if (new RegExp(String.raw`^${SUBJECT} is not at full Hit Points$|^${SUBJECT} isn't at full Hit Points$`).test(c)) return { hurt: true };
@@ -74,9 +96,16 @@ function readClause(clause) {
 }
 
 // The Requirements sentence → [needs] (each holds), or null.
+// The Requirements sentence's words, or null.
+export function requirementText(item) {
+    const text = htmlToPlainText(String(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ");
+    // (One with no "Effect" after it runs on into the effect: its first sentence.)
+    return /\bRequirements?\s+(.+?)(?=\s+(?:Trigger|Effects?|Frequency|Cost)\b|$)/.exec(text)?.[1]?.trim().split(/(?<=[a-z\d])\.\s+(?=[A-Z])/)[0].replace(/[;.]$/, "") ?? null;
+}
+
 export function readNeeds(item) {
     const text = htmlToPlainText(String(item?.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(/\s+/g, " ");
-    const full = /\bRequirements?\s+(.+?)(?=\s+(?:Trigger|Effect|Frequency|Cost)\b|$)/.exec(text)?.[1]?.trim().replace(/[;.]$/, "");
+    const full = /\bRequirements?\s+(.+?)(?=\s+(?:Trigger|Effects?|Frequency|Cost)\b|$)/.exec(text)?.[1]?.trim().replace(/[;.]$/, "");
     if (!full) return null;
     // (One with no "Effect" after it runs on into the effect: "… regeneration is currently active The ravenile regains 20 HP." — its first
     // sentence.)
