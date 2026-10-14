@@ -3260,6 +3260,13 @@ The user's call: "build everything you brought up" (tier 3).
 - **Simulator:** rolls the save at the end of each of the creature's turns (its B314).
 - **Coverage:** 86 rulebook abilities (the ghouls' and ghasts' paralysis kin, a xill's, a mocking chorus's confusion) and 3 Battlezoo ones.
 
+## Death Strike's spell half (2026-10-14, batch 312)
+
+- **Reader** (`withSpellCriticalFailure` in `src/compiler/monster.js`): a Strike rider whose text says "or that critically fails against any of its spells" gets `trigger.spellCriticalFailure: true`.
+- **Why:** the user asked whether the Grim Reaper's death effects worked; the half after its spells wasn't played.
+- **Coverage:** the Grim Reaper and the Aspect of Immortality.
+- **Live:** unchanged (the rider on a critical hit as before; the GM applies the spell half from the stat block). The simulator plays both (its B316).
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

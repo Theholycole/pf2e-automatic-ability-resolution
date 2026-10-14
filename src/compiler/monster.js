@@ -10465,12 +10465,23 @@ export function compileMonsterAbility(source, options = {}) {
     // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return withSaveEnds(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)))));
+    return withSpellCriticalFailure(modernItem(source), withSaveEnds(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null))))));
 }
 
 // (Batch 308: "If the guardian uses 1 action …, 3d6 force; 2 actions …, 5d6; 3 actions …, 6d6" — a damage for each count of actions, read
 // before as all three at once: the first count's damage, and resolution.native.byActions[n] with each count's, as a troop's are (batch 241).)
 const COUNT_WORDS = { 1: 1, one: 1, 2: 2, two: 2, 3: 3, three: 3 };
+// Its spells too (2026-10-14, batch 312; the user asked whether the Grim Reaper's death effects worked): "A creature critically hit by any of
+// the grim reaper's attacks or that critically fails against any of its spells must succeed at a … save or die" — the Strike rider also at a
+// creature that critically fails a save against one of its spells, trigger.spellCriticalFailure, for the simulator (live: the GM, from the
+// stat block, as before).
+function withSpellCriticalFailure(item, plan) {
+    if (!plan?.trigger || plan.trigger.event !== "strike") return plan;
+    const text = htmlToPlainText(String(item.system?.description?.value ?? ""));
+    if (!/\bcritically fails (?:a saving throw |a save )?against (?:any of )?(?:its|their|his|her|the [\w'’ -]+?['’]s) spells\b/i.test(text)) return plan;
+    return { ...plan, trigger: { ...plan.trigger, spellCriticalFailure: true } };
+}
+
 // A new save each turn (2026-10-13, batch 311; found by the simulator's deadliest-creatures study): "It can attempt a new save at the end of
 // each of its turns, and the DC cumulatively decreases by 1" — on each condition the text names in a failure row, duration.saveEnds
 // { save, dc, drop } (an open one becomes { mode: "unlimited" }). Live play keeps the condition as before; the simulator rolls the saves.
