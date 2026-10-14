@@ -10465,12 +10465,40 @@ export function compileMonsterAbility(source, options = {}) {
     // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null))));
+    return withSaveEnds(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)))));
 }
 
 // (Batch 308: "If the guardian uses 1 action …, 3d6 force; 2 actions …, 5d6; 3 actions …, 6d6" — a damage for each count of actions, read
 // before as all three at once: the first count's damage, and resolution.native.byActions[n] with each count's, as a troop's are (batch 241).)
 const COUNT_WORDS = { 1: 1, one: 1, 2: 2, two: 2, 3: 3, three: 3 };
+// A new save each turn (2026-10-13, batch 311; found by the simulator's deadliest-creatures study): "It can attempt a new save at the end of
+// each of its turns, and the DC cumulatively decreases by 1" — on each condition the text names in a failure row, duration.saveEnds
+// { save, dc, drop } (an open one becomes { mode: "unlimited" }). Live play keeps the condition as before; the simulator rolls the saves.
+function withSaveEnds(item, plan) {
+    if (!plan) return plan;
+    if (plan.builtin === "modes" && Array.isArray(plan.modes)) {
+        const modes = plan.modes.map((mode) => (mode.plan?.resolution ? { ...mode, plan: withSaveEnds(item, mode.plan) } : mode));
+        return modes.some((mode, index) => mode !== plan.modes[index]) ? { ...plan, modes } : plan;
+    }
+    const check = plan.resolution?.check;
+    if (!plan.resolution?.outcomes || check?.roll !== "save" || check.against?.dc !== "fixed" || !Number.isFinite(Number(check.against.value))) return plan;
+    const text = htmlToPlainText(String(item.system?.description?.value ?? ""));
+    if (!/\b(?:can|may|must) attempt a new (?:save|saving throw)\b[^.]*?\bat the end of (?:each of )?(?:its|their|his|her|your) turns?\b/i.test(text)) return plan;
+    const drop = Number(/\bDC (?:cumulatively )?(?:decreases|is reduced|lowers) by (\d+)/i.exec(text)?.[1]) || 0;
+    const saveEnds = { save: check.statistic, dc: Number(check.against.value), drop };
+    let changed = false;
+    const outcomes = Object.fromEntries(Object.entries(plan.resolution.outcomes).map(([degree, row]) => {
+        if (!["failure", "criticalFailure"].includes(degree) || !row?.effects?.length) return [degree, row];
+        const effects = row.effects.map((effect) => {
+            if (effect?.kind !== "condition" || !new RegExp(String.raw`\b${effect.slug}\b`, "i").test(text) || effect.duration?.saveEnds) return effect;
+            changed = true;
+            return { ...effect, duration: { ...(effect.duration ?? { mode: "unlimited" }), saveEnds } };
+        });
+        return [degree, { ...row, effects }];
+    }));
+    return changed ? { ...plan, resolution: { ...plan.resolution, outcomes } } : plan;
+}
+
 // Once a fight in its own words (2026-10-13, batch 310; found by the simulator's deadliest-creatures study): "can't use its tongue decoy
 // again for 1 day", "… again until 1 hour has passed" — not before a fight ends. (A minute is a recharge of 10 rounds: readRecharge.)
 // (Also its recharge in its own name without "again" — "the golem can't use Oil Spray for 1d4 rounds" — on the plan or each of

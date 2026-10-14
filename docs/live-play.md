@@ -3253,6 +3253,13 @@ The user's call: "build everything you brought up" (tier 3).
 - **Coverage:** 36 rulebook abilities and 25 Battlezoo ones (Petty Whispers, Vent Energy, Crushing Gale …).
 - **Live:** the recharge shows on the card as other recharges do; `oncePerFight` is the simulator's.
 
+## A new save each turn (2026-10-13, batch 311)
+
+- **Reader** (`withSaveEnds` in `src/compiler/monster.js`, after every other reading): a save with a fixed DC whose text says the creature "can attempt a new save at the end of each of its turns" → `duration.saveEnds { save, dc, drop }` on each condition of the failure and critical failure rows that the text names; `drop` from "the DC cumulatively decreases by N". An open duration becomes `{ mode: "unlimited", saveEnds }`; a fixed one keeps its mode and time. Ways of a `modes` plan too.
+- **Live** (`saveEndsText` in `scripts/live.js`): the condition as before, and the card says "a new Fortitude save at the end of each of its turns ends it (DC 34, 1 lower each time)" for the GM to roll.
+- **Simulator:** rolls the save at the end of each of the creature's turns (its B314).
+- **Coverage:** 86 rulebook abilities (the ghouls' and ghasts' paralysis kin, a xill's, a mocking chorus's confusion) and 3 Battlezoo ones.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

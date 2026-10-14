@@ -1325,7 +1325,7 @@ async function applyChange(change, state) {
                 // "for 1d4 rounds": rolled for each creature.
                 const duration = change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration;
                 await timedCondition(actor, change.slug, change.value, duration, state);
-                return `${target.name}'s ${change.slug} lasts ${durationText(duration, state.source.name)}${change.duration.valueRoll ? ` (rolled ${change.duration.valueRoll})` : ""}`;
+                return `${target.name}'s ${change.slug} lasts ${durationText(duration, state.source.name)}${change.duration.valueRoll ? ` (rolled ${change.duration.valueRoll})` : ""}${saveEndsText(change)}`;
             }
             // A condition that grows with each later failure (batch 74): what it already has plus the stack, to its maximum.
             const now = Number(actor.itemTypes.condition.find((condition) => condition.slug === change.slug && condition.active)?.value) || 0;
@@ -1337,6 +1337,8 @@ async function applyChange(change, state) {
             await setCondition(actor, change.slug, change.value);
             // "Fleeing for as long as it's frightened": the GM ends it with that condition.
             if (change.duration?.mode === "while" && change.duration.condition) return `${target.name}'s ${change.slug} lasts as long as it's ${change.duration.condition}`;
+            // (Batch 311: a new save at the end of each of its turns — the GM rolls it.)
+            if (change.duration?.saveEnds) return `${target.name} is ${change.slug}${saveEndsText(change)}`;
             return null;
         }
         case "effect":
@@ -1588,6 +1590,13 @@ async function setCondition(actor, slug, value) {
         return;
     }
     await actor.increaseCondition(slug, Number.isFinite(value) ? { value } : {});
+}
+
+// (Batch 311) "; a new Fortitude save at the end of each of its turns ends it (DC 34, 1 lower each time)".
+function saveEndsText(change) {
+    const ends = change.duration?.saveEnds;
+    if (!ends) return "";
+    return `; a new ${ends.save ? ends.save[0].toUpperCase() + ends.save.slice(1) : ""} save at the end of each of its turns ends it (DC ${ends.dc}${ends.drop ? `, ${ends.drop} lower each time` : ""})`;
 }
 
 function durationText(duration, source) {
