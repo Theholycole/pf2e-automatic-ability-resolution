@@ -3243,6 +3243,15 @@ The user's call: "build everything you brought up" (tier 3).
 - **Coverage:** rulebook packs 539 marked unread, 502 with needs (118 before), 2 more once a fight; Battlezoo 108 and 56 (25 before).
 - **Live:** unchanged; the fields are for the simulator.
 
+## How often, in more words (2026-10-13, batch 310)
+
+- **Reader:** `readRecharge` in `src/compiler/inline.js` reads "can't use … again for N minutes" (10 rounds a minute; not "can't be …"); `onceAFight` in `src/compiler/monster.js`, after every other reading:
+  - a recharge in the ability's own name, "again" or not ("can't use Oil Spray for 1d4 rounds"): `trigger.recharge`, or on each way of a `modes` plan;
+  - "can't use … again for N hours/days", "until an hour has passed", "again that day", "after … is spent … goes dormant": `oncePerFight: true`.
+- **Why:** the simulator used these abilities every action.
+- **Coverage:** 25 rulebook abilities and 13 Battlezoo ones (Petty Whispers, Vent Energy, Crushing Gale …).
+- **Live:** the recharge shows on the card as other recharges do; `oncePerFight` is the simulator's.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

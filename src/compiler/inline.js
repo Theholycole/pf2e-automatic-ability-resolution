@@ -137,6 +137,9 @@ export function readRecharge(html) {
     if (roll) return roll[1].replace(/\s+/g, "");
     const plain = /can'?t use [^.]*? again for (\d+d\d+|\d+) rounds?/i.exec(htmlToPlainText(text));
     if (plain) return plain[1];
+    // (Batch 310: "can't use Petty Whispers again for 1 minute" — ten rounds a minute. Not "can't be …", a target's immunity.)
+    const minutes = /can(?:'?t|not) (?!be\b)[^.]*? again for (\d+|an?|one) minutes?\b/i.exec(htmlToPlainText(text));
+    if (minutes) return String(10 * (Number(minutes[1]) || 1));
     // Other publishers' wording: "can't Spew Smog again for [[/br 1d4 #rounds]]{1d4 rounds}", "can't use its
     // Breath Weapon again for [[/r 1d4 #rounds]]".
     const rolled = /can(?:'?t|not) (?:use )?[^.]*? again for \[\[\/(?:gm|b|bl)?r(?:oll)? (\d+d\d+(?:\s*[+-]\s*\d+)?)[^\]]*\]\](?:\{[^}]*\})?/i.exec(text) ?? /can(?:'?t|not) [^.]*? again for (\d+d\d+|\d+) rounds?/i.exec(htmlToPlainText(text));

@@ -10465,12 +10465,32 @@ export function compileMonsterAbility(source, options = {}) {
     // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)));
+    return onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null))));
 }
 
 // (Batch 308: "If the guardian uses 1 action …, 3d6 force; 2 actions …, 5d6; 3 actions …, 6d6" — a damage for each count of actions, read
 // before as all three at once: the first count's damage, and resolution.native.byActions[n] with each count's, as a troop's are (batch 241).)
 const COUNT_WORDS = { 1: 1, one: 1, 2: 2, two: 2, 3: 3, three: 3 };
+// Once a fight in its own words (2026-10-13, batch 310; found by the simulator's deadliest-creatures study): "can't use its tongue decoy
+// again for 1 day", "… again until 1 hour has passed" — not before a fight ends. (A minute is a recharge of 10 rounds: readRecharge.)
+// (Also its recharge in its own name without "again" — "the golem can't use Oil Spray for 1d4 rounds" — on the plan or each of
+// its ways; and spent until something else refreshes it — "After the energy is vented, the energy gland goes dormant": once a fight.)
+function onceAFight(item, plan) {
+    if (!plan || plan.oncePerFight || plan.trigger?.recharge || (plan.builtin === "no-effect" && plan.gm)) return plan;
+    const html = String(item.system?.description?.value ?? "");
+    const text = htmlToPlainText(html);
+    const name = String(item.name ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const own = name && new RegExp(String.raw`can(?:'?t|not) use (?:its |this |the )?${name}\b[^.]*? (?:again )?for (?:\[\[\/(?:gm|b|bl)?r(?:oll)? (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+|\d+) rounds?)`, "i").exec(html);
+    if (own && !plan.modes?.some((mode) => mode.plan?.trigger?.recharge)) {
+        const recharge = { formula: own[1] ?? own[2], unit: "rounds" };
+        if (plan.builtin === "modes") return { ...plan, modes: plan.modes.map((mode) => (mode.plan?.resolution ? { ...mode, plan: { ...mode.plan, trigger: { ...(mode.plan.trigger ?? { event: "use" }), recharge } } } : mode)) };
+        if (plan.resolution) return { ...plan, trigger: { ...(plan.trigger ?? { event: "use" }), recharge } };
+    }
+    if (/\bcan(?:'?t|not) (?!be\b)[^.]*? again (?:for (?:\d+|an?|one) (?:hours?|days?)\b|until (?:\d+|an?|one) (?:hours?|days?) (?:has|have) passed|(?:that|this) day\b)/i.test(text)
+        || /\bAfter [^.]*? (?:is|are) (?:vented|expended|spent|used)\b[^.]*\b(?:goes|go|becomes?) dormant\b/i.test(text)) return { ...plan, oncePerFight: true };
+    return plan;
+}
+
 function byActionCount(item, plan) {
     const shared = plan?.resolution?.sharedDamage;
     if (!shared?.components?.length || shared.components.length < 2 || plan.resolution.native?.byActions) return plan;
