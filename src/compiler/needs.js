@@ -83,7 +83,7 @@ function readClause(clause) {
     if (new RegExp(String.raw`^${SUBJECT} hit with a melee Strike with (?:its|their|his|her) last action$`).test(c)) return { afterStrike: { on: ["success", "criticalSuccess"], melee: true } };
     if (new RegExp(String.raw`^${SUBJECT}['’]s? last action was a critical success$`).test(c)) return { afterStrike: { on: ["criticalSuccess"] } };
     if ((m = /^A creature within [\w' -]+? aura is taking persistent (\w+) damage$/.exec(c))) return { foe: { persistent: m[1].toLowerCase(), within: 30 } };
-    if (new RegExp(String.raw`^${SUBJECT} is adjacent to a dying creature$`).test(c)) return { foe: { conditions: ["dying"], within: 5 } };
+    if (new RegExp(String.raw`^${SUBJECT} is adjacent to a [Dd]ying creature$`).test(c)) return { foe: { conditions: ["dying"], within: 5 } };
     if ((m = new RegExp(String.raw`^${SUBJECT} is adjacent to an? (Prone|Paralyzed|Restrained|Unconscious|Grabbed)((?:,? (?:or )?(?:Prone|Paralyzed|Restrained|Unconscious|Grabbed|willing))*),? (?:or )?(?:willing )?(?:living )?(?:creature|humanoid)$`).exec(c))) {
         const conditions = [m[1], ...(m[2].match(/Prone|Paralyzed|Restrained|Unconscious|Grabbed/g) ?? [])].map((word) => CONDITION_WORDS[word.toLowerCase()]);
         return { target: { conditions: [...new Set(conditions)], within: 5 } };

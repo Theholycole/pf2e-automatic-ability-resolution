@@ -10465,12 +10465,28 @@ export function compileMonsterAbility(source, options = {}) {
     // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return withSpellCriticalFailure(modernItem(source), withSaveEnds(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null))))));
+    return withDyingTarget(modernItem(source), withSpellCriticalFailure(modernItem(source), withSaveEnds(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)))))));
 }
 
 // (Batch 308: "If the guardian uses 1 action …, 3d6 force; 2 actions …, 5d6; 3 actions …, 6d6" — a damage for each count of actions, read
 // before as all three at once: the first count's damage, and resolution.native.byActions[n] with each count's, as a troop's are (batch 241).)
 const COUNT_WORDS = { 1: 1, one: 1, 2: 2, two: 2, 3: 3, three: 3 };
+// Only at a dying creature (2026-10-14, batch 313; found checking the Grim Reaper's death effects for the user): "The skull fairy attempts to
+// rip the head off an adjacent Dying creature … If it fails, it dies" — a check or save aimed at the creature that is dying: needs
+// { target: { conditions: ["dying"], within } }, also from a requirement "adjacent to a dying creature". Before, the simulator used it on any
+// foe, and a level-3 fairy killed healthy PCs outright. (One that also takes a corpse or the recently dead keeps its own reading.)
+function withDyingTarget(item, plan) {
+    if (!plan?.resolution?.check) return plan;
+    const text = htmlToPlainText(String(item.system?.description?.value ?? "").replace(/@(?:UUID|Compendium)\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    const within = Number(/\bdying creature within (\d+) feet\b/i.exec(text)?.[1]) || 5;
+    const need = { target: { conditions: ["dying"], within } };
+    const foe = (plan.needs ?? []).findIndex((entry) => entry.foe?.conditions?.length === 1 && entry.foe.conditions[0] === "dying");
+    if (foe >= 0) return { ...plan, needs: plan.needs.map((entry, index) => (index === foe ? need : entry)) };
+    if (plan.needs || /\bor (?:a|the) (?:corpse|creature that died|dead)\b/i.test(text)) return plan;
+    if (!/\b(?:an? |the )?adjacent dying creature\b|\ba dying creature within \d+ feet\b|\bthe dying creature (?:must|attempts)\b|\badjacent creature that is dying\b/i.test(text)) return plan;
+    return { ...plan, needs: [need] };
+}
+
 // Its spells too (2026-10-14, batch 312; the user asked whether the Grim Reaper's death effects worked): "A creature critically hit by any of
 // the grim reaper's attacks or that critically fails against any of its spells must succeed at a … save or die" — the Strike rider also at a
 // creature that critically fails a save against one of its spells, trigger.spellCriticalFailure, for the simulator (live: the GM, from the

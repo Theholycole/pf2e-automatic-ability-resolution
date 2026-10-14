@@ -3267,6 +3267,13 @@ The user's call: "build everything you brought up" (tier 3).
 - **Coverage:** the Grim Reaper and the Aspect of Immortality.
 - **Live:** unchanged (the rider on a critical hit as before; the GM applies the spell half from the stat block). The simulator plays both (its B316).
 
+## Only at a dying creature (2026-10-14, batch 313)
+
+- **Reader** (`withDyingTarget` in `src/compiler/monster.js`; `src/compiler/needs.js`): a plan with a check whose text aims it at "an adjacent Dying creature", "a dying creature within N feet", "the dying creature must…" gets `needs: [{ target: { conditions: ["dying"], within } }]`; a requirement "adjacent to a dying creature" (now with "Dying" capitalised too) becomes that target need instead of a foe nearby. One that also takes a corpse or the recently dead keeps its own reading.
+- **Why:** found checking the Grim Reaper's death effects for the user: the skull fairy's Terminal Tug was used on healthy PCs and killed them outright.
+- **Coverage:** 7 rulebook abilities.
+- **Live:** unchanged; the simulator doesn't place downed creatures, so it doesn't play these at all now.
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:
