@@ -393,7 +393,9 @@ export function compileFirstAid(item) {
             kind: "check",
             check: { roll: "skill", statistic: "medicine", against: { dc: "target", statistic: "stabilize" } },
             sharedDamage: null,
-            outcomes: { criticalSuccess: stable(), success: stable(), failure: none(), criticalFailure: { ...none(), effects: [{ kind: "condition", slug: "dying", value: 1, duration: null }] } }
+            // ("the target's dying value increases by 1": 1 more than it has — the core's stack, which live play adds; 2026-10-15, found by the
+            // item module's live check, where it was set to 1.)
+            outcomes: { criticalSuccess: stable(), success: stable(), failure: none(), criticalFailure: { ...none(), effects: [{ kind: "condition", slug: "dying", value: 1, duration: null, stack: { by: 1 } }] } }
         },
         automation: { level: "automatic" }
     };

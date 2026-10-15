@@ -28,3 +28,15 @@ test("only some creatures' condition (\"Creatures that are vulnerable to sunligh
     assert.deepEqual([rows(plan).failure, rows(plan).criticalFailure], [[], []]);
     assert.equal(plan.resolution.outcomes.failure.damage.multiplier, 1);
 });
+
+test("Administer First Aid's critical failure raises dying by 1, not to 1 (the item module's live check)", async () => {
+    const { compileFirstAid } = await import("../src/compiler/checks.js");
+    const { CORE_FAMILIES, createRegistry } = await import("../../pf2e-resolution-core/src/index.js");
+    const plan = compileFirstAid({ name: "Administer First Aid" });
+    assert.deepEqual(plan.resolution.outcomes.criticalFailure.effects, [{ kind: "condition", slug: "dying", value: 1, duration: null, stack: { by: 1 } }]);
+    // (The core passes the stack on, as for a save's.)
+    const registry = createRegistry();
+    for (const family of CORE_FAMILIES) registry.registerFamily(family);
+    const result = registry.resolveSync(plan, { caster: { id: "a" }, targets: [{ id: "b" }], id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 20 }), traits: () => [], iwr: () => ({ immunities: [] }), allied: () => true }, { roll: () => ({ degree: "criticalFailure" }) });
+    assert.deepEqual(result.changes.find((change) => change.op === "condition")?.stack, { by: 1 });
+});
