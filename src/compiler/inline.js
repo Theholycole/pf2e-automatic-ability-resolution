@@ -350,6 +350,14 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         // Some other set of creatures, or a later state ("A creature unable to act due to the slowed condition … is
         // Petrified permanently", "A creature that is already slowed is instead stunned").
         if (/^\s*(?:A|Any|Each) creature (?:that|who|unable|reduced|whose)\b(?! (?:fails|critically fails|is hit|is struck|takes damage))/i.test(plain)) continue;
+        // (2026-10-15, the item module's Gearbinder Oil: "The target increases its slowed condition by 1, to a maximum of Slowed 3" — that
+        // value more, up to the most: the core's stack, by and max.)
+        const raised = /\b(?:the (?:target|creature)|it|they) increases? (?:its|their) (clumsy|drained|enfeebled|frightened|sickened|slowed|stupefied|doomed|stunned) (?:condition(?: value)?|value) by (\d+)(?:,? to a maximum of (?:[a-z]+ )?(\d+))?/i.exec(plain.replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+        if (raised) {
+            const by = Number(raised[2]);
+            if (!effects.some((effect) => effect.slug === raised[1].toLowerCase())) effects.push({ kind: "condition", slug: raised[1].toLowerCase(), value: by, duration: null, stack: { by, ...(raised[3] ? { max: Number(raised[3]) } : {}) } });
+            continue;
+        }
         const duration = readDuration(plain);
         const self = recipientOf(plain) === "self";
         const found = new Map();
@@ -361,7 +369,8 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
             const slug = match[1].toLowerCase().replace(/\s+/g, "-");
             if (!found.has(slug)) found.set(slug, match[2] ? Number(match[2]) : null);
         }
-        const unlinked = htmlToPlainText(scan.replace(CONDITION_LINK, ""));
+        // (Not a state it's said to be in, "… against the first Strike you make against it while it is slowed": the item module's Mamlambo Scale.)
+        const unlinked = htmlToPlainText(scan.replace(CONDITION_LINK, "")).replace(/\bwhile (?:it|they|the (?:creature|target))(?:'s|'re| is| are| remains?) [a-z-]+\b/gi, "");
         for (const slug of plainConditions) {
             if (found.has(slug)) continue;
             const named = new RegExp(`\\b${slug}(?: (\\d+))?\\b`, "i").exec(unlinked);

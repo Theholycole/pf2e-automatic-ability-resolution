@@ -579,11 +579,18 @@ function proseOutcomes(html, { criticalOnly = false } = {}) {
     // a critical failure": each degree's own.
     const listed = new RegExp(`${SUBJECT}\\s+(.+?) on a success, (.+?) on a failure,? and (.+?) on a critical failure\\b`, "i").exec(text);
     if (listed) return { failure: `becomes ${listed[2]}`, critical: { text: listed[3], adds: false }, success: `becomes ${listed[1]}` };
+    // (2026-10-15, the item module's Fireworks Boots: "They become Clumsy 1 for 1 round on a failure, or Clumsy 2 on a critical failure" — each
+    // degree's own; before, the critical failure's was taken for both.)
+    const paired = new RegExp(`${SUBJECT}\\s+(.+?) (?:on a failure|if (?:it|they) fails? (?:this|the|its|their) (?:save|saving throw)),? (?:or|and) (.+?) on a critical failure\\b`, "i").exec(text);
+    if (paired) return { failure: `becomes ${paired[1]}`, critical: { text: paired[2], adds: false }, success: null };
     let failure = null;
     const becoming = /(?:saving throw|save),? becoming (.+?) on a failure\b/i.exec(text);
     if (becoming) failure = becoming[1];
     else {
         const lead = find(FAIL_LEAD);
+        // (Only some creatures, "Creatures that are specifically vulnerable to sunlight are also Frightened 1 if they fail this save …", the item
+        // module's Horn of the Sun Aurochs: the GM's.)
+        if (lead && /(?:^|[.!?]\s+)(?:Creatures|Targets|Those) (?:that|who) (?:are|have)\b[^.]*$/i.test(htmlToPlainText(text.slice(0, lead.at).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")))) return { failure: null, critical: null, success: null };
         if (lead) failure = clause(lead.from).replace(new RegExp(`^${SUBJECT}\\s+`, "i"), "becomes ");
     }
     // Only a critical failure's rider ("Creatures that critically fail also take 5 persistent acid damage"), when asked.
