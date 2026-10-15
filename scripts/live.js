@@ -1312,7 +1312,7 @@ export async function applyChange(change, state) {
                 const worse = change.escalate;
                 if (worse.duration?.mode === "fixed" && ["rounds", "minutes"].includes(worse.duration.unit)) {
                     await timedCondition(actor, worse.slug, worse.value, worse.duration, state);
-                    return `${target.name} was already ${worse.if}: ${worse.slug}, ${durationText(worse.duration, state.source.name)}`;
+                    return `${target.name} was already ${worse.if}: ${worse.slug}, ${durationText(worse.duration, state.source.name, target.name)}`;
                 }
                 await setCondition(actor, worse.slug, worse.value);
                 return `${target.name} was already ${worse.if}: ${worse.slug}${worse.duration ? "" : " (until it's restored)"}`;
@@ -1329,7 +1329,7 @@ export async function applyChange(change, state) {
                 // "for 1d4 rounds": rolled for each creature.
                 const duration = change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration;
                 await timedCondition(actor, change.slug, change.value, duration, state);
-                return `${target.name}'s ${change.slug} lasts ${durationText(duration, state.source.name)}${change.duration.valueRoll ? ` (rolled ${change.duration.valueRoll})` : ""}${saveEndsText(change)}`;
+                return `${target.name}'s ${change.slug} lasts ${durationText(duration, state.source.name, target.name)}${change.duration.valueRoll ? ` (rolled ${change.duration.valueRoll})` : ""}${saveEndsText(change)}`;
             }
             // A condition that grows with each later failure (batch 74): what it already has plus the stack, to its maximum.
             const now = Number(actor.itemTypes.condition.find((condition) => condition.slug === change.slug && condition.active)?.value) || 0;
@@ -1416,15 +1416,14 @@ export async function applyChange(change, state) {
 // A condition that lasts "until the end of the monster's next turn" and the
 // like: an effect granting it, its duration counted on the monster's turns (as
 // the spell module does): 0 rounds when the monster still acts this round, else 1.
+// ("target-turn", the item module's bombs: counted on the creature's own turns, and it the effect's origin, so PF2e starts the effect at
+// its initiative and ends a turn-start one on its turn.)
 async function timedCondition(actor, slug, value, duration, state) {
     const template = game.pf2e.ConditionManager.getCondition(slug);
     if (!template) return setCondition(actor, slug, value);
     const combat = game.combat;
-    let rounds = Number(duration.value ?? 1);
-    if (duration.anchor === "source-turn" && combat?.started && duration.unit === "rounds" && rounds <= 1) {
-        const position = combat.turns.findIndex((turn) => turn.actor?.uuid === state.source.actorUuid);
-        if (position >= 0) rounds = (rounds === 0 && duration.expiry === "turn-end" ? position >= combat.turn : position > combat.turn) ? 0 : 1;
-    }
+    const rounds = turnRounds(duration, duration.anchor === "target-turn" ? actor.uuid : duration.anchor === "source-turn" ? state.source.actorUuid : null);
+    const origin = duration.anchor === "target-turn" ? actor.uuid : state.source.actorUuid;
     const label = `${template.name}${Number.isFinite(value) ? ` ${value}` : ""}`;
     await actor.createEmbeddedDocuments("Item", [{
         name: `${state.ability.name}: ${label}`,
@@ -1435,10 +1434,31 @@ async function timedCondition(actor, slug, value, duration, state) {
             description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
             duration: { value: rounds, unit: duration.unit, expiry: duration.expiry ?? "turn-start", sustained: false },
             start: { value: game.time.worldTime, initiative: combat?.started ? combat.combatant?.initiative ?? null : null },
-            context: { origin: { actor: state.source.actorUuid, item: state.ability.uuid }, target: { actor: actor.uuid }, roll: null },
+            context: { origin: { actor: origin, item: state.ability.uuid }, target: { actor: actor.uuid }, roll: null },
             rules: [{ key: "GrantItem", uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
         }
     }]);
+}
+
+// Rounds for a duration counted on one creature's turns (its actor's uuid): 0 when it still acts this round ("until the end of its
+// turn" also during that turn), else 1; longer ones, or none in the encounter, as given.
+function turnRounds(duration, anchorUuid) {
+    const combat = game.combat;
+    const rounds = Number(duration.value ?? 1);
+    if (!anchorUuid || !combat?.started || duration.unit !== "rounds" || rounds > 1) return rounds;
+    const position = combat.turns.findIndex((turn) => turn.actor?.uuid === anchorUuid);
+    if (position < 0) return rounds;
+    return (rounds === 0 && duration.expiry === "turn-end" ? position >= combat.turn : position > combat.turn) ? 0 : 1;
+}
+
+// A rule-less or modifier effect counted on the creature's own turns ("target-turn"): PF2e starts an effect at the current turn's
+// initiative, so once made its start is the creature's (as the spell module's createNativeEffect does). It has no origin, so PF2e already
+// ends a turn-start one on the creature's own turn.
+async function anchorToTarget(created, actor, duration) {
+    if (duration?.anchor !== "target-turn" || !game.combat?.started) return;
+    const initiative = game.combat.turns.find((turn) => turn.actor?.uuid === actor.uuid)?.initiative;
+    const effect = created?.[0];
+    if (Number.isFinite(initiative) && effect && effect.system?.start?.initiative !== initiative) await effect.update({ "system.start.initiative": initiative });
 }
 
 // A penalty or bonus from the result (Bon Mot's -2 status to Perception and
@@ -1467,9 +1487,9 @@ async function nativeEffect(actor, effect, state, degree = null) {
 // Harmony's choice for the next spell), lasting as the note says (until removed when it doesn't).
 async function noteEffect(actor, note, state) {
     if (!note?.text) return null;
-    const duration = note.duration?.mode === "fixed" ? { value: note.duration.value, unit: note.duration.unit, expiry: note.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
+    const duration = note.duration?.mode === "fixed" ? { value: note.duration.anchor === "target-turn" ? turnRounds(note.duration, actor.uuid) : note.duration.value, unit: note.duration.unit, expiry: note.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
-    await actor.createEmbeddedDocuments("Item", [{
+    const created = await actor.createEmbeddedDocuments("Item", [{
         name: `${state.ability.name}: ${note.label ?? "note"}`,
         type: "effect",
         img: "icons/svg/book.svg",
@@ -1481,6 +1501,7 @@ async function noteEffect(actor, note, state) {
             rules: []
         }
     }]);
+    await anchorToTarget(created, actor, note.duration);
     return null;
 }
 
@@ -1490,9 +1511,9 @@ async function penaltyEffect(actor, modifier, state, against = null) {
     const marked = against ? (await targetOf(state, against)).token ?? null : null;
     const slug = marked ? `aar-${String(state.ability.name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${marked.id}`.toLowerCase() : null;
     const outgoing = /^(?:attack|damage|strike)/.test(String(modifier.selector));
-    const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
+    const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.anchor === "target-turn" ? turnRounds(modifier.duration, actor.uuid) : modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const sign = modifier.value > 0 ? "+" : "−";
-    await actor.createEmbeddedDocuments("Item", [{
+    const created = await actor.createEmbeddedDocuments("Item", [{
         name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${selectorLabel(modifier.selector)}${marked ? ` against ${marked.name}` : ""}`,
         type: "effect",
         img: "icons/svg/downgrade.svg",
@@ -1507,6 +1528,7 @@ async function penaltyEffect(actor, modifier, state, against = null) {
                 : [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, ...(modifier.predicate?.length ? { predicate: modifier.predicate } : {}) }]
         }
     }]);
+    await anchorToTarget(created, actor, modifier.duration);
     return null;
 }
 
@@ -1607,7 +1629,8 @@ function saveEndsText(change) {
     return `; a new ${ends.save ? ends.save[0].toUpperCase() + ends.save.slice(1) : ""} save at the end of each of its turns ends it (DC ${ends.dc}${ends.drop ? `, ${ends.drop} lower each time` : ""})`;
 }
 
-function durationText(duration, source) {
+function durationText(duration, source, target = null) {
+    if (duration.anchor === "target-turn" && target) source = target;
     // Minutes and longer: the time itself ("1 minute"); the monster's turns only count rounds.
     if (duration.unit && duration.unit !== "rounds") return `${duration.value} ${duration.value === 1 ? duration.unit.replace(/s$/, "") : duration.unit}`;
     // (More than a round, batch 28's Golem Antimagic: "until the end of its turn in 6 rounds".)
