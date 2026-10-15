@@ -23,6 +23,7 @@ import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
 import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
+import { isDying, recoverFromDying, revivedNote } from "../../pf2e-resolution-core/scripts/dying-recovery.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 const CORE_ID = "pf2e-resolution-core";
@@ -1365,6 +1366,9 @@ export async function applyChange(change, state) {
         }
         // Healing on the creature (batch 31: Drink Blood's "regains 10 Hit Points, gaining any excess as temporary Hit Points").
         case "heal": {
+            // (2026-10-15: a dying creature healed to 1 HP or more loses Dying and Unconscious and gains Wounded — the core's dying recovery,
+            // shared with the spell and item modules; PF2e leaves Dying to the table.)
+            const wasDying = isDying(actor);
             const hp = actor.system?.attributes?.hp ?? {};
             const value = Number(hp.value) || 0;
             const max = Number(hp.max) || value;
@@ -1373,7 +1377,8 @@ export async function applyChange(change, state) {
             const update = { "system.attributes.hp.value": value + healed };
             if (excess > (Number(hp.temp) || 0)) update["system.attributes.hp.temp"] = excess;
             await actor.update(update);
-            return `${target.name} regains ${healed} Hit Points${excess > 0 ? ` and has ${Math.max(excess, Number(hp.temp) || 0)} temporary Hit Points` : ""}`;
+            const revived = await recoverFromDying(actor, wasDying);
+            return `${target.name} regains ${healed} Hit Points${excess > 0 ? ` and has ${Math.max(excess, Number(hp.temp) || 0)} temporary Hit Points` : ""}${revived ? `. ${revivedNote(revived)}` : ""}`;
         }
         // Temporary Hit Points (batch 30): the higher of its current and these (they don't stack); how long they last, for the GM.
         case "tempHp": {
