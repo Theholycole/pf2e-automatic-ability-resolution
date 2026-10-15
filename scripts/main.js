@@ -4,7 +4,7 @@
 // Live play: confirmation cards (scripts/live.js) and aura triggers (scripts/auras.js).
 
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
-import { setUpLivePlay } from "./live.js";
+import { applyChange, setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpRecharge } from "./recharge.js";
@@ -94,5 +94,7 @@ Hooks.once("ready", async () => {
     const module = game.modules.get(MODULE_ID);
     // (zoneEvent: the zones' Region script behaviours call it, batch 256.)
     // (initiativeSkills, batch 302: the skills an ability names for its creature's own initiative — the simulator's.)
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent });
+    // (live.applyChange, 2026-10-15: the item module's cards apply the core's changes with this module's Foundry code — heal, temporary Hit
+    // Points, native Effects, timed conditions, the affliction hand-off.)
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange }) });
 });

@@ -1281,7 +1281,10 @@ async function targetOf(state, id) {
 export const damageRollClass = () => (CONFIG.Dice?.rolls ?? []).find((roll) => roll?.name === "DamageRoll");
 
 // One change from the core, applied in Foundry. Returns an extra line for the card, or null.
-async function applyChange(change, state) {
+// (2026-10-15: exported on the module api as api.live.applyChange for the item module's cards — run it on the active GM's client, with a state
+// { plan, ability: { name, uuid }, source: { actorUuid, tokenUuid, name }, targets: [{ id, actorUuid, tokenUuid, name }] }. Keep its
+// signature stable.)
+export async function applyChange(change, state) {
     const { target, token, actor } = await targetOf(state, change.target);
     if (!actor && change.target !== undefined) return null;
     switch (change.op) {

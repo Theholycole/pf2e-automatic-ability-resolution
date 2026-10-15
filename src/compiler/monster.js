@@ -4760,9 +4760,11 @@ function readZone(item, actor = null) {
         if (template && !zone.area) {
             said = `${lead} ${said}`.trim();
             if (!["burst", "emanation", "cone", "line", "square"].includes(template.type) || /@Damage\[|@Check\[/.test(sentence)) return null;
+            // (2026-10-15, the item module's Cold Comfort and Hampering Snare: a square given as an inline @Template, not in words — its
+            // range from "within N feet" where the text has one. Before, it read the wording's match, null there, and threw.)
             if (template.type === "square") {
                 zone.centre = "placed";
-                zone.range = Number(square[2]) || null;
+                zone.range = Number(square?.[2]) || Number(/\bwithin (\d+) feet\b/i.exec(said.replace(/@Template\[[^\]]*\](?:\{[^}]*\})?/g, ""))?.[1]) || null;
             }
             // (Not what the creatures there get at once, an ally's bonus or extra damage for a round: War Cry's, Sic 'Em!'s.)
             if (/^(?:Each|All|Any|Every)\b/i.test(said) || /\b(?:gains?|deals?) (?:an? )?(?:additional|[+–-]\d)/i.test(said)) return null;
