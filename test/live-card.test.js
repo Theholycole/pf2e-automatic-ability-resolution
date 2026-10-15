@@ -198,6 +198,21 @@ test("zones live: the Region at the token or for the GM to place, its terrain, i
     assert.deepEqual(zoneMemberEffect({ name: "Test", kind: "modifiers", modifiers: [{ selector: "reflex", value: -2, type: "status" }], regionUuid: "r", moduleId: "mod" }).system.rules, [{ key: "FlatModifier", selector: "reflex", value: -2, type: "status", label: "Test" }]);
 });
 
+test("a zone gone once it acts, the item module's snares: set off by its first creature's save, not by its maker or what entering gives; its card says so (2026-10-15)", async () => {
+    const { spentZoneCard, zoneActions, zoneRegion, zoneSetOff } = await import("../src/live/zones.js");
+    const snare = { area: { type: "square", value: 5 }, centre: "placed", range: 5, lasts: null, saves: [{ when: ["enter"], plan: { id: "save" } }], once: true, terrain: [], damage: [], modifiers: [], notes: [] };
+    const region = zoneRegion({ name: "Test Snare", zone: snare, token: { id: "tok", x: 0, y: 0, width: 1, height: 1 }, grid: { size: 100, distance: 5 }, moduleId: "mod", flags: {} });
+    assert.deepEqual([region.place, region.data.shapes[0].type, region.data.shapes[0].width], [true, "rectangle", 100]);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter")), true);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { own: true })), false);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { initial: true })), false);
+    assert.equal(zoneSetOff({ ...snare, once: false }, zoneActions(snare, "tokenEnter")), false);
+    assert.equal(zoneSetOff({ ...snare, concealed: true, saves: [] }, zoneActions({ ...snare, concealed: true, saves: [] }, "tokenEnter")), false);
+    const card = '<section class="pf2e-aar-zone"><p><strong>Test Snare</strong>: a save on whoever it says.</p><button type="button" data-zone-end><i class="fa-solid fa-xmark"></i> End Test Snare</button></section>';
+    assert.equal(spentZoneCard(card, { who: "Goblin <b>", left: 0 }), '<section class="pf2e-aar-zone"><p><strong>Test Snare</strong>: a save on whoever it says.</p><p><em>Goblin b set it off; it\'s gone.</em></p></section>');
+    assert.ok(spentZoneCard(card, { who: "Goblin", left: 1 }).includes("it's gone.</em></p><button"));
+});
+
 test("a choice of ways keeps its builtins and words; every way in turn; zones that change checks by side and save on moving (2026-10-13, batch 274)", async () => {
     const source = { actorUuid: "Actor.m", tokenUuid: null, name: "Test Mantis" };
     const stance = { builtin: "self-effect", actions: 1, model: { name: "Iron", modifiers: [{ on: "ac", type: "circumstance", value: 2 }] } };

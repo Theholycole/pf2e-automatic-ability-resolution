@@ -2,9 +2,10 @@
 // difficult terrain on it, and a script behaviour that hands the module its events (on the active GM). A token entering gets the zone's
 // concealment, PF2e's effect or penalties inside, and the save, hazard or damage that entering brings; leaving takes away what it gave;
 // a turn starting or ending inside brings its saves and damage. The zone ends with its time (at its maker's turn), or by its card's
-// button. Its maker isn't harmed by its own zone.
+// button. Its maker isn't harmed by its own zone. A zone that's gone once it acts (zone.once, the item module's snares) goes with its first
+// creature.
 
-import { zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion } from "../src/live/zones.js";
+import { spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
 import { isActiveGM, postCard } from "./live.js";
 import { noteToGM } from "./recharge.js";
 
@@ -14,6 +15,8 @@ const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) =>
 
 // Who is inside each zone, on this (the GM's) client: region uuid → token uuids. (Its entering events may come twice as it's made.)
 const inside = new Map();
+// The zones gone once they act that a creature has set off (their regions going).
+const spent = new Set();
 
 export function setUpZones() {
     Hooks.on("pf2e.startTurn", (combatant) => {
@@ -51,7 +54,8 @@ async function expireZones(combatant, phase) {
     }
 }
 
-// The ability's zone: its Region (placed by the GM when it's at range, a cone or a line), its time, and its card.
+// The ability's zone: its Region (placed by the GM when it's at range, a cone or a line), its time, and its card. (item: the ability, or
+// { name, uuid, actor } for one already used up, the item module's snares; on the GM's client, which makes the Region.)
 export async function startZone({ item, plan, sourceToken }) {
     const zone = plan.zone;
     const token = sourceToken?.document ?? sourceToken;
@@ -79,7 +83,7 @@ export async function startZone({ item, plan, sourceToken }) {
         }
         if (region) made.push(region);
     }
-    const lasts = endsAt ? `until ${endsAt.at === "turn-end" ? "the end" : "the start"} of its turn in round ${endsAt.round}${rolled ? ` (${rolled} rounds rolled)` : ""}` : zone.lasts ? `${rolled ?? zone.lasts.value} ${(rolled ?? zone.lasts.value) === 1 ? zone.lasts.unit.replace(/s$/, "") : zone.lasts.unit} (end it on this card)` : zone.untilReused ? "until it ends it (use End on this card)" : "until it's cleared (use End on this card)";
+    const lasts = endsAt ? `until ${endsAt.at === "turn-end" ? "the end" : "the start"} of its turn in round ${endsAt.round}${rolled ? ` (${rolled} rounds rolled)` : ""}` : zone.lasts ? `${rolled ?? zone.lasts.value} ${(rolled ?? zone.lasts.value) === 1 ? zone.lasts.unit.replace(/s$/, "") : zone.lasts.unit} (end it on this card)` : zone.untilReused ? "until it ends it (use End on this card)" : zone.once ? "until a creature sets it off (or use End on this card)" : "until it's cleared (use End on this card)";
     const parts = [
         zone.concealed ? "those inside are Concealed, and those outside concealed to them" : null,
         zone.terrain?.length ? `difficult terrain${zone.others ? ` (not for ${escape(item.actor.name)}: move it normally)` : ""}` : null,
@@ -88,7 +92,8 @@ export async function startZone({ item, plan, sourceToken }) {
         zone.effect ? `${escape(zone.effect.label)} on ${zone.effect.allies ? "its allies" : "those"} inside` : null,
         zone.modifiers?.length ? "a penalty inside" : null,
         zone.adjustments?.length ? "its allies' and foes' checks changed inside" : null,
-        zone.damage?.length ? "damage at a turn's end inside" : null
+        zone.damage?.length ? "damage at a turn's end inside" : null,
+        zone.once ? "gone once a creature sets it off" : null
     ].filter(Boolean);
     const placed = made.length ? "" : " <em>Not placed.</em>";
     await ChatMessage.create({
@@ -102,7 +107,7 @@ export async function startZone({ item, plan, sourceToken }) {
 export async function zoneEvent(region, behavior, event) {
     const flags = region?.flags?.[MODULE_ID]?.zone;
     const token = event?.data?.token;
-    if (!flags || !token?.actor || !isActiveGM()) return;
+    if (!flags || !token?.actor || !isActiveGM() || spent.has(region.uuid)) return;
     const members = inside.get(region.uuid) ?? new Set();
     inside.set(region.uuid, members);
     if (event.name === "tokenEnter") {
@@ -110,15 +115,23 @@ export async function zoneEvent(region, behavior, event) {
         members.add(token.uuid);
     }
     if (event.name === "tokenExit") members.delete(token.uuid);
-    const sourceToken = await fromUuid(flags.sourceTokenUuid).catch(() => null);
     const own = token.uuid === flags.sourceTokenUuid || token.actor.uuid === flags.sourceActorUuid;
-    const allied = !own && !!sourceToken && token.disposition === sourceToken.disposition;
     const initial = event.name === "tokenEnter" && !event.data.movement && Date.now() - (flags.createdAt ?? 0) < 10000;
-    const item = await fromUuid(flags.itemUuid).catch(() => null);
-    const sourceActor = item?.actor ?? (await fromUuid(flags.sourceActorUuid).catch(() => null));
-    const name = flags.itemName ?? item?.name ?? "Zone";
+    // (A zone gone once it acts: claimed before the awaits, so two creatures entering at once don't both set it off.)
+    const claims = !!flags.zone.once && !own && ["tokenEnter", "tokenMoveWithin"].includes(event.name);
+    if (claims) spent.add(region.uuid);
+    const sourceToken = await fromUuid(flags.sourceTokenUuid).catch(() => null);
+    const allied = !own && !!sourceToken && token.disposition === sourceToken.disposition;
+    const found = await fromUuid(flags.itemUuid).catch(() => null);
+    const sourceActor = found?.actor ?? (await fromUuid(flags.sourceActorUuid).catch(() => null));
+    const name = flags.itemName ?? found?.name ?? "Zone";
+    // (An item used up since, a snare: its name on the cards.)
+    const item = found ?? (sourceActor ? { name, uuid: null, actor: sourceActor } : null);
     const target = token.object ?? token;
-    for (const action of zoneActions(flags.zone, event.name, { own, allied, initial })) {
+    const actions = zoneActions(flags.zone, event.name, { own, allied, initial });
+    const setOff = claims && zoneSetOff(flags.zone, actions);
+    if (claims && !setOff) spent.delete(region.uuid);
+    for (const action of actions) {
         if (action.kind === "clear") await clearZone(token.actor, region.uuid, flags.zone);
         else if (action.kind === "conceal" || action.kind === "modifiers" || action.kind === "adjust") await token.actor.createEmbeddedDocuments("Item", [zoneMemberEffect({ name, kind: action.kind, modifiers: action.modifiers, adjustments: action.adjustments, concealedUuid: CONCEALED, regionUuid: region.uuid, moduleId: MODULE_ID })]);
         else if (action.kind === "effect") {
@@ -131,13 +144,29 @@ export async function zoneEvent(region, behavior, event) {
         else if ((action.kind === "damage" || action.kind === "hazard") && item && sourceActor) await postCard({ plan: zoneDamagePlan(name, action.formulas), item, sourceActor, sourceToken, tokens: [target], warning: action.kind === "hazard" ? `${name}: on entering it; as much again for each further square it moves into.` : `${name}: ${eventWords(event.name, initial)}.` });
         else if (action.kind === "note") await noteToGM(sourceActor, sourceToken, [`<strong>${escape(name)}</strong> — ${escape(token.name)}: ${escape(action.text)}`]);
     }
+    if (setOff) await spendZone(region, flags, token.name);
+}
+
+// A zone gone once it acts, set off: what it gave those inside taken away, its Region deleted, and its card saying so.
+async function spendZone(region, flags, who) {
+    for (const uuid of inside.get(region.uuid) ?? []) {
+        const member = await fromUuid(uuid).catch(() => null);
+        if (member?.actor) await clearZone(member.actor, region.uuid, flags.zone);
+    }
+    inside.delete(region.uuid);
+    const message = game.messages?.contents?.findLast?.((entry) => entry.getFlag?.(MODULE_ID, "zoneCard")?.regionUuids?.includes(region.uuid)) ?? null;
+    await region.delete().catch(() => null);
+    if (!message) return;
+    const left = message.getFlag(MODULE_ID, "zoneCard").regionUuids.filter((uuid) => uuid !== region.uuid);
+    await message.update({ content: spentZoneCard(message.content, { who, left: left.length }), [`flags.${MODULE_ID}.zoneCard.regionUuids`]: left });
 }
 
 const eventWords = (name, initial) => (initial ? "in the area as it's made" : name === "tokenEnter" ? "entering it" : name === "tokenTurnStart" ? "starting its turn in it" : name === "tokenMoveWithin" ? "moving within it" : "ending its turn in it");
 
 // Leaving (or the zone ending): what the zone gave the creature, and PF2e's effects of the zone's own on it (its "while inside" ones).
 async function clearZone(actor, regionUuid, zone) {
-    const sources = new Set([zone.effect?.uuid, ...(zone.saves ?? []).flatMap((save) => ["failure", "criticalFailure"].flatMap((degree) => (save.plan?.resolution?.outcomes?.[degree]?.nativeEffects ?? []).map((entry) => entry.uuid)))].filter(Boolean));
+    // (Not a save's effects from a zone gone once it acts: a snare's last their own time.)
+    const sources = new Set([zone.effect?.uuid, ...(zone.once ? [] : zone.saves ?? []).flatMap((save) => ["failure", "criticalFailure"].flatMap((degree) => (save.plan?.resolution?.outcomes?.[degree]?.nativeEffects ?? []).map((entry) => entry.uuid)))].filter(Boolean));
     const gone = (actor.itemTypes?.effect ?? []).filter((effect) => effect.flags?.[MODULE_ID]?.zone === regionUuid || sources.has(effect._stats?.compendiumSource ?? effect.flags?.core?.sourceId)).map((effect) => effect.id);
     if (gone.length) await actor.deleteEmbeddedDocuments("Item", gone);
 }

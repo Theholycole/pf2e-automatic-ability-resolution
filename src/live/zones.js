@@ -124,6 +124,21 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
     return actions;
 }
 
+// A zone that's gone once it acts (2026-10-15, the item module's snares: "the first creature to enter the square"): whether what an event
+// did sets it off. A save, damage or a note on the creature does; what entering gives everyone (concealment, penalties inside) doesn't.
+const SETS_OFF = new Set(["save", "damage", "hazard", "note", "effect"]);
+export function zoneSetOff(zone, actions) {
+    return !!zone?.once && actions.some((action) => SETS_OFF.has(action.kind));
+}
+
+// Its card once it's set off: who set it off, and no End button when none of its areas are left.
+export function spentZoneCard(content, { who, left = 0 }) {
+    const line = `<p><em>${String(who ?? "A creature").replace(/[&<>"']/g, "")} set it off; it's gone.</em></p>`;
+    const button = /<button type="button" data-zone-end>[\s\S]*?<\/button>/;
+    if (button.test(content)) return content.replace(button, (found) => (left > 0 ? `${line}${found}` : line));
+    return content.replace(/<\/section>\s*$/, `${line}</section>`);
+}
+
 // A card's plan for damage the zone deals with no save (at a turn's end, a hazard on entering): the formulas, applied as rolled.
 export function zoneDamagePlan(name, formulas) {
     return {
