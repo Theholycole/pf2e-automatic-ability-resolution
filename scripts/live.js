@@ -1290,7 +1290,9 @@ export async function applyChange(change, state) {
     if (!actor && change.target !== undefined) return null;
     switch (change.op) {
         case "damage": {
-            const parts = change.instances.filter((instance) => instance.amount > 0).map((instance) => `${instance.amount}[${instance.category === "persistent" ? "persistent," : ""}${instance.type ?? "untyped"}]`);
+            // (2026-10-16: a material the damage carries — "3d8[fire,silver]", the core's instance.materials — back in its flavor, which PF2e's
+            // DamageRoll reads, so a weakness to silver applies.)
+            const parts = change.instances.filter((instance) => instance.amount > 0).map((instance) => `${instance.amount}[${[...(instance.category === "persistent" ? ["persistent"] : []), instance.type ?? "untyped", ...(instance.materials ?? [])].join(",")}]`);
             if (!parts.length) return null;
             const DamageRoll = damageRollClass();
             const roll = await new DamageRoll(parts.length === 1 ? parts[0] : `{${parts.join(",")}}`).evaluate();
@@ -1303,7 +1305,7 @@ export async function applyChange(change, state) {
                 const DamageRoll = damageRollClass();
                 // Its dice ("1d4 bleed" rolls each round), unless a basic save halved or doubled the rolled amount.
                 const dice = change.damage?.dice?.length && !change.damage?.multiplier ? instanceFormula(change.damage) : null;
-                const roll = await new DamageRoll(`(${change.damage?.formula ?? dice ?? change.damage?.amount ?? 1})[persistent,${change.damage?.type ?? "untyped"}]`).evaluate();
+                const roll = await new DamageRoll(`(${change.damage?.formula ?? dice ?? change.damage?.amount ?? 1})[${["persistent", change.damage?.type ?? "untyped", ...(change.damage?.materials ?? [])].join(",")}]`).evaluate();
                 await actor.applyDamage({ damage: roll, token: token ?? undefined });
                 return null;
             }
