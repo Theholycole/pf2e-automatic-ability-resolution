@@ -87,7 +87,8 @@ function auraPlan(item) {
 const radiusOf = (item, plan) => Number(item.rules?.find((rule) => rule.key === "Aura")?.radius) || Number(plan.targeting?.area?.value) || 0;
 
 // The tokens taking part in an encounter.
-export const inEncounter = (combat) => new Set(combat.combatants.map((combatant) => combatant.tokenId).filter(Boolean));
+// (No encounter — a condition landing outside one, the item module's live check found: no one.)
+export const inEncounter = (combat) => new Set([...(combat?.combatants ?? [])].map((combatant) => combatant.tokenId).filter(Boolean));
 
 // The auras of the encounter's monsters on a scene: { token, actor, item, plan, when, radius, key }.
 // (A monster on the map but not in the encounter brings no cards.)

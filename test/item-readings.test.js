@@ -40,3 +40,9 @@ test("Administer First Aid's critical failure raises dying by 1, not to 1 (the i
     const result = registry.resolveSync(plan, { caster: { id: "a" }, targets: [{ id: "b" }], id: (c) => c.id, statistic: () => ({ modifier: 0, dc: 20 }), traits: () => [], iwr: () => ({ immunities: [] }), allied: () => true }, { roll: () => ({ degree: "criticalFailure" }) });
     assert.deepEqual(result.changes.find((change) => change.op === "condition")?.stack, { by: 1 });
 });
+
+test("no encounter: no one is in it (a condition landing outside one no longer throws in the reaction hooks)", async () => {
+    const { inEncounter } = await import("../scripts/auras.js");
+    assert.deepEqual([...inEncounter(null)], []);
+    assert.deepEqual([...inEncounter({ combatants: [{ tokenId: "a" }, { tokenId: null }, { tokenId: "b" }] })], ["a", "b"]);
+});
