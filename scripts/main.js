@@ -7,6 +7,7 @@ import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compi
 import { applyChange, postCard, setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
+import { setUpFloors } from "./floors.js";
 import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
 import { setUpHazards } from "./hazards.js";
@@ -76,6 +77,8 @@ Hooks.once("ready", () => {
     setUpLivePlay({ compileItem, basicActions: () => basicActions, loaded });
     setUpAuras({ compileItem, loaded });
     setUpSwallow();
+    // (2026-10-16: condition floors that last while persistent damage does.)
+    setUpFloors();
     setUpRecharge({ compileItem });
     setUpReactions({ compileItem });
     // (Batch 302: Bravery's lower frightened, from whatever adds it.)

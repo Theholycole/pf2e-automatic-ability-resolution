@@ -3,6 +3,8 @@
 // The Foundry side (scripts/live.js) makes the rolls, keeps the card's state in
 // its chat message's flags and applies the results.
 
+import { floorLabel, isFloor } from "./floor.js";
+
 export const CARD_VERSION = 1;
 export const DEGREE_LABELS = Object.freeze({ criticalFailure: "critical failure", failure: "failure", success: "success", criticalSuccess: "critical success" });
 
@@ -296,6 +298,8 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 if (change.effect?.kind === "native") lines.push(`${who} gets ${change.effect.label ?? "the effect"}`);
                 // (Batch 274: a note Effect, what the module can't play, on the creature.)
                 if (change.effect?.kind === "note") lines.push(`${who} gets a note: ${change.effect.note?.label ?? "the ability's words"}`);
+                // (2026-10-16: a condition floor, src/live/floor.js.)
+                if (change.effect?.kind === "floor" && isFloor(change.effect.floor)) lines.push(`${who}: ${floorLabel(change.effect.floor).replace(/^Can't/, "can't")}`);
                 if (change.effect?.kind === "swallow") lines.push(`${who} is swallowed (grabbed and slowed 1; ${change.effect.damage ? `takes ${change.effect.damage}` : "no damage"} at the end of each of its turns${change.effect.rupture ? `; Rupture ${change.effect.rupture}` : ""}${change.effect.escapeDC ? `; Escape DC ${change.effect.escapeDC}` : ""})`);
                 break;
             case "note":

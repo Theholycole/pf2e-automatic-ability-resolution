@@ -21,6 +21,7 @@ import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
+import { applyFloor } from "./floors.js";
 import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
 import { isDying, recoverFromDying, revivedNote } from "../../pf2e-resolution-core/scripts/dying-recovery.js";
@@ -1354,6 +1355,14 @@ export async function applyChange(change, state) {
             if (change.effect?.kind === "modifier") return penaltyEffect(actor, change.effect.modifier, state, change.against ?? null);
             if (change.effect?.kind === "native") return nativeEffect(actor, change.effect, state, state.targets.find((entry) => entry.id === change.target)?.degree ?? null);
             if (change.effect?.kind === "note") return noteEffect(actor, change.effect.note, state);
+            // (2026-10-16: a condition floor — "can't reduce its sickened value below 1 while the persistent fire damage lasts", the item
+            // module's save rows; scripts/floors.js.)
+            if (change.effect?.kind === "floor") {
+                const floor = change.effect.floor;
+                const duration = floor?.duration;
+                const rounds = floor?.lifetime === "fixed" && duration ? (duration.anchor === "target-turn" ? turnRounds(duration, actor.uuid) : duration.anchor === "source-turn" ? turnRounds(duration, state.source.actorUuid) : duration.value) : null;
+                return applyFloor(actor, floor, state, { rounds, anchor: (created) => anchorToTarget(created, actor, duration) });
+            }
             return null;
         case "end": {
             // Escape: the user's grabbed or restrained ends (an effect granting it goes with it).

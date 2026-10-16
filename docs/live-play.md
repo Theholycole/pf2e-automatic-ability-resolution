@@ -3288,3 +3288,12 @@ Checked in pftest:
   - the stale "GM's call" note;
   - the nearby-death card's target (now the creature that fell).
 
+## Condition floors (2026-10-16, for the item module)
+
+The core's `{ op: "effect", effect: { kind: "floor", floor } }` ("can't reduce its sickened value below 1 while the persistent fire damage lasts"), in the spell module's shape: `floor { slug, value, lifetime, duration?, persistentDamage?, liftedBy? }`, for clumsy, drained, enfeebled, frightened, sickened or stupefied. Apply gives the creature an Effect, "<ability>: <condition> floor", that grants the condition at the floor's value, locked (PF2e keeps a granted condition while the Effect lasts, so a lower value stops there; the condition can't be deleted on its own). Its lifetime:
+
+- `"fixed"`: for its `duration` (`{ value, unit, expiry?, anchor? }`; "until the end of its next turn" is 1 round, `expiry: "turn-end"`, `anchor: "target-turn"`).
+- `"while-persistent"`: while the creature takes persistent damage of `persistentDamage`'s type; the active GM's client deletes it when the creature's last persistent damage of that type goes (`scripts/floors.js`).
+- `"until-lifted"`: until what `liftedBy` says ("it spends a concentrate action"); the Effect says so and the GM deletes it.
+
+Others (a spell's "spell" lifetime) aren't applied here. Pure parts in `src/live/floor.js` (tests in `test/floor.test.js`). Not live-checked yet.
