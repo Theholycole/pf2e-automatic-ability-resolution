@@ -1361,7 +1361,8 @@ export async function applyChange(change, state) {
                 const floor = change.effect.floor;
                 const duration = floor?.duration;
                 const rounds = floor?.lifetime === "fixed" && duration ? (duration.anchor === "target-turn" ? turnRounds(duration, actor.uuid) : duration.anchor === "source-turn" ? turnRounds(duration, state.source.actorUuid) : duration.value) : null;
-                return applyFloor(actor, floor, state, { rounds, anchor: (created) => anchorToTarget(created, actor, duration) });
+                const done = await applyFloor(actor, floor, state, { rounds, anchor: (created) => anchorToTarget(created, actor, duration) });
+                return done ? `${target.name}: ${done}` : null;
             }
             return null;
         case "end": {

@@ -3296,4 +3296,4 @@ The core's `{ op: "effect", effect: { kind: "floor", floor } }` ("can't reduce i
 - `"while-persistent"`: while the creature takes persistent damage of `persistentDamage`'s type; the active GM's client deletes it when the creature's last persistent damage of that type goes (`scripts/floors.js`).
 - `"until-lifted"`: until what `liftedBy` says ("it spends a concentrate action"); the Effect says so and the GM deletes it.
 
-Others (a spell's "spell" lifetime) aren't applied here. Pure parts in `src/live/floor.js` (tests in `test/floor.test.js`). Not live-checked yet.
+Others (a spell's "spell" lifetime) aren't applied here. Apply's line for it: "<target>: can't reduce Sickened below 1 while taking persistent fire damage". Pure parts in `src/live/floor.js` (tests in `test/floor.test.js`). Live-checked by the item module's cases in `pftest` (2026-10-16): Timpani of Panic's 1-minute frightened floor, and a Tallow Bomb's sickened floor removed with the persistent fire.
