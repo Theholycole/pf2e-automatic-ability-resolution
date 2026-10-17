@@ -984,7 +984,7 @@ async function rollTarget(message, target) {
     const identifier = rollIdentifier(message.id, target.id);
     if (state.check.kind === "save") {
         const statistic = actor?.getStatistic?.(state.check.statistic);
-        if (!statistic) throw new Error(`${target.name} has no ${statisticLabel(state.check.statistic)} save.`);
+        if (!statistic) throw new Error(`${target.name} has no ${statisticLabel(state.check.statistic)}${["fortitude", "reflex", "will"].includes(state.check.statistic) ? " save" : ""}.`);
         // (Batch 286: its own bonus or penalty on the save, and a save rolled twice keeping the worse — PF2e's rollTwice.)
         const saveBonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
         return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}) });

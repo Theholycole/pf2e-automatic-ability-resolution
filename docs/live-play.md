@@ -3297,3 +3297,8 @@ The core's `{ op: "effect", effect: { kind: "floor", floor } }` ("can't reduce i
 - `"until-lifted"`: until what `liftedBy` says ("it spends a concentrate action"); the Effect says so and the GM deletes it.
 
 Others (a spell's "spell" lifetime) aren't applied here. Apply's line for it: "<target>: can't reduce Sickened below 1 while taking persistent fire damage". Pure parts in `src/live/floor.js` (tests in `test/floor.test.js`). Live-checked by the item module's cases in `pftest` (2026-10-16): Timpani of Panic's 1-minute frightened floor, and a Tallow Bomb's sickened floor removed with the persistent fire.
+
+## Snares that leave an area, and Perception "saves" (2026-10-16, for the item module)
+
+- **`zone.then`** on a snare (`zone.once`): Smoke Screen, Hampering and Shadow Cloak Snares do nothing to the creature that sets them off; they leave an area where they were. `then` is a zone model of its own (`area` — a burst, an emanation or a square —, `lasts`, `concealed`, `terrain`, `notes`, and anything else a zone carries). The first creature other than its maker to enter sets the snare off (nothing done to it needed); the snare goes, and the `then` zone is made centred on the snare's square (its Region's shape's middle, `snareSquare`), not placed and not attached (`centre: "snare"`), timed from the snare's maker as zones are. Pure parts in `src/live/zones.js` (`zoneSetOff`, `snareSquare`, `zoneRegion`), tests in `test/snare-then.test.js`. Not live-checked yet.
+- **A target's Perception against a fixed DC**, rolled as a save (`check.roll "save"`, `statistic "perception"`; core 2026-10-16): the card says "DC 38 Perception check".

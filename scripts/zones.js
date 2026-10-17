@@ -5,7 +5,7 @@
 // button. Its maker isn't harmed by its own zone. A zone that's gone once it acts (zone.once, the item module's snares) goes with its first
 // creature.
 
-import { spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
+import { snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
 import { isActiveGM, postCard } from "./live.js";
 import { noteToGM } from "./recharge.js";
 
@@ -56,23 +56,26 @@ async function expireZones(combatant, phase) {
 
 // The ability's zone: its Region (placed by the GM when it's at range, a cone or a line), its time, and its card. (item: the ability, or
 // { name, uuid, actor } for one already used up, the item module's snares; on the GM's client, which makes the Region.)
-export async function startZone({ item, plan, sourceToken }) {
+// at (2026-10-16): { token, scene } — a square to make it at in place of the creature's token (a snare's area where the snare was, zone.then);
+// sourceToken still gives its time.
+export async function startZone({ item, plan, sourceToken, at = null }) {
     const zone = plan.zone;
     const token = sourceToken?.document ?? sourceToken;
-    const scene = token?.parent ?? canvas.scene;
-    if (!token || !scene) {
+    const scene = at?.scene ?? token?.parent ?? canvas.scene;
+    const place = at?.token ?? (token ? { id: token.id, x: token.x, y: token.y, width: token.width, height: token.height, shape: token.shape } : null);
+    if (!place || !scene) {
         await noteToGM(item.actor, sourceToken, [`<strong>${escape(item.name)}</strong>: its area needs the creature's token on the scene.`]);
         return;
     }
     const rolled = zone.lasts?.valueRoll ? (await new Roll(zone.lasts.valueRoll).evaluate()).total : null;
     const combat = game.combats?.find?.((entry) => entry.started && (entry.scene?.id ?? canvas.scene?.id) === scene.id) ?? null;
-    const combatant = combat?.combatants?.find?.((entry) => entry.tokenId === token.id) ?? null;
+    const combatant = token ? combat?.combatants?.find?.((entry) => entry.tokenId === token.id) ?? null : null;
     const acted = !combatant || combat.combatant?.id === combatant.id || combat.turns.indexOf(combatant) < combat.turn;
     const endsAt = combatant ? zoneEndsAt(zone.lasts, { round: combat.round, combatantId: combatant.id, rolled, acted }) : null;
-    const flags = { zone, itemUuid: item.uuid, itemName: item.name, sourceActorUuid: item.actor.uuid, sourceTokenUuid: token.uuid, endsAt, combatId: endsAt ? combat.id : null, createdAt: Date.now() };
+    const flags = { zone, itemUuid: item.uuid, itemName: item.name, sourceActorUuid: item.actor.uuid, sourceTokenUuid: token?.uuid ?? null, endsAt, combatId: endsAt ? combat.id : null, createdAt: Date.now() };
     const made = [];
     for (let count = 0; count < Math.max(1, Number(plan.times) || 1); count++) {
-        const built = zoneRegion({ name: item.name, zone, token: { id: token.id, x: token.x, y: token.y, width: token.width, height: token.height, shape: token.shape }, grid: { size: scene.grid.size, distance: scene.grid.distance }, moduleId: MODULE_ID, flags: { ...flags, createdAt: Date.now() }, visibility: CONST.REGION_VISIBILITY?.ALWAYS ?? 2 });
+        const built = zoneRegion({ name: item.name, zone, token: place, grid: { size: scene.grid.size, distance: scene.grid.distance }, moduleId: MODULE_ID, flags: { ...flags, createdAt: Date.now() }, visibility: CONST.REGION_VISIBILITY?.ALWAYS ?? 2 });
         if (!built) break;
         let region = null;
         if (built.place && canvas.scene?.id === scene.id && canvas.regions?.placeRegion) {
@@ -97,7 +100,7 @@ export async function startZone({ item, plan, sourceToken }) {
     ].filter(Boolean);
     const placed = made.length ? "" : " <em>Not placed.</em>";
     await ChatMessage.create({
-        speaker: ChatMessage.getSpeaker({ actor: item.actor, token }),
+        speaker: ChatMessage.getSpeaker({ actor: item.actor, ...(token ? { token } : {}) }),
         content: `<section class="pf2e-aar-zone"><p><strong>${escape(item.name)}</strong>: ${parts.join("; ")}. Lasts ${escape(lasts)}.${placed}</p>${(zone.notes ?? []).map((note) => `<p>${escape(note)}</p>`).join("")}${made.length ? `<button type="button" data-zone-end><i class="fa-solid fa-xmark"></i> End ${escape(item.name)}</button>` : ""}</section>`,
         flags: { [MODULE_ID]: { zoneCard: { regionUuids: made.map((region) => region.uuid) } } }
     });
@@ -144,7 +147,13 @@ export async function zoneEvent(region, behavior, event) {
         else if ((action.kind === "damage" || action.kind === "hazard") && item && sourceActor) await postCard({ plan: zoneDamagePlan(name, action.formulas), item, sourceActor, sourceToken, tokens: [target], warning: action.kind === "hazard" ? `${name}: on entering it; as much again for each further square it moves into.` : `${name}: ${eventWords(event.name, initial)}.` });
         else if (action.kind === "note") await noteToGM(sourceActor, sourceToken, [`<strong>${escape(name)}</strong> — ${escape(token.name)}: ${escape(action.text)}`]);
     }
-    if (setOff) await spendZone(region, flags, token.name);
+    if (setOff) {
+        // (2026-10-16: a snare that leaves an area where it was — Smoke Screen Snare's smoke —: that area, at its square, once it's gone.)
+        const square = flags.zone.then ? snareSquare(region.shapes?.[0], region.parent?.grid?.size ?? canvas.scene?.grid?.size ?? 100) : null;
+        const scene = region.parent;
+        await spendZone(region, flags, token.name);
+        if (flags.zone.then && square && scene && item) await startZone({ item, plan: { zone: { ...flags.zone.then, centre: "snare" } }, sourceToken, at: { token: square, scene } });
+    }
 }
 
 // A zone gone once it acts, set off: what it gave those inside taken away, its Region deleted, and its card saying so.

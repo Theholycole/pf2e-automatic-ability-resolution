@@ -174,7 +174,8 @@ export function checkLine(state) {
     const signed = (value) => `${value < 0 ? "−" : "+"}${Math.abs(value)}`;
     const bonus = check.bonus ? ` (${signed(check.bonus.value)} ${check.bonus.type})` : "";
     // (Batch 286: its own bonus or penalty on the save, and a save rolled twice.)
-    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} save${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}`;
+    // (2026-10-16: the target's Perception against a fixed DC, rolled as a save — Mercurial Mantle's: a check, as PF2e says.)
+    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} ${["fortitude", "reflex", "will"].includes(check.statistic) ? "save" : "check"}${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}`;
     if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;

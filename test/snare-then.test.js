@@ -1,0 +1,33 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { snareSquare, zoneRegion, zoneSetOff } from "../src/live/zones.js";
+import { cardCheck, checkLine } from "../src/live/card.js";
+
+// (2026-10-16, for the item module: snares that leave an area where they were — Smoke Screen, Hampering, Shadow Cloak — zone.then.)
+const SMOKE = { area: { type: "burst", value: 5 }, centre: "placed", once: true, saves: [], then: { area: { type: "burst", value: 20 }, lasts: { mode: "fixed", value: 1, unit: "minutes" }, concealed: true } };
+
+test("a snare with zone.then is set off by any creature entering, with nothing done to it; one without, only by what it does", () => {
+    assert.equal(zoneSetOff(SMOKE, []), true);
+    assert.equal(zoneSetOff({ ...SMOKE, then: undefined }, []), false);
+    assert.equal(zoneSetOff({ ...SMOKE, then: undefined }, [{ kind: "save" }]), true);
+    assert.equal(zoneSetOff({ ...SMOKE, once: false }, []), false);
+});
+
+test("its area at the snare's square: the square under the snare's shape, a burst or a square centred there, not placed, not attached", () => {
+    const grid = { size: 100, distance: 5 };
+    assert.deepEqual(snareSquare({ type: "circle", x: 450, y: 250, radius: 100 }, 100), { id: null, x: 400, y: 200, width: 1, height: 1, shape: 0 });
+    assert.deepEqual(snareSquare({ type: "rectangle", x: 400, y: 200, width: 100, height: 100 }, 100), { id: null, x: 400, y: 200, width: 1, height: 1, shape: 0 });
+    const square = snareSquare({ type: "circle", x: 450, y: 250, radius: 100 }, 100);
+    const smoke = zoneRegion({ name: "Smoke", zone: { ...SMOKE.then, centre: "snare" }, token: square, grid, moduleId: "aar", flags: {} });
+    assert.deepEqual([smoke.place, smoke.data.shapes[0].type, smoke.data.shapes[0].x, smoke.data.shapes[0].y, smoke.data.shapes[0].radius, smoke.data.attachment], [false, "circle", 450, 250, 400, undefined]);
+    const hampering = zoneRegion({ name: "Hampering", zone: { area: { type: "square", value: 10 }, centre: "snare", terrain: [{ movement: ["walk"] }] }, token: square, grid, moduleId: "aar", flags: {} });
+    assert.deepEqual([hampering.place, hampering.data.shapes[0].type, hampering.data.shapes[0].width], [false, "rectangle", 200]);
+});
+
+test("a target's Perception against a fixed DC, rolled as a save, is a check on the card", () => {
+    const check = cardCheck({ resolution: { check: { roll: "save", statistic: "perception", against: { dc: "fixed", value: 38 } } } });
+    assert.deepEqual([check.kind, check.statistic, check.dc], ["save", "perception", 38]);
+    assert.equal(checkLine({ check }), "DC 38 Perception check");
+    assert.equal(checkLine({ check: { ...check, statistic: "will" } }), "DC 38 Will save");
+});

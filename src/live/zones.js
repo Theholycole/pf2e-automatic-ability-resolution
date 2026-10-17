@@ -53,7 +53,13 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
     let shape = null;
     let place = false;
     let attach = false;
-    if (zone.area?.type === "emanation" && token) {
+    // (2026-10-16: an area a snare leaves where it was, zone.then — centre "snare": at its square, never placed, never attached.)
+    const atSnare = zone.centre === "snare" && token;
+    if (atSnare && ["burst", "emanation"].includes(zone.area?.type)) {
+        shape = { type: "circle", x: centre.x, y: centre.y, radius, gridBased: true };
+    } else if (atSnare && zone.area?.type === "square") {
+        shape = { type: "rectangle", x: centre.x, y: centre.y, width: radius, height: radius, anchorX: 0.5, anchorY: 0.5, rotation: 0, gridBased: true };
+    } else if (zone.area?.type === "emanation" && token) {
         shape = { type: "emanation", base: { type: "token", x: token.x, y: token.y, width: token.width, height: token.height, shape: token.shape ?? 0 }, radius, gridBased: true };
         attach = true;
     } else if (zone.area?.type === "burst" && zone.centre !== "placed" && token) {
@@ -126,9 +132,21 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
 
 // A zone that's gone once it acts (2026-10-15, the item module's snares: "the first creature to enter the square"): whether what an event
 // did sets it off. A save, damage or a note on the creature does; what entering gives everyone (concealment, penalties inside) doesn't.
+// (2026-10-16: one that leaves an area where it was, zone.then — Smoke Screen Snare —: any creature's entering sets it off.)
 const SETS_OFF = new Set(["save", "damage", "hazard", "note", "effect"]);
 export function zoneSetOff(zone, actions) {
-    return !!zone?.once && actions.some((action) => SETS_OFF.has(action.kind));
+    return !!zone?.once && (!!zone.then || actions.some((action) => SETS_OFF.has(action.kind)));
+}
+
+// The square a snare's Region stands on, as a one-square token there (its shape's middle): for the area it leaves (zone.then).
+export function snareSquare(shape, gridSize) {
+    if (!shape) return null;
+    const middle = shape.type === "circle" || (shape.type === "rectangle" && shape.anchorX === 0.5 && shape.anchorY === 0.5)
+        ? { x: shape.x, y: shape.y }
+        : shape.type === "rectangle" ? { x: shape.x + (shape.width ?? gridSize) / 2, y: shape.y + (shape.height ?? gridSize) / 2 }
+            : Number.isFinite(shape.x) && Number.isFinite(shape.y) ? { x: shape.x, y: shape.y } : null;
+    if (!middle) return null;
+    return { id: null, x: Math.floor(middle.x / gridSize) * gridSize, y: Math.floor(middle.y / gridSize) * gridSize, width: 1, height: 1, shape: 0 };
 }
 
 // Its card once it's set off: who set it off, and no End button when none of its areas are left.
