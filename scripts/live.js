@@ -21,7 +21,7 @@ import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
-import { applyFloor } from "./floors.js";
+import { applyFloor, applyWhilePersistent } from "./floors.js";
 import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
 import { isDying, recoverFromDying, revivedNote } from "../../pf2e-resolution-core/scripts/dying-recovery.js";
@@ -1326,6 +1326,14 @@ export async function applyChange(change, state) {
             if (change.duration?.mode === "in-aura" && (await applyAuraCondition(actor, change, state))) {
                 const after = change.duration.after;
                 return `${target.name}'s ${change.slug} lasts while it stays in the aura${after ? `, and ${after.value} ${after.value === 1 ? after.unit.replace(/s$/, "") : after.unit} after it leaves` : ""}`;
+            }
+            // (2026-10-17: "dazzled while the persistent damage lasts" — Sparking Spellgun: an Effect granting it, ended with the creature's last
+            // persistent damage of that type, scripts/floors.js; none of it, no condition.)
+            if (change.duration?.mode === "while" && change.duration.persistent) {
+                const type = change.duration.persistent;
+                return (await applyWhilePersistent(actor, change.slug, change.value, type, state))
+                    ? `${target.name}'s ${change.slug} lasts while it takes persistent ${type} damage`
+                    : `${target.name} takes no persistent ${type} damage, so it isn't ${change.slug}`;
             }
             // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
             if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {

@@ -54,12 +54,35 @@ export function floorEffectSource(floor, context) {
     };
 }
 
-// The floors to end when persistent damage goes: the "while-persistent" ones (effects: [{ id, flags }]) whose type the creature no longer
-// takes (types: its persistent damage's types left).
+// The Effects to end when persistent damage goes (effects: [{ id, flags }]): the "while-persistent" floors and the conditions that last
+// while a persistent damage does (flags.whilePersistent) whose type the creature no longer takes (types: its persistent damage's types left).
 export function floorsToLift(effects, types, moduleId) {
     const left = new Set(types);
     return (effects ?? []).filter((effect) => {
-        const floor = effect.flags?.[moduleId]?.conditionFloor;
-        return floor?.lifetime === "while-persistent" && !left.has(floor.persistentDamage);
+        const flags = effect.flags?.[moduleId];
+        const floor = flags?.conditionFloor;
+        if (floor?.lifetime === "while-persistent") return !left.has(floor.persistentDamage);
+        return Boolean(flags?.whilePersistent) && !left.has(flags.whilePersistent);
     }).map((effect) => effect.id);
+}
+
+// (2026-10-17, the item module's Sparking Spellgun: "the target is dazzled while the persistent damage lasts" — a row's condition with
+// duration { mode: "while", persistent: "electricity" }.) The Effect that grants the condition for as long as the creature takes persistent
+// damage of that type; ended with its last one (floorsToLift). context as floorEffectSource's.
+export function persistentConditionSource(slug, value, type, context) {
+    const escape = (text) => String(text ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
+    const label = `${capital(slug)}${Number.isFinite(value) ? ` ${value}` : ""}`;
+    return {
+        name: `${context.abilityName}: ${label}`,
+        type: "effect",
+        img: context.img ?? "icons/svg/downgrade.svg",
+        flags: { [context.moduleId]: { whilePersistent: type, source: context.sourceActorUuid ?? null } },
+        system: {
+            description: { value: `<p>${escape(label)} while taking persistent ${escape(type)} damage.</p><p>From <strong>${escape(context.abilityName)}</strong> (${escape(context.sourceName)}).</p>` },
+            duration: { value: -1, unit: "unlimited", expiry: null, sustained: false },
+            start: { value: context.worldTime ?? 0, initiative: context.initiative ?? null },
+            context: { origin: { actor: context.sourceActorUuid ?? null, item: context.abilityUuid ?? null }, target: { actor: context.targetActorUuid ?? null }, roll: null },
+            rules: [{ key: "GrantItem", uuid: context.conditionUuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
+        }
+    };
 }

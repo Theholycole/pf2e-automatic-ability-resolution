@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { floorEffectSource, floorLabel, floorsToLift, isFloor } from "../src/live/floor.js";
+import { floorEffectSource, floorLabel, floorsToLift, isFloor, persistentConditionSource } from "../src/live/floor.js";
 import { changeLines } from "../src/live/card.js";
 
 // Condition floors (2026-10-16, the item module's request: Timpani of Panic, Tallow Bombs, Putrescent Glob…).
@@ -46,4 +46,14 @@ test("a while-persistent floor ends with the last persistent damage of its type;
 test("the card says it", () => {
     const lines = changeLines([{ op: "effect", target: "t", effect: { kind: "floor", floor: TIMPANI } }], { t: "Ogre" });
     assert.ok(lines.some((line) => line === "Ogre: can't reduce Frightened below 1 for 1 minutes"), JSON.stringify(lines));
+});
+
+test("2026-10-17: a condition that lasts while a persistent damage does (Sparking Spellgun's dazzled) — its Effect, ended with the last of that damage", () => {
+    const source = persistentConditionSource("dazzled", null, "electricity", { moduleId: "aar", abilityName: "Sparking Spellgun", sourceName: "Ezren", sourceActorUuid: "Actor.ezren", targetActorUuid: "Actor.ogre", conditionUuid: "Compendium.pf2e.conditionitems.Item.dazzled" });
+    assert.equal(source.name, "Sparking Spellgun: Dazzled");
+    assert.deepEqual([source.flags.aar.whilePersistent, source.system.duration.unit, source.system.rules[0].alterations, source.system.rules[0].onDeleteActions.grantee], ["electricity", "unlimited", [], "cascade"]);
+    const effects = [{ id: "d", flags: { aar: { whilePersistent: "electricity" } } }, { id: "f", flags: { aar: { conditionFloor: TALLOW } } }];
+    assert.deepEqual(floorsToLift(effects, ["fire"], "aar"), ["d"]);
+    assert.deepEqual(floorsToLift(effects, [], "aar"), ["d", "f"]);
+    assert.deepEqual(floorsToLift(effects, ["fire", "electricity"], "aar"), []);
 });
