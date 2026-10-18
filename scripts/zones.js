@@ -131,7 +131,9 @@ export async function zoneEvent(region, behavior, event) {
     // (An item used up since, a snare: its name on the cards.)
     const item = found ?? (sourceActor ? { name, uuid: null, actor: sourceActor } : null);
     const target = token.object ?? token;
-    const actions = zoneActions(flags.zone, event.name, { own, allied, initial });
+    // (2026-10-18: its traits, for a save or damage only for some — Sanctified Beans'.)
+    const traits = [...(token.actor.traits ?? token.actor.system?.traits?.value ?? [])];
+    const actions = zoneActions(flags.zone, event.name, { own, allied, initial, traits });
     const setOff = claims && zoneSetOff(flags.zone, actions);
     if (claims && !setOff) spent.delete(region.uuid);
     for (const action of actions) {

@@ -105,7 +105,11 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
 // What a region event does to the token: [{ kind, … }]. On entering: concealed, PF2e's effect inside (its allies only, when so), penalties
 // inside; then (not on its maker: own) the hazard's damage, the saves and damage on entering, at a turn's start or end. initial: in the area
 // as it's made (a save "as it's made" only, not one on entering). Leaving: clear what the zone gave.
-export function zoneActions(zone, event, { own = false, allied = false, initial = false } = {}) {
+// traits (2026-10-18): the creature's, for a save or damage only for some (entry.only.traits, any of them: Sanctified Beans' fiends, fey,
+// ghosts, spirits and undead; Anathema Fulu's chosen trait). A creature with none of them: not that entry.
+export const onlyFits = (entry, traits) => !entry?.only?.traits?.length || entry.only.traits.some((trait) => (traits ?? []).includes(trait));
+
+export function zoneActions(zone, event, { own = false, allied = false, initial = false, traits = [] } = {}) {
     if (event === "tokenExit") return [{ kind: "clear" }];
     const when = event === "tokenEnter" ? (initial ? "initial" : "enter") : event === "tokenTurnStart" ? "start" : event === "tokenTurnEnd" ? "end" : event === "tokenMoveWithin" ? "move" : null;
     if (!when) return [];
@@ -123,10 +127,10 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
     if (allied && zone.effect?.allies) return actions;
     if (when === "enter" && zone.hazard?.formulas?.length) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
     for (const save of zone.saves ?? []) {
-        if (!save.when.includes(when)) continue;
+        if (!save.when.includes(when) || !onlyFits(save, traits)) continue;
         actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
     }
-    for (const entry of zone.damage ?? []) if (entry.when === when) actions.push({ kind: "damage", formulas: [...entry.formulas] });
+    for (const entry of zone.damage ?? []) if (entry.when === when && onlyFits(entry, traits)) actions.push({ kind: "damage", formulas: [...entry.formulas] });
     return actions;
 }
 

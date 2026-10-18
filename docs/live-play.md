@@ -3306,3 +3306,7 @@ Others (a spell's "spell" lifetime) aren't applied here. Apply's line for it: "<
 ## A condition while a persistent damage lasts (2026-10-17, for the item module)
 
 A row's condition with `duration: { mode: "while", persistent: "<damage type>" }` ("The target is dazzled while the persistent damage lasts": Sparking Spellguns, Fume Ammunition): Apply gives the creature an Effect that grants the condition (with its value, if it has one), flagged `whilePersistent`; the active GM's client deletes it when the creature's last persistent damage of that type goes (the floors' hook, `scripts/floors.js`). A creature that takes no persistent damage of that type (immune, or none rolled) doesn't get the condition. The core passes the duration through as it is; the Combat Simulator already ends such a condition with that persistent damage. Pure parts in `src/live/floor.js` (`persistentConditionSource`, `floorsToLift`). Live-checked by the item module's case in `pftest` (2026-10-17): Sparking Spellgun (Lesser)'s hit gave persistent fire and Dazzled, and deleting the persistent fire removed Dazzled.
+
+## A zone's save or damage only for some creatures (2026-10-18, for the item module)
+
+A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry only on a creature with one of those traits (Sanctified Beans' fiends, fey, ghosts, spirits and undead; a second save only for the incorporeal; Anathema Fulu's chosen trait). Without it, as before. `zoneActions` takes the creature's traits (`onlyFits`); the Combat Simulator's zones honour the same field.

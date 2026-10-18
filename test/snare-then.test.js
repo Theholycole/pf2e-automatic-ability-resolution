@@ -31,3 +31,14 @@ test("a target's Perception against a fixed DC, rolled as a save, is a check on 
     assert.equal(checkLine({ check }), "DC 38 Perception check");
     assert.equal(checkLine({ check: { ...check, statistic: "will" } }), "DC 38 Will save");
 });
+
+test("2026-10-18: a zone's save or damage only for creatures with some traits (Sanctified Beans' fiends, fey, ghosts, spirits and undead): not on others", async () => {
+    const { zoneActions } = await import("../src/live/zones.js");
+    const save = { when: ["end"], plan: { source: { name: "Beans" } }, only: { traits: ["fiend", "fey", "ghost", "spirit", "undead"] } };
+    const incorporeal = { when: ["end"], plan: { source: { name: "Beans: incorporeal" } }, only: { traits: ["incorporeal"] } };
+    const zone = { area: { type: "square", value: 5 }, saves: [save, incorporeal], damage: [{ when: "end", formulas: ["1d6"], only: { traits: ["undead"] } }, { when: "end", formulas: ["1"] }] };
+    const kinds = (traits) => zoneActions(zone, "tokenTurnEnd", { traits }).map((action) => action.kind === "save" ? action.plan.source.name : action.formulas[0]);
+    assert.deepEqual(kinds(["humanoid"]), ["1"]);
+    assert.deepEqual(kinds(["undead"]), ["Beans", "1d6", "1"]);
+    assert.deepEqual(kinds(["undead", "incorporeal", "ghost"]), ["Beans", "Beans: incorporeal", "1d6", "1"]);
+});
