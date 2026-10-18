@@ -3309,4 +3309,4 @@ A row's condition with `duration: { mode: "while", persistent: "<damage type>" }
 
 ## A zone's save or damage only for some creatures (2026-10-18, for the item module)
 
-A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry only on a creature with one of those traits (Sanctified Beans' fiends, fey, ghosts, spirits and undead; a second save only for the incorporeal; Anathema Fulu's chosen trait). Without it, as before. `zoneActions` takes the creature's traits (`onlyFits`); the Combat Simulator's zones honour the same field.
+A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry only on a creature with one of those traits (Sanctified Beans' fiends, fey, ghosts, spirits and undead; a second save only for the incorporeal; Anathema Fulu's chosen trait). Without it, as before. `zoneActions` takes the creature's traits (`onlyFits`); the Combat Simulator's zones honour the same field. Live-checked by the item module's Sanctified Beans case in `pftest` (2026-10-18): no card for a plain creature in the square; an undead, incorporeal one got its basic Will and its Fortitude cards at its turn's end.
