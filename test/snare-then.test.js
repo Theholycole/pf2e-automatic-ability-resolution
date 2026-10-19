@@ -42,3 +42,12 @@ test("2026-10-18: a zone's save or damage only for creatures with some traits (S
     assert.deepEqual(kinds(["undead"]), ["Beans", "1d6", "1"]);
     assert.deepEqual(kinds(["undead", "incorporeal", "ghost"]), ["Beans", "Beans: incorporeal", "1d6", "1"]);
 });
+
+test("2026-10-19: a zone card words its modifiers inside by their sign — Sprite Apple's +1 is a bonus", async () => {
+    const { modifierWords } = await import("../src/live/zones.js");
+    assert.equal(modifierWords([{ selector: "performance", value: 1, type: "item" }]), "a bonus inside");
+    assert.equal(modifierWords([{ selector: "ac", value: -2 }]), "a penalty inside");
+    assert.equal(modifierWords([{ value: -1 }, { value: -2 }]), "penalties inside");
+    assert.equal(modifierWords([{ value: 1 }, { value: -1 }]), "bonuses and penalties inside");
+    assert.equal(modifierWords([]), null);
+});

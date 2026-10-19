@@ -142,6 +142,15 @@ export function zoneSetOff(zone, actions) {
     return !!zone?.once && (!!zone.then || actions.some((action) => SETS_OFF.has(action.kind)));
 }
 
+// The card's words for a zone's modifiers inside, by their sign (2026-10-19: Sprite Apple's light gives +1 to Performance — "a bonus").
+export function modifierWords(modifiers) {
+    const values = (modifiers ?? []).map((modifier) => Number(modifier?.value) || 0);
+    if (!values.length) return null;
+    if (values.every((value) => value > 0)) return values.length === 1 ? "a bonus inside" : "bonuses inside";
+    if (values.every((value) => value < 0)) return values.length === 1 ? "a penalty inside" : "penalties inside";
+    return "bonuses and penalties inside";
+}
+
 // The square a snare's Region stands on, as a one-square token there (its shape's middle): for the area it leaves (zone.then).
 export function snareSquare(shape, gridSize) {
     if (!shape) return null;

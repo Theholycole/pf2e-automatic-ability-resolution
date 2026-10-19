@@ -5,7 +5,7 @@
 // button. Its maker isn't harmed by its own zone. A zone that's gone once it acts (zone.once, the item module's snares) goes with its first
 // creature.
 
-import { snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
+import { modifierWords, snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
 import { isActiveGM, postCard } from "./live.js";
 import { noteToGM } from "./recharge.js";
 
@@ -93,7 +93,7 @@ export async function startZone({ item, plan, sourceToken, at = null }) {
         zone.hazard ? "hazardous terrain (damage on entering)" : null,
         zone.saves?.length ? "a save on whoever it says" : null,
         zone.effect ? `${escape(zone.effect.label)} on ${zone.effect.allies ? "its allies" : "those"} inside` : null,
-        zone.modifiers?.length ? "a penalty inside" : null,
+        modifierWords(zone.modifiers),
         zone.adjustments?.length ? "its allies' and foes' checks changed inside" : null,
         zone.damage?.length ? "damage at a turn's end inside" : null,
         zone.once ? "gone once a creature sets it off" : null
