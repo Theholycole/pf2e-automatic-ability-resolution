@@ -12,7 +12,7 @@ import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
 import { setUpHazards } from "./hazards.js";
 import { setUpZones, startZone, zoneEvent } from "./zones.js";
-import { setUpConjure } from "./conjure.js";
+import { setUpConjure, startConjure } from "./conjure.js";
 import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
 import { setUpBravery } from "./bravery.js";
@@ -99,5 +99,7 @@ Hooks.once("ready", async () => {
     // (initiativeSkills, batch 302: the skills an ability names for its creature's own initiative — the simulator's.)
     // (live.applyChange, 2026-10-15: the item module's cards apply the core's changes with this module's Foundry code — heal, temporary Hit
     // Points, native Effects, timed conditions, the affliction hand-off.)
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, startZone }) });
+    // (live.startConjure, 2026-10-18: the item module's conjure plans — Fossil Fragments, Wondrous Figurines — as playAbility makes them:
+    // startConjure({ item, plan, sourceToken }), item.actor the user.)
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, startZone, startConjure }) });
 });
