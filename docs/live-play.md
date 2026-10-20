@@ -3317,3 +3317,4 @@ A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry o
 - `trigger.immunity.slug`: the key an immunity is granted and checked by, before the ability's slug — an item's grades share one ("immune to all aetheric irritants"). `immunityKey(plan, name)` in `src/live/card.js`.
 - An expired immunity Effect no longer counts (`immunityFlags`), in case PF2e leaves it.
 - `immunityEffect()` and `isImmune()` (`src/live/auras.js`) stay as they are: the item module makes the same Effect for its own uses.
+- Live-checked by the item module's cases in `pftest` (2026-10-20): a second Spun Cloud (Red) posted no card for the creature immune to the first; an undead immune to Aetheric Irritant (Lesser) got no card in the Major's area.
