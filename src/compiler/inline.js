@@ -153,6 +153,8 @@ export function readRange(text) {
 }
 
 const CONDITION_LINK = /@UUID\[Compendium\.pf2e\.conditionitems\.Item\.[^\]]+\]\{([A-Za-z-]+(?: [A-Za-z-]+)?)(?: (\d+))?\}/g;
+// (2026-10-20, the item module's Grit and Succubus Kiss: a condition linked by its noun, "{Confusion}", "{Blindness}" — the condition.)
+const CONDITION_NOUNS = { confusion: "confused", blindness: "blinded", deafness: "deafened", paralysis: "paralyzed", fatigue: "fatigued", sickness: "sickened", invisibility: "invisible", unconsciousness: "unconscious", fascination: "fascinated", petrification: "petrified" };
 // Conditions PF2e's text names without a link.
 const PLAIN_CONDITIONS = ["restrained", "grabbed", "prone", "off-guard", "frightened", "immobilized", "encumbered"];
 
@@ -268,7 +270,8 @@ const CHOICE_NAMES = [...new Set([...STAGE_CONDITIONS, "concealed", "hidden", "i
 const CHOICE_ITEM = `(?:${CHOICE_NAMES})(?: \\d+)?(?: for (?:\\d+|an?|one) (?:round|minute|hour|day)s?)?`;
 const CHOICE = new RegExp(`\\b${CHOICE_ITEM}(?:, ${CHOICE_ITEM})*,? or ${CHOICE_ITEM}\\b`, "gi");
 function choiceSlugs(sentence) {
-    const words = htmlToPlainText(String(sentence).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1"));
+    // (A choice by the conditions' nouns, "Blindness or Deafness": the conditions.)
+    const words = htmlToPlainText(String(sentence).replace(/@UUID\[[^\]]*\]\{([^}]*)\}/g, "$1")).replace(new RegExp(`\\b(${Object.keys(CONDITION_NOUNS).join("|")})\\b`, "gi"), (noun) => CONDITION_NOUNS[noun.toLowerCase()]);
     const slugs = new Set();
     for (const match of words.matchAll(CHOICE)) {
         // "Clumsy 1, or Clumsy 2 and Enfeebled 1 on a critical failure": the critical failure's own, not a choice.
@@ -366,7 +369,7 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
         for (const match of scan.matchAll(CONDITION_LINK)) {
             // Not a word describing who ("dragging the {Grabbed} creature along").
             if (/\b(?:the|a|an|any|each|its|that|this)\s*$/i.test(scan.slice(0, match.index)) && /^\s*(?:creature|foe|target|enemy|ally|victim|opponent)s?\b/i.test(scan.slice(match.index + match[0].length))) continue;
-            const slug = match[1].toLowerCase().replace(/\s+/g, "-");
+            const slug = CONDITION_NOUNS[match[1].toLowerCase()] ?? match[1].toLowerCase().replace(/\s+/g, "-");
             if (!found.has(slug)) found.set(slug, match[2] ? Number(match[2]) : null);
         }
         // (Not a state it's said to be in, "… against the first Strike you make against it while it is slowed": the item module's Mamlambo Scale.)

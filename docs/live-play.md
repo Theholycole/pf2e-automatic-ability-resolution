@@ -3355,3 +3355,7 @@ A condition's `duration.saveEnds` (batch 311's monster reading, "It can attempt 
 - `from: "next"` skips the first such turn; `rounds` ends it after that many of its turns ("functions for up to 6 rounds").
 - The simulator plays the same modes (`saveEndsAtTurnEnd`, timing "start" at its turn's start; a gate taken as met).
 - Live-checked by the item module's cases in `pftest` (2026-10-20, Foundry 14.367, PF2e 8.6.1, d20 pinned): Tusk and Fang Chain's Confused ended on a success at its turn's end; Spirit-Sealing Fulu (Greater)'s Paralyzed 4 rounds lost a round on a success; Gearbinder Oil (Lesser)'s gate (yes, no, yes) took Slowed 2 to 3, skipped a turn, then a critical success ended it and its tracker; Golden Silencer (Greater)'s note Effect ended on a critical success.
+
+## Affliction stages read more fully (2026-10-20, found by the item module)
+
+`readAffliction` (`src/compiler/afflictions.js`): a condition linked by its noun ("{Confusion}", "{Blindness}") is that condition (confused, blinded; for every reading, `CONDITION_NOUNS` in `inline.js`), and "Blindness or Deafness" is a choice, the GM's; "(remaining duration)" is `{ value: null, unit: "remaining" }`, as long as the affliction lasts (Grit's stage 6); a stage's own PF2e Effect (`stage.effects [{ uuid, label }]`: "Effect: Grit (Stage 1)", in the paragraph after the stage; after the last stage only one named for a stage, not the whole affliction's). Live play leaves afflictions to Pseudo Afflictions as before; the simulator puts a stage's Effect on the creature while that stage lasts.

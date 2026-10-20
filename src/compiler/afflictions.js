@@ -26,7 +26,7 @@ export function readSpan(text) {
     return { value, unit: UNITS[match[4].toLowerCase()] };
 }
 
-// One stage's text → { stage, damage: ["1d4[poison]"], conditions: [{ slug, value }], duration, death? }.
+// One stage's text → { stage, damage: ["1d4[poison]"], conditions: [{ slug, value }], duration, effects?: [{ uuid, label }], death? }.
 function readStage(stage, html) {
     const plain = htmlToPlainText(html);
     // The last stage of many: "dead", "the creature dies and becomes a wraith".
@@ -34,10 +34,12 @@ function readStage(stage, html) {
     const damage = inlineTags(html, "Damage").map(readDamage).filter(Boolean);
     // Plain "2d10 poison damage" when the stage has no @Damage.
     if (!damage.length) for (const match of plain.matchAll(/\b(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+([a-z]+)\s+damage\b/gi)) damage.push(`(${match[1].replace(/\s+/g, "")})[${match[2].toLowerCase()}]`);
-    // "(1 round)": the last parenthesis.
-    const spans = [...plain.matchAll(/\(([^()]*)\)/g)].map((match) => readSpan(match[1])).filter(Boolean);
+    // "(1 round)": the last parenthesis; (2026-10-20, Grit's stage 6) "(remaining duration)": as long as the affliction lasts — { unit: "remaining" }.
+    const spans = [...plain.matchAll(/\(([^()]*)\)/g)].map((match) => (/^\s*remaining duration\s*$/i.test(match[1]) ? { value: null, unit: "remaining" } : readSpan(match[1]))).filter(Boolean);
     const conditions = readConditions(html.replace(/\([^()]*\)\s*$/, ""), { plain: STAGE_CONDITIONS }).map((effect) => ({ slug: effect.slug, value: effect.value }));
-    return { stage, damage, conditions, duration: spans.at(-1) ?? null, text: plain };
+    // (2026-10-20: PF2e's own Effect for the stage, "Effect: Grit (Stage 1)": on the creature while the stage lasts — the simulator's.)
+    const effects = [...String(html).matchAll(/@UUID\[(Compendium\.[\w-]+\.[\w-]*effects\.Item\.[A-Za-z0-9]{16})\](?:\{([^}]*)\})?/gi)].map((match) => ({ uuid: match[1], label: (match[2] ?? "").replace(/^Effect:\s*/i, "") || null }));
+    return { stage, damage, conditions, duration: spans.at(-1) ?? null, ...(effects.length ? { effects } : {}), text: plain };
 }
 
 // The affliction block of an item, or null when it has no stages.
@@ -48,13 +50,21 @@ export function readAffliction(item) {
     const again = stageMarks.findIndex((mark, index) => index > 0 && mark[1] === "1");
     if (again > 0) stageMarks = stageMarks.slice(0, again);
     if (!stageMarks.length) return null;
-    const stages = stageMarks.map((mark, index) => readStage(Number(mark[1]), html.slice(mark.index + mark[0].length, stageMarks[index + 1]?.index ?? html.length).replace(/<\/p>[\s\S]*$/i, "")));
+    // (2026-10-20: its own PF2e Effect in the paragraph after it, "<p>@UUID[…]{Effect: Grit (Stage 1)}</p>", Blaze's "Effect: Blaze" before its
+    // stage 2: the stage's too; after the last stage only one named for a stage, not the whole affliction's, "Effect: Bogwid Fever".)
+    const stages = stageMarks.map((mark, index) => {
+        const segment = html.slice(mark.index + mark[0].length, stageMarks[index + 1]?.index ?? html.length);
+        const own = segment.replace(/<\/p>[\s\S]*$/i, "");
+        const last = index === stageMarks.length - 1;
+        const linked = [...segment.slice(own.length).matchAll(/<p>\s*(@UUID\[Compendium\.[\w-]+\.[\w-]*effects\.Item\.[A-Za-z0-9]{16}\]\{([^}]*)\})\s*<\/p>/gi)].filter((match) => !last || /\bStage \d+\b/i.test(match[2])).map((match) => match[1]).join(" ");
+        return readStage(Number(mark[1]), linked ? `${own} ${linked}` : own);
+    });
     if (stages.some((stage, index) => stage.stage !== index + 1)) return null;
     for (const [index, stage] of stages.entries()) {
         // "as stage 2": that stage's effects (and duration).
         const as = /^as stage (\d+)\b/i.exec(stage.text);
         const earlier = as ? stages[Number(as[1]) - 1] : null;
-        if (earlier && Number(as[1]) <= index) Object.assign(stage, { damage: [...earlier.damage, ...stage.damage.filter((formula) => !earlier.damage.includes(formula))], conditions: stage.conditions.length ? stage.conditions : [...earlier.conditions], duration: stage.duration ?? earlier.duration });
+        if (earlier && Number(as[1]) <= index) Object.assign(stage, { damage: [...earlier.damage, ...stage.damage.filter((formula) => !earlier.damage.includes(formula))], conditions: stage.conditions.length ? stage.conditions : [...earlier.conditions], duration: stage.duration ?? earlier.duration, ...(!stage.effects && earlier.effects ? { effects: [...earlier.effects] } : {}) });
         // A stage with no duration of its own: the previous stage's.
         if (!stage.duration && !stage.death && index > 0) stage.duration = stages[index - 1].duration;
     }

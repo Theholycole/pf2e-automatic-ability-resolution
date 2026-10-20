@@ -42,6 +42,21 @@ test("\"On a critical failure, the foe is also knocked Prone\" after a basic sav
     assert.deepEqual([rows(plan).failure, rows(plan).criticalFailure], [[], ["prone -"]]);
 });
 
+test("an affliction's stages: a condition by its noun, \"(remaining duration)\", a stage's own PF2e Effect (Grit, Blaze, Succubus Kiss)", async () => {
+    const { readAffliction } = await import("../src/compiler/afflictions.js");
+    const effect = (id, label) => `<p>@UUID[Compendium.pf2e.equipment-effects.Item.${id}]{Effect: ${label}}</p>`;
+    const html = `<p><strong>Saving Throw</strong> @Check[fortitude|dc:20]</p><p><strong>Maximum Duration</strong> 1 day</p>`
+        + `<p><strong>Stage 1</strong> +1 item bonus to Athletics checks (10 minutes)</p>${effect("TESTSTAGEONE0001", "Test Drug")}`
+        + `<p><strong>Stage 2</strong> ${link("Confusion")} (1 round)</p>`
+        + `<p><strong>Stage 3</strong> ${link("Blindness")} or ${link("Deafness")} (1 hour)</p>`
+        + `<p><strong>Stage 4</strong> ${link("Unconscious")} (remaining duration)</p>${effect("TESTWHOLEAFFLICT", "Test Drug")}`;
+    const stages = readAffliction({ name: "Test Drug", system: { slug: "test-drug", traits: { value: ["poison"] }, description: { value: html } } }).stages;
+    assert.deepEqual(stages[0].effects, [{ uuid: "Compendium.pf2e.equipment-effects.Item.TESTSTAGEONE0001", label: "Test Drug" }]);
+    assert.deepEqual(stages[1].conditions, [{ slug: "confused", value: null }]);
+    assert.deepEqual(stages[2].conditions, [], "a choice: the GM's");
+    assert.deepEqual([stages[3].duration, stages[3].effects], [{ value: null, unit: "remaining" }, undefined], "not the whole affliction's Effect after its last stage");
+});
+
 test("Administer First Aid's critical failure raises dying by 1, not to 1 (the item module's live check)", async () => {
     const { compileFirstAid } = await import("../src/compiler/checks.js");
     const { CORE_FAMILIES, createRegistry } = await import("../../pf2e-resolution-core/src/index.js");
