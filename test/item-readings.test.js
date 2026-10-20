@@ -29,6 +29,19 @@ test("only some creatures' condition (\"Creatures that are vulnerable to sunligh
     assert.equal(plan.resolution.outcomes.failure.damage.multiplier, 1);
 });
 
+test("a basic save's degree sections add their own conditions to the basic rows (Vision of Meloth); not a second check's sections", () => {
+    const plan = compileMonsterAbility(item(`<p>The target takes @Damage[6d6[mental]] damage with a @Check[will|dc:25|basic] save.</p><p><strong>Critical Success</strong> The target is unaffected.</p><p><strong>Success</strong> The target takes half damage and is ${link("Frightened 1")}.</p><p><strong>Failure</strong> The target takes full damage and is ${link("Frightened 2")}.</p><p><strong>Critical Failure</strong> The target takes double damage, is ${link("Frightened 4")}, and is ${link("Slowed 1")} as long as it remains frightened.</p>`));
+    assert.deepEqual([rows(plan).success, rows(plan).failure, rows(plan).criticalFailure], [["frightened 1"], ["frightened 2"], ["frightened 4", "slowed 1"]]);
+    assert.deepEqual(["success", "criticalFailure"].map((degree) => plan.resolution.outcomes[degree].damage.multiplier), [0.5, 2]);
+    const two = compileMonsterAbility(item(`<p>The burst deals @Damage[4d6[fire]] damage (@Check[reflex|dc:25|basic] save). Each creature that breathes the smoke must attempt a @Check[fortitude|dc:25] save.</p><p><strong>Success</strong> The creature is unaffected.</p><p><strong>Failure</strong> The creature is ${link("Sickened 1")}.</p>`));
+    assert.deepEqual(rows(two).failure.filter((entry) => entry.startsWith("sickened")), []);
+});
+
+test("\"On a critical failure, the foe is also knocked Prone\" after a basic save: the critical failure's (Stampede Medallion)", () => {
+    const plan = compileMonsterAbility(item(`<p>The herd tramples the foes around it for @Damage[4d6[bludgeoning]] damage, with a @Check[reflex|dc:25|basic] save. On a critical failure, the foe is also knocked ${link("Prone")}.</p>`));
+    assert.deepEqual([rows(plan).failure, rows(plan).criticalFailure], [[], ["prone -"]]);
+});
+
 test("Administer First Aid's critical failure raises dying by 1, not to 1 (the item module's live check)", async () => {
     const { compileFirstAid } = await import("../src/compiler/checks.js");
     const { CORE_FAMILIES, createRegistry } = await import("../../pf2e-resolution-core/src/index.js");

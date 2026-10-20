@@ -387,6 +387,35 @@ function trample(item, actor) {
 // A basic save's rows with what a failure or critical failure adds (2026-10-10): "A creature that fails its save is
 // also Stupefied 1", "Creatures that critically fail also take 5 persistent acid damage", "also knocked Prone". Not
 // when they're one of several effects to choose from ("chooses one of the following additional effects").
+// A basic save's degree sections (2026-10-20, the item module's Vision of Meloth: "Success The target takes half damage and is Frightened 1.
+// Failure … Frightened 2. Critical Failure … double damage, is Frightened 4, and is Slowed 1 as long as it remains frightened."): each section's
+// conditions, push, damage of its own (not the save's again) and other results (src/compiler/row-extras.js) on the basic rows, beside their
+// riders; "As failure, but …" on a critical failure (or "As success" on a critical success) with that row's conditions. The rows, changed in place.
+function withSectionResults(outcomes, sections, components, { dc, names }) {
+    for (const degree of ["criticalSuccess", "success", "failure", "criticalFailure"]) {
+        const section = sections[degree];
+        const row = outcomes[degree];
+        if (!section || !row) continue;
+        const always = unconditional(section.split(/\bone of the following\b/i)[0]);
+        const like = { criticalFailure: "failure", criticalSuccess: "success" }[degree];
+        const base = like && new RegExp(`^As ${like}\\b`, "i").test(htmlToPlainText(section).trim()) ? outcomes[like] : null;
+        const own = readConditions(always, { plain: SECTION_CONDITIONS });
+        const effects = [...(base?.effects ?? []).filter((effect) => !own.some((other) => other.slug === effect.slug)), ...own];
+        row.effects = [...(row.effects ?? []).filter((effect) => !effects.some((other) => other.slug === effect.slug)), ...effects];
+        const push = readPush(section, names) ?? base?.forcedMovement ?? null;
+        if (push && !row.forcedMovement) row.forcedMovement = push;
+        const extra = sentencesOf(always).filter((sentence) => !/@Check\[/.test(sentence)).flatMap((sentence) => inlineTags(sentence, "Damage")).filter((raw) => !/\[splash\]|healing/i.test(raw)).map((raw) => ({ formula: readDamage(raw) })).filter((entry) => !components.some((component) => component.formula === entry.formula));
+        if (extra.length) row.damage = row.damage?.mode === "mixed" ? { ...row.damage, formulas: [...row.damage.formulas, ...extra] } : row.damage?.mode === "shared" ? { mode: "mixed", shared: row.damage, formulas: extra, rollScope: "outcome" } : { mode: "formulas", formulas: extra, rollScope: "outcome" };
+        withExtras(row, rowExtras(section, { dc, time: rowTime(section) }));
+        if (base) {
+            if (base.modifiers?.length && !row.modifiers?.length) row.modifiers = structuredClone(base.modifiers);
+            if (base.conditionFloor && !row.conditionFloor) row.conditionFloor = base.conditionFloor;
+            if (base.noteEffects?.length) row.noteEffects = [...base.noteEffects.filter((note) => !(row.noteEffects ?? []).some((other) => other.label === note.label)), ...(row.noteEffects ?? [])];
+        }
+    }
+    return outcomes;
+}
+
 function withRiders(outcomes, html, components) {
     const riders = /\bchooses? one of the following\b|\bone of the following (?:additional )?effects\b/i.test(htmlToPlainText(html)) ? null : saveOrOutcomes(html, [], { riders: true });
     if (riders) for (const degree of ["success", "failure", "criticalFailure"]) {
@@ -548,7 +577,8 @@ function buck(item) {
 //   "…save. On a success, the creature gains the Frightened 1 condition; on a failure, …"
 // → { failure: html | null, critical: { text, adds } | null, success: html | null }. A degree named inside
 // brackets ("Frightened 2 (Frightened 3 on a critical failure)") is left to the failure's own reading.
-const SUBJECT = String.raw`(?:it(?:'s| is)|it becomes|they are|they become|the (?:creature|target) (?:is|becomes)|a creature (?:is|becomes)|creatures are)`;
+// (2026-10-20: also "the foe is", the item module's Stampede Medallion.)
+const SUBJECT = String.raw`(?:it(?:'s| is)|it becomes|they are|they become|the (?:creature|target|foe|enemy|victim) (?:is|becomes)|a creature (?:is|becomes)|creatures are)`;
 // Who a result sentence is about: "A creature that fails", "Targets who critically fail their saving throw".
 const WHO = String.raw`(?:(?:A|Each|Any) (?:creature|target|foe|enemy)|(?:Creatures|Targets|Foes|Enemies|Those)|(?:and )?one)`;
 const FAIL_LEAD = new RegExp(String.raw`(?:On a (?:failure|failed save|failed or critically failed save)|If (?:it|they|the (?:creature|target)) fails?(?: (?:its|the|this|their) (?:save|saving throw))?|${WHO} (?:that|who) fails?(?: (?:its|the|this|their) (?:saves?|saving throws?))?)\s*,?\s*`, "i");
@@ -598,7 +628,7 @@ function proseOutcomes(html, { criticalOnly = false } = {}) {
     if (!failure && !(criticalOnly && crit)) return { failure: null, critical: null, success: null };
     // Left to the GM: a result about someone else ("the evangelist is Concealed from the creature"), or
     // results that differ by creature type ("Humanoids that fail… Animals are…").
-    if (/^the (?!creature|target|victim)[\w' -]+? (?:is|becomes|gains)\b/i.test(htmlToPlainText(failure ?? clause(crit.from)).trim())) return { failure: null, critical: null, success: null };
+    if (/^the (?!creature|target|victim|foe|enemy)[\w' -]+? (?:is|becomes|gains)\b/i.test(htmlToPlainText(failure ?? clause(crit.from)).trim())) return { failure: null, critical: null, success: null };
     if (/\b(?:Humanoids|Animals|Undead|Constructs|Plants|Fey|Beasts|Dragons|Fiends|Celestials|Elementals)\b (?:that|who|are|is)\b/.test(htmlToPlainText(text))) return { failure: null, critical: null, success: null };
     // …or results that hang on the target's state ("if the creature was already Doomed, on a failed save, …").
     if (/\bif (?:the creature|it|the target|they) (?:was|is|were|are) already\b|\bwhile already\b/i.test(htmlToPlainText(text))) return { failure: null, critical: null, success: null };
@@ -2181,6 +2211,12 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     if (basicDamage?.length) {
         components = basicDamage;
         outcomes = withRiders(basicRows(components.map((component) => component.id)), html, components);
+        // (2026-10-20, the item module's Vision of Meloth: degree sections beside a basic save — "Success The target takes half damage and is
+        // Frightened 1" — their own results on the basic rows.)
+        // (Only when it's the ability's one check: not a second save's sections or its maker's own check — a breath's other way, a miasma after
+        // the burst, armor that may break —, nor one of several ways.)
+        const ways = MODES.test(htmlToPlainText(html)) || /\b(?:manifest|use|emit)s? (?:this ability|it) in one of (?:two|three) ways\b|\bone of (?:two|three) (?:ways|types of breath)\b/i.test(htmlToPlainText(html));
+        if (Object.keys(sections).length && inlineTags(html, "Check").length === 1 && !ways) withSectionResults(outcomes, sections, components, { dc: check.dc, names: ownNames(actor ?? item.actor ?? item.parent) });
     } else if (basicDamage === null && !Object.keys(sections).length) return null;
     else if (Object.keys(sections).length) {
         outcomes = {};
@@ -2220,14 +2256,13 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
                 if (push) row.forcedMovement = push;
                 // (2026-10-20, the item module's rows: its penalties, an early end when the creature Escapes, a floor, a lowered condition,
                 // misfortune, negated invisibility — src/compiler/row-extras.js.)
-                withExtras(row, rowExtras(section, { dc: check.dc, escape: untilEscaped, time: rowTime(section) }));
+                const extras = rowExtras(section, { dc: check.dc, escape: untilEscaped, time: rowTime(section) });
+                withExtras(row, extras);
                 // (A section that links its own PF2e Effect where the text's reading missed a penalty or bonus it names — one in words it doesn't
                 // take: that Effect for its penalties, with the text's early end on it; covers: what of the row's words it carries. Otherwise the
                 // text's reading, the Effect's time maybe not the row's — Enact Justice's.)
                 const ownLinks = [...section.matchAll(EFFECT_LINK)];
-                const missed = row.missedPenalty;
-                delete row.missedPenalty;
-                if (ownLinks.length === 1 && row.modifiers?.length && missed) {
+                if (ownLinks.length === 1 && row.modifiers?.length && extras.missed) {
                     const ends = row.modifiers.find((modifier) => modifier.escape)?.escape ?? null;
                     const until = row.modifiers.find((modifier) => modifier.until)?.until ?? null;
                     delete row.modifiers;

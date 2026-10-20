@@ -261,7 +261,6 @@ export function rowExtras(html, { dc = null, escape = null, time = null } = {}) 
 // undetected" — not outright), and the early end on the conditions it ends. The row, changed in place.
 export function withExtras(row, extras) {
     if (extras.modifiers) row.modifiers = [...(row.modifiers ?? []), ...extras.modifiers];
-    if (extras.missed) row.missedPenalty = true;
     if (extras.conditionFloor && !row.conditionFloor) row.conditionFloor = extras.conditionFloor;
     row.effects ??= [];
     for (const effect of extras.effects ?? []) if (!row.effects.some((other) => other.slug === effect.slug)) row.effects.push(effect);
