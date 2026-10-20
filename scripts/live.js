@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
@@ -106,9 +106,26 @@ function effectTarget(token, sourceToken) {
     return { actorUuid: token.actor.uuid, tokenUuid: token.document?.uuid ?? token.uuid ?? null, name: token.name ?? token.actor.name, allied: !!sourceToken && disposition === (sourceToken.document ?? sourceToken).disposition };
 }
 
+// The immunity flags of a creature's Effects that haven't run out (PF2e may leave an expired one if it doesn't remove them itself).
+export const immunityFlags = (actor) => (actor?.itemTypes?.effect ?? []).filter((effect) => !(effect.isExpired ?? effect.system?.expired)).map((effect) => effect.flags?.[MODULE_ID]);
+
 export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
+    // (2026-10-20: a temporary immunity — trigger.immunity —: the creatures already immune left out, and the card says so; none left, a
+    // note for the GM. Zones, auras and other modules' cards alike.)
+    const immunity = plan?.trigger?.immunity;
+    const key = immunity ? immunityKey(plan, item?.name) : null;
+    const immune = key ? tokens.filter((token) => token?.actor && isImmune(immunityFlags(token.actor), { slug: key, source: immunity.against === "all" ? null : sourceActor.uuid })) : [];
+    if (immune.length) {
+        tokens = tokens.filter((token) => !immune.includes(token));
+        const said = `${immune.map((token) => token.name).join(", ")} ${immune.length === 1 ? "is" : "are"} immune: ${item.name}.`;
+        if (!tokens.length) {
+            await noteToGM(sourceActor, sourceToken, [`<strong>${item.name}</strong>: ${said}`]);
+            return null;
+        }
+        warning = [warning, said].filter(Boolean).join(" ");
+    }
     const state = createCard({
         plan,
         ability: { name: item.name, uuid: item.uuid },
@@ -1247,7 +1264,8 @@ async function grabStrike(state, changes) {
 
 async function grantImmunity(state) {
     const immunity = state.plan?.trigger?.immunity;
-    const slug = state.plan?.source?.slug ?? state.ability.slug;
+    // (2026-10-20: its own key first — an item's grades share one — trigger.immunity.slug.)
+    const slug = immunity?.slug ?? state.plan?.source?.slug ?? state.ability.slug ?? immunityKey(state.plan, state.ability.name);
     if (!immunity?.duration || !slug) return [];
     const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
     const lines = [];
@@ -1256,7 +1274,7 @@ async function grantImmunity(state) {
         const { actor } = await targetOf(state, target.id);
         if (!actor) continue;
         const source = immunity.against === "all" ? null : state.source.actorUuid;
-        if (isImmune(actor.itemTypes.effect.map((effect) => effect.flags?.[MODULE_ID]), { slug, source })) continue;
+        if (isImmune(immunityFlags(actor), { slug, source })) continue;
         const data = immunityEffect(MODULE_ID, immunity, {
             ability: { name: state.ability.name, slug, img: item?.img },
             source: { actorUuid: state.source.actorUuid, name: state.source.name },

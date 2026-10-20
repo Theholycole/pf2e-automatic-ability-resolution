@@ -51,3 +51,15 @@ test("2026-10-19: a zone card words its modifiers inside by their sign — Sprit
     assert.equal(modifierWords([{ value: 1 }, { value: -1 }]), "bonuses and penalties inside");
     assert.equal(modifierWords([]), null);
 });
+
+test("2026-10-20: a temporary immunity's key — its own (trigger.immunity.slug: an item's grades share one), else the ability's slug, else its name's", async () => {
+    const { immunityKey } = await import("../src/live/card.js");
+    const { isImmune } = await import("../src/live/auras.js");
+    const lesser = { source: { name: "Aetheric Irritant (Lesser)", slug: "aetheric-irritant-lesser" }, trigger: { immunity: { slug: "aetheric-irritant", against: "all", duration: { value: 1, unit: "hours" } } } };
+    const major = { ...lesser, source: { name: "Aetheric Irritant (Major)", slug: "aetheric-irritant-major" } };
+    assert.equal(immunityKey(lesser), "aetheric-irritant");
+    assert.equal(immunityKey(major), immunityKey(lesser), "the grades alike");
+    assert.equal(immunityKey({ source: { slug: "stench" }, trigger: { immunity: {} } }), "stench");
+    assert.equal(immunityKey({ source: { name: "Frightful Presence" } }), "frightful-presence");
+    assert.equal(isImmune([{ immunity: { slug: "aetheric-irritant", source: null } }], { slug: immunityKey(major), source: null }), true);
+});

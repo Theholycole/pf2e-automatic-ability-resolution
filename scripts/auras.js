@@ -15,9 +15,9 @@
 // Only the active GM's client acts, one trigger at a time.
 
 import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/model/grid.js";
-import { abilitySlug, cardCheck } from "../src/live/card.js";
+import { cardCheck, immunityKey } from "../src/live/card.js";
 import { AURA_CAUSES, activeAfterUse, auraConditionEffect, auraConditionStep, auraWhen, entered, isImmune } from "../src/live/auras.js";
-import { isActiveGM, postCard, stateOf } from "./live.js";
+import { immunityFlags, isActiveGM, postCard, stateOf } from "./live.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -201,10 +201,10 @@ function recordUse(message) {
 // The card for an aura's targets, less those immune, already hit this round
 // (a damage aura) or waiting on an open card from the same aura.
 async function trigger(source, tokens, when, combat) {
-    const slug = abilitySlug(source.plan, source.item?.name);
+    const slug = immunityKey(source.plan, source.item?.name);
     const immunity = source.plan.trigger?.immunity;
     const sourceUuid = source.actor.uuid;
-    let targets = tokens.filter((token) => !(slug && isImmune(token.actor.itemTypes.effect.map((effect) => effect.flags?.[MODULE_ID]), { slug, source: immunity?.against === "all" ? null : sourceUuid })));
+    let targets = tokens.filter((token) => !(slug && isImmune(immunityFlags(token.actor), { slug, source: immunity?.against === "all" ? null : sourceUuid })));
     if (source.plan.trigger?.oncePerRound) {
         targets = targets.filter((token) => hits.get(`${combat.id}:${source.key}:${token.id}`) !== combat.round);
         for (const token of targets) hits.set(`${combat.id}:${source.key}:${token.id}`, combat.round);

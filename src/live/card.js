@@ -114,6 +114,12 @@ export function effectRecipients(state) {
 
 // The ability's slug, for its immunity effects and marks: PF2e's, or one from its name (most bestiary
 // abilities have none, and without it Apply couldn't record "immune to the Revenant's Baleful Shriek").
+// (2026-10-20, for the item module: "immune to all aetheric irritants" — one key for an item's grades, trigger.immunity.slug.) The key a
+// temporary immunity is recorded and checked by: the immunity's own slug, else the ability's (its plan's, else one from its name).
+export function immunityKey(plan, name = null) {
+    return plan?.trigger?.immunity?.slug ?? abilitySlug(plan, name);
+}
+
 export function abilitySlug(plan, name = null) {
     const slug = plan?.source?.slug;
     if (slug) return slug;

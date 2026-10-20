@@ -3310,3 +3310,10 @@ A row's condition with `duration: { mode: "while", persistent: "<damage type>" }
 ## A zone's save or damage only for some creatures (2026-10-18, for the item module)
 
 A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry only on a creature with one of those traits (Sanctified Beans' fiends, fey, ghosts, spirits and undead; a second save only for the incorporeal; Anathema Fulu's chosen trait). Without it, as before. `zoneActions` takes the creature's traits (`onlyFits`); the Combat Simulator's zones honour the same field. Live-checked by the item module's Sanctified Beans case in `pftest` (2026-10-18): no card for a plain creature in the square; an undead, incorporeal one got its basic Will and its Fortitude cards at its turn's end.
+
+## Temporary immunity on every card (2026-10-20, for the item module)
+
+- `postCard` honours a plan's `trigger.immunity` itself now, not only the auras: a creature already immune (an unexpired "Immune:" Effect of this module's, matching key and source) is left out and the card says so ("Ogre is immune: Aetheric Irritant (Major)."); none left, a note for the GM and no card. So a zone's save card, an aura's and another module's (the item module's) alike.
+- `trigger.immunity.slug`: the key an immunity is granted and checked by, before the ability's slug — an item's grades share one ("immune to all aetheric irritants"). `immunityKey(plan, name)` in `src/live/card.js`.
+- An expired immunity Effect no longer counts (`immunityFlags`), in case PF2e leaves it.
+- `immunityEffect()` and `isImmune()` (`src/live/auras.js`) stay as they are: the item module makes the same Effect for its own uses.
