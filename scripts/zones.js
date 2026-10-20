@@ -94,6 +94,7 @@ export async function startZone({ item, plan, sourceToken, at = null }) {
         zone.saves?.length ? "a save on whoever it says" : null,
         zone.effect ? `${escape(zone.effect.label)} on ${zone.effect.allies ? "its allies" : "those"} inside` : null,
         modifierWords(zone.modifiers),
+        zone.inside?.length ? "its own rules on those inside it names" : null,
         zone.adjustments?.length ? "its allies' and foes' checks changed inside" : null,
         zone.damage?.length ? "damage at a turn's end inside" : null,
         zone.once ? "gone once a creature sets it off" : null
@@ -138,7 +139,7 @@ export async function zoneEvent(region, behavior, event) {
     if (claims && !setOff) spent.delete(region.uuid);
     for (const action of actions) {
         if (action.kind === "clear") await clearZone(token.actor, region.uuid, flags.zone);
-        else if (action.kind === "conceal" || action.kind === "modifiers" || action.kind === "adjust") await token.actor.createEmbeddedDocuments("Item", [zoneMemberEffect({ name, kind: action.kind, modifiers: action.modifiers, adjustments: action.adjustments, concealedUuid: CONCEALED, regionUuid: region.uuid, moduleId: MODULE_ID })]);
+        else if (["conceal", "modifiers", "adjust", "inside"].includes(action.kind)) await token.actor.createEmbeddedDocuments("Item", [zoneMemberEffect({ name, kind: action.kind, modifiers: action.modifiers, adjustments: action.adjustments, rules: action.rules, concealedUuid: CONCEALED, regionUuid: region.uuid, moduleId: MODULE_ID })]);
         else if (action.kind === "effect") {
             const source = await fromUuid(action.uuid).catch(() => null);
             if (!source) continue;

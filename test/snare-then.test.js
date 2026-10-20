@@ -63,3 +63,20 @@ test("2026-10-20: a temporary immunity's key — its own (trigger.immunity.slug:
     assert.equal(immunityKey({ source: { name: "Frightful Presence" } }), "frightful-presence");
     assert.equal(isImmune([{ immunity: { slug: "aetheric-irritant", source: null } }], { slug: immunityKey(major), source: null }), true);
 });
+
+test("2026-10-20: zones for candles and incense — a modifier's predicate on the inside Effect, a save its maker attempts too, rules for those inside that fit", async () => {
+    const { zoneActions, zoneMemberEffect } = await import("../src/live/zones.js");
+    const truth = { area: { type: "emanation", value: 10 }, modifiers: [{ selector: "deception", value: -4, type: "status", predicate: ["action:lie"] }],
+        saves: [{ when: ["enter"], plan: { source: { name: "Truth" } }, own: true }, { when: ["enter"], plan: { source: { name: "Others" } } }] };
+    const effect = zoneMemberEffect({ name: "Candle of Truth", kind: "modifiers", modifiers: truth.modifiers, regionUuid: "r", moduleId: "aar" });
+    assert.deepEqual(effect.system.rules[0], { key: "FlatModifier", selector: "deception", value: -4, type: "status", label: "Candle of Truth", predicate: ["action:lie"] });
+    const names = (options) => zoneActions(truth, "tokenEnter", options).filter((action) => action.kind === "save").map((action) => action.plan.source.name);
+    assert.deepEqual(names({ own: true }), ["Truth"], "its maker: the save that says so, not the other");
+    assert.deepEqual(names({}), ["Truth", "Others"]);
+    const incense = { area: { type: "emanation", value: 20 }, inside: [{ rules: [{ key: "FastHealing", value: 4 }], only: { traits: ["undead"] } }] };
+    const inside = (traits, own = false) => zoneActions(incense, "tokenEnter", { traits, own }).filter((action) => action.kind === "inside");
+    assert.deepEqual(inside(["undead"]).map((action) => action.rules), [[{ key: "FastHealing", value: 4 }]]);
+    assert.deepEqual(inside(["humanoid"]), []);
+    assert.equal(inside(["undead"], true).length, 1, "its maker too when it fits");
+    assert.deepEqual(zoneMemberEffect({ name: "Incense", kind: "inside", rules: [{ key: "FastHealing", value: 4 }], regionUuid: "r", moduleId: "aar" }).system.rules, [{ key: "FastHealing", value: 4 }]);
+});

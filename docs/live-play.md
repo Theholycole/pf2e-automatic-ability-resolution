@@ -3318,3 +3318,9 @@ A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry o
 - An expired immunity Effect no longer counts (`immunityFlags`), in case PF2e leaves it.
 - `immunityEffect()` and `isImmune()` (`src/live/auras.js`) stay as they are: the item module makes the same Effect for its own uses.
 - Live-checked by the item module's cases in `pftest` (2026-10-20): a second Spun Cloud (Red) posted no card for the creature immune to the first; an undead immune to Aetheric Irritant (Lesser) got no card in the Major's area.
+
+## Zones for candles and incense (2026-10-20, for the item module)
+
+- `zone.modifiers[i].predicate`: copied onto the inside Effect's FlatModifier, so it counts only where PF2e's predicate says (Candle of Truth's −4 to Deception only to Lie, `["action:lie"]`; Candle of Inflamed Passions' −1 to saves against emotion effects).
+- `zone.saves[i].own: true`: its maker attempts that save too ("each creature (including you)"), as the others do; other saves stay off it.
+- `zone.inside: [{ rules: [PF2e rule elements], only?: { traits } }]`: each entry's rules on the inside Effect of a creature that fits it (its maker too), gone when it leaves (Incense of Distilled Death: undead get `{ key: "FastHealing", value: 4 }`). The card says "its own rules on those inside it names".

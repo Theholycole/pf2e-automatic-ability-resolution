@@ -121,8 +121,15 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
         // (Batch 274, Sink or Swim: PF2e's degree adjustments, its allies' on its allies, its foes' on the others; not on itself.)
         const adjustments = (zone.adjustments ?? []).filter((entry) => (entry.allies ? allied : !allied && !own));
         if (adjustments.length) actions.push({ kind: "adjust", adjustments: adjustments.map((entry) => ({ ...entry })) });
+        // (2026-10-20: rules for the creatures inside that fit — zone.inside [{ rules, only }]: Incense of Distilled Death's fast healing 4
+        // for undead —, its maker too when it fits.)
+        for (const entry of zone.inside ?? []) if ((entry.rules ?? []).length && onlyFits(entry, traits)) actions.push({ kind: "inside", rules: entry.rules.map((rule) => ({ ...rule })) });
     }
-    if (own) return actions;
+    // (2026-10-20: a save its maker attempts too — saves[i].own, Candle of Truth's "each creature (including you)".)
+    if (own) {
+        for (const save of zone.saves ?? []) if (save.own && save.when.includes(when) && onlyFits(save, traits)) actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
+        return actions;
+    }
     // (A zone of its allies' gifts, Cleansing Earth's: nothing more on them.)
     if (allied && zone.effect?.allies) return actions;
     if (when === "enter" && zone.hazard?.formulas?.length) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
@@ -187,12 +194,15 @@ export function zoneDamagePlan(name, formulas) {
 
 // The Effect a creature holds while inside: concealed (PF2e's condition, granted; a note on its attacks out), the zone's penalties, or (batch 274)
 // PF2e's degree adjustments ("a success … to Swim is a critical success instead").
-export function zoneMemberEffect({ name, kind, modifiers = [], adjustments = [], concealedUuid, regionUuid, moduleId, img = "icons/svg/mystery-man.svg" }) {
-    const rules = kind === "conceal"
+// rules (kind "inside", 2026-10-20): the zone's own rule elements for a creature inside that fits (zone.inside).
+export function zoneMemberEffect({ name, kind, modifiers = [], adjustments = [], rules: given = [], concealedUuid, regionUuid, moduleId, img = "icons/svg/mystery-man.svg" }) {
+    const rules = kind === "inside" ? given.map((rule) => ({ ...rule }))
+        : kind === "conceal"
         ? [{ key: "GrantItem", uuid: concealedUuid, flag: "concealed", allowDuplicate: true, onDeleteActions: { granter: "cascade", grantee: "cascade" } }, { key: "Note", selector: ["attack-roll"], title: name, text: `Creatures outside ${name} are concealed to you: DC 5 flat check.` }]
         : kind === "adjust"
             ? adjustments.map((entry) => ({ key: "AdjustDegreeOfSuccess", selector: entry.selector, ...(entry.predicate?.length ? { predicate: [...entry.predicate] } : {}), adjustment: { ...entry.adjustment } }))
-            : modifiers.map((modifier) => ({ key: "FlatModifier", selector: modifier.selector, value: modifier.value, type: modifier.type ?? "untyped", label: name }));
+            // (2026-10-20: a modifier's predicate — Candle of Truth's −4 to Deception only to Lie, ["action:lie"].)
+            : modifiers.map((modifier) => ({ key: "FlatModifier", selector: modifier.selector, value: modifier.value, type: modifier.type ?? "untyped", label: name, ...(modifier.predicate?.length ? { predicate: [...modifier.predicate] } : {}) }));
     return {
         name: kind === "conceal" ? `${name}: inside (concealed)` : `${name}: inside`,
         type: "effect",
