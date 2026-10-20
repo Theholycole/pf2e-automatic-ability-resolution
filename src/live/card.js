@@ -13,6 +13,10 @@ const STATISTIC_LABELS = { ac: "AC", fortitude: "Fortitude", reflex: "Reflex", w
 export const statisticLabel = (slug) => STATISTIC_LABELS[slug] ?? String(slug ?? "").split("-").map((word) => word.replace(/^./, (letter) => letter.toUpperCase())).join(" ");
 // PF2e selectors as the card says them ("all-speeds", batch 121: its Speeds).
 export const selectorLabel = (selector) => ({ "all-speeds": "Speeds" })[selector] ?? selector;
+// (2026-10-20) What a modifier is to, in words: "Escape" for one only on PF2e's Escape, "attack-roll against creatures other than Valeros"; and
+// how it ends early: " or until it Escapes (DC 18)", " or until it uses an Interact action to remove the glitter".
+export const modifierTarget = (modifier, sourceName = null) => `${(modifier?.predicate ?? []).includes("action:escape") ? "Escape" : selectorLabel(modifier?.selector)}${modifier?.against === "others" ? ` against creatures other than ${sourceName ?? "its source"}` : ""}`;
+export const endWords = (thing) => `${Number(thing?.escape?.dc) > 0 ? ` or until it Escapes (DC ${Number(thing.escape.dc)})` : ""}${thing?.until ? ` or until ${thing.until}` : ""}`;
 
 const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
@@ -282,6 +286,11 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                     lines.push(`${who} takes ${damage.formula ?? dice ?? damage.amount ?? "some"} persistent ${damage.type ?? "untyped"}`);
                     break;
                 }
+                // (2026-10-20: "reduces its slowed condition by 1", the stack below 0.)
+                if (Number(change.stack?.by) < 0) {
+                    lines.push(`${who}'s ${conditionLabel(change.slug)} drops by ${-Number(change.stack.by)}`);
+                    break;
+                }
                 lines.push(`${who} is ${conditionLabel(change.slug)}${Number.isFinite(change.value) ? ` ${change.value}` : ""}${change.scope?.attacker ? ` to ${names[change.scope.attacker] ?? "one creature"}'s ${change.scope.uses === 1 ? "next " : ""}${change.scope.attacks === "melee" ? "melee " : ""}attack${change.scope.uses === 1 ? "" : "s"}` : ""}`);
                 break;
             case "move":
@@ -298,7 +307,10 @@ export function changeLines(changes, names, { conditionLabel = (slug) => slug } 
                 if (change.effect?.kind === "modifier") {
                     const modifier = change.effect.modifier;
                     // (Batch 275: against one creature only, the change's against.)
-                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}${change.against ? ` against ${names[change.against] ?? "that creature"}` : ""}${modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit})` : ""}`);
+                    // (2026-10-20: its early end, and "against creatures other than" the source.)
+                    const ends = endWords(modifier);
+                    const time = modifier.duration?.mode === "fixed" ? ` (${modifier.duration.value} ${modifier.duration.unit}${ends})` : ends ? ` (${ends.replace(/^ or /, "")})` : "";
+                    lines.push(`${who} takes ${modifier.value < 0 ? "−" : "+"}${Math.abs(modifier.value)} ${modifier.type} to ${modifierTarget(modifier, names.source)}${change.against ? ` against ${names[change.against] ?? "that creature"}` : ""}${time}`);
                 }
                 // A dropped weapon is named by the Foundry side, which knows which one fell.
                 if (change.effect?.kind === "disarm" && change.effect.what === "weaken") lines.push(`${who}'s grip is weakened (−${change.effect.penalty ?? 2} to attacks with that weapon)`);

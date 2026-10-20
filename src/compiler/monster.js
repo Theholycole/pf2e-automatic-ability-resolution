@@ -20,6 +20,7 @@ import { readNeeds, requirementText } from "./needs.js";
 import { htmlToPlainText } from "../../../pf2e-resolution-core/src/text/plain-text.js";
 import { OTHER_WAY, STAGE_CONDITIONS, degreeSections, immunityDetails, inlineTags, modernInline, readCheck, readConditions, readDamage, readDuration, readImmunity, readLinger, readPush, readRange, readRecharge, readTemplate, readableText, sentencesOf, unconditional, conditionalDamage, noteUnread } from "./inline.js";
 import { compileSkillAction, readPenalties, readSkillCheck } from "./checks.js";
+import { liftedIn, penaltyVariant, rowExtras, rowTime, rowWords, variantValue, withExtras } from "./row-extras.js";
 import { chargeSentences, compileBuiltin, countWord, moveThenStrike, readRage, readRegrowth, readSelfGuard, readShell, readStrikeBuff } from "./builtins.js";
 import { compileAffliction, readAffliction } from "./afflictions.js";
 import { readActiveAfter, readAuraTiming } from "./auras.js";
@@ -2183,6 +2184,8 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
     } else if (basicDamage === null && !Object.keys(sections).length) return null;
     else if (Object.keys(sections).length) {
         outcomes = {};
+        // ("The ammunition's effects last until the target Escapes": every row's, against the save's DC — PF2e's Escape, "the DC of the effect".)
+        const untilEscaped = /\beffects? lasts? until the (?:target|creature|foe) Escapes\b/i.test(rowWords(html.split(/<strong>\s*(?:Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/i)[0])) ? { dc: check.dc } : null;
         for (const degree of ["criticalSuccess", "success", "failure", "criticalFailure"]) {
             const section = sections[degree];
             const row = none();
@@ -2215,15 +2218,44 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
                 row.effects = readConditions(section, { plain: SECTION_CONDITIONS });
                 const push = readPush(section, ownNames(actor ?? item.actor ?? item.parent));
                 if (push) row.forcedMovement = push;
+                // (2026-10-20, the item module's rows: its penalties, an early end when the creature Escapes, a floor, a lowered condition,
+                // misfortune, negated invisibility — src/compiler/row-extras.js.)
+                withExtras(row, rowExtras(section, { dc: check.dc, escape: untilEscaped, time: rowTime(section) }));
+                // (A section that links its own PF2e Effect where the text's reading missed a penalty or bonus it names — one in words it doesn't
+                // take: that Effect for its penalties, with the text's early end on it; covers: what of the row's words it carries. Otherwise the
+                // text's reading, the Effect's time maybe not the row's — Enact Justice's.)
+                const ownLinks = [...section.matchAll(EFFECT_LINK)];
+                const missed = row.missedPenalty;
+                delete row.missedPenalty;
+                if (ownLinks.length === 1 && row.modifiers?.length && missed) {
+                    const ends = row.modifiers.find((modifier) => modifier.escape)?.escape ?? null;
+                    const until = row.modifiers.find((modifier) => modifier.until)?.until ?? null;
+                    delete row.modifiers;
+                    row.nativeEffects = [{ uuid: ownLinks[0][1], label: (ownLinks[0][2] ?? "").replace(/^Effect:\s*/i, "") || null, covers: ["penalty"], ...(ends ? { escape: ends } : {}), ...(until ? { until } : {}) }];
+                }
             }
             outcomes[degree] = row;
         }
         // "As failure, but the effect persists for 3 rounds after leaving the aura": the failure's row,
         // with what the row names itself in place of the same conditions ("As failure, but frightened 3").
-        for (const [degree, like] of [["criticalFailure", "failure"], ["criticalSuccess", "success"]]) {
+        // (2026-10-20: also "As success, but …" on a failure or critical failure — Hobbling Snare's, Gleaming Cuirass's.)
+        for (const [degree, like] of [["failure", "success"], ["criticalFailure", "failure"], ["criticalFailure", "success"], ["criticalSuccess", "success"]]) {
             const text = sections[degree] ? htmlToPlainText(sections[degree]).trim() : "";
             if (!new RegExp(`^As ${like}\\b`, "i").test(text)) continue;
+            // (The success's for a failure or critical failure only as its penalty, changed — src/compiler/row-extras.js penaltyVariant.)
+            if (like === "success" && degree !== "criticalSuccess" && !penaltyVariant(sections[degree], outcomes[like])) continue;
             const copy = structuredClone(outcomes[like]);
+            // (2026-10-20: "As success, but the penalty is -10 feet", "… the penalty is -4", "and the penalty lasts for 1 minute", "The glitter sticks
+            // for 5 minutes or until the creature spends a 3-action activity …": the copied penalties so.)
+            const penalty = variantValue(sections[degree]);
+            const lastsFor = /\bthe penalty lasts (for [^.,]+)|\b(?:sticks|lasts) (for (?:\d+|one|an?|ten) (?:round|minute|hour)s?)\b/i.exec(text);
+            const penaltyTime = lastsFor ? rowTime(lastsFor[1] ?? lastsFor[2]) : null;
+            const until = liftedIn(rowWords(sections[degree]));
+            for (const modifier of copy.modifiers ?? []) {
+                if (penalty && modifier.value < 0) modifier.value = -Number(penalty);
+                if (penaltyTime) modifier.duration = penaltyTime;
+                if (until) modifier.until = until;
+            }
             const linger = readLinger(text);
             if (linger) for (const effect of copy.effects) if (effect.duration?.mode === "in-aura") effect.duration = { ...effect.duration, after: linger };
             // "As failure, but the duration is 1 minute", "…, but the effect lasts 10 minutes": the copied conditions, for that long.
@@ -2235,7 +2267,9 @@ function inlineSave(item, actor = null, { afterHit = false } = {}) {
             const plus = new RegExp(`^As ${like},? (?:plus|and)\\b`, "i").test(text);
             const damage = own.damage?.mode === "none" ? copy.damage : plus ? addDamage(copy.damage, own.damage) : own.damage;
             // "As failure, except the creature is pushed 70 feet away": its own push in place of the failure's.
-            outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects], ...(own.forcedMovement ? { forcedMovement: own.forcedMovement } : {}) };
+            // (Its own penalties, floor and notes too: in place of the copied penalties and floor, beside the copied notes.)
+            const notes = [...(copy.noteEffects ?? []).filter((note) => !(own.noteEffects ?? []).some((other) => other.label === note.label)), ...(own.noteEffects ?? [])];
+            outcomes[degree] = { ...copy, damage, effects: [...copy.effects.filter((effect) => !own.effects.some((other) => other.slug === effect.slug)), ...own.effects], ...(own.forcedMovement ? { forcedMovement: own.forcedMovement } : {}), ...(own.modifiers?.length ? { modifiers: own.modifiers } : {}), ...(own.conditionFloor ? { conditionFloor: own.conditionFloor } : {}), ...(notes.length ? { noteEffects: notes } : {}) };
         }
     } else {
         outcomes = saveOrOutcomes(html, components, { names: ownNames(actor ?? item.actor ?? item.parent), afterHit, triggered: readsTrigger(item) });

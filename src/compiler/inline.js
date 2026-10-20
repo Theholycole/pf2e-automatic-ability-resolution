@@ -494,12 +494,16 @@ const NOTHING = /^(?:[\w' -]+? (?:(?:is|are) )?)?(?:unaffected|(?:is|are)n't aff
 // "As failure, except …" brings the failure's text too. The outcomes are changed in place.
 // A row that applies something, but whose text has more it can't ("is fascinated for 1 minute, can't use reactions while fascinated"):
 // rules of these kinds left once what it applies is taken out.
-const MORE = /\bcan(?:'t|not) (?:use|take|move|speak|cast|fly|attack|see|hear|act|reduce|end|recover|regain|benefit|Stride|Step)\b|\b(?:status|circumstance|item) (?:penalty|bonus)\b|\bpenalty to\b|\bweakness\b|\bresistance\b|\bmust (?:spend|use|move|Stride|Step)\b|\bteleport|\bdies\b(?! out)|\bslain\b|\bdestroyed\b|\btransforms?\b|\bcursed\b|\bwastes?\b|\bloses? (?:its|their|\d+|an?|the)\b/i;
+const MORE = /\bafter (?:it |they )?escap(?:es|ing)\b|\b(?:can|may) (?:then |also |immediately )?(?:Leap|Stride|Step|Fly|Burrow|Climb|Swim)\b|\bcan(?:'t|not) (?:use|take|move|speak|cast|fly|attack|see|hear|act|reduce|end|recover|regain|benefit|Stride|Step)\b|\b(?:status|circumstance|item) (?:penalty|bonus)\b|\bpenalty to\b|\bweakness\b|\bresistance\b|\bmust (?:spend|use|move|Stride|Step)\b|\bteleport|\bdies\b(?! out)|\bslain\b|\bdestroyed\b|\btransforms?\b|\bcursed\b|\bwastes?\b|\bloses? (?:its|their|\d+|an?|the)\b/i;
 function hasMore(text, row) {
     let rest = text;
     for (const effect of row.effects ?? []) if (effect.slug) rest = rest.replace(new RegExp(`\\b${effect.slug.replace(/-/g, "[- ]")}\\b(?: \\d+)?`, "gi"), "");
-    // Penalties it applies as modifiers, and immunity (the trigger's) are read.
-    if (row.modifiers?.length) rest = rest.replace(/\b(?:status|circumstance|item) (?:penalty|bonus)\b|\bpenalty to\b/gi, "");
+    // Penalties it applies as modifiers, and immunity (the trigger's) are read; (2026-10-20) so are those PF2e's own Effect on the row carries
+    // (its covers).
+    if (row.modifiers?.length || (row.nativeEffects ?? []).some((effect) => (effect.covers ?? []).includes("penalty"))) rest = rest.replace(/\b(?:status|circumstance|item) (?:penalty|bonus)\b|\bpenalty to\b/gi, "");
+    // (2026-10-20: and a floor it keeps, "can't reduce its frightened value below 1 …" — not when it says more of another, "In addition, the
+    // dreadsong dancer is affected …".)
+    if (row.conditionFloor && !/\bIn addition, (?!(?:the (?:target|creature|foe)|it|they)\b)/i.test(text)) rest = rest.replace(/\bcan(?:'t|not) reduce (?:its|their)\s+(?:\w+\s+)?(?:value|condition) below\b|\bcan(?:'t|not) be reduced below\b/gi, "");
     return MORE.test(rest);
 }
 
@@ -509,12 +513,17 @@ export function noteUnread(outcomes, html) {
         const row = outcomes?.[degree];
         const section = sections[degree];
         if (!row || !section) continue;
-        const applies = (row.damage?.mode ?? "none") !== "none" || row.effects?.length || row.forcedMovement || row.modifiers?.length || row.affliction || row.noteEffects?.length || row.nativeEffects?.length || row.terminal;
+        // (2026-10-20: a condition floor too, Timpani of Panic's "can't reduce its frightened value below 1 for 1 round".)
+        const applies = (row.damage?.mode ?? "none") !== "none" || row.effects?.length || row.forcedMovement || row.modifiers?.length || row.affliction || row.noteEffects?.length || row.nativeEffects?.length || row.terminal || row.conditionFloor;
         const text = readableText(section);
         if (!text || NOTHING.test(text)) continue;
         // A row that applies something: its text too when more is left for the GM, after the notes it has.
+        // (2026-10-20: "As success, but …": what the copied row's own text leaves unread too, with that text.)
         if (applies) {
-            if (hasMore(text, row)) row.manualInstructions = [...(row.manualInstructions ?? []), `{target} (${label.toLowerCase()}, the rest by hand): ${text}`];
+            const as = /^As (critical success|success|failure|critical failure)\b/i.exec(text)?.[1]?.toLowerCase();
+            const from = as ? DEGREE_LABELS.find(([, name]) => name.toLowerCase() === as)?.[0] : null;
+            const base = from && from !== degree && sections[from] ? readableText(sections[from]) : null;
+            if (hasMore(text, row) || (base && hasMore(base, row))) row.manualInstructions = [...(row.manualInstructions ?? []), `{target} (${label.toLowerCase()}, the rest by hand): ${text}${base ? ` (${as}: ${base})` : ""}`];
             continue;
         }
         const like = /^As (critical success|success|failure|critical failure)\b/i.exec(text)?.[1]?.toLowerCase();

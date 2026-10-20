@@ -9,7 +9,8 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
+import { escapeWords } from "../src/live/escape.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
@@ -1353,6 +1354,23 @@ export async function applyChange(change, state) {
                     ? `${target.name}'s ${change.slug} lasts while it takes persistent ${type} damage`
                     : `${target.name} takes no persistent ${type} damage, so it isn't ${change.slug}`;
             }
+            // (2026-10-20: "The target reduces its slowed condition by 1" — the core's stack, by below 0: that much lower, gone at 0; nothing when
+            // it has none.)
+            if (Number(change.stack?.by) < 0) {
+                const existing = actor.itemTypes.condition.find((condition) => condition.slug === change.slug && condition.active);
+                if (!existing) return `${target.name} isn't ${change.slug}`;
+                const lower = Math.max(0, (Number(existing.value) || 0) + Number(change.stack.by));
+                if (lower > 0) await game.pf2e.ConditionManager.updateConditionValue(existing.id, actor, lower);
+                else await actor.decreaseCondition(change.slug, { forceRemove: true });
+                return lower > 0 ? `${target.name}'s ${change.slug} drops to ${lower}` : `${target.name} is no longer ${change.slug}`;
+            }
+            // (2026-10-20: "Immobilized for 1 minute or until it Escapes (DC 27)", "Slowed 1" until it Escapes: an Effect granting it, for its time or
+            // until removed, that a successful Escape ends — scripts/escape.js.)
+            if (change.duration?.escape && (change.duration.mode === "until-escape" || (change.duration.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)))) {
+                const duration = change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration;
+                await timedCondition(actor, change.slug, change.value, duration, state);
+                return `${target.name}'s ${change.slug} lasts ${duration.mode === "fixed" ? `${durationText(duration, state.source.name, target.name)} or ` : ""}until it Escapes (DC ${duration.escape.dc})`;
+            }
             // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
             if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {
                 // "for 1d4 rounds": rolled for each creature.
@@ -1456,21 +1474,23 @@ export async function applyChange(change, state) {
 // the spell module does): 0 rounds when the monster still acts this round, else 1.
 // ("target-turn", the item module's bombs: counted on the creature's own turns, and it the effect's origin, so PF2e starts the effect at
 // its initiative and ends a turn-start one on its turn.)
+// (2026-10-20: duration.escape, an Escape that ends it early — flagged for scripts/escape.js; with mode "until-escape", no time of its own.)
 async function timedCondition(actor, slug, value, duration, state) {
     const template = game.pf2e.ConditionManager.getCondition(slug);
     if (!template) return setCondition(actor, slug, value);
     const combat = game.combat;
-    const rounds = turnRounds(duration, duration.anchor === "target-turn" ? actor.uuid : duration.anchor === "source-turn" ? state.source.actorUuid : null);
+    const timed = duration.mode !== "until-escape";
+    const rounds = timed ? turnRounds(duration, duration.anchor === "target-turn" ? actor.uuid : duration.anchor === "source-turn" ? state.source.actorUuid : null) : -1;
     const origin = duration.anchor === "target-turn" ? actor.uuid : state.source.actorUuid;
     const label = `${template.name}${Number.isFinite(value) ? ` ${value}` : ""}`;
     await actor.createEmbeddedDocuments("Item", [{
         name: `${state.ability.name}: ${label}`,
         type: "effect",
         img: template.img,
-        flags: { [MODULE_ID]: { timedCondition: { slug, sourceActorUuid: state.source.actorUuid } } },
+        flags: { [MODULE_ID]: { timedCondition: { slug, sourceActorUuid: state.source.actorUuid }, ...(duration.escape ? { escape: { dc: Number(duration.escape.dc) } } : {}) } },
         system: {
-            description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
-            duration: { value: rounds, unit: duration.unit, expiry: duration.expiry ?? "turn-start", sustained: false },
+            description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).${escapeWords(duration.escape)}</p>` },
+            duration: timed ? { value: rounds, unit: duration.unit, expiry: duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false },
             start: { value: game.time.worldTime, initiative: combat?.started ? combat.combatant?.initiative ?? null : null },
             context: { origin: { actor: origin, item: state.ability.uuid }, target: { actor: actor.uuid }, roll: null },
             rules: [{ key: "GrantItem", uuid: template._stats?.compendiumSource ?? template.sourceId ?? template.uuid, flag: "condition", allowDuplicate: true, alterations: Number.isFinite(value) ? [{ mode: "override", property: "badge-value", value }] : [], onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
@@ -1503,11 +1523,34 @@ async function anchorToTarget(created, actor, duration) {
 // Will for 1 minute): a PF2e effect with that FlatModifier, for its duration.
 // A PF2e effect item (an effect card's): a copy on the creature, its origin the monster and its ability, so PF2e
 // counts "until the start of its next turn" on the monster's turns.
+// (2026-10-20: its early end, from the plan's own entry for it — the core passes only its uuid and label: "or until it Escapes (DC 18)", flagged for
+// scripts/escape.js; "or until it uses an Interact action …", in its description for the GM.)
+function nativeExtras(plan, uuid) {
+    const seen = new Set();
+    const walk = (node) => {
+        if (!node || typeof node !== "object" || seen.has(node)) return null;
+        seen.add(node);
+        const own = Array.isArray(node.nativeEffects) ? node.nativeEffects.find((entry) => entry?.uuid === uuid && (entry.escape || entry.until)) : null;
+        if (own) return own;
+        for (const value of Object.values(node)) {
+            const found = walk(value);
+            if (found) return found;
+        }
+        return null;
+    };
+    return walk(plan);
+}
+
 async function nativeEffect(actor, effect, state, degree = null) {
     const template = await fromUuid(effect.uuid).catch(() => null);
     if (!template) return `${actor.name}: ${effect.label ?? "the effect"} wasn't found; apply it by hand.`;
     const source = template.toObject();
     delete source._id;
+    const extras = nativeExtras(state.plan, effect.uuid);
+    if (extras) {
+        const words = `${extras.until ? ` It ends early once ${extras.until} (GM: delete this Effect then).` : ""}${escapeWords(extras.escape)}`;
+        source.system.description = { ...(source.system.description ?? {}), value: `${source.system.description?.value ?? ""}<p>${words.trim()}</p>` };
+    }
     // A choice of the save's result in the effect (PF2e's "Degree of success" prompt): the target's own, so no prompt.
     for (const rule of source.system?.rules ?? []) {
         if (rule?.key !== "ChoiceSet" || rule.selection !== undefined || !Array.isArray(rule.choices) || !degree) continue;
@@ -1516,7 +1559,7 @@ async function nativeEffect(actor, effect, state, degree = null) {
     }
     source._stats = { ...(source._stats ?? {}), compendiumSource: effect.uuid };
     source.system.context = { ...(source.system.context ?? {}), origin: { ...(source.system.context?.origin ?? {}), actor: state.source.actorUuid, token: state.source.tokenUuid ?? null, item: state.ability.uuid ?? null } };
-    source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true } };
+    source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true, ...(Number(extras?.escape?.dc) > 0 ? { escape: { dc: Number(extras.escape.dc) } } : {}) } };
     await actor.createEmbeddedDocuments("Item", [source]);
     return null;
 }
@@ -1531,12 +1574,14 @@ async function noteEffect(actor, note, state) {
         name: `${state.ability.name}: ${note.label ?? "note"}`,
         type: "effect",
         img: "icons/svg/book.svg",
-        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid } } },
+        // (2026-10-20: a note Effect may carry PF2e's own rules — a misfortune's RollTwice, Concealed while Invisible — then it's a real one; once:
+        // for one roll, gone after it, scripts/escape.js.)
+        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}) } },
         system: {
             description: { value: `<p>${escape(note.text)}</p><p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
-            rules: []
+            rules: (Array.isArray(note.rules) ? note.rules : []).filter((rule) => rule && typeof rule.key === "string").map((rule) => structuredClone(rule))
         }
     }]);
     await anchorToTarget(created, actor, note.duration);
@@ -1545,23 +1590,28 @@ async function noteEffect(actor, note, state) {
 
 // (Batch 275, Gauge Potential: a bonus against one creature only — PF2e's TokenMark on that creature's token; attack and damage rolls predicated
 // on target:mark, AC and saves on origin:mark.)
+// (2026-10-20: modifier.against "others" — "attack rolls against creatures other than you": the source's token marked, the modifier on every
+// attack but those against it; modifier.escape, ended by a successful Escape (scripts/escape.js); modifier.until, how it ends early, the GM's.)
 async function penaltyEffect(actor, modifier, state, against = null) {
-    const marked = against ? (await targetOf(state, against)).token ?? null : null;
+    const others = modifier.against === "others";
+    const marked = against ? (await targetOf(state, against)).token ?? null : others ? (await targetOf(state, "source")).token ?? null : null;
     const slug = marked ? `aar-${String(state.ability.name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${marked.id}`.toLowerCase() : null;
-    const outgoing = /^(?:attack|damage|strike)/.test(String(modifier.selector));
+    const outgoing = /^(?:attack|damage|strike|ranged-attack|melee-attack)/.test(String(modifier.selector));
     const duration = modifier.duration?.mode === "fixed" ? { value: modifier.duration.anchor === "target-turn" ? turnRounds(modifier.duration, actor.uuid) : modifier.duration.value, unit: modifier.duration.unit, expiry: modifier.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const sign = modifier.value > 0 ? "+" : "−";
+    const what = modifierTarget(modifier, marked?.name ?? state.source.name);
+    const ends = modifier.until ? ` It ends early once ${modifier.until} (GM: delete this Effect then).` : "";
     const created = await actor.createEmbeddedDocuments("Item", [{
-        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${selectorLabel(modifier.selector)}${marked ? ` against ${marked.name}` : ""}`,
+        name: `${state.ability.name}: ${sign}${Math.abs(modifier.value)} to ${what}${marked && !others ? ` against ${marked.name}` : ""}`,
         type: "effect",
         img: "icons/svg/downgrade.svg",
-        flags: { [MODULE_ID]: { modifier: { selector: modifier.selector, source: state.source.actorUuid } } },
+        flags: { [MODULE_ID]: { modifier: { selector: modifier.selector, source: state.source.actorUuid }, ...(Number(modifier.escape?.dc) > 0 ? { escape: { dc: Number(modifier.escape.dc) } } : {}) } },
         system: {
-            description: { value: `<p>${sign}${Math.abs(modifier.value)} ${modifier.type} to ${selectorLabel(modifier.selector)}, from <strong>${state.ability.name}</strong> (${state.source.name}).</p>` },
+            description: { value: `<p>${sign}${Math.abs(modifier.value)} ${modifier.type} to ${what}, from <strong>${state.ability.name}</strong> (${state.source.name}).${ends}${escapeWords(modifier.escape)}</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
             rules: slug
-                ? [{ key: "TokenMark", slug, uuid: marked.uuid }, { key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, predicate: [`${outgoing ? "target" : "origin"}:mark:${slug}`, ...(modifier.predicate ?? [])] }]
+                ? [{ key: "TokenMark", slug, uuid: marked.uuid }, { key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, predicate: [others ? { not: `target:mark:${slug}` } : `${outgoing ? "target" : "origin"}:mark:${slug}`, ...(modifier.predicate ?? [])] }]
                 // (Batch 280, Divine Aegis: a modifier only against some effects — its predicate.)
                 : [{ key: "FlatModifier", selector: modifier.selector, type: modifier.type ?? "untyped", value: modifier.value, ...(modifier.predicate?.length ? { predicate: modifier.predicate } : {}) }]
         }
