@@ -3354,3 +3354,4 @@ A condition's `duration.saveEnds` (batch 311's monster reading, "It can attempt 
   - `"escalate"`: the degree's step on the condition's value, to `max`; at 0 or `"end"`, gone with `alsoEnds`.
 - `from: "next"` skips the first such turn; `rounds` ends it after that many of its turns ("functions for up to 6 rounds").
 - The simulator plays the same modes (`saveEndsAtTurnEnd`, timing "start" at its turn's start; a gate taken as met).
+- Live-checked by the item module's cases in `pftest` (2026-10-20, Foundry 14.367, PF2e 8.6.1, d20 pinned): Tusk and Fang Chain's Confused ended on a success at its turn's end; Spirit-Sealing Fulu (Greater)'s Paralyzed 4 rounds lost a round on a success; Gearbinder Oil (Lesser)'s gate (yes, no, yes) took Slowed 2 to 3, skipped a turn, then a critical success ended it and its tracker; Golden Silencer (Greater)'s note Effect ended on a critical success.
