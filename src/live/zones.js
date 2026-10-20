@@ -117,7 +117,8 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
     if (event === "tokenEnter") {
         if (zone.concealed) actions.push({ kind: "conceal" });
         if (zone.effect && (!zone.effect.allies || allied)) actions.push({ kind: "effect", uuid: zone.effect.uuid, label: zone.effect.label });
-        if (zone.modifiers?.length) actions.push({ kind: "modifiers", modifiers: zone.modifiers.map((modifier) => ({ ...modifier })) });
+        // (2026-10-19: zone.modifiersAllies — the item module's Inspiring Spotlight, "you and allies" inside: its maker and its allies only.)
+        if (zone.modifiers?.length && (!zone.modifiersAllies || allied || own)) actions.push({ kind: "modifiers", modifiers: zone.modifiers.map((modifier) => ({ ...modifier })) });
         // (Batch 274, Sink or Swim: PF2e's degree adjustments, its allies' on its allies, its foes' on the others; not on itself.)
         const adjustments = (zone.adjustments ?? []).filter((entry) => (entry.allies ? allied : !allied && !own));
         if (adjustments.length) actions.push({ kind: "adjust", adjustments: adjustments.map((entry) => ({ ...entry })) });

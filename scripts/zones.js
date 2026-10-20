@@ -93,7 +93,7 @@ export async function startZone({ item, plan, sourceToken, at = null }) {
         zone.hazard ? "hazardous terrain (damage on entering)" : null,
         zone.saves?.length ? "a save on whoever it says" : null,
         zone.effect ? `${escape(zone.effect.label)} on ${zone.effect.allies ? "its allies" : "those"} inside` : null,
-        modifierWords(zone.modifiers),
+        zone.modifiers?.length && zone.modifiersAllies ? `${modifierWords(zone.modifiers).replace(/ inside$/, "")} for its maker and allies inside` : modifierWords(zone.modifiers),
         zone.adjustments?.length ? "its allies' and foes' checks changed inside" : null,
         zone.damage?.length ? "damage at a turn's end inside" : null,
         zone.once ? "gone once a creature sets it off" : null

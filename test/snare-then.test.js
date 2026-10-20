@@ -51,3 +51,13 @@ test("2026-10-19: a zone card words its modifiers inside by their sign — Sprit
     assert.equal(modifierWords([{ value: 1 }, { value: -1 }]), "bonuses and penalties inside");
     assert.equal(modifierWords([]), null);
 });
+
+test("2026-10-19: a zone's modifiers for its maker and allies only (zone.modifiersAllies, Inspiring Spotlight); without it, everyone inside", async () => {
+    const { zoneActions } = await import("../src/live/zones.js");
+    const zone = { area: { type: "burst", value: 5 }, modifiers: [{ selector: "saving-throw", value: 2, type: "item" }], modifiersAllies: true };
+    const kinds = (options) => zoneActions(zone, "tokenEnter", options).map((action) => action.kind);
+    assert.deepEqual(kinds({ allied: true }), ["modifiers"]);
+    assert.deepEqual(kinds({ own: true }), ["modifiers"]);
+    assert.deepEqual(kinds({}), [], "a foe: nothing");
+    assert.deepEqual(zoneActions({ ...zone, modifiersAllies: undefined }, "tokenEnter", {}).map((action) => action.kind), ["modifiers"]);
+});
