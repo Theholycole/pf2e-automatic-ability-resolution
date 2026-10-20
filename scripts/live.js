@@ -11,6 +11,7 @@
 
 import { allRolled, cardCheck, cardHTML, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
 import { escapeWords } from "../src/live/escape.js";
+import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
@@ -1364,6 +1365,24 @@ export async function applyChange(change, state) {
                 else await actor.decreaseCondition(change.slug, { forceRemove: true });
                 return lower > 0 ? `${target.name}'s ${change.slug} drops to ${lower}` : `${target.name} is no longer ${change.slug}`;
             }
+            // (2026-10-20: "a new Will save at the end of each of its turns" — duration.saveEnds, src/live/recurring.js: scripts/recurring.js posts
+            // the saves. One that escalates: the condition itself, with an Effect that keeps its saves; otherwise an Effect that grants it, for
+            // its time or until a save ends it.)
+            const recurring = change.duration?.saveEnds ? recurringSpec(change.duration.saveEnds, planDC(state)) : null;
+            if (recurring) {
+                const words = `; ${recurringWords(recurring)}`;
+                if (recurring.mode === "escalate") {
+                    const now = Number(actor.itemTypes.condition.find((condition) => condition.slug === change.slug && condition.active)?.value) || 0;
+                    const value = change.stack && now > 0 && Number.isFinite(change.value) ? Math.min(Number(change.stack.max) || Infinity, now + (Number(change.stack.by) || 1)) : change.value;
+                    await setCondition(actor, change.slug, value);
+                    await saveTracker(actor, change.slug, recurring, state);
+                    return `${target.name} is ${change.slug}${Number.isFinite(value) ? ` ${value}` : ""}${words}`;
+                }
+                const fixed = change.duration.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit);
+                const duration = fixed ? (change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration) : { mode: "unlimited", ...(change.duration.escape ? { escape: change.duration.escape } : {}) };
+                await timedCondition(actor, change.slug, change.value, duration, state, { recurring });
+                return `${target.name} is ${change.slug}${fixed ? ` for ${durationText(duration, state.source.name, target.name)}` : ""}${words}`;
+            }
             // (2026-10-20: "Immobilized for 1 minute or until it Escapes (DC 27)", "Slowed 1" until it Escapes: an Effect granting it, for its time or
             // until removed, that a successful Escape ends — scripts/escape.js.)
             if (change.duration?.escape && (change.duration.mode === "until-escape" || (change.duration.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)))) {
@@ -1474,12 +1493,13 @@ export async function applyChange(change, state) {
 // the spell module does): 0 rounds when the monster still acts this round, else 1.
 // ("target-turn", the item module's bombs: counted on the creature's own turns, and it the effect's origin, so PF2e starts the effect at
 // its initiative and ends a turn-start one on its turn.)
-// (2026-10-20: duration.escape, an Escape that ends it early — flagged for scripts/escape.js; with mode "until-escape", no time of its own.)
-async function timedCondition(actor, slug, value, duration, state) {
+// (2026-10-20: duration.escape, an Escape that ends it early — flagged for scripts/escape.js; with mode "until-escape", no time of its own.
+// recurring: a new save at its turns, src/live/recurring.js — flagged saveEnds for scripts/recurring.js; with no fixed time, until a save ends it.)
+async function timedCondition(actor, slug, value, duration, state, { recurring = null } = {}) {
     const template = game.pf2e.ConditionManager.getCondition(slug);
     if (!template) return setCondition(actor, slug, value);
     const combat = game.combat;
-    const timed = duration.mode !== "until-escape";
+    const timed = duration.mode === "fixed";
     const rounds = timed ? turnRounds(duration, duration.anchor === "target-turn" ? actor.uuid : duration.anchor === "source-turn" ? state.source.actorUuid : null) : -1;
     const origin = duration.anchor === "target-turn" ? actor.uuid : state.source.actorUuid;
     const label = `${template.name}${Number.isFinite(value) ? ` ${value}` : ""}`;
@@ -1487,9 +1507,9 @@ async function timedCondition(actor, slug, value, duration, state) {
         name: `${state.ability.name}: ${label}`,
         type: "effect",
         img: template.img,
-        flags: { [MODULE_ID]: { timedCondition: { slug, sourceActorUuid: state.source.actorUuid }, ...(duration.escape ? { escape: { dc: Number(duration.escape.dc) } } : {}) } },
+        flags: { [MODULE_ID]: { timedCondition: { slug, sourceActorUuid: state.source.actorUuid }, ...(duration.escape ? { escape: { dc: Number(duration.escape.dc) } } : {}), ...(recurring ? { saveEnds: { ...recurring, slug, what: label }, ability: state.ability.name } : {}) } },
         system: {
-            description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).${escapeWords(duration.escape)}</p>` },
+            description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).${escapeWords(duration.escape)}${recurringNote(recurring)}</p>` },
             duration: timed ? { value: rounds, unit: duration.unit, expiry: duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false },
             start: { value: game.time.worldTime, initiative: combat?.started ? combat.combatant?.initiative ?? null : null },
             context: { origin: { actor: origin, item: state.ability.uuid }, target: { actor: actor.uuid }, roll: null },
@@ -1568,6 +1588,8 @@ async function nativeEffect(actor, effect, state, degree = null) {
 // Harmony's choice for the next spell), lasting as the note says (until removed when it doesn't).
 async function noteEffect(actor, note, state) {
     if (!note?.text) return null;
+    const found = note.saveEnds ? recurringSpec(note.saveEnds, planDC(state)) : null;
+    const recurring = found ? { ...found, ...(found.mode === "escalate" ? { mode: "end" } : {}) } : null;
     const duration = note.duration?.mode === "fixed" ? { value: note.duration.anchor === "target-turn" ? turnRounds(note.duration, actor.uuid) : note.duration.value, unit: note.duration.unit, expiry: note.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
     const created = await actor.createEmbeddedDocuments("Item", [{
@@ -1576,9 +1598,10 @@ async function noteEffect(actor, note, state) {
         img: "icons/svg/book.svg",
         // (2026-10-20: a note Effect may carry PF2e's own rules — a misfortune's RollTwice, Concealed while Invisible — then it's a real one; once:
         // for one roll, gone after it, scripts/escape.js.)
-        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}) } },
+        // (2026-10-20: note.saveEnds, a new save at its turns that ends it — src/live/recurring.js, scripts/recurring.js.)
+        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}), ...(recurring ? { saveEnds: { ...recurring, what: note.label ?? "the effect" }, ability: state.ability.name } : {}) } },
         system: {
-            description: { value: `<p>${escape(note.text)}</p><p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
+            description: { value: `<p>${escape(note.text)}${escape(recurringNote(recurring))}</p><p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
             rules: (Array.isArray(note.rules) ? note.rules : []).filter((rule) => rule && typeof rule.key === "string").map((rule) => structuredClone(rule))
@@ -1701,6 +1724,27 @@ function bothHitText(rider) {
 }
 
 // A condition at least at this value (PF2e's conditions take the higher value, not the sum).
+// (2026-10-20) The plan's own DC, for a repeated save whose dc is null: its card's, else its check's fixed one.
+const planDC = (state) => Number(state.check?.dc ?? state.plan?.resolution?.check?.against?.value) || null;
+
+// (2026-10-20) An escalating condition's saves (src/live/recurring.js mode "escalate"): a rule-less Effect on the creature that keeps them, flagged
+// saveEnds with the condition it steps (scripts/recurring.js); gone with the condition.
+async function saveTracker(actor, slug, recurring, state) {
+    const label = game.pf2e.ConditionManager.getCondition(slug)?.name ?? slug;
+    await actor.createEmbeddedDocuments("Item", [{
+        name: `${state.ability.name}: ${label} saves`,
+        type: "effect",
+        img: "icons/svg/dice-target.svg",
+        flags: { [MODULE_ID]: { saveEnds: { ...recurring, condition: slug, what: label }, ability: state.ability.name } },
+        system: {
+            description: { value: `<p>${label} from <strong>${state.ability.name}</strong> (${state.source.name}).${recurringNote(recurring)}</p>` },
+            duration: { value: -1, unit: "unlimited", expiry: null, sustained: false },
+            start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
+            rules: []
+        }
+    }]);
+}
+
 async function setCondition(actor, slug, value) {
     const existing = actor.itemTypes.condition.find((condition) => condition.slug === slug && condition.active);
     if (existing) {
@@ -1714,6 +1758,8 @@ async function setCondition(actor, slug, value) {
 function saveEndsText(change) {
     const ends = change.duration?.saveEnds;
     if (!ends) return "";
+    const spec = recurringSpec(ends, Number(ends.dc) || null);
+    if (spec) return `; ${recurringWords(spec)}`;
     return `; a new ${ends.save ? ends.save[0].toUpperCase() + ends.save.slice(1) : ""} save at the end of each of its turns ends it (DC ${ends.dc}${ends.drop ? `, ${ends.drop} lower each time` : ""})`;
 }
 

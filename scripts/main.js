@@ -9,6 +9,7 @@ import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpFloors } from "./floors.js";
 import { setUpEscapes } from "./escape.js";
+import { setUpRecurring } from "./recurring.js";
 import { setUpRecharge } from "./recharge.js";
 import { setUpReactions } from "./reactions.js";
 import { setUpHazards } from "./hazards.js";
@@ -82,6 +83,8 @@ Hooks.once("ready", () => {
     setUpFloors();
     // (2026-10-20: Effects a successful Escape ends, and one-roll misfortunes once used.)
     setUpEscapes();
+    // (2026-10-20: a new save at a creature's turns.)
+    setUpRecurring();
     setUpRecharge({ compileItem });
     setUpReactions({ compileItem });
     // (Batch 302: Bravery's lower frightened, from whatever adds it.)

@@ -3341,3 +3341,16 @@ A save's result rows (`inlineSave`'s degree sections; `src/compiler/row-extras.j
 - **A section that links its own PF2e Effect** keeps the text's reading, unless that reading missed a penalty or bonus the section names; then the Effect, with the text's early end on its entry (`covers: ["penalty"]`, `escape`, `until`; live finds them in the plan).
 - **A basic save's degree sections** ("Success The target takes half damage and is Frightened 1", Vision of Meloth): their conditions, push, damage of their own and the readings above on the basic rows, beside the riders — only when the save is the ability's one check and not one of several ways (a second save's sections, a breath's other way, its maker's own check stay out). "On a critical failure, the foe is also knocked Prone" after a basic save is the critical failure's (the subject "the foe" or "the enemy" read as the target).
 - **GM lines**: an "As failure, but …" row's line also carries the copied row's words when those have more to do; a floor doesn't hide "In addition, <someone else> …"; "after it escapes" and a monster's "can then Leap/Stride/Step" are left to the GM.
+
+## A new save at a creature's turns (2026-10-20, for the item module)
+
+A condition's `duration.saveEnds` (batch 311's monster reading, "It can attempt a new Fortitude save at the end of each of its turns") or a note Effect's `note.saveEnds` is now played, not only said (`src/live/recurring.js`, `scripts/recurring.js`, tests in `test/recurring.test.js`):
+
+- `{ save, dc (null: the plan's own DC), drop?, timing?: "end" | "start", from?: "next", rounds?, alsoEnds?, gate?, mode?: "end" | "reduce" | "escalate", escalate?: { criticalSuccess, success, failure, criticalFailure }, max? }`.
+- Apply: an Effect that grants the condition (its time, or until a save ends it), flagged `saveEnds`; for `"escalate"` the condition itself plus a rule-less Effect that keeps its saves (gone with the condition). A note Effect is flagged likewise. The Effects' words say the save.
+- At that end (or start) of the creature's turn (PF2e's `pf2e.endTurn` / `pf2e.startTurn`, active GM): a save card for it — first the gate's yes/no for the GM ("only if it took an action with the attack, manipulate or move trait this round"), then "Roll the Fortitude save" for its owner or the GM. The roll (identifier `aar-recurring:<card>`) does the rest:
+  - `"end"`: a success or better ends it (and `alsoEnds`); a failure lowers the DC by `drop`.
+  - `"reduce"`: a critical success ends it; a success takes a round off its Effect (gone at 0).
+  - `"escalate"`: the degree's step on the condition's value, to `max`; at 0 or `"end"`, gone with `alsoEnds`.
+- `from: "next"` skips the first such turn; `rounds` ends it after that many of its turns ("functions for up to 6 rounds").
+- The simulator plays the same modes (`saveEndsAtTurnEnd`, timing "start" at its turn's start; a gate taken as met).
