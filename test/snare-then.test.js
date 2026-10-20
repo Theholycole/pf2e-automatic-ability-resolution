@@ -78,5 +78,9 @@ test("2026-10-20: zones for candles and incense — a modifier's predicate on th
     assert.deepEqual(inside(["undead"]).map((action) => action.rules), [[{ key: "FastHealing", value: 4 }]]);
     assert.deepEqual(inside(["humanoid"]), []);
     assert.equal(inside(["undead"], true).length, 1, "its maker too when it fits");
+    // (who: "others" not its maker, "own" its maker only — a gadget's weakness on the others, its holder's resistance.)
+    const gadget = { area: { type: "emanation", value: 10 }, inside: [{ rules: [{ key: "Resistance", type: "spirit", value: 5 }], who: "own" }, { rules: [{ key: "Weakness", type: "spirit", value: 5 }], who: "others" }] };
+    const keys = (own) => zoneActions(gadget, "tokenEnter", { own }).filter((action) => action.kind === "inside").map((action) => action.rules[0].key);
+    assert.deepEqual([keys(true), keys(false)], [["Resistance"], ["Weakness"]]);
     assert.deepEqual(zoneMemberEffect({ name: "Incense", kind: "inside", rules: [{ key: "FastHealing", value: 4 }], regionUuid: "r", moduleId: "aar" }).system.rules, [{ key: "FastHealing", value: 4 }]);
 });

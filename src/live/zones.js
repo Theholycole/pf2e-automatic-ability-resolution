@@ -121,9 +121,13 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
         // (Batch 274, Sink or Swim: PF2e's degree adjustments, its allies' on its allies, its foes' on the others; not on itself.)
         const adjustments = (zone.adjustments ?? []).filter((entry) => (entry.allies ? allied : !allied && !own));
         if (adjustments.length) actions.push({ kind: "adjust", adjustments: adjustments.map((entry) => ({ ...entry })) });
-        // (2026-10-20: rules for the creatures inside that fit — zone.inside [{ rules, only }]: Incense of Distilled Death's fast healing 4
-        // for undead —, its maker too when it fits.)
-        for (const entry of zone.inside ?? []) if ((entry.rules ?? []).length && onlyFits(entry, traits)) actions.push({ kind: "inside", rules: entry.rules.map((rule) => ({ ...rule })) });
+        // (2026-10-20: rules for the creatures inside that fit — zone.inside [{ rules, only, who? }]: Incense of Distilled Death's fast healing 4
+        // for undead —, its maker too when it fits; who "others": not its maker, "own": its maker only — Maelstromic Destabilizer's weakness to
+        // spirit on the others, its holder's resistance.)
+        for (const entry of zone.inside ?? []) {
+            if (!(entry.rules ?? []).length || !onlyFits(entry, traits) || (entry.who === "others" && own) || (entry.who === "own" && !own)) continue;
+            actions.push({ kind: "inside", rules: entry.rules.map((rule) => ({ ...rule })) });
+        }
     }
     // (2026-10-20: a save its maker attempts too — saves[i].own, Candle of Truth's "each creature (including you)".)
     if (own) {
