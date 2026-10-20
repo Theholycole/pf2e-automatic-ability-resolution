@@ -32,6 +32,8 @@ test("immunity: how long, to whom, after which results", () => {
     const footsteps = inline.immunityDetails("Critical Success The creature is unaffected and is temporarily immune for 24 hours.");
     assert.deepEqual([footsteps.duration, footsteps.degrees], [{ value: 24, unit: "hours" }, ["criticalSuccess"]]);
     assert.deepEqual(inline.readImmunity("<p>Regardless of your result, the target is temporarily immune to your attempts to Demoralize it for 10 minutes.</p>").duration, { value: 10, unit: "minutes" });
+    // (2026-10-20: not an immunity to attempts to end something — Mindrender Baton's.)
+    assert.equal(inline.readImmunity("<p>The commanded creature is then temporarily immune to the commander's attempts to end the command with skills for 24 hours.</p>"), null);
 });
 
 test("compiled auras: Frightful Presence on entering, Stench also at turn start, Miasma after Poison Breath; other passives aren't auras", { skip: !available && "PF2e's packs not found" }, async () => {

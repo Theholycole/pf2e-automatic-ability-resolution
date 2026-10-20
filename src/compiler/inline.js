@@ -410,12 +410,16 @@ export function readConditions(html, { plain: plainConditions = PLAIN_CONDITIONS
 export function readImmunity(html, names = []) {
     // Each result heading and each line its own sentence ("…save\nCritical Success The creature is unaffected and immune…").
     const plain = htmlToPlainText(String(html ?? "").replace(/<strong>\s*(Critical Success|Success|Failure|Critical Failure)\s*<\/strong>/gi, "\n$1")).replace(/\s*\n+\s*/g, ". ").replace(/\.\s*\./g, ".");
-    const temporarily = /[^.]*\btemporarily immune\b[^.]*\./i.exec(plain);
+    // (2026-10-20: not one to attempts to end something — Mindrender Baton's immunity to another creature's attempts to remove its effect:
+    // not an immunity to this ability. Demoralize's "immune to your attempts to Demoralize it" still is.)
+    const attempts = (sentence) => /\bimmune to [^.]*\battempts? to (?:remove|end|break|counteract|dispel|suppress|negate|free|cure|undo|escape|lift)\b/i.test(sentence);
+    const temporarily = [...plain.matchAll(/[^.]*\btemporarily immune\b[^.]*\./gi)].find((match) => !attempts(match[0]));
     if (temporarily) return immunityDetails(temporarily[0].trim());
     // "is then immune to the hantu denai's Terrifying Cry for 1 minute", "immune to this ability for 24 hours";
     // not "immune to all thatchlings' distracting giggle" (another ability) or "to the sight of that creature".
     for (const match of plain.matchAll(/[^.]*\bimmune to ([^.]*?)\bfor (?:\d+|an?|one) (?:round|minute|hour|day)s?\b[^.]*\./gi)) {
         const what = match[1].toLowerCase();
+        if (attempts(match[0])) continue;
         // "All of the creature's equipment is immune to Wasting Gaze": not the creature.
         if (/\b(?:equipment|items?|objects?|gear)\b[^.]*\bimmune\b/i.test(match[0])) continue;
         const own = /^(?:this|the|that|its) (?:ability|effect|effects|aura|trap|hazard)\b|^its effects\b|^the effects of\b/.test(what)
