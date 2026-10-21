@@ -3274,6 +3274,16 @@ The user's call: "build everything you brought up" (tier 3).
 - **Coverage:** 7 rulebook abilities.
 - **Live:** unchanged; the simulator doesn't place downed creatures, so it doesn't play these at all now.
 
+## Recharges in more words, and shared ones (2026-10-21, batch 314)
+
+- **Reader:**
+  - `readRecharge` in `src/compiler/inline.js` also reads a time after "until … in" ("can't be used again until another tumor swells to a suitable size in 1d4 rounds"; not "can't be affected …", a target's immunity), and a roll whose formula is in braces (`[[/br {1d4} #Recharge Breath Weapon]]`).
+  - `onceAFight`: "it can't be used again." with nothing after it is `oncePerFight: true`.
+  - `withSharedRecharge` in `src/compiler/monster.js`, after `onceAFight`: a plan with a recharge whose text says "This ability and X can't be used again …" or "can't use A or B again …" (one of them its own name) gets `sharesRecharge`, the other ability's name as the creature has it; only an ability the creature has. A plan made from another ability's (Double Breath from Corrosive Breath) drops a `sharesRecharge` naming itself and reads its own.
+- **Why:** the simulator's danger study had the Ash Giant use Blastboil three times a round; the recharge and its sharing with Tumor Pop weren't read.
+- **Coverage:** 10 rulebook plans: Blastboil (recharge, shared with Tumor Pop); Breath Weapon and Jolting Arc of four PFS creatures (braced rolls); Ulna Bow of two brain guzzlers (once a fight); the Tarn Linnorm's Corrosive Breath and Double Breath, which now share each other's; the Grauladon's Noxious Breath, shared with Reactive Breath. No Battlezoo plan changed.
+- **Live:** `startRecharge` already puts the recharge on both abilities when a plan shares it (batch 262). The simulator gives abilities that name each other one recharge (its B318).
+
 ## Live check of batches 299–300 (2026-10-13)
 
 Checked in pftest:

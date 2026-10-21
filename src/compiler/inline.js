@@ -131,9 +131,10 @@ export function readTemplate(raw) {
 }
 
 // "[[/gmr 1d4 #Recharge X]]" or "can't use X again for 1d4 rounds" → "1d4".
+// (2026-10-21: a formula in braces too, "[[/br {1d4} #Recharge Breath Weapon]]" — PFS season 3's cinder rat and displaced robots.)
 export function readRecharge(html) {
     const text = String(html ?? "");
-    const roll = /\[\[\/(?:gm)?r(?:oll)? (\d+d\d+(?:\s*[+-]\s*\d+)?)[^\]]*#\s*Recharge/i.exec(text);
+    const roll = /\[\[\/(?:gm|b|bl)?r(?:oll)? \{?\s*(\d+d\d+(?:\s*[+-]\s*\d+)?)\s*\}?[^\]]*#\s*Recharge/i.exec(text);
     if (roll) return roll[1].replace(/\s+/g, "");
     const plain = /can'?t use [^.]*? again for (\d+d\d+|\d+) rounds?/i.exec(htmlToPlainText(text));
     if (plain) return plain[1];
@@ -142,8 +143,13 @@ export function readRecharge(html) {
     if (minutes) return String(10 * (Number(minutes[1]) || 1));
     // Other publishers' wording: "can't Spew Smog again for [[/br 1d4 #rounds]]{1d4 rounds}", "can't use its
     // Breath Weapon again for [[/r 1d4 #rounds]]".
-    const rolled = /can(?:'?t|not) (?:use )?[^.]*? again for \[\[\/(?:gm|b|bl)?r(?:oll)? (\d+d\d+(?:\s*[+-]\s*\d+)?)[^\]]*\]\](?:\{[^}]*\})?/i.exec(text) ?? /can(?:'?t|not) [^.]*? again for (\d+d\d+|\d+) rounds?/i.exec(htmlToPlainText(text));
-    return rolled ? rolled[1].replace(/\s+/g, "") : null;
+    const rolled = /can(?:'?t|not) (?:use )?[^.]*? again for \[\[\/(?:gm|b|bl)?r(?:oll)? \{?\s*(\d+d\d+(?:\s*[+-]\s*\d+)?)[^\]]*\]\](?:\{[^}]*\})?/i.exec(text) ?? /can(?:'?t|not) [^.]*? again for (\d+d\d+|\d+) rounds?/i.exec(htmlToPlainText(text));
+    if (rolled) return rolled[1].replace(/\s+/g, "");
+    // (2026-10-21, found by the simulator's danger study — its Ash Giant used Blastboil three times a round: "This ability and tumor pop can't be
+    // used again until another tumor swells to a suitable size in [[/gmr 1d4 #rounds]]{1d4 rounds}." — the time after "until … in". Not
+    // "can't be affected again …", a target's immunity.)
+    const until = /can(?:'?t|not) (?!be\b(?! used\b))[^.]*? again until [^.]*? in (?:\[\[\/(?:gm|b|bl)?r(?:oll)? \{?\s*(\d+d\d+(?:\s*[+-]\s*\d+)?)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+|\d+) rounds?\b)/i.exec(text);
+    return until ? (until[1] ?? until[2]).replace(/\s+/g, "") : null;
 }
 
 // "within 100 feet" / "up to 60 feet" / "range 30 feet" → 100.

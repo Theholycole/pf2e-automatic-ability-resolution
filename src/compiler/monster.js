@@ -10543,7 +10543,7 @@ export function compileMonsterAbility(source, options = {}) {
     // Attach, Berserk, the elemental dragons' Countered by and Fed by — src/compiler/creature-rules.js.)
     const passive = !read && !free ? passiveRules(modernItem(source), options.actor ?? source.actor ?? source.parent ?? null) ?? creatureRules(modernItem(source)) : null;
     const plan = withWatchedTrigger(modernItem(source), read ?? free ?? passive ?? (options.trailing ? null : hazardEffect(modernItem(source), options) ?? reactionByEffect(modernItem(source), options) ?? trailingNotes(modernItem(source), options)) ?? (options.trailing ? null : ownToggle(modernItem(source))) ?? gmFallback(modernItem(source), options));
-    return withDyingTarget(modernItem(source), withSpellCriticalFailure(modernItem(source), withSaveEnds(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)))))));
+    return withDyingTarget(modernItem(source), withSpellCriticalFailure(modernItem(source), withSaveEnds(modernItem(source), withSharedRecharge(modernItem(source), onceAFight(modernItem(source), byActionCount(modernItem(source), withNeeds(modernItem(source), withExtraReactions(modernItem(source), plan, options.actor ?? source.actor ?? source.parent ?? null)))), options.actor ?? source.actor ?? source.parent ?? null))));
 }
 
 // (Batch 308: "If the guardian uses 1 action …, 3d6 force; 2 actions …, 5d6; 3 actions …, 6d6" — a damage for each count of actions, read
@@ -10620,15 +10620,43 @@ function onceAFight(item, plan) {
     if (once && acted) return { ...plan, oncePerFight: true };
     if (plan.trigger?.recharge) return plan;
     const name = String(item.name ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const own = name && new RegExp(String.raw`can(?:'?t|not) use (?:its |this |the )?${name}\b[^.]*? (?:again )?for (?:\[\[\/(?:gm|b|bl)?r(?:oll)? (\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+|\d+) rounds?)`, "i").exec(html);
+    const own = name && new RegExp(String.raw`can(?:'?t|not) use (?:its |this |the )?${name}\b[^.]*? (?:again )?for (?:\[\[\/(?:gm|b|bl)?r(?:oll)? \{?\s*(\d+d\d+)[^\]]*\]\](?:\{[^}]*\})?|(\d+d\d+|\d+) rounds?)`, "i").exec(html);
     if (own && !plan.modes?.some((mode) => mode.plan?.trigger?.recharge)) {
         const recharge = { formula: own[1] ?? own[2], unit: "rounds" };
         if (plan.builtin === "modes") return { ...plan, modes: plan.modes.map((mode) => (mode.plan?.resolution ? { ...mode, plan: { ...mode.plan, trigger: { ...(mode.plan.trigger ?? { event: "use" }), recharge } } } : mode)) };
         if (plan.resolution) return { ...plan, trigger: { ...(plan.trigger ?? { event: "use" }), recharge } };
     }
+    // (2026-10-21: and never again, "Once the ulna bow has been used once it can't be used again.")
     if (/\bcan(?:'?t|not) (?!be\b)[^.]*? again (?:for (?:\d+|an?|one) (?:hours?|days?)\b|until (?:\d+|an?|one) (?:hours?|days?) (?:has|have) passed|(?:that|this) day\b)/i.test(text)
+        || /\bcan(?:'?t|not) be used again\s*(?:\.|$)/im.test(text)
         || /\bAfter [^.]*? (?:is|are) (?:vented|expended|spent|used)\b[^.]*\b(?:goes|go|becomes?) dormant\b/i.test(text)) return { ...plan, oncePerFight: true };
     return plan;
+}
+
+// A recharge shared with another of its abilities (2026-10-21, found by the simulator's danger study: its Ash Giant used Blastboil three times a
+// round): "This ability and tumor pop can't be used again until … in 1d4 rounds", "The linnorm can't use Corrosive Breath or Double Breath again for
+// 1d4 rounds" → sharesRecharge, the other ability's name as the creature has it (live, both get the recharge, scripts/recharge.js; the
+// simulator, one recharge for both). Only a plan with a recharge of its own, and an ability the creature has. (A plan made from another
+// ability's — Double Breath from Corrosive Breath — doesn't keep that one's when it names itself.)
+function withSharedRecharge(item, plan, actor) {
+    if (!plan?.resolution || !plan.trigger?.recharge) return plan;
+    const own = String(item.name ?? "").trim().toLowerCase();
+    if (plan.sharesRecharge && String(plan.sharesRecharge).trim().toLowerCase() !== own) return plan;
+    if (plan.sharesRecharge) {
+        const { sharesRecharge, ...rest } = plan;
+        plan = rest;
+    }
+    const text = htmlToPlainText(String(item.system?.description?.value ?? "")).replace(/\[\[\/[^\]]*\]\](?:\{([^}]*)\})?/g, (_all, label) => label ?? "").replace(/@\w+\[[^\]]*\](?:\{([^}]*)\})?/g, (_all, label) => label ?? "");
+    const name = String.raw`(?:its |their |the )?([A-Za-z][\w' -]*?)`;
+    const both = new RegExp(String.raw`\b(?:This (?:ability|action)|${name}) and ${name} can(?:'?t|not) be used again\b`, "i").exec(text)
+        ?? new RegExp(String.raw`\bcan(?:'?t|not) use ${name} (?:or|and) ${name} again\b`, "i").exec(text);
+    if (!both) return plan;
+    const names = [both[1] ?? item.name, both[2]].map((entry) => String(entry ?? "").trim());
+    if (!names.some((entry) => entry.toLowerCase() === own)) return plan;
+    const named = names.find((entry) => entry.toLowerCase() !== own);
+    const owner = actor ?? item.actor ?? item.parent;
+    const other = named ? [...(owner?.items?.contents ?? owner?.items ?? [])].find((entry) => String(entry?.name ?? "").trim().toLowerCase() === named.toLowerCase()) : null;
+    return other ? { ...plan, sharesRecharge: other.name } : plan;
 }
 
 function byActionCount(item, plan) {
