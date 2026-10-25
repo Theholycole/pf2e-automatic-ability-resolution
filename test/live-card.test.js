@@ -18,6 +18,13 @@ test("a card's check: a save against a fixed DC, or the user's check against eac
     assert.equal(cardCheck({ resolution: { kind: "save", check: { roll: "save", statistic: "will", against: { dc: "spell" } } } }), null);
 });
 
+test("a card's moveFrom: the token its pushes and pulls are measured from, kept on the state (the item module's Dispersing Bullet)", () => {
+    const plain = createCard({ plan: breath, ability: { name: "Avalanche Breath" }, source: { actorUuid: "Actor.x", tokenUuid: "Scene.s.Token.src", name: "Dragon" }, targets: [{ actorUuid: "Actor.a", name: "Valeros" }] });
+    assert.equal(plain.moveFrom, undefined);
+    const moved = createCard({ plan: breath, ability: { name: "Dispersing Bullet" }, source: { actorUuid: "Actor.x", tokenUuid: "Scene.s.Token.src", name: "Gunner" }, targets: [{ actorUuid: "Actor.a", name: "Valeros" }], moveFrom: "Scene.s.Token.hit" });
+    assert.equal(moved.moveFrom, "Scene.s.Token.hit");
+});
+
 test("a card's state: targets, rolls recorded by identifier, Apply when all have rolled", () => {
     const state = createCard({ plan: breath, ability: { name: "Avalanche Breath", uuid: "Actor.x.Item.y" }, source: { actorUuid: "Actor.x", name: "Dragon" }, targets: [{ actorUuid: "Actor.a", name: "Valeros" }, { actorUuid: "Actor.b", name: "Seelah" }] });
     assert.deepEqual(state.targets.map((target) => target.id), ["t0", "t1"]);

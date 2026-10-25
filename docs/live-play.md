@@ -3369,3 +3369,8 @@ A condition's `duration.saveEnds` (batch 311's monster reading, "It can attempt 
 ## Affliction stages read more fully (2026-10-20, found by the item module)
 
 `readAffliction` (`src/compiler/afflictions.js`): a condition linked by its noun ("{Confusion}", "{Blindness}") is that condition (confused, blinded; for every reading, `CONDITION_NOUNS` in `inline.js`), and "Blindness or Deafness" is a choice, the GM's; "(remaining duration)" is `{ value: null, unit: "remaining" }`, as long as the affliction lasts (Grit's stage 6); a stage's own PF2e Effect (`stage.effects [{ uuid, label }]`: "Effect: Grit (Stage 1)", in the paragraph after the stage; after the last stage only one named for a stage, not the whole affliction's). Live play leaves afflictions to Pseudo Afflictions as before; the simulator puts a stage's Effect on the creature while that stage lasts.
+
+## For other modules: a push's origin, and a hook after Apply (2026-10-25, the item module's request)
+
+- `api.live.postCard({ …, moveFrom })`: a token uuid the card's pushes and pulls are measured from (its centre, and a pull's `stopAt`), instead of the source's — Dispersing Bullet pushes away from the creature the Strike hit, Singularity Ammunition pulls toward it. Kept on the card's state as `moveFrom`. (One for the whole card: the core passes no per-row origin with a move.)
+- `Hooks.callAll("pf2e-automatic-ability-resolution.applied", { message, state, targets, changes })` once a card is applied, on the client that applied it (the active GM): `targets` is `[{ id, tokenUuid, actorUuid, name, degree }]`, `changes` the core's. For follow-ups the card doesn't play itself — the item module's space-picking card after Roc-Shaft Arrow's or Whip-Tongue Sling's failed save.

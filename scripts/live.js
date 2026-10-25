@@ -111,7 +111,9 @@ function effectTarget(token, sourceToken) {
 // The immunity flags of a creature's Effects that haven't run out (PF2e may leave an expired one if it doesn't remove them itself).
 export const immunityFlags = (actor) => (actor?.itemTypes?.effect ?? []).filter((effect) => !(effect.isExpired ?? effect.system?.expired)).map((effect) => effect.flags?.[MODULE_ID]);
 
-export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null }) {
+// (2026-10-25, for the item module: moveFrom — a token uuid its pushes and pulls are measured from instead of the source's: Dispersing
+// Bullet's from the creature its Strike hit.)
+export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null, moveFrom = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     // (2026-10-20: a temporary immunity — trigger.immunity —: the creatures already immune left out, and the card says so; none left, a
@@ -136,7 +138,8 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
         rider,
         cause,
         aura,
-        warning
+        warning,
+        moveFrom
     });
     return ChatMessage.create({
         content: cardHTML(state),
@@ -1226,7 +1229,11 @@ async function applyCard(message) {
     // What happened first, then the rolls and reminders.
     const next = { ...stateOf(message), status: "applied", results: [...changeLines(result.changes, names), ...lines] };
     if (!next.results.length) next.results = ["Nothing to apply."];
-    return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    const updated = await message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
+    // (2026-10-25, for other modules' follow-ups — the item module's space-picking card after Roc-Shaft Arrow's failed save: each target's
+    // token and degree, on the client that applied the card.)
+    Hooks.callAll(`${MODULE_ID}.applied`, { message, state: next, targets: next.targets.map((target) => ({ id: target.id, tokenUuid: target.tokenUuid ?? null, actorUuid: target.actorUuid, name: target.name, degree: target.degree ?? null })), changes: result.changes });
+    return updated;
 }
 
 // "Temporarily immune for 1 minute" (Frightful Presence, Stench, Demoralize):
@@ -1706,7 +1713,9 @@ async function disarm(actor, effect, target) {
 // monster, stopped by walls and the scene's edge (the core's forced movement).
 async function forcedMove(state, target, token, change) {
     const mover = game.modules.get(CORE_ID)?.api?.forcedMovement;
-    const source = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
+    // (Measured from the card's moveFrom token when it has one — postCard's —, else its source.)
+    const origin = state.moveFrom ?? state.source.tokenUuid;
+    const source = origin ? await fromUuid(origin).catch(() => null) : null;
     if (!mover || !token || !source) return `${target.name}: move the token ${change.distance} feet by hand.`;
     const size = source.parent?.grid?.size ?? canvas.grid.size;
     const point = { x: source.x + Number(source.width ?? 1) * size / 2, y: source.y + Number(source.height ?? 1) * size / 2 };

@@ -137,7 +137,7 @@ export function actionCounts(plan) {
     return variants && typeof variants === "object" ? Object.keys(variants).map(Number).filter(Number.isFinite).sort((a, b) => a - b) : [];
 }
 
-export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null, warning = null }) {
+export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null, warning = null, moveFrom = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     const counts = actionCounts(plan);
@@ -156,6 +156,8 @@ export function createCard({ plan, ability, source, targets, rider = null, cause
         cause,
         aura,
         warning,
+        // (A token uuid its pushes and pulls are measured from instead of the source's — postCard's moveFrom.)
+        ...(moveFrom ? { moveFrom } : {}),
         targets: targets.map((target, index) => ({ id: `t${index}`, actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name, dc: target.dc ?? null, total: null, natural: null, degree: check.kind === "automatic" ? "success" : null })),
         status: "open",
         results: []
