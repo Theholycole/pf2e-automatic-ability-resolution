@@ -1309,6 +1309,11 @@ async function targetOf(state, id) {
 
 export const damageRollClass = () => (CONFIG.Dice?.rolls ?? []).find((roll) => roll?.name === "DamageRoll");
 
+// (2026-10-26, for the item module's Exsanguinate: what each target actually took — after its resistances, from its Hit Points and temporary
+// ones — as a card's changes are applied in turn, for a later tempHp change's fromDamage { of, fraction, afterResistances }.)
+const TAKEN = new WeakMap();
+const hitPointsOf = (actor) => (Number(actor?.system?.attributes?.hp?.value) || 0) + (Number(actor?.system?.attributes?.hp?.temp) || 0);
+
 // One change from the core, applied in Foundry. Returns an extra line for the card, or null.
 // (2026-10-15: exported on the module api as api.live.applyChange for the item module's cards — run it on the active GM's client, with a state
 // { plan, ability: { name, uuid }, source: { actorUuid, tokenUuid, name }, targets: [{ id, actorUuid, tokenUuid, name }] }. Keep its
@@ -1325,7 +1330,11 @@ export async function applyChange(change, state) {
             const DamageRoll = damageRollClass();
             const roll = await new DamageRoll(parts.length === 1 ? parts[0] : `{${parts.join(",")}}`).evaluate();
             const item = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
+            const before = hitPointsOf(actor);
             await actor.applyDamage({ damage: roll, token: token ?? undefined, item: item ?? undefined });
+            const taken = Math.max(0, before - hitPointsOf(actor));
+            if (!TAKEN.has(state)) TAKEN.set(state, new Map());
+            TAKEN.get(state).set(change.target, (TAKEN.get(state).get(change.target) ?? 0) + taken);
             return null;
         }
         case "condition": {
@@ -1464,10 +1473,27 @@ export async function applyChange(change, state) {
         }
         // Temporary Hit Points (batch 30): the higher of its current and these (they don't stack); how long they last, for the GM.
         case "tempHp": {
+            // (A share of what a target took after its resistances, as this card applied it: Exsanguinate's half.)
+            let amount = change.amount;
+            if (change.fromDamage?.afterResistances) {
+                const taken = TAKEN.get(state)?.get(change.fromDamage.of);
+                if (Number.isFinite(taken)) amount = Math.floor(taken * (Number(change.fromDamage.fraction) || 1));
+                if (!(amount > 0)) return `${target.name} gains no temporary Hit Points (no damage was taken)`;
+            }
             const current = Number(actor.system?.attributes?.hp?.temp) || 0;
-            if (change.amount > current) await actor.update({ "system.attributes.hp.temp": change.amount });
             const lasting = change.duration?.mode === "fixed" && change.duration.value ? `, for ${change.duration.value} ${change.duration.value === 1 ? String(change.duration.unit).replace(/s$/, "") : change.duration.unit}` : "";
-            return change.amount > current ? `${target.name} has ${change.amount} temporary Hit Points${lasting}` : `${target.name} keeps its ${current} temporary Hit Points (more than ${change.amount})`;
+            // (2026-10-26: for a set time, PF2e's own TempHP rule on an Effect that lasts it — "You lose any remaining temporary Hit Points after
+            // 1 minute": they go when it ends.)
+            if (lasting && ["rounds", "minutes", "hours"].includes(change.duration.unit) && amount > current) {
+                await actor.createEmbeddedDocuments("Item", [{
+                    name: `Temporary Hit Points (${state.ability?.name ?? "ability"})`,
+                    type: "effect",
+                    img: "icons/svg/regen.svg",
+                    system: { slug: "temporary-hit-points", duration: { value: Number(change.duration.value), unit: change.duration.unit, expiry: "turn-start", sustained: false }, rules: [{ key: "TempHP", value: amount }], description: { value: `<p>${amount} temporary Hit Points${lasting}.</p>` } },
+                    flags: { [MODULE_ID]: { tempHp: { amount, source: state.ability?.name ?? null } } }
+                }]);
+            } else if (amount > current) await actor.update({ "system.attributes.hp.temp": amount });
+            return amount > current ? `${target.name} has ${amount} temporary Hit Points${lasting}` : `${target.name} keeps its ${current} temporary Hit Points (more than ${amount})`;
         }
         case "affliction":
             return handOffAffliction(state, target, actor, change.data);
