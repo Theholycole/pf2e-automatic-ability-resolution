@@ -1313,6 +1313,9 @@ export const damageRollClass = () => (CONFIG.Dice?.rolls ?? []).find((roll) => r
 // ones — as a card's changes are applied in turn, for a later tempHp change's fromDamage { of, fraction, afterResistances }.)
 const TAKEN = new WeakMap();
 const hitPointsOf = (actor) => (Number(actor?.system?.attributes?.hp?.value) || 0) + (Number(actor?.system?.attributes?.hp?.temp) || 0);
+// The times a PF2e Effect counts: a condition for one of them is an Effect that grants it, for that time (2026-10-27: hours and days too —
+// Grease Snare's "clumsy 1 for 1 hour" stayed on for good).
+const TIMED_UNITS = ["rounds", "minutes", "hours", "days"];
 
 // One change from the core, applied in Foundry. Returns an extra line for the card, or null.
 // (2026-10-15: exported on the module api as api.live.applyChange for the item module's cards — run it on the active GM's client, with a state
@@ -1349,7 +1352,7 @@ export async function applyChange(change, state) {
             // Already slowed (batch 75): "a failed save causes it to be Petrified permanently" — the worse condition, for its time or for good.
             if (change.escalate?.slug && actor.itemTypes.condition.some((condition) => condition.slug === change.escalate.if && condition.active)) {
                 const worse = change.escalate;
-                if (worse.duration?.mode === "fixed" && ["rounds", "minutes"].includes(worse.duration.unit)) {
+                if (worse.duration?.mode === "fixed" && TIMED_UNITS.includes(worse.duration.unit)) {
                     await timedCondition(actor, worse.slug, worse.value, worse.duration, state);
                     return `${target.name} was already ${worse.if}: ${worse.slug}, ${durationText(worse.duration, state.source.name, target.name)}`;
                 }
@@ -1394,20 +1397,20 @@ export async function applyChange(change, state) {
                     await saveTracker(actor, change.slug, recurring, state);
                     return `${target.name} is ${change.slug}${Number.isFinite(value) ? ` ${value}` : ""}${words}`;
                 }
-                const fixed = change.duration.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit);
+                const fixed = change.duration.mode === "fixed" && TIMED_UNITS.includes(change.duration.unit);
                 const duration = fixed ? (change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration) : { mode: "unlimited", ...(change.duration.escape ? { escape: change.duration.escape } : {}) };
                 await timedCondition(actor, change.slug, change.value, duration, state, { recurring });
                 return `${target.name} is ${change.slug}${fixed ? ` for ${durationText(duration, state.source.name, target.name)}` : ""}${words}`;
             }
             // (2026-10-20: "Immobilized for 1 minute or until it Escapes (DC 27)", "Slowed 1" until it Escapes: an Effect granting it, for its time or
             // until removed, that a successful Escape ends — scripts/escape.js.)
-            if (change.duration?.escape && (change.duration.mode === "until-escape" || (change.duration.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)))) {
+            if (change.duration?.escape && (change.duration.mode === "until-escape" || (change.duration.mode === "fixed" && TIMED_UNITS.includes(change.duration.unit)))) {
                 const duration = change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration;
                 await timedCondition(actor, change.slug, change.value, duration, state);
                 return `${target.name}'s ${change.slug} lasts ${duration.mode === "fixed" ? `${durationText(duration, state.source.name, target.name)} or ` : ""}until it Escapes (DC ${duration.escape.dc})`;
             }
             // A condition with a duration: a PF2e effect that grants it and ends on the monster's turn.
-            if (change.duration?.mode === "fixed" && ["rounds", "minutes"].includes(change.duration.unit)) {
+            if (change.duration?.mode === "fixed" && TIMED_UNITS.includes(change.duration.unit)) {
                 // "for 1d4 rounds": rolled for each creature.
                 const duration = change.duration.valueRoll ? { ...change.duration, value: (await new Roll(change.duration.valueRoll).evaluate()).total } : change.duration;
                 await timedCondition(actor, change.slug, change.value, duration, state);
@@ -1484,7 +1487,7 @@ export async function applyChange(change, state) {
             const lasting = change.duration?.mode === "fixed" && change.duration.value ? `, for ${change.duration.value} ${change.duration.value === 1 ? String(change.duration.unit).replace(/s$/, "") : change.duration.unit}` : "";
             // (2026-10-26: for a set time, PF2e's own TempHP rule on an Effect that lasts it — "You lose any remaining temporary Hit Points after
             // 1 minute": they go when it ends.)
-            if (lasting && ["rounds", "minutes", "hours"].includes(change.duration.unit) && amount > current) {
+            if (lasting && TIMED_UNITS.includes(change.duration.unit) && amount > current) {
                 await actor.createEmbeddedDocuments("Item", [{
                     name: `Temporary Hit Points (${state.ability?.name ?? "ability"})`,
                     type: "effect",
