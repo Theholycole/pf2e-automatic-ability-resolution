@@ -60,6 +60,14 @@ test("2026-10-26: a zone's entry only for a size or larger (only.minSize: the it
     assert.equal(onlyFits({ only: { minSize: "sm", traits: ["undead"] } }, ["humanoid"], "med"), false);
     assert.equal(onlyFits({ only: { minSize: "sm", traits: ["undead"] } }, ["undead"], "med"), true);
     assert.equal(onlyFits({ only: { traits: ["undead"] } }, ["undead"]), true);
+    // (2026-10-27, maxSize: Trip Snare's "A Medium or smaller creature" — a Large one doesn't set it off; with minSize, a range.)
+    const trip = { once: true, area: { type: "square", value: 5 }, saves: [{ when: ["enter"], plan: { id: "trip" }, only: { maxSize: "med" } }] };
+    assert.equal(zoneSetOff(trip, zoneActions(trip, "tokenEnter", { size: "lg" })), false);
+    for (const size of ["tiny", "sm", "med", null]) assert.equal(zoneSetOff(trip, zoneActions(trip, "tokenEnter", { size })), true, String(size));
+    assert.deepEqual(["tiny", "sm", "med", "lg", "huge"].map((size) => onlyFits({ only: { minSize: "sm", maxSize: "lg" } }, [], size)), [false, true, true, true, false]);
+    assert.equal(onlyFits({ only: { maxSize: "medium" } }, [], "huge"), false);
+    assert.equal(onlyFits({ only: { maxSize: "sm", traits: ["animal"] } }, ["animal"], "med"), false);
+    assert.equal(onlyFits({ burst: true, only: { maxSize: "med" } }, [], "grg"), false);
 });
 
 test("2026-10-27: a snare that bursts (zone.burst: Shrapnel Snare, Bomb Snare): one burst action on entering, gated by its only; it sets the snare off; its reach and words", async () => {

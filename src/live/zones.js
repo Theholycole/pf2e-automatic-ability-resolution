@@ -111,11 +111,14 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
 // ghosts, spirits and undead; Anathema Fulu's chosen trait). A creature with none of them: not that entry.
 // size (2026-10-26, the item module's snares: "When a Small or larger creature enters the square", Hoof Stakes Snare's "only when a Large
 // or larger creature"): the creature's (PF2e's actor.size), for an entry only for that size or larger (entry.only.minSize, "sm" … "grg").
-// A smaller one: not that entry — nothing sets the snare off, so it stays. A creature of unknown size fits.
+// A smaller one: not that entry — nothing sets the snare off, so it stays. A creature of unknown size fits. (2026-10-27: entry.only.maxSize
+// as well, that size or smaller — Trip Snare's "A Medium or smaller creature that enters the snare's square".)
 export function onlyFits(entry, traits, size) {
     if (entry?.only?.traits?.length && !entry.only.traits.some((trait) => (traits ?? []).includes(trait))) return false;
-    const at = entry?.only?.minSize ? sizeIndex(size) : -1;
-    return at < 0 || at >= sizeIndex(entry.only.minSize);
+    const at = entry?.only?.minSize || entry?.only?.maxSize ? sizeIndex(size) : -1;
+    if (at < 0) return true;
+    const [low, high] = [entry.only.minSize ? sizeIndex(entry.only.minSize) : -1, entry.only.maxSize ? sizeIndex(entry.only.maxSize) : -1];
+    return (low < 0 || at >= low) && (high < 0 || at <= high);
 }
 
 export function zoneActions(zone, event, { own = false, allied = false, initial = false, traits = [], size = null } = {}) {
