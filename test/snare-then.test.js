@@ -25,6 +25,16 @@ test("its area at the snare's square: the square under the snare's shape, a burs
     assert.deepEqual([hampering.place, hampering.data.shapes[0].type, hampering.data.shapes[0].width], [false, "rectangle", 200]);
 });
 
+test("2026-10-27: a zone of given squares (Hellfire Boots' trail): one square shape each, snapped, once each, where they are", () => {
+    const grid = { size: 100, distance: 5 };
+    const token = { id: "tok", x: 0, y: 0, width: 1, height: 1, shape: 0 };
+    const trail = zoneRegion({ name: "Trail", zone: { area: { type: "squares", cells: [{ x: 300, y: 200 }, { x: 410, y: 250 }, { x: 300, y: 200 }, { x: "a" }] }, damage: [] }, token, grid, moduleId: "aar", flags: {} });
+    assert.equal(trail.place, false);
+    assert.equal(trail.data.attachment, undefined);
+    assert.deepEqual(trail.data.shapes.map((shape) => [shape.type, shape.x, shape.y, shape.width, shape.height, shape.anchorX]), [["rectangle", 300, 200, 100, 100, 0], ["rectangle", 400, 200, 100, 100, 0]]);
+    assert.equal(zoneRegion({ name: "Trail", zone: { area: { type: "squares", cells: [] } }, token, grid, moduleId: "aar", flags: {} }), null);
+});
+
 test("a target's Perception against a fixed DC, rolled as a save, is a check on the card", () => {
     const check = cardCheck({ resolution: { check: { roll: "save", statistic: "perception", against: { dc: "fixed", value: 38 } } } });
     assert.deepEqual([check.kind, check.statistic, check.dc], ["save", "perception", 38]);

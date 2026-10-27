@@ -57,7 +57,13 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
     let attach = false;
     // (2026-10-16: an area a snare leaves where it was, zone.then — centre "snare": at its square, never placed, never attached.)
     const atSnare = zone.centre === "snare" && token;
-    if (atSnare && ["burst", "emanation"].includes(zone.area?.type)) {
+    // (2026-10-27, for the item module's Hellfire Boots' trail: zone.area { type: "squares", cells: [{ x, y }] } — those grid squares (each a
+    // square's top-left in pixels, snapped to the grid, the same ones once), where they are: never placed, never attached.)
+    const cells = zone.area?.type === "squares" ? [...new Map((zone.area.cells ?? []).filter((cell) => Number.isFinite(Number(cell?.x)) && Number.isFinite(Number(cell?.y)))
+        .map((cell) => [Math.floor(Number(cell.x) / grid.size) * grid.size, Math.floor(Number(cell.y) / grid.size) * grid.size]).map(([x, y]) => [`${x},${y}`, { x, y }])).values()] : null;
+    if (cells) {
+        if (!cells.length) return null;
+    } else if (atSnare && ["burst", "emanation"].includes(zone.area?.type)) {
         shape = { type: "circle", x: centre.x, y: centre.y, radius, gridBased: true };
     } else if (atSnare && zone.area?.type === "square") {
         shape = { type: "rectangle", x: centre.x, y: centre.y, width: radius, height: radius, anchorX: 0.5, anchorY: 0.5, rotation: 0, gridBased: true };
@@ -80,7 +86,7 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
         shape = { type: "rectangle", x: centre.x, y: centre.y, width: radius, height: radius, anchorX: 0.5, anchorY: 0.5, rotation: 0, gridBased: true };
         place = true;
     }
-    if (!shape) return null;
+    if (!shape && !cells) return null;
     const difficulties = zoneDifficulties(zone.terrain);
     const behaviors = [
         ...(Object.keys(difficulties).length ? [{ name: `${name}: difficult terrain`, type: "modifyMovementCost", system: { difficulties } }] : []),
@@ -93,7 +99,7 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
         data: {
             name,
             color,
-            shapes: [shape],
+            shapes: cells ? cells.map(({ x, y }) => ({ type: "rectangle", x, y, width: grid.size, height: grid.size, anchorX: 0, anchorY: 0, rotation: 0, gridBased: true })) : [shape],
             behaviors,
             visibility,
             highlightMode: "coverage",
