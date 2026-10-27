@@ -134,7 +134,9 @@ export async function zoneEvent(region, behavior, event) {
     const target = token.object ?? token;
     // (2026-10-18: its traits, for a save or damage only for some — Sanctified Beans'.)
     const traits = [...(token.actor.traits ?? token.actor.system?.traits?.value ?? [])];
-    const actions = zoneActions(flags.zone, event.name, { own, allied, initial, traits });
+    // (2026-10-26: its size, for one only for Small or larger creatures — the item module's snares.)
+    const size = token.actor.size ?? token.actor.system?.traits?.size?.value ?? null;
+    const actions = zoneActions(flags.zone, event.name, { own, allied, initial, traits, size });
     const setOff = claims && zoneSetOff(flags.zone, actions);
     if (claims && !setOff) spent.delete(region.uuid);
     for (const action of actions) {

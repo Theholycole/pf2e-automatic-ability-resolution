@@ -43,6 +43,25 @@ test("2026-10-18: a zone's save or damage only for creatures with some traits (S
     assert.deepEqual(kinds(["undead", "incorporeal", "ghost"]), ["Beans", "Beans: incorporeal", "1d6", "1"]);
 });
 
+test("2026-10-26: a zone's entry only for a size or larger (only.minSize: the item module's 'Small or larger' snares): a smaller creature gets none and doesn't set the snare off", async () => {
+    const { onlyFits, zoneActions, zoneSetOff } = await import("../src/live/zones.js");
+    const snare = { once: true, area: { type: "square", value: 5 }, saves: [{ when: ["enter"], note: "The alarm sounds.", only: { minSize: "sm" } }] };
+    const hoof = { once: true, area: { type: "square", value: 5 }, saves: [{ when: ["enter"], plan: { id: "hoof" }, only: { minSize: "lg" } }], damage: [{ when: "enter", formulas: ["1d6"], only: { minSize: "lg" } }] };
+    assert.deepEqual(zoneActions(snare, "tokenEnter", { size: "tiny" }), []);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { size: "tiny" })), false);
+    for (const size of ["sm", "med", "grg"]) assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { size })), true, size);
+    assert.deepEqual(zoneActions(hoof, "tokenEnter", { size: "med" }), []);
+    assert.deepEqual(zoneActions(hoof, "tokenEnter", { size: "lg" }).map((action) => action.kind), ["save", "damage"]);
+    assert.deepEqual(zoneActions(hoof, "tokenEnter", { size: "huge" }).map((action) => action.kind), ["save", "damage"]);
+    // (Unknown size fits; the word works as well as PF2e's slug; traits and size together both have to fit.)
+    assert.equal(onlyFits({ only: { minSize: "lg" } }, [], null), true);
+    assert.equal(onlyFits({ only: { minSize: "large" } }, [], "med"), false);
+    assert.equal(onlyFits({ only: { minSize: "sm", traits: ["undead"] } }, ["undead"], "tiny"), false);
+    assert.equal(onlyFits({ only: { minSize: "sm", traits: ["undead"] } }, ["humanoid"], "med"), false);
+    assert.equal(onlyFits({ only: { minSize: "sm", traits: ["undead"] } }, ["undead"], "med"), true);
+    assert.equal(onlyFits({ only: { traits: ["undead"] } }, ["undead"]), true);
+});
+
 test("2026-10-19: a zone card words its modifiers inside by their sign — Sprite Apple's +1 is a bonus", async () => {
     const { modifierWords } = await import("../src/live/zones.js");
     assert.equal(modifierWords([{ selector: "performance", value: 1, type: "item" }]), "a bonus inside");

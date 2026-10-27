@@ -83,10 +83,13 @@ export function strikeMatches(activity, strike) {
     return name === wanted || name.startsWith(wanted) || wanted.startsWith(name) || name.includes(wanted);
 }
 
+// A size (PF2e's slug "sm", "med" … or the word) as its place: tiny 0 … gargantuan 5; -1 when unknown.
+export const sizeIndex = (size) => SIZES.indexOf(String(size ?? "").toLowerCase().replace(/^sm$/, "small").replace(/^med$/, "medium").replace(/^lg$/, "large").replace(/^grg$/, "gargantuan"));
+
 // A creature small enough for the activity's save ("A Medium or smaller creature struck by this attack must succeed …").
 export function fitsSize(size, limit) {
     if (!limit) return true;
-    const at = SIZES.indexOf(String(size ?? "").toLowerCase().replace(/^sm$/, "small").replace(/^med$/, "medium").replace(/^lg$/, "large").replace(/^grg$/, "gargantuan"));
+    const at = sizeIndex(size);
     return at < 0 || at <= SIZES.indexOf(String(limit).toLowerCase());
 }
 

@@ -3321,6 +3321,8 @@ A row's condition with `duration: { mode: "while", persistent: "<damage type>" }
 
 A zone's `saves[i].only` or `damage[i].only` = `{ traits: [...] }`: that entry only on a creature with one of those traits (Sanctified Beans' fiends, fey, ghosts, spirits and undead; a second save only for the incorporeal; Anathema Fulu's chosen trait). Without it, as before. `zoneActions` takes the creature's traits (`onlyFits`); the Combat Simulator's zones honour the same field. Live-checked by the item module's Sanctified Beans case in `pftest` (2026-10-18): no card for a plain creature in the square; an undead, incorporeal one got its basic Will and its Fortitude cards at its turn's end.
 
+`only.minSize` (2026-10-26, for the item module's snares that only a creature of some size sets off: "When a Small or larger creature enters the square", Hoof Stakes Snare's "only when a Large or larger creature"): one of PF2e's size slugs (`sm`, `med`, `lg`, `huge`, `grg`; the words work too). That entry, and the hazard's damage when `zone.hazard.only` says so, only on a creature that size or larger (`actor.size`; an unknown size fits). With `only.traits` too, both have to fit. A smaller creature gets nothing from it, so a snare (`once`) isn't set off and stays. The Combat Simulator's zones honour the same field.
+
 ## Temporary immunity on every card (2026-10-20, for the item module)
 
 - `postCard` honours a plan's `trigger.immunity` itself now, not only the auras: a creature already immune (an unexpired "Immune:" Effect of this module's, matching key and source) is left out and the card says so ("Ogre is immune: Aetheric Irritant (Major)."); none left, a note for the GM and no card. So a zone's save card, an aura's and another module's (the item module's) alike.

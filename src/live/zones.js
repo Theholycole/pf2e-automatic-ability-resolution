@@ -2,6 +2,8 @@
 // on the scene. Foundry tells the module when a token enters or leaves it, or starts or ends its turn in it (a script behaviour); PF2e's
 // own behaviour makes its difficult terrain. Pure: the Region's data, when it ends, and what each event does.
 
+import { sizeIndex } from "./activity.js";
+
 const NONE = { damage: { mode: "none", multiplier: 0, sourceComponentIds: [] }, effects: [] };
 
 // The script behaviour's source: on the active GM only, the module's handler.
@@ -107,9 +109,16 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
 // as it's made (a save "as it's made" only, not one on entering). Leaving: clear what the zone gave.
 // traits (2026-10-18): the creature's, for a save or damage only for some (entry.only.traits, any of them: Sanctified Beans' fiends, fey,
 // ghosts, spirits and undead; Anathema Fulu's chosen trait). A creature with none of them: not that entry.
-export const onlyFits = (entry, traits) => !entry?.only?.traits?.length || entry.only.traits.some((trait) => (traits ?? []).includes(trait));
+// size (2026-10-26, the item module's snares: "When a Small or larger creature enters the square", Hoof Stakes Snare's "only when a Large
+// or larger creature"): the creature's (PF2e's actor.size), for an entry only for that size or larger (entry.only.minSize, "sm" … "grg").
+// A smaller one: not that entry — nothing sets the snare off, so it stays. A creature of unknown size fits.
+export function onlyFits(entry, traits, size) {
+    if (entry?.only?.traits?.length && !entry.only.traits.some((trait) => (traits ?? []).includes(trait))) return false;
+    const at = entry?.only?.minSize ? sizeIndex(size) : -1;
+    return at < 0 || at >= sizeIndex(entry.only.minSize);
+}
 
-export function zoneActions(zone, event, { own = false, allied = false, initial = false, traits = [] } = {}) {
+export function zoneActions(zone, event, { own = false, allied = false, initial = false, traits = [], size = null } = {}) {
     if (event === "tokenExit") return [{ kind: "clear" }];
     const when = event === "tokenEnter" ? (initial ? "initial" : "enter") : event === "tokenTurnStart" ? "start" : event === "tokenTurnEnd" ? "end" : event === "tokenMoveWithin" ? "move" : null;
     if (!when) return [];
@@ -125,23 +134,23 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
         // for undead —, its maker too when it fits; who "others": not its maker, "own": its maker only — Maelstromic Destabilizer's weakness to
         // spirit on the others, its holder's resistance.)
         for (const entry of zone.inside ?? []) {
-            if (!(entry.rules ?? []).length || !onlyFits(entry, traits) || (entry.who === "others" && own) || (entry.who === "own" && !own)) continue;
+            if (!(entry.rules ?? []).length || !onlyFits(entry, traits, size) || (entry.who === "others" && own) || (entry.who === "own" && !own)) continue;
             actions.push({ kind: "inside", rules: entry.rules.map((rule) => ({ ...rule })) });
         }
     }
     // (2026-10-20: a save its maker attempts too — saves[i].own, Candle of Truth's "each creature (including you)".)
     if (own) {
-        for (const save of zone.saves ?? []) if (save.own && save.when.includes(when) && onlyFits(save, traits)) actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
+        for (const save of zone.saves ?? []) if (save.own && save.when.includes(when) && onlyFits(save, traits, size)) actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
         return actions;
     }
     // (A zone of its allies' gifts, Cleansing Earth's: nothing more on them.)
     if (allied && zone.effect?.allies) return actions;
-    if (when === "enter" && zone.hazard?.formulas?.length) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
+    if (when === "enter" && zone.hazard?.formulas?.length && onlyFits(zone.hazard, traits, size)) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
     for (const save of zone.saves ?? []) {
-        if (!save.when.includes(when) || !onlyFits(save, traits)) continue;
+        if (!save.when.includes(when) || !onlyFits(save, traits, size)) continue;
         actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
     }
-    for (const entry of zone.damage ?? []) if (entry.when === when && onlyFits(entry, traits)) actions.push({ kind: "damage", formulas: [...entry.formulas] });
+    for (const entry of zone.damage ?? []) if (entry.when === when && onlyFits(entry, traits, size)) actions.push({ kind: "damage", formulas: [...entry.formulas] });
     return actions;
 }
 
