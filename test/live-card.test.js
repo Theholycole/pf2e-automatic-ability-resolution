@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, changeLines, createCard, createCastCard, createModeCard, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
+import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, changeLines, checkLine, createCard, createCastCard, createModeCard, incapacitates, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
 
 const breath = {
     source: { name: "Avalanche Breath", slug: "avalanche-breath" },
@@ -265,4 +265,14 @@ test("a check at a set modifier, a save's penalty and a misfortune save, on the 
     assert.match(cardHTML(card(enfold.resolution)), /Enfold \+16 against each target(?:'|&#39;)s Reflex DC/);
     assert.match(cardHTML(card({ kind: "save", check: { roll: "save", statistic: "will", basic: false, against: { dc: "fixed", value: 26 }, misfortune: true } })), /DC 26 Will save, rolled twice \(the worse kept\)/);
     assert.match(cardHTML(card({ kind: "save", check: { roll: "save", statistic: "fortitude", basic: false, against: { dc: "fixed", value: 23 }, bonus: { value: -2, type: "circumstance" } } })), /DC 23 Fortitude save \(−2 circumstance\)/);
+});
+
+test("2026-10-27: an incapacitation effect's save says so, for PF2e's own adjustment", () => {
+    const resolution = { kind: "save", check: { roll: "save", statistic: "will", basic: false, against: { dc: "fixed", value: 25 } } };
+    assert.equal(incapacitates({ traits: ["magical"], activation: { traits: ["incapacitation", "auditory"] } }), true);
+    assert.equal(incapacitates({ traits: ["incapacitation"] }), true);
+    assert.equal(incapacitates({ traits: ["mental"] }), false);
+    assert.deepEqual(cardCheck({ traits: ["incapacitation"], resolution }), { kind: "save", statistic: "will", dc: 25, basic: false, incapacitation: true });
+    assert.deepEqual(cardCheck({ traits: [], resolution }), { kind: "save", statistic: "will", dc: 25, basic: false });
+    assert.equal(checkLine({ check: cardCheck({ activation: { traits: ["incapacitation"] }, resolution }) }), "DC 25 Will save (incapacitation)");
 });

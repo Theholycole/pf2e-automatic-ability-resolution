@@ -3347,6 +3347,12 @@ An aimed burst (2026-10-27, for Flame Drake Snare's "a 15-foot cone in the direc
 - Units: rounds, minutes, hours or days. Pure parts are in `src/live/part-immunity.js`. The Combat Simulator does the same (`src/engine/part-immunity.js`): rounds as they are, minutes as ten rounds, hours and days for the whole fight.
 - Checked live in `pftest` (2026-10-27, PFTEST SIM creatures, deleted afterwards): a critical failure blinded the target and gave it "Immune: Blinded (…)" for 1 hour; the next card said so before the roll, and on its critical failure dealt its damage without blinded.
 
+## Rolled condition values and incapacitation on save cards (2026-10-27, for the item module)
+
+- A condition whose value the text rolls ("Drained 1d4", the core's `valueRoll` with `value` null) is rolled for each creature on Apply: the roll is posted, the value is at least 1, and the card says "<creature>'s drained rolled 1d4: 3" before the condition goes on. `api.live.applyChange` rolls it too when its caller hasn't, as the spell module's basic saves do.
+- A save card for a plan with the incapacitation trait (on `plan.traits` or `plan.activation.traits`) says "(incapacitation)" and rolls the save with the roll option `item:trait:incapacitation`, so PF2e's own adjustment applies: a creature of higher level than the effect gets one degree better. The effect's level is PF2e's: the card's item when it's a physical item (Horn of the Aoyin), twice a spell's rank, otherwise the source creature's level. The source's own checks against a target's DC get no adjustment (PF2e needs a targeted DC for it). The Combat Simulator reads the activation's traits the same way.
+- Checked live in `pftest` (2026-10-27, PFTEST SIM creatures, deleted afterwards): a level-1 creature's "DC 15 Will save (incapacitation)" card; the level-10 target's failure became a success (the world's PF2E Incapacitation Variants module made the adjustment from the trait), the level-1 target's stayed a failure; Apply posted its 1d4 and left it drained 2 ("… drained rolled 1d4: 2"); `api.live.applyChange` with a valueRoll rolled and applied drained 4.
+
 ## Zones for candles and incense (2026-10-20, for the item module)
 
 - `zone.modifiers[i].predicate`: copied onto the inside Effect's FlatModifier, so it counts only where PF2e's predicate says (Candle of Truth's −4 to Deception only to Lie, `["action:lie"]`; Candle of Inflamed Passions' −1 to saves against emotion effects).

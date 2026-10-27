@@ -1014,7 +1014,9 @@ async function rollTarget(message, target) {
         if (!statistic) throw new Error(`${target.name} has no ${statisticLabel(state.check.statistic)}${["fortitude", "reflex", "will"].includes(state.check.statistic) ? " save" : ""}.`);
         // (Batch 286: its own bonus or penalty on the save, and a save rolled twice keeping the worse — PF2e's rollTwice.)
         const saveBonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
-        return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}) });
+        // (2026-10-27: an incapacitation effect — PF2e improves the save of a creature above the effect's level: the item's, a spell's twice its
+        // rank, otherwise the source's.)
+        return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}), ...(state.check.incapacitation ? { extraRollOptions: ["item:trait:incapacitation"] } : {}) });
     }
     // (Batch 288: a check at a set modifier, Envelop's +16 or a spell attack modifier in place of Athletics: PF2e's check with that as its base.)
     if (Number.isFinite(state.check.modifier)) {
@@ -1221,6 +1223,13 @@ async function applyCard(message) {
     const { kept, dropped } = dropImmuneParts(resolved.changes, immune);
     const result = { ...resolved, changes: kept };
     const lines = rolled.map((line) => `Damage rolled: ${line}`);
+    // (2026-10-27: "Drained 1d4" — rolled for each creature now, so the card's lines carry the value.)
+    for (const [index, change] of result.changes.entries()) {
+        if (!rollsValue(change)) continue;
+        const { target, actor } = await targetOf(state, change.target);
+        result.changes[index] = await withRolledValue(change, state, target?.name, actor);
+        lines.push(`${target?.name ?? "A creature"}'s ${change.slug} rolled ${change.valueRoll}: ${result.changes[index].value}`);
+    }
     for (const { target, slug } of dropped) lines.push(`${state.targets.find((entry) => entry.id === target)?.name ?? "A creature"} ${partWords(parts.find((part) => part.condition === slug), state.ability.name)}`);
     for (const change of result.changes) {
         try {
@@ -1343,6 +1352,17 @@ async function targetOf(state, id) {
     return { target, token, actor: token?.actor ?? (await fromUuid(target.actorUuid)) };
 }
 
+// A condition whose value is rolled (the core's valueRoll, kept when the text gives dice): the roll, posted, at least 1 — as the spell
+// module's basic saves do.
+const rollsValue = (change) => change?.op === "condition" && !Number.isFinite(change.value) && typeof change.valueRoll === "string" && change.valueRoll.trim() !== "";
+
+async function withRolledValue(change, state, name, actor) {
+    const roll = await new Roll(change.valueRoll).evaluate();
+    try { await roll.toMessage({ speaker: ChatMessage.getSpeaker({ actor: actor ?? undefined }), flavor: `${state.ability?.name ?? "Ability"}: ${name ?? "a creature"}'s ${change.slug} value (${change.valueRoll})` }); } catch (_) {}
+    const { valueRoll, ...rest } = change;
+    return { ...rest, value: Math.max(1, Number(roll.total) || 0), rolled: valueRoll };
+}
+
 export const damageRollClass = () => (CONFIG.Dice?.rolls ?? []).find((roll) => roll?.name === "DamageRoll");
 
 // (2026-10-26, for the item module's Exsanguinate: what each target actually took — after its resistances, from its Hit Points and temporary
@@ -1360,6 +1380,13 @@ const TIMED_UNITS = ["rounds", "minutes", "hours", "days"];
 export async function applyChange(change, state) {
     const { target, token, actor } = await targetOf(state, change.target);
     if (!actor && change.target !== undefined) return null;
+    // (2026-10-27, for the item module's cards: a value the text rolls, "Drained 1d4" — the core's valueRoll, rolled here when the caller
+    // hasn't.)
+    if (rollsValue(change)) {
+        const rolled = await withRolledValue(change, state, target?.name, actor);
+        const line = await applyChange(rolled, state);
+        return [`${target?.name ?? "A creature"}'s ${change.slug} rolled ${change.valueRoll}: ${rolled.value}`, line].filter(Boolean).join("; ");
+    }
     switch (change.op) {
         case "damage": {
             // (2026-10-16: a material the damage carries — "3d8[fire,silver]", the core's instance.materials — back in its flavor, which PF2e's

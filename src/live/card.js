@@ -20,13 +20,18 @@ export const endWords = (thing) => `${Number(thing?.escape?.dc) > 0 ? ` or until
 
 const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 
+// Has the plan the incapacitation trait (its own traits or its activation's)?
+export const incapacitates = (plan) => [...(plan?.traits ?? []), ...(plan?.activation?.traits ?? [])].includes("incapacitation");
+
 // What a plan asks for: a save each target attempts against a fixed DC, or the
 // user's check against each target's DC. null when it rolls nothing a card can.
 export function cardCheck(plan) {
     const check = plan?.resolution?.check;
     if (!check) return null;
     // (Batch 286: the save's own bonus or penalty, Inject Venom's −2 after a critical hit; a save rolled twice, the worse kept: misfortune.)
-    if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.misfortune ? { misfortune: true } : {}) };
+    // (2026-10-27, for the item module's Horn of the Aoyin: an incapacitation effect — PF2e's own save adjustment, by the item's level or the
+    // source's.)
+    if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.misfortune ? { misfortune: true } : {}), ...(incapacitates(plan) ? { incapacitation: true } : {}) };
     // No roll ("The target takes 3d8 fire damage"): every target is affected (2026-10-10).
     if (check.roll === "automatic") return { kind: "automatic" };
     // (A bonus of its own, "a +4 status bonus to the Athletics check", batch 36: added to the roll.)
@@ -187,7 +192,7 @@ export function checkLine(state) {
     const bonus = check.bonus ? ` (${signed(check.bonus.value)} ${check.bonus.type})` : "";
     // (Batch 286: its own bonus or penalty on the save, and a save rolled twice.)
     // (2026-10-16: the target's Perception against a fixed DC, rolled as a save — Mercurial Mantle's: a check, as PF2e says.)
-    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} ${["fortitude", "reflex", "will"].includes(check.statistic) ? "save" : "check"}${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}`;
+    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} ${["fortitude", "reflex", "will"].includes(check.statistic) ? "save" : "check"}${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}${check.incapacitation ? " (incapacitation)" : ""}`;
     if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
