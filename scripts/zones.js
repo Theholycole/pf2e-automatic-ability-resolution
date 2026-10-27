@@ -5,7 +5,9 @@
 // button. Its maker isn't harmed by its own zone. A zone that's gone once it acts (zone.once, the item module's snares) goes with its first
 // creature.
 
-import { modifierWords, snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
+import { burstReaches, burstWords, modifierWords, snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
+import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
+import { box, gridOf } from "./auras.js";
 import { isActiveGM, postCard } from "./live.js";
 import { noteToGM } from "./recharge.js";
 
@@ -151,6 +153,7 @@ export async function zoneEvent(region, behavior, event) {
         } else if (action.kind === "save" && item && sourceActor) await postCard({ plan: action.plan, item, sourceActor, sourceToken, tokens: [target], warning: `${name}: ${eventWords(event.name, initial)}.` });
         else if ((action.kind === "damage" || action.kind === "hazard") && item && sourceActor) await postCard({ plan: zoneDamagePlan(name, action.formulas), item, sourceActor, sourceToken, tokens: [target], warning: action.kind === "hazard" ? `${name}: on entering it; as much again for each further square it moves into.` : `${name}: ${eventWords(event.name, initial)}.` });
         else if (action.kind === "note") await noteToGM(sourceActor, sourceToken, [`<strong>${escape(name)}</strong> — ${escape(token.name)}: ${escape(action.text)}`]);
+        else if (action.kind === "burst" && item && sourceActor) await postCard({ plan: action.burst.plan, item, sourceActor, sourceToken, tokens: burstTokens(region, token, action.burst), warning: `${name}: set off by ${token.name}; everyone ${burstWords(action.burst)}.` });
     }
     if (setOff) {
         // (2026-10-16: a snare that leaves an area where it was — Smoke Screen Snare's smoke —: that area, at its square, once it's gone.)
@@ -159,6 +162,21 @@ export async function zoneEvent(region, behavior, event) {
         await spendZone(region, flags, token.name);
         if (flags.zone.then && square && scene && item) await startZone({ item, plan: { zone: { ...flags.zone.then, centre: "snare" } }, sourceToken, at: { token: square, scene } });
     }
+}
+
+// The creatures a snare's burst reaches (zone.burst, 2026-10-27): the one that set it off first (wherever its move ends), then every other
+// creature on the scene in the area — measured from the snare's square at that creature's height, or (from "creature", Bomb Snare's "the
+// target and all creatures in adjacent squares") from its space where it covers the square.
+function burstTokens(region, token, burst) {
+    const scene = region.parent;
+    const grid = gridOf(scene);
+    const square = snareSquare(region.shapes?.[0], grid.size);
+    const space = box(token, grid.size);
+    const own = square ? { ...box(square, grid.size), elevation: space.elevation } : space;
+    const covers = square && space.x < own.x + own.w && space.x + space.w > own.x && space.y < own.y + own.h && space.y + space.h > own.y;
+    const origin = burst.from === "creature" && (covers || !square) ? space : own;
+    const others = scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && burstReaches(burst, origin, box(other, grid.size), grid, distanceFeet));
+    return [token, ...others].map((entry) => entry.object ?? entry);
 }
 
 // A zone gone once it acts, set off: what it gave those inside taken away, its Region deleted, and its card saying so.

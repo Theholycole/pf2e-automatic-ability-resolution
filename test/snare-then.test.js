@@ -62,6 +62,33 @@ test("2026-10-26: a zone's entry only for a size or larger (only.minSize: the it
     assert.equal(onlyFits({ only: { traits: ["undead"] } }, ["undead"]), true);
 });
 
+test("2026-10-27: a snare that bursts (zone.burst: Shrapnel Snare, Bomb Snare): one burst action on entering, gated by its only; it sets the snare off; its reach and words", async () => {
+    const { burstReaches, burstWords, zoneActions, zoneSetOff } = await import("../src/live/zones.js");
+    const { distanceFeet } = await import("../../pf2e-resolution-core/src/model/grid.js");
+    const plan = { id: "shrapnel" };
+    const snare = { once: true, area: { type: "square", value: 5 }, saves: [], burst: { area: { type: "emanation", value: 10 }, plan, only: { minSize: "sm" } } };
+    assert.deepEqual(zoneActions(snare, "tokenEnter", { size: "med" }), [{ kind: "burst", burst: snare.burst }]);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { size: "med" })), true);
+    // (Not a Tiny one, not its maker, not one in the square as it's placed, not a turn inside.)
+    assert.deepEqual(zoneActions(snare, "tokenEnter", { size: "tiny" }), []);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { size: "tiny" })), false);
+    assert.equal(zoneSetOff(snare, zoneActions(snare, "tokenEnter", { own: true, size: "med" })), false);
+    assert.deepEqual(zoneActions(snare, "tokenEnter", { initial: true, size: "med" }), []);
+    assert.deepEqual(zoneActions(snare, "tokenTurnStart", { size: "med" }), []);
+    // (Reach: 10 feet of the square by PF2e's distance — two squares out, a diagonal 5 then 10 —; a square area that many feet across.)
+    const grid = { size: 100, gridFeet: 5 };
+    const square = { x: 500, y: 500, w: 100, h: 100, elevation: 0 };
+    const at = (x, y, elevation = 0, w = 100) => ({ x, y, w, h: w, elevation });
+    const reaches = (burst, space) => burstReaches(burst, square, space, grid, distanceFeet);
+    assert.deepEqual([reaches(snare.burst, at(500, 500)), reaches(snare.burst, at(700, 500)), reaches(snare.burst, at(800, 500)), reaches(snare.burst, at(600, 600)), reaches(snare.burst, at(700, 700)), reaches(snare.burst, at(500, 500, 15))], [true, true, false, true, false, false]);
+    const across = { area: { type: "square", value: 15 } };
+    assert.deepEqual([reaches(across, at(400, 400)), reaches(across, at(300, 500)), reaches(across, at(500, 500, 5)), reaches(across, at(500, 500, 10)), reaches(across, at(200, 200, 0, 200))], [true, false, true, false, false]);
+    assert.equal(reaches({ area: { type: "square", value: 5 } }, at(600, 500)), false);
+    assert.equal(burstWords(snare.burst), "within 10 feet of its square");
+    assert.equal(burstWords({ from: "creature", area: { type: "emanation", value: 5 } }), "within 5 feet of it");
+    assert.equal(burstWords(across), "in the 15-foot square around its square");
+});
+
 test("2026-10-19: a zone card words its modifiers inside by their sign — Sprite Apple's +1 is a bonus", async () => {
     const { modifierWords } = await import("../src/live/zones.js");
     assert.equal(modifierWords([{ selector: "performance", value: 1, type: "item" }]), "a bonus inside");

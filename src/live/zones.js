@@ -145,6 +145,9 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
     }
     // (A zone of its allies' gifts, Cleansing Earth's: nothing more on them.)
     if (allied && zone.effect?.allies) return actions;
+    // (2026-10-27, the item module's snares that burst — Shrapnel Snare, Puff Dragon, Bomb Snare: zone.burst { area, plan, from?, only? }: one
+    // save card of its plan on everyone in that area, the creature that set it off among them, when a creature that fits enters.)
+    if (when === "enter" && zone.burst?.plan && onlyFits(zone.burst, traits, size)) actions.push({ kind: "burst", burst: zone.burst });
     if (when === "enter" && zone.hazard?.formulas?.length && onlyFits(zone.hazard, traits, size)) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
     for (const save of zone.saves ?? []) {
         if (!save.when.includes(when) || !onlyFits(save, traits, size)) continue;
@@ -157,9 +160,28 @@ export function zoneActions(zone, event, { own = false, allied = false, initial 
 // A zone that's gone once it acts (2026-10-15, the item module's snares: "the first creature to enter the square"): whether what an event
 // did sets it off. A save, damage or a note on the creature does; what entering gives everyone (concealment, penalties inside) doesn't.
 // (2026-10-16: one that leaves an area where it was, zone.then — Smoke Screen Snare —: any creature's entering sets it off.)
-const SETS_OFF = new Set(["save", "damage", "hazard", "note", "effect"]);
+const SETS_OFF = new Set(["save", "damage", "hazard", "note", "effect", "burst"]);
 export function zoneSetOff(zone, actions) {
     return !!zone?.once && (!!zone.then || actions.some((action) => SETS_OFF.has(action.kind)));
+}
+
+// Whether a burst (zone.burst.area) reaches a creature's space (boxes { x, y, w, h, elevation } in pixels, as the auras' box gives them),
+// from its origin — the snare's square, or the space of the creature that set it off. An emanation or a burst: within its feet of the
+// origin by PF2e's distance (distance: the core's distanceFeet); a square: that many feet across, centred on the origin.
+export function burstReaches(burst, origin, space, grid, distance) {
+    const feet = Number(burst?.area?.value) || 0;
+    if (burst?.area?.type !== "square") return distance(origin, space, grid) <= feet;
+    const reach = Math.max(0, Math.floor((Math.round(feet / grid.gridFeet) - 1) / 2));
+    const out = reach * grid.size;
+    const level = Math.round(Math.abs((Number(origin.elevation) || 0) - (Number(space.elevation) || 0)) / grid.gridFeet);
+    return space.x < origin.x + origin.w + out && space.x + space.w > origin.x - out && space.y < origin.y + origin.h + out && space.y + space.h > origin.y - out && level <= reach;
+}
+
+// The card's words for a burst's reach: "within 10 feet of its square".
+export function burstWords(burst) {
+    const feet = Number(burst?.area?.value) || 0;
+    const from = burst?.from === "creature" ? "it" : "its square";
+    return burst?.area?.type === "square" ? `in the ${feet}-foot square around ${from}` : `within ${feet} feet of ${from}`;
 }
 
 // The card's words for a zone's modifiers inside, by their sign (2026-10-19: Sprite Apple's light gives +1 to Performance — "a bonus").
