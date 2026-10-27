@@ -3339,6 +3339,14 @@ An aimed burst (2026-10-27, for Flame Drake Snare's "a 15-foot cone in the direc
 - `immunityEffect()` and `isImmune()` (`src/live/auras.js`) stay as they are: the item module makes the same Effect for its own uses.
 - Live-checked by the item module's cases in `pftest` (2026-10-20): a second Spun Cloud (Red) posted no card for the creature immune to the first; an undead immune to Aetheric Irritant (Lesser) got no card in the Major's area.
 
+## Immunity to one part (2026-10-27, for the item module)
+
+- `trigger.partImmunity: { condition, duration: { value, unit }, slug?, degrees?, against? }` (or a list of them): a temporary immunity to one condition an ability gives, while the rest of it (its damage) still applies. Poison Fizz's "then temporarily immune to being blinded by poison fizz for 1 hour", Durian Bomb's "immune to the sickened condition caused by other durian bombs for 1 minute", Scalding Gauntlets, Phantasmal Doorknob's 24 hours. It is a key of its own, beside `trigger.immunity`, because the Combat Simulator reads `trigger.immunity` as immunity to the whole ability.
+- On Apply, a target already immune (an unexpired "Immune: <condition> (<ability>)" Effect flagged `partImmunity { slug, condition, source }`) gets its row without that condition, and the card says "<creature> is immune to being blinded by <ability>". A target the card gives that condition, on a result in `degrees` (any when none), gets that Effect for the duration ("<creature> is immune to being blinded by <ability> for 1 hour"). The duration starts when the card applies, which is close enough for "then … for 1 hour".
+- The key is `slug`, else the plan's source slug or the ability's name (an item's grades share it when the plan sets `slug`). `against: "all"` means from anyone's ability of that key; otherwise only from this source's, as with `trigger.immunity`. The card says before the roll who is immune to a part.
+- Units: rounds, minutes, hours or days. Pure parts are in `src/live/part-immunity.js`. The Combat Simulator does the same (`src/engine/part-immunity.js`): rounds as they are, minutes as ten rounds, hours and days for the whole fight.
+- Checked live in `pftest` (2026-10-27, PFTEST SIM creatures, deleted afterwards): a critical failure blinded the target and gave it "Immune: Blinded (…)" for 1 hour; the next card said so before the roll, and on its critical failure dealt its damage without blinded.
+
 ## Zones for candles and incense (2026-10-20, for the item module)
 
 - `zone.modifiers[i].predicate`: copied onto the inside Effect's FlatModifier, so it counts only where PF2e's predicate says (Candle of Truth's −4 to Deception only to Lie, `["action:lie"]`; Candle of Inflamed Passions' −1 to saves against emotion effects).

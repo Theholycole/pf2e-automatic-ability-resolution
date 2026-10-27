@@ -13,6 +13,7 @@ import { allRolled, cardCheck, cardHTML, endWords, immunityKey, changeLines, cre
 import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
+import { dropImmuneParts, partImmunities, partImmunityEffect, partImmuneTo, partsEarned, partWords } from "../src/live/part-immunity.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { startZone } from "./zones.js";
@@ -130,6 +131,10 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
         }
         warning = [warning, said].filter(Boolean).join(" ");
     }
+    // (2026-10-27: an immunity to one part of it — trigger.partImmunity, src/live/part-immunity.js —: said on the card; Apply leaves that part out.)
+    const parts = partImmunities(plan, item?.name);
+    const partly = parts.flatMap((part) => tokens.filter((token) => token?.actor && partImmuneTo(immunityFlags(token.actor), part, sourceActor.uuid)).map((token) => `${token.name} ${partWords(part, item.name)}`));
+    if (partly.length) warning = [warning, `${partly.join("; ")}.`].filter(Boolean).join(" ");
     const state = createCard({
         plan,
         ability: { name: item.name, uuid: item.uuid },
@@ -1204,8 +1209,19 @@ async function applyCard(message) {
         // (Batch 142: the GM's damage type on the card.)
         choose: (decision) => (decision?.id === "caster-choice:damage-type" ? state.damageType ?? undefined : undefined)
     };
-    const result = await core.registry.resolve(state.plan, context, io);
+    const resolved = await core.registry.resolve(state.plan, context, io);
+    // (2026-10-27: a part immunity — the conditions its targets are already immune to left out, the rest as rolled.)
+    const parts = partImmunities(state.plan, state.ability.name);
+    const immune = new Map();
+    for (const target of parts.length ? state.targets : []) {
+        const { actor } = await targetOf(state, target.id);
+        const held = parts.filter((part) => actor && partImmuneTo(immunityFlags(actor), part, state.source.actorUuid)).map((part) => part.condition);
+        if (held.length) immune.set(target.id, new Set(held));
+    }
+    const { kept, dropped } = dropImmuneParts(resolved.changes, immune);
+    const result = { ...resolved, changes: kept };
     const lines = rolled.map((line) => `Damage rolled: ${line}`);
+    for (const { target, slug } of dropped) lines.push(`${state.targets.find((entry) => entry.id === target)?.name ?? "A creature"} ${partWords(parts.find((part) => part.condition === slug), state.ability.name)}`);
     for (const change of result.changes) {
         try {
             const extra = await applyChange(change, state);
@@ -1215,6 +1231,7 @@ async function applyCard(message) {
         }
     }
     lines.push(...(await grantImmunity(state)));
+    lines.push(...(await grantPartImmunity(state, parts, result.changes, immune)));
     // Fast Swallow (batch 38): a creature it just Grabbed: its Swallow Whole's card, as its reaction.
     await fastSwallow(state, result.changes);
     await grabStrike(state, result.changes);
@@ -1269,6 +1286,25 @@ async function grabStrike(state, changes) {
     const sourceToken = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid) : null;
     const names = grabbed.map((change) => state.targets.find((entry) => entry.id === change.target)?.name).filter(Boolean);
     await noteToGM(actor, sourceToken, [`<strong>${answer.item.name}</strong> (its reaction): ${answer.plan.note ? `${answer.plan.note} ` : ""}Then its ${answer.plan.strike} Strike at ${names.join(", ") || "the creature it grabbed"}: roll it from its sheet.`]);
+}
+
+// (2026-10-27) The part immunities a card's changes earn (src/live/part-immunity.js): an "Immune: <condition> (<ability>)" Effect for their time.
+async function grantPartImmunity(state, parts, changes, immune) {
+    if (!parts.length) return [];
+    const item = state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null;
+    const lines = [];
+    for (const { target: id, part } of partsEarned(changes, state.targets, parts, immune)) {
+        const { target, actor } = await targetOf(state, id);
+        if (!actor) continue;
+        await actor.createEmbeddedDocuments("Item", [partImmunityEffect(MODULE_ID, part, {
+            ability: { name: state.ability.name, img: item?.img },
+            source: { actorUuid: state.source.actorUuid, name: state.source.name },
+            conditionName: game.pf2e.ConditionManager.getCondition(part.condition)?.name ?? part.condition,
+            time: { worldTime: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null }
+        })]);
+        lines.push(`${target.name} ${partWords(part, state.ability.name, true)}`);
+    }
+    return lines;
 }
 
 async function grantImmunity(state) {
