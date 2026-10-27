@@ -155,7 +155,9 @@ export async function zoneEvent(region, behavior, event) {
         else if (action.kind === "note") await noteToGM(sourceActor, sourceToken, [`<strong>${escape(name)}</strong> — ${escape(token.name)}: ${escape(action.text)}`]);
         else if (action.kind === "burst" && item && sourceActor) {
             const { tokens, aimless } = burstTokens(region, token, action.burst, event.data.movement);
-            const warning = aimless ? `${name}: set off by ${token.name}, from a way it can't tell; aim its ${action.burst.area.value}-foot ${action.burst.area.type} yourself and use your targets.` : `${name}: set off by ${token.name}; everyone ${burstWords(action.burst)}.`;
+            // (othersOnly, 2026-10-27, Piercing Whistle Snare: the setter has its own save in zone.saves; nobody else reached, no card.)
+            if (action.burst.othersOnly && !aimless && !tokens.length) continue;
+            const warning = aimless ? `${name}: set off by ${token.name}, from a way it can't tell; aim its ${action.burst.area.value}-foot ${action.burst.area.type} yourself and use your targets.` : `${name}: set off by ${token.name}; everyone${action.burst.othersOnly ? " else" : ""} ${burstWords(action.burst)}.`;
             await postCard({ plan: action.burst.plan, item, sourceActor, sourceToken, tokens, warning });
         }
     }
@@ -170,7 +172,8 @@ export async function zoneEvent(region, behavior, event) {
 
 // The creatures a snare's burst reaches (zone.burst, 2026-10-27): the one that set it off first (wherever its move ends), then every other
 // creature on the scene in the area — measured from the snare's square at that creature's height, or (from "creature", Bomb Snare's "the
-// target and all creatures in adjacent squares") from its space where it covers the square; not one behind a wall from it.
+// target and all creatures in adjacent squares") from its space where it covers the square; not one behind a wall from it. othersOnly
+// (2026-10-27, Piercing Whistle Snare, whose setter has worse results of its own in zone.saves): not the setter.
 // An aimed one (a cone or a line back the way it came in, from its move's path): the creatures on the squares it covers, walls between
 // them and its point stopping it as PF2e's areas are, within its reach of the setter's height; not the one that set it off (it's "to hit
 // any allies behind" it). No way in to tell (a token made there): none, and the card says to aim it. { tokens, aimless }
@@ -206,7 +209,7 @@ function burstTokens(region, token, burst, movement) {
         return false;
     };
     const reached = others((other) => burstReaches(burst, origin, box(other, grid.size), grid, distanceFeet) && seen(box(other, grid.size)));
-    return { tokens: [token, ...reached].map((entry) => entry.object ?? entry), aimless: false };
+    return { tokens: [...(burst.othersOnly ? [] : [token]), ...reached].map((entry) => entry.object ?? entry), aimless: false };
 }
 
 // A wall that stops movement between two points, as PF2e's areas test it (only on the scene on the canvas; none otherwise).
