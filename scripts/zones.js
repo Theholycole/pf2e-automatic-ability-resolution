@@ -5,7 +5,7 @@
 // button. Its maker isn't harmed by its own zone. A zone that's gone once it acts (zone.once, the item module's snares) goes with its first
 // creature.
 
-import { burstReaches, burstWords, modifierWords, snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
+import { AIMED, aimedShape, burstReaches, burstWords, coveredSquares, entryDirection, modifierWords, snareSquare, spentZoneCard, zoneActions, zoneDamagePlan, zoneEndsAt, zoneMemberEffect, zoneOver, zoneRegion, zoneSetOff } from "../src/live/zones.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
 import { isActiveGM, postCard } from "./live.js";
@@ -153,7 +153,11 @@ export async function zoneEvent(region, behavior, event) {
         } else if (action.kind === "save" && item && sourceActor) await postCard({ plan: action.plan, item, sourceActor, sourceToken, tokens: [target], warning: `${name}: ${eventWords(event.name, initial)}.` });
         else if ((action.kind === "damage" || action.kind === "hazard") && item && sourceActor) await postCard({ plan: zoneDamagePlan(name, action.formulas), item, sourceActor, sourceToken, tokens: [target], warning: action.kind === "hazard" ? `${name}: on entering it; as much again for each further square it moves into.` : `${name}: ${eventWords(event.name, initial)}.` });
         else if (action.kind === "note") await noteToGM(sourceActor, sourceToken, [`<strong>${escape(name)}</strong> — ${escape(token.name)}: ${escape(action.text)}`]);
-        else if (action.kind === "burst" && item && sourceActor) await postCard({ plan: action.burst.plan, item, sourceActor, sourceToken, tokens: burstTokens(region, token, action.burst), warning: `${name}: set off by ${token.name}; everyone ${burstWords(action.burst)}.` });
+        else if (action.kind === "burst" && item && sourceActor) {
+            const { tokens, aimless } = burstTokens(region, token, action.burst, event.data.movement);
+            const warning = aimless ? `${name}: set off by ${token.name}, from a way it can't tell; aim its ${action.burst.area.value}-foot ${action.burst.area.type} yourself and use your targets.` : `${name}: set off by ${token.name}; everyone ${burstWords(action.burst)}.`;
+            await postCard({ plan: action.burst.plan, item, sourceActor, sourceToken, tokens, warning });
+        }
     }
     if (setOff) {
         // (2026-10-16: a snare that leaves an area where it was — Smoke Screen Snare's smoke —: that area, at its square, once it's gone.)
@@ -166,17 +170,56 @@ export async function zoneEvent(region, behavior, event) {
 
 // The creatures a snare's burst reaches (zone.burst, 2026-10-27): the one that set it off first (wherever its move ends), then every other
 // creature on the scene in the area — measured from the snare's square at that creature's height, or (from "creature", Bomb Snare's "the
-// target and all creatures in adjacent squares") from its space where it covers the square.
-function burstTokens(region, token, burst) {
+// target and all creatures in adjacent squares") from its space where it covers the square; not one behind a wall from it.
+// An aimed one (a cone or a line back the way it came in, from its move's path): the creatures on the squares it covers, walls between
+// them and its point stopping it as PF2e's areas are, within its reach of the setter's height; not the one that set it off (it's "to hit
+// any allies behind" it). No way in to tell (a token made there): none, and the card says to aim it. { tokens, aimless }
+function burstTokens(region, token, burst, movement) {
     const scene = region.parent;
     const grid = gridOf(scene);
     const square = snareSquare(region.shapes?.[0], grid.size);
     const space = box(token, grid.size);
+    const others = (test) => scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && test(other));
+    if (AIMED.has(burst.area?.type)) {
+        const path = movement ? [movement.origin, ...(movement.passed?.waypoints ?? [])] : [];
+        const direction = square ? entryDirection(path, { width: Number(token.width) || 1, height: Number(token.height) || 1 }, square, grid.size) : null;
+        if (!direction) return { tokens: [], aimless: true };
+        const { squares } = coveredSquares(aimedShape(burst, square, direction, grid), grid, { blocked: wallBetween(scene) });
+        const covered = new Set(squares.map((corner) => `${corner.x},${corner.y}`));
+        const feet = Number(burst.area.value) || 0;
+        const hit = others((other) => {
+            const at = box(other, grid.size);
+            if (Math.abs(at.elevation - space.elevation) > feet) return false;
+            for (let x = at.x; x < at.x + at.w; x += grid.size) for (let y = at.y; y < at.y + at.h; y += grid.size) if (covered.has(`${x},${y}`)) return true;
+            return false;
+        });
+        return { tokens: hit.map((entry) => entry.object ?? entry), aimless: false };
+    }
     const own = square ? { ...box(square, grid.size), elevation: space.elevation } : space;
     const covers = square && space.x < own.x + own.w && space.x + space.w > own.x && space.y < own.y + own.h && space.y + space.h > own.y;
     const origin = burst.from === "creature" && (covers || !square) ? space : own;
-    const others = scene.tokens.filter((other) => other.id !== token.id && other.actor?.isOfType?.("creature") && !other.hidden && !(other.actor.isDead ?? false) && burstReaches(burst, origin, box(other, grid.size), grid, distanceFeet));
-    return [token, ...others].map((entry) => entry.object ?? entry);
+    // (Line of effect: one behind a wall from the area's middle on every square it takes up isn't reached.)
+    const blocked = wallBetween(scene);
+    const middle = { x: origin.x + origin.w / 2, y: origin.y + origin.h / 2 };
+    const seen = (at) => {
+        for (let x = at.x; x < at.x + at.w; x += grid.size) for (let y = at.y; y < at.y + at.h; y += grid.size) if (!blocked(middle, { x: x + grid.size / 2, y: y + grid.size / 2 })) return true;
+        return false;
+    };
+    const reached = others((other) => burstReaches(burst, origin, box(other, grid.size), grid, distanceFeet) && seen(box(other, grid.size)));
+    return { tokens: [token, ...reached].map((entry) => entry.object ?? entry), aimless: false };
+}
+
+// A wall that stops movement between two points, as PF2e's areas test it (only on the scene on the canvas; none otherwise).
+function wallBetween(scene) {
+    const backend = CONFIG.Canvas?.polygonBackends?.move;
+    if (canvas?.scene?.id !== scene.id || !backend?.testCollision) return () => false;
+    return (origin, point) => {
+        try {
+            return !!backend.testCollision(origin, point, { type: "move", mode: "any", ...(canvas.level ? { level: canvas.level } : {}) });
+        } catch {
+            return false;
+        }
+    };
 }
 
 // A zone gone once it acts, set off: what it gave those inside taken away, its Region deleted, and its card saying so.

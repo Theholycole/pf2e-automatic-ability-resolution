@@ -181,7 +181,107 @@ export function burstReaches(burst, origin, space, grid, distance) {
 export function burstWords(burst) {
     const feet = Number(burst?.area?.value) || 0;
     const from = burst?.from === "creature" ? "it" : "its square";
+    if (AIMED.has(burst?.area?.type)) return `in its ${feet}-foot ${burst.area.type} back the way it came`;
     return burst?.area?.type === "square" ? `in the ${feet}-foot square around ${from}` : `within ${feet} feet of ${from}`;
+}
+
+// --- Aimed bursts (2026-10-27, the item module's Flame Drake Snare: "a 15-foot cone in the direction from which the creature entered",
+// Frost Worm Snare's 30-foot line): burst.area { type: "cone" | "line", value }, aimed from the snare's square back the way the creature
+// that set it off came in. The squares it covers are PF2e's own for its cone and line areas (its RegionDocumentPF2e coverage): a square
+// whose centre is inside the shape, by PF2e's grid distance from the cone's point, and not behind a wall from it (the script's test).
+
+export const AIMED = new Set(["cone", "line"]);
+
+// A token's space at a top-left point (width, height in squares; a Tiny one's is the square its point is in), in pixels.
+const spaceAt = (point, width, height, size) => {
+    const square = (value, span) => (span < 1 ? Math.floor(value / size) * size : value);
+    return { x: square(point.x, width), y: square(point.y, height), w: Math.max(1, width) * size, h: Math.max(1, height) * size };
+};
+const overlaps = (space, square, size) => space.x < square.x + size && space.x + space.w > square.x && space.y < square.y + size && space.y + space.h > square.y;
+
+// The way the creature came into the snare's square, as one of the 8 directions { dx, dy } (y down) pointing back along it: from its
+// path (the move's origin then the waypoints it passed, top-left points), the part along which its space first covers the square, turned
+// round. null when its path doesn't come in from outside (a token made there, or one that started its move in the square).
+export function entryDirection(path, { width = 1, height = 1 } = {}, square, size) {
+    const points = (path ?? []).filter((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y));
+    if (!points.length || overlaps(spaceAt(points[0], width, height, size), square, size)) return null;
+    for (let index = 1; index < points.length; index++) {
+        const [from, to] = [points[index - 1], points[index]];
+        const [dx, dy] = [to.x - from.x, to.y - from.y];
+        const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / (size / 4));
+        if (!steps) continue;
+        for (let step = 1; step <= steps; step++) {
+            const at = { x: from.x + (dx * step) / steps, y: from.y + (dy * step) / steps };
+            if (!overlaps(spaceAt(at, width, height, size), square, size)) continue;
+            const turn = Math.round(Math.atan2(-dy, -dx) / (Math.PI / 4));
+            return { dx: Math.round(Math.cos((turn * Math.PI) / 4)) || 0, dy: Math.round(Math.sin((turn * Math.PI) / 4)) || 0 };
+        }
+    }
+    return null;
+}
+
+// The aimed area's shape, as a Region's (PF2e's cone and line): from the snare's square's edge (aimed straight) or corner (aimed
+// diagonally) in that direction. square: its top-left point; grid { size, gridFeet }.
+export function aimedShape(burst, square, direction, grid) {
+    const half = grid.size / 2;
+    const x = square.x + half + direction.dx * half;
+    const y = square.y + half + direction.dy * half;
+    const rotation = (360 + (Math.atan2(direction.dy, direction.dx) * 180) / Math.PI) % 360;
+    const reach = ((Number(burst?.area?.value) || 0) / grid.gridFeet) * grid.size;
+    return burst?.area?.type === "line" ? { type: "line", x, y, length: reach, width: grid.size, rotation } : { type: "cone", x, y, radius: reach, angle: 90, rotation };
+}
+
+// PF2e's distance on a square grid between two points: squares along each axis rounded up, diagonals 5 then 10 feet.
+const gridDistance = (a, b, { size, gridFeet }) => {
+    const [low, high] = [Math.ceil(Math.abs(b.x - a.x) / size), Math.ceil(Math.abs(b.y - a.y) / size)].sort((one, two) => one - two);
+    return Math.floor(low * 1.5 + (high - low)) * gridFeet;
+};
+
+// The squares an aimed shape covers (as PF2e's coverage does): [{ x, y }] top-left points, and the point they're seen from. blocked
+// (origin, point): a wall between (the script's test; none by default).
+export function coveredSquares(shape, grid, { blocked = () => false } = {}) {
+    const { size } = grid;
+    const radians = (shape.rotation * Math.PI) / 180;
+    const along = { x: Math.cos(radians), y: Math.sin(radians) };
+    let origin;
+    let contains;
+    if (shape.type === "cone") {
+        // (A point inside a square: moved to its edge or corner the cone points out of, as PF2e does.)
+        origin = {
+            x: shape.x + (shape.x % size === 0 ? 0 : (Math.sign(Math.round(along.x * 100)) / 2) * size),
+            y: shape.y + (shape.y % size === 0 ? 0 : (Math.sign(Math.round(along.y * 100)) / 2) * size)
+        };
+        const low = (360 + ((shape.rotation - shape.angle / 2) % 360)) % 360;
+        const high = (360 + ((shape.rotation + shape.angle / 2) % 360)) % 360;
+        const within = (angle) => (low < high ? angle >= low && angle <= high : angle >= low || angle <= high);
+        const feet = (shape.radius / size) * grid.gridFeet;
+        contains = (point) => {
+            const [dx, dy] = [point.x - origin.x, point.y - origin.y];
+            if (dx === 0 && dy === 0) return true;
+            return within((360 + ((Math.atan2(dy, dx) * 180) / Math.PI) % 360) % 360) && gridDistance(point, origin, grid) <= feet;
+        };
+    } else {
+        const across = { x: -along.y, y: along.x };
+        const toCorner = (value, part) => (value % size === 0 ? value : value - Math.sign(Math.round(part * 100)) * (size / 2));
+        origin = { x: toCorner(shape.x, along.x), y: toCorner(shape.y, along.y) };
+        contains = (point) => {
+            const [dx, dy] = [point.x - origin.x, point.y - origin.y];
+            const forward = dx * along.x + dy * along.y;
+            return forward >= 0 && forward <= shape.length && Math.abs(dx * across.x + dy * across.y) <= shape.width / 2;
+        };
+    }
+    const reach = Math.ceil((shape.type === "cone" ? shape.radius : shape.length) / size) + 1;
+    const [i, j] = [Math.floor(origin.x / size), Math.floor(origin.y / size)];
+    const squares = [];
+    for (let di = -reach; di <= reach; di++) {
+        for (let dj = -reach; dj <= reach; dj++) {
+            const corner = { x: (i + di) * size, y: (j + dj) * size };
+            const centre = { x: corner.x + size / 2, y: corner.y + size / 2 };
+            if (centre.x < 0 || centre.y < 0 || !contains(centre) || blocked(origin, centre)) continue;
+            squares.push(corner);
+        }
+    }
+    return { origin, squares };
 }
 
 // The card's words for a zone's modifiers inside, by their sign (2026-10-19: Sprite Apple's light gives +1 to Performance — "a bonus").

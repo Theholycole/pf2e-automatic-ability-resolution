@@ -89,6 +89,35 @@ test("2026-10-27: a snare that bursts (zone.burst: Shrapnel Snare, Bomb Snare): 
     assert.equal(burstWords(across), "in the 15-foot square around its square");
 });
 
+test("2026-10-27: an aimed burst (Flame Drake Snare's cone, Frost Worm Snare's line) points back the way the creature came in; its squares are PF2e's cone and line coverage", async () => {
+    const { aimedShape, burstWords, coveredSquares, entryDirection } = await import("../src/live/zones.js");
+    const grid = { size: 100, gridFeet: 5 };
+    const square = { x: 1000, y: 1000 };
+    // (The way in: from the east → aimed east; a diagonal from the north-west → north-west; a bent path → its last part; none from inside.)
+    assert.deepEqual(entryDirection([{ x: 1400, y: 1000 }, { x: 1000, y: 1000 }], {}, square, 100), { dx: 1, dy: 0 });
+    assert.deepEqual(entryDirection([{ x: 700, y: 700 }, { x: 1300, y: 1300 }], {}, square, 100), { dx: -1, dy: -1 });
+    assert.deepEqual(entryDirection([{ x: 1000, y: 400 }, { x: 1000, y: 800 }, { x: 600, y: 1000 }, { x: 1000, y: 1000 }], {}, square, 100), { dx: -1, dy: 0 });
+    assert.deepEqual(entryDirection([{ x: 1000, y: 600 }, { x: 1000, y: 1000 }], {}, square, 100), { dx: 0, dy: -1 });
+    assert.equal(entryDirection([{ x: 1000, y: 1000 }, { x: 1000, y: 1300 }], {}, square, 100), null);
+    assert.equal(entryDirection([], {}, square, 100), null);
+    // (A Large creature: its 2×2 space reaches the square a step sooner.)
+    assert.deepEqual(entryDirection([{ x: 1300, y: 900 }, { x: 900, y: 900 }], { width: 2, height: 2 }, square, 100), { dx: 1, dy: 0 });
+    const cells = (burst, direction, options) => coveredSquares(aimedShape(burst, square, direction, grid), grid, options).squares.map((corner) => [(corner.x - 1000) / 100, (corner.y - 1000) / 100]).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cone = { area: { type: "cone", value: 15 } };
+    // (15-foot cone aimed east from the square's edge: 1, then 3, then 3 squares; aimed north-east from its corner: PF2e's 6.)
+    assert.deepEqual(cells(cone, { dx: 1, dy: 0 }), [[1, 0], [2, -1], [2, 0], [2, 1], [3, -1], [3, 0], [3, 1]]);
+    assert.deepEqual(cells(cone, { dx: 1, dy: -1 }), [[1, -3], [1, -2], [1, -1], [2, -2], [2, -1], [3, -1]]);
+    assert.deepEqual(cells(cone, { dx: 0, dy: 1 }), [[-1, 2], [-1, 3], [0, 1], [0, 2], [0, 3], [1, 2], [1, 3]]);
+    // (30-foot line west: six squares in the row; diagonal south-west: four, as PF2e counts 5 then 10 feet.)
+    const line = { area: { type: "line", value: 30 } };
+    assert.deepEqual(cells(line, { dx: -1, dy: 0 }), [[-6, 0], [-5, 0], [-4, 0], [-3, 0], [-2, 0], [-1, 0]]);
+    assert.deepEqual(cells(line, { dx: -1, dy: 1 }), [[-4, 4], [-3, 3], [-2, 2], [-1, 1]]);
+    // (A wall: the squares behind it from the point left out.)
+    assert.deepEqual(cells(line, { dx: -1, dy: 0 }, { blocked: (origin, point) => point.x < 800 }), [[-2, 0], [-1, 0]]);
+    assert.equal(burstWords(cone), "in its 15-foot cone back the way it came");
+    assert.equal(burstWords(line), "in its 30-foot line back the way it came");
+});
+
 test("2026-10-19: a zone card words its modifiers inside by their sign — Sprite Apple's +1 is a bonus", async () => {
     const { modifierWords } = await import("../src/live/zones.js");
     assert.equal(modifierWords([{ selector: "performance", value: 1, type: "item" }]), "a bonus inside");
