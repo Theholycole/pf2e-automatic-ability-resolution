@@ -28,12 +28,14 @@ export async function applyFloor(actor, floor, state, { rounds = null, anchor = 
     return floorLabel(floor).replace(/^Can't/, "can't");
 }
 
+// Whether the creature takes persistent damage of the type now (PF2e's persistent-damage conditions).
+export const takesPersistent = (actor, type) => (actor?.itemTypes?.condition ?? []).some((condition) => condition.slug === "persistent-damage" && condition.system?.persistent?.damageType === type);
+
 // (2026-10-17) A condition that lasts while the creature takes persistent damage of a type (Sparking Spellgun's dazzled): its Effect, ended
 // with that damage (setUpFloors). → whether it applied (not when the creature takes no persistent damage of that type).
 export async function applyWhilePersistent(actor, slug, value, type, state) {
-    const takes = (actor.itemTypes?.condition ?? []).some((condition) => condition.slug === "persistent-damage" && condition.system?.persistent?.damageType === type);
     const template = game.pf2e.ConditionManager.getCondition(slug);
-    if (!takes || !template) return false;
+    if (!takesPersistent(actor, type) || !template) return false;
     await actor.createEmbeddedDocuments("Item", [persistentConditionSource(slug, value, type, {
         moduleId: MODULE_ID,
         abilityName: state.ability.name,

@@ -23,7 +23,7 @@ import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
 import { applySwallow } from "./swallow.js";
-import { applyFloor, applyWhilePersistent } from "./floors.js";
+import { applyFloor, applyWhilePersistent, takesPersistent } from "./floors.js";
 import { applyAuraCondition } from "./auras.js";
 import { noteToGM, rechargeFormula, rechargeWarning, startRecharge } from "./recharge.js";
 import { isDying, recoverFromDying, revivedNote } from "../../pf2e-resolution-core/scripts/dying-recovery.js";
@@ -1581,12 +1581,14 @@ async function anchorToTarget(created, actor, duration) {
 // counts "until the start of its next turn" on the monster's turns.
 // (2026-10-20: its early end, from the plan's own entry for it — the core passes only its uuid and label: "or until it Escapes (DC 18)", flagged for
 // scripts/escape.js; "or until it uses an Interact action …", in its description for the GM.)
+// (2026-10-27, the item module's Static Snare: whilePersistent, a damage type — "for as long as the persistent electricity damage lasts":
+// flagged so scripts/floors.js ends it with the creature's last persistent damage of that type; with none of it, no Effect.)
 function nativeExtras(plan, uuid) {
     const seen = new Set();
     const walk = (node) => {
         if (!node || typeof node !== "object" || seen.has(node)) return null;
         seen.add(node);
-        const own = Array.isArray(node.nativeEffects) ? node.nativeEffects.find((entry) => entry?.uuid === uuid && (entry.escape || entry.until)) : null;
+        const own = Array.isArray(node.nativeEffects) ? node.nativeEffects.find((entry) => entry?.uuid === uuid && (entry.escape || entry.until || entry.whilePersistent)) : null;
         if (own) return own;
         for (const value of Object.values(node)) {
             const found = walk(value);
@@ -1603,8 +1605,11 @@ async function nativeEffect(actor, effect, state, degree = null) {
     const source = template.toObject();
     delete source._id;
     const extras = nativeExtras(state.plan, effect.uuid);
+    const lasting = extras?.whilePersistent ? String(extras.whilePersistent) : null;
+    const label = effect.label ?? source.name ?? "the effect";
+    if (lasting && !takesPersistent(actor, lasting)) return `${actor.name} takes no persistent ${lasting} damage, so it doesn't get ${label}`;
     if (extras) {
-        const words = `${extras.until ? ` It ends early once ${extras.until} (GM: delete this Effect then).` : ""}${escapeWords(extras.escape)}`;
+        const words = `${lasting ? ` It lasts while ${actor.name} takes persistent ${lasting} damage.` : ""}${extras.until ? ` It ends early once ${extras.until} (GM: delete this Effect then).` : ""}${escapeWords(extras.escape)}`;
         source.system.description = { ...(source.system.description ?? {}), value: `${source.system.description?.value ?? ""}<p>${words.trim()}</p>` };
     }
     // A choice of the save's result in the effect (PF2e's "Degree of success" prompt): the target's own, so no prompt.
@@ -1615,15 +1620,18 @@ async function nativeEffect(actor, effect, state, degree = null) {
     }
     source._stats = { ...(source._stats ?? {}), compendiumSource: effect.uuid };
     source.system.context = { ...(source.system.context ?? {}), origin: { ...(source.system.context?.origin ?? {}), actor: state.source.actorUuid, token: state.source.tokenUuid ?? null, item: state.ability.uuid ?? null } };
-    source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true, ...(Number(extras?.escape?.dc) > 0 ? { escape: { dc: Number(extras.escape.dc) } } : {}) } };
+    source.flags = { ...(source.flags ?? {}), [MODULE_ID]: { ...(source.flags?.[MODULE_ID] ?? {}), card: true, ...(Number(extras?.escape?.dc) > 0 ? { escape: { dc: Number(extras.escape.dc) } } : {}), ...(lasting ? { whilePersistent: lasting } : {}) } };
     await actor.createEmbeddedDocuments("Item", [source]);
-    return null;
+    return lasting ? `${actor.name}'s ${label} lasts while it takes persistent ${lasting} damage` : null;
 }
 
 // A note Effect (batch 274): what the module can't play, on the creature as a rule-less Effect that says it (Rescue's "inside the carriage", Arcane
 // Harmony's choice for the next spell), lasting as the note says (until removed when it doesn't).
 async function noteEffect(actor, note, state) {
     if (!note?.text) return null;
+    // (2026-10-27, Static Snare's critical failure: whilePersistent, as a PF2e Effect's — nativeExtras.)
+    const lasting = note.whilePersistent ? String(note.whilePersistent) : null;
+    if (lasting && !takesPersistent(actor, lasting)) return `${actor.name} takes no persistent ${lasting} damage, so it doesn't get "${note.label ?? "the note"}"`;
     const found = note.saveEnds ? recurringSpec(note.saveEnds, planDC(state)) : null;
     const recurring = found ? { ...found, ...(found.mode === "escalate" ? { mode: "end" } : {}) } : null;
     const duration = note.duration?.mode === "fixed" ? { value: note.duration.anchor === "target-turn" ? turnRounds(note.duration, actor.uuid) : note.duration.value, unit: note.duration.unit, expiry: note.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
@@ -1635,16 +1643,16 @@ async function noteEffect(actor, note, state) {
         // (2026-10-20: a note Effect may carry PF2e's own rules — a misfortune's RollTwice, Concealed while Invisible — then it's a real one; once:
         // for one roll, gone after it, scripts/escape.js.)
         // (2026-10-20: note.saveEnds, a new save at its turns that ends it — src/live/recurring.js, scripts/recurring.js.)
-        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}), ...(recurring ? { saveEnds: { ...recurring, what: note.label ?? "the effect" }, ability: state.ability.name } : {}) } },
+        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}), ...(recurring ? { saveEnds: { ...recurring, what: note.label ?? "the effect" }, ability: state.ability.name } : {}), ...(lasting ? { whilePersistent: lasting } : {}) } },
         system: {
-            description: { value: `<p>${escape(note.text)}${escape(recurringNote(recurring))}</p><p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
+            description: { value: `<p>${escape(note.text)}${escape(recurringNote(recurring))}</p>${lasting && !/\bpersistent\b/i.test(note.text) ? `<p>It lasts while taking persistent ${escape(lasting)} damage.</p>` : ""}<p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
             rules: (Array.isArray(note.rules) ? note.rules : []).filter((rule) => rule && typeof rule.key === "string").map((rule) => structuredClone(rule))
         }
     }]);
     await anchorToTarget(created, actor, note.duration);
-    return null;
+    return lasting ? `${actor.name}'s "${note.label ?? "note"}" lasts while it takes persistent ${lasting} damage` : null;
 }
 
 // (Batch 275, Gauge Potential: a bonus against one creature only — PF2e's TokenMark on that creature's token; attack and damage rolls predicated
