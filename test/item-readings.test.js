@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
+import { readAffliction as readStages } from "../src/compiler/afflictions.js";
 
 // Readings the item module found wrong in item texts (2026-10-15). Synthetic wording, after each.
 const item = (html) => ({ type: "action", name: "Test Activation", system: { slug: null, actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, rules: [], description: { value: html } } });
@@ -73,4 +74,12 @@ test("no encounter: no one is in it (a condition landing outside one no longer t
     const { inEncounter } = await import("../scripts/auras.js");
     assert.deepEqual([...inEncounter(null)], []);
     assert.deepEqual([...inEncounter({ combatants: [{ tokenId: "a" }, { tokenId: null }, { tokenId: "b" }] })], ["a", "b"]);
+});
+
+test("2026-10-27: an affliction's range of stages alike ('Stages 1–5'), and its fields stopping at the next one", () => {
+    const itch = { name: "Test Itch", system: { slug: "test-itch", traits: { value: ["poison"] }, description: { value: "<p>The onset period begins only if a victim eats it.</p><p><strong>Saving Throw</strong> @Check[fortitude|dc:30]</p><p><strong>Onset</strong> 10 minutes <strong>Maximum Duration</strong> 6 minutes</p><p><strong>Stages 1–5</strong> 1d6 poison damage (1 round)</p>" } } };
+    const read = readStages(itch);
+    assert.equal(read.stages.length, 5);
+    assert.deepEqual(read.stages.map((stage) => [stage.stage, stage.damage.join(","), stage.duration?.value]), [1, 2, 3, 4, 5].map((stage) => [stage, "(1d6)[poison]", 1]));
+    assert.deepEqual([read.onset, read.maximumDuration], [{ value: 10, unit: "minutes" }, { value: 6, unit: "minutes" }]);
 });

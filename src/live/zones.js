@@ -91,7 +91,7 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
     const behaviors = [
         ...(Object.keys(difficulties).length ? [{ name: `${name}: difficult terrain`, type: "modifyMovementCost", system: { difficulties } }] : []),
         // (Batch 274: a save on each move within it, Tempest Downdrafts': its moves too.)
-        { name: `${name}: zone`, type: "executeScript", system: { events: ["tokenEnter", "tokenExit", "tokenTurnStart", "tokenTurnEnd", ...((zone.saves ?? []).some((save) => save.when?.includes("move")) ? ["tokenMoveWithin"] : [])], source: zoneScript(moduleId) } }
+        { name: `${name}: zone`, type: "executeScript", system: { events: zoneEvents(zone), source: zoneScript(moduleId) } }
     ];
     const color = zone.hazard || zone.damage?.length ? "#a0412d" : zone.concealed ? "#8a94a0" : zone.terrain?.length ? "#7a5c3a" : "#5b6f8c";
     return {
@@ -119,51 +119,112 @@ export function zoneRegion({ name, zone, token, grid, moduleId, flags, visibilit
 // or larger creature"): the creature's (PF2e's actor.size), for an entry only for that size or larger (entry.only.minSize, "sm" … "grg").
 // A smaller one: not that entry — nothing sets the snare off, so it stays. A creature of unknown size fits. (2026-10-27: entry.only.maxSize
 // as well, that size or smaller — Trip Snare's "A Medium or smaller creature that enters the snare's square".)
-export function onlyFits(entry, traits, size) {
-    if (entry?.only?.traits?.length && !entry.only.traits.some((trait) => (traits ?? []).includes(trait))) return false;
-    const at = entry?.only?.minSize || entry?.only?.maxSize ? sizeIndex(size) : -1;
+// (2026-10-27, the item module's Cube of Force and Cube of Nex, Spiral Athame, The Uprising, Godsbreath Bow.) only.notTraits: none of them (a
+// living creature, not undead or construct); only.all: every one (a summoned undead); only.conditions: one of them now, only.lacks.conditions
+// none of them (grabbed or not, at its turn's end) — conditions: the creature's condition slugs; only.moving: by that movement only (Godsbreath
+// Bow's flying through, "fly") — moving: the movement action of the event, none when it didn't move.
+export function onlyFits(entry, traits, size, { conditions = [], moving = null } = {}) {
+    const only = entry?.only;
+    const has = (trait) => (traits ?? []).includes(trait);
+    if (only?.traits?.length && !only.traits.some(has)) return false;
+    if (only?.notTraits?.length && only.notTraits.some(has)) return false;
+    if (only?.all?.length && !only.all.every(has)) return false;
+    if (only?.conditions?.length && !only.conditions.some((slug) => (conditions ?? []).includes(slug))) return false;
+    if (only?.lacks?.conditions?.length && only.lacks.conditions.some((slug) => (conditions ?? []).includes(slug))) return false;
+    if (only?.lacks?.traits?.length && only.lacks.traits.some(has)) return false;
+    if (only?.moving && ![only.moving].flat().includes(moving)) return false;
+    const at = only?.minSize || only?.maxSize ? sizeIndex(size) : -1;
     if (at < 0) return true;
     const [low, high] = [entry.only.minSize ? sizeIndex(entry.only.minSize) : -1, entry.only.maxSize ? sizeIndex(entry.only.maxSize) : -1];
     return (low < 0 || at >= low) && (high < 0 || at <= high);
 }
 
-export function zoneActions(zone, event, { own = false, allied = false, initial = false, traits = [], size = null } = {}) {
-    if (event === "tokenExit") return [{ kind: "clear" }];
-    const when = event === "tokenEnter" ? (initial ? "initial" : "enter") : event === "tokenTurnStart" ? "start" : event === "tokenTurnEnd" ? "end" : event === "tokenMoveWithin" ? "move" : null;
+// Who an entry is for (2026-10-27, the item module's The Eclipse, Globe of Shrouds, Magnetic Suit…): none or "all", everyone; "others", not its
+// maker; "own", its maker only; "allies", its maker's allies (not itself); "foes", the rest (not its maker).
+export function whoFits(who, { own = false, allied = false } = {}) {
+    if (!who || who === "all") return true;
+    if (who === "others") return !own;
+    if (who === "own") return own;
+    if (who === "allies") return allied && !own;
+    if (who === "foes") return !allied && !own;
+    return true;
+}
+
+// (2026-10-27) Leaving: the saves for crossing out too, saves[i].when "exit" (Cube of Force's walls, crossed either way), their rows on the
+// creature leaving. A melee Strike at a creature inside (event "strikeInto", on the attacker, scripts/zones.js): saves[i].when "strike-into"
+// (Portable Seal's summoned creatures).
+export function zoneActions(zone, event, { own = false, allied = false, initial = false, traits = [], size = null, conditions = [], moving = null } = {}) {
+    const fits = (entry) => onlyFits(entry, traits, size, { conditions, moving });
+    const who = { own, allied };
+    const when = event === "tokenEnter" ? (initial ? "initial" : "enter") : event === "tokenTurnStart" ? "start" : event === "tokenTurnEnd" ? "end" : event === "tokenMoveWithin" ? "move" : event === "tokenExit" ? "exit" : event === "strikeInto" ? "strike-into" : null;
     if (!when) return [];
-    const actions = [];
+    const actions = event === "tokenExit" ? [{ kind: "clear" }] : [];
     if (event === "tokenEnter") {
         if (zone.concealed) actions.push({ kind: "conceal" });
+        // (2026-10-27, Kraken Bottle's ink: undetected inside, as concealed is.)
+        if (zone.undetected) actions.push({ kind: "undetected" });
         if (zone.effect && (!zone.effect.allies || allied)) actions.push({ kind: "effect", uuid: zone.effect.uuid, label: zone.effect.label });
-        if (zone.modifiers?.length) actions.push({ kind: "modifiers", modifiers: zone.modifiers.map((modifier) => ({ ...modifier })) });
+        const modifiers = (zone.modifiers ?? []).filter((modifier) => whoFits(modifier.who, who) && fits(modifier));
+        if (modifiers.length) actions.push({ kind: "modifiers", modifiers: modifiers.map(({ who: _who, only: _only, ...modifier }) => ({ ...modifier })) });
         // (Batch 274, Sink or Swim: PF2e's degree adjustments, its allies' on its allies, its foes' on the others; not on itself.)
         const adjustments = (zone.adjustments ?? []).filter((entry) => (entry.allies ? allied : !allied && !own));
         if (adjustments.length) actions.push({ kind: "adjust", adjustments: adjustments.map((entry) => ({ ...entry })) });
         // (2026-10-20: rules for the creatures inside that fit — zone.inside [{ rules, only, who? }]: Incense of Distilled Death's fast healing 4
         // for undead —, its maker too when it fits; who "others": not its maker, "own": its maker only — Maelstromic Destabilizer's weakness to
         // spirit on the others, its holder's resistance.)
+        // (2026-10-27: inside[i].text, its words on the Effect — one with words only is a note Effect inside; inside[i].lingers, kept that long
+        // after it leaves — { value, unit }, or "turn-start": until its next turn starts —: Globe of Shrouds, Soulspark Candle.)
         for (const entry of zone.inside ?? []) {
-            if (!(entry.rules ?? []).length || !onlyFits(entry, traits, size) || (entry.who === "others" && own) || (entry.who === "own" && !own)) continue;
-            actions.push({ kind: "inside", rules: entry.rules.map((rule) => ({ ...rule })) });
+            if ((!(entry.rules ?? []).length && !entry.text) || !fits(entry) || !whoFits(entry.who, who)) continue;
+            actions.push({ kind: "inside", rules: (entry.rules ?? []).map((rule) => ({ ...rule })), ...(entry.text ? { text: entry.text } : {}), ...(entry.lingers ? { lingers: entry.lingers } : {}), ...(entry.label ? { label: entry.label } : {}) });
         }
     }
+    const saving = (save) => save.when.includes(when) && fits(save) && whoFits(save.who, who);
     // (2026-10-20: a save its maker attempts too — saves[i].own, Candle of Truth's "each creature (including you)".)
     if (own) {
-        for (const save of zone.saves ?? []) if (save.own && save.when.includes(when) && onlyFits(save, traits, size)) actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
+        for (const save of zone.saves ?? []) if (save.own && saving({ ...save, who: null })) actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
         return actions;
     }
     // (A zone of its allies' gifts, Cleansing Earth's: nothing more on them.)
     if (allied && zone.effect?.allies) return actions;
     // (2026-10-27, the item module's snares that burst — Shrapnel Snare, Puff Dragon, Bomb Snare: zone.burst { area, plan, from?, only? }: one
     // save card of its plan on everyone in that area, the creature that set it off among them, when a creature that fits enters.)
-    if (when === "enter" && zone.burst?.plan && onlyFits(zone.burst, traits, size)) actions.push({ kind: "burst", burst: zone.burst });
-    if (when === "enter" && zone.hazard?.formulas?.length && onlyFits(zone.hazard, traits, size)) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
+    if (when === "enter" && zone.burst?.plan && fits(zone.burst)) actions.push({ kind: "burst", burst: zone.burst });
+    if (when === "enter" && zone.hazard?.formulas?.length && fits(zone.hazard)) actions.push({ kind: "hazard", formulas: [...zone.hazard.formulas] });
+    // (2026-10-27: saves[i].who "foes" or "allies", The Eclipse's and Strand of the Seven Births' — not the others.)
     for (const save of zone.saves ?? []) {
-        if (!save.when.includes(when) || !onlyFits(save, traits, size)) continue;
+        if (!saving(save)) continue;
         actions.push(save.plan ? { kind: "save", plan: save.plan } : { kind: "note", text: save.note });
     }
-    for (const entry of zone.damage ?? []) if (entry.when === when && onlyFits(entry, traits, size)) actions.push({ kind: "damage", formulas: [...entry.formulas] });
+    for (const entry of zone.damage ?? []) if (entry.when === when && fits(entry) && whoFits(entry.who, who)) actions.push({ kind: "damage", formulas: [...entry.formulas] });
     return actions;
+}
+
+// (2026-10-27) Whether a zone listens for an event at all: its region's events (moves within it for saves on each move or by flying through;
+// none needed for a melee Strike into it, scripts/zones.js watches attack rolls).
+export const zoneEvents = (zone) => ["tokenEnter", "tokenExit", "tokenTurnStart", "tokenTurnEnd", ...((zone.saves ?? []).some((save) => save.when?.includes("move") || save.only?.moving) ? ["tokenMoveWithin"] : [])];
+
+// (2026-10-27, Godsbreath Bow.) Whether an attack's damage on a creature inside gets the zone's extra (zone.incoming { damage, attacks }):
+// attacks "ranged" — a ranged Strike's (a thrown weapon's too), "melee" — a melee one's, "physical" — bludgeoning, piercing or slashing among
+// its damage, "strike" — a Strike's; every one listed. options, domains: the damage roll's; types: its instances' damage types.
+const PHYSICAL_TYPES = new Set(["bludgeoning", "piercing", "slashing"]);
+export function incomingFits(incoming, { options = [], domains = [], types = [] } = {}) {
+    const tests = {
+        ranged: () => options.includes("item:ranged") || options.includes("item:thrown-melee") || domains.some((domain) => /^ranged-/.test(domain)),
+        melee: () => (options.includes("item:melee") && !options.includes("item:thrown-melee")) || domains.some((domain) => /^melee-/.test(domain)),
+        physical: () => types.some((type) => PHYSICAL_TYPES.has(type)),
+        strike: () => domains.includes("strike-damage")
+    };
+    const attacks = [incoming?.attacks ?? []].flat().filter((entry) => tests[entry]);
+    return attacks.every((entry) => tests[entry]());
+}
+
+// A lingering inside Effect's time once its creature leaves: { value, unit, expiry } — "turn-start", until its next turn starts.
+export function lingerDuration(lingers) {
+    if (lingers === "turn-start") return { value: 1, unit: "rounds", expiry: "turn-start", sustained: false };
+    const value = Number(lingers?.value);
+    const unit = { round: "rounds", minute: "minutes", hour: "hours", day: "days" }[String(lingers?.unit).replace(/s$/, "")] ?? null;
+    return Number.isFinite(value) && value > 0 && unit ? { value, unit, expiry: lingers.expiry ?? "turn-start", sustained: false } : null;
 }
 
 // A zone that's gone once it acts (2026-10-15, the item module's snares: "the first creature to enter the square"): whether what an event
@@ -339,19 +400,25 @@ export function zoneDamagePlan(name, formulas) {
 // The Effect a creature holds while inside: concealed (PF2e's condition, granted; a note on its attacks out), the zone's penalties, or (batch 274)
 // PF2e's degree adjustments ("a success … to Swim is a critical success instead").
 // rules (kind "inside", 2026-10-20): the zone's own rule elements for a creature inside that fits (zone.inside).
-export function zoneMemberEffect({ name, kind, modifiers = [], adjustments = [], rules: given = [], concealedUuid, regionUuid, moduleId, img = "icons/svg/mystery-man.svg" }) {
+// (2026-10-27: kind "undetected", Kraken Bottle's ink — PF2e's undetected granted; text and lingers of an inside entry — its words, and its time
+// after it leaves, flags[moduleId].lingers.)
+export function zoneMemberEffect({ name, kind, modifiers = [], adjustments = [], rules: given = [], concealedUuid, undetectedUuid = null, regionUuid, moduleId, text = null, lingers = null, label = null, img = "icons/svg/mystery-man.svg" }) {
     const rules = kind === "inside" ? given.map((rule) => ({ ...rule }))
         : kind === "conceal"
         ? [{ key: "GrantItem", uuid: concealedUuid, flag: "concealed", allowDuplicate: true, onDeleteActions: { granter: "cascade", grantee: "cascade" } }, { key: "Note", selector: ["attack-roll"], title: name, text: `Creatures outside ${name} are concealed to you: DC 5 flat check.` }]
+        : kind === "undetected"
+        ? [{ key: "GrantItem", uuid: undetectedUuid, flag: "undetected", allowDuplicate: true, onDeleteActions: { granter: "cascade", grantee: "cascade" } }]
         : kind === "adjust"
             ? adjustments.map((entry) => ({ key: "AdjustDegreeOfSuccess", selector: entry.selector, ...(entry.predicate?.length ? { predicate: [...entry.predicate] } : {}), adjustment: { ...entry.adjustment } }))
             // (2026-10-20: a modifier's predicate — Candle of Truth's −4 to Deception only to Lie, ["action:lie"].)
             : modifiers.map((modifier) => ({ key: "FlatModifier", selector: modifier.selector, value: modifier.value, type: modifier.type ?? "untyped", label: name, ...(modifier.predicate?.length ? { predicate: [...modifier.predicate] } : {}) }));
+    const plain = (value) => String(value ?? "").replace(/[&<>"']/g, "");
+    const kept = lingerDuration(lingers);
     return {
-        name: kind === "conceal" ? `${name}: inside (concealed)` : `${name}: inside`,
+        name: kind === "conceal" ? `${name}: inside (concealed)` : kind === "undetected" ? `${name}: inside (undetected)` : label ? `${name}: ${label}` : `${name}: inside`,
         type: "effect",
         img,
-        system: { duration: { value: -1, unit: "unlimited", expiry: null, sustained: false }, rules, description: { value: `<p>Inside <strong>${String(name).replace(/[&<>"']/g, "")}</strong>.${kind === "conceal" ? " Concealed; creatures outside are concealed to it (DC 5 flat check)." : ""}</p>` } },
-        flags: { [moduleId]: { zone: regionUuid } }
+        system: { duration: { value: -1, unit: "unlimited", expiry: null, sustained: false }, rules, description: { value: `<p>Inside <strong>${plain(name)}</strong>.${kind === "conceal" ? " Concealed; creatures outside are concealed to it (DC 5 flat check)." : kind === "undetected" ? " Undetected to creatures outside it." : ""}</p>${text ? `<p>${plain(text)}</p>` : ""}${kept ? `<p>It lasts ${lingers === "turn-start" ? "until the start of its next turn" : `${kept.value} ${kept.value === 1 ? kept.unit.replace(/s$/, "") : kept.unit}`} after it leaves.</p>` : ""}` } },
+        flags: { [moduleId]: { zone: regionUuid, ...(kept ? { lingers: kept } : {}) } }
     };
 }

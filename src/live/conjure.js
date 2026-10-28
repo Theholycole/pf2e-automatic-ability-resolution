@@ -35,15 +35,18 @@ export function conjuredActorData({ name, size = "tiny", stats = null, level = 0
 
 // Free squares around a token, nearest ring first: [{ x, y }] in pixels, `count` of them, each `squares` wide, inside the scene's bounds
 // ({ x, y, width, height } in pixels) and not on another token. token: { x, y, width, height } (x, y in pixels, width and height in squares).
+// (2026-10-27, the item module's boats: squares { width, height } for a token that isn't square — a 1-by-2 Rowboat —, or one number.)
 export function placements({ token, grid, count, squares = 1, occupied = [], bounds = null }) {
     const size = grid.size;
+    const wide = Math.max(1, Number(squares?.width ?? squares) || 1);
+    const tall = Math.max(1, Number(squares?.height ?? squares) || 1);
     const taken = occupied.map((entry) => ({ x: entry.x, y: entry.y, right: entry.x + entry.width * size, bottom: entry.y + entry.height * size }));
-    const overlaps = (x, y) => taken.some((box) => x < box.right && x + squares * size > box.x && y < box.bottom && y + squares * size > box.y);
-    const inside = (x, y) => !bounds || (x >= bounds.x && y >= bounds.y && x + squares * size <= bounds.x + bounds.width && y + squares * size <= bounds.y + bounds.height);
+    const overlaps = (x, y) => taken.some((box) => x < box.right && x + wide * size > box.x && y < box.bottom && y + tall * size > box.y);
+    const inside = (x, y) => !bounds || (x >= bounds.x && y >= bounds.y && x + wide * size <= bounds.x + bounds.width && y + tall * size <= bounds.y + bounds.height);
     const found = [];
     for (let ring = 1; ring <= 12 && found.length < count; ring++) {
-        const left = token.x - ring * size - (squares - 1) * size;
-        const top = token.y - ring * size - (squares - 1) * size;
+        const left = token.x - ring * size - (wide - 1) * size;
+        const top = token.y - ring * size - (tall - 1) * size;
         const right = token.x + (token.width + ring - 1) * size;
         const bottom = token.y + (token.height + ring - 1) * size;
         for (let y = top; y <= bottom && found.length < count; y += size) {
@@ -51,7 +54,7 @@ export function placements({ token, grid, count, squares = 1, occupied = [], bou
                 const edge = x === left || x === right || y === top || y === bottom;
                 if (!edge || overlaps(x, y) || !inside(x, y)) continue;
                 found.push({ x, y });
-                taken.push({ x, y, right: x + squares * size, bottom: y + squares * size });
+                taken.push({ x, y, right: x + wide * size, bottom: y + tall * size });
             }
         }
     }

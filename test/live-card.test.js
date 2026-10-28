@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, changeLines, checkLine, createCard, createCastCard, createModeCard, incapacitates, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
+import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, damageExtras, changeLines, checkLine, createCard, createCastCard, createModeCard, incapacitates, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
 
 const breath = {
     source: { name: "Avalanche Breath", slug: "avalanche-breath" },
@@ -275,4 +275,29 @@ test("2026-10-27: an incapacitation effect's save says so, for PF2e's own adjust
     assert.deepEqual(cardCheck({ traits: ["incapacitation"], resolution }), { kind: "save", statistic: "will", dc: 25, basic: false, incapacitation: true });
     assert.deepEqual(cardCheck({ traits: [], resolution }), { kind: "save", statistic: "will", dc: 25, basic: false });
     assert.equal(checkLine({ check: cardCheck({ activation: { traits: ["incapacitation"] }, resolution }) }), "DC 25 Will save (incapacitation)");
+});
+
+test("2026-10-27: a secret check (Essence Prism) — PF2e's blind roll, its result on the card for the GM only; a skill or Lore rolled as a save", () => {
+    const resolution = (statistic, extra = {}) => ({ kind: "save", check: { roll: "save", statistic, basic: false, against: { dc: "fixed", value: 30 }, ...extra }, outcomes: {} });
+    assert.deepEqual(cardCheck({ resolution: resolution("arcana", { secret: true }) }), { kind: "save", statistic: "arcana", dc: 30, basic: false, secret: true });
+    assert.equal(checkLine({ check: cardCheck({ resolution: resolution("arcana", { secret: true }) }) }), "DC 30 Arcana check, rolled in secret");
+    assert.equal(checkLine({ check: cardCheck({ resolution: resolution("warfare-lore") }) }), "DC 30 Warfare Lore check");
+    const state = createCard({ plan: { resolution: resolution("arcana", { secret: true }) }, ability: { name: "Essence Prism" }, source: { actorUuid: "Actor.x", name: "Ezren" }, targets: [{ actorUuid: "Actor.x", name: "Ezren" }] });
+    const rolled = recordRoll(state, state.targets[0].id, { total: 24, natural: 9, degree: "failure" });
+    const html = cardHTML({ ...rolled, results: ["Ezren: the prism is set"] });
+    assert.match(html, /<span data-aar-gm-text="true"><span class="aar-result aar-failure">24: failure<\/span><\/span><span class="aar-result" data-aar-player-text="true">rolled in secret<\/span>/);
+    assert.match(html, /<ul class="aar-applied" data-aar-gm-text="true">/);
+    assert.doesNotMatch(cardHTML(recordRoll(createCard({ plan: { resolution: resolution("arcana") }, ability: { name: "X" }, source: { actorUuid: "Actor.x", name: "Ezren" }, targets: [{ actorUuid: "Actor.x", name: "Ezren" }] }), "t0", { total: 24, natural: 9, degree: "failure" })), /data-aar-gm-text/);
+});
+
+test("2026-10-27: the user's own skill against a fixed DC, its rows on each target (Mindsponge's DC 28 Medicine)", () => {
+    const plan = { resolution: { kind: "save", check: { roll: "skill", statistic: "medicine", against: { dc: "fixed", value: 28 } }, outcomes: {} } };
+    assert.deepEqual(cardCheck(plan), { kind: "check", statistic: "medicine", against: null, dc: 28 });
+    assert.equal(checkLine({ check: cardCheck(plan) }), "DC 28 Medicine check");
+    assert.equal(cardCheck({ resolution: { ...plan.resolution, check: { ...plan.resolution.check, against: { dc: "fixed", value: 0 } } } }), null);
+});
+
+test("2026-10-27: a card's damage carries the plan's roll options and the resistance and immunities it ignores (Hunter's Dawn, Soulspark Candle)", () => {
+    assert.deepEqual(damageExtras({ resolution: {} }), {});
+    assert.deepEqual(damageExtras({ damageOptions: ["item:rune:property:ghost-touch", ""], resolution: { ignoreResistance: [{ value: null, types: ["fire"] }], ignoreImmunity: "fire" } }), { rollOptions: ["item:rune:property:ghost-touch"], ignoreResistance: [{ value: null, types: ["fire"] }], ignoreImmunity: ["fire"] });
 });

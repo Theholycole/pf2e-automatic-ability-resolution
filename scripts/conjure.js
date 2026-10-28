@@ -196,7 +196,8 @@ async function findCreature(name) {
 }
 
 // The GM's pick of a creature the plan allows: a list to filter by name. { uuid, name } or null.
-async function pickCreature({ title, pick, context = {} }) {
+// (2026-10-27: exported on the module api as api.live.pickCreature, for the item module.)
+export async function pickCreature({ title, pick, context = {} }) {
     // (Batch 298: the rune's own creature, from wherever it is — an adventure's pack too.)
     const named = pick.default?.uuid ? await fromUuid(pick.default.uuid).catch(() => null) : null;
     const defaultEntry = named ? { uuid: pick.default.uuid, name: named.name, level: Number(named.system?.details?.level?.value), traits: named.system?.traits?.value ?? [], type: named.type } : null;
@@ -292,8 +293,9 @@ async function useSummonCard(message, action) {
     if (card.status !== "open") return;
     const settle = (status, result) => message.update({ content: summonCardHTML({ ...card, status }, card.buttons, card.lines, result), [`flags.${MODULE_ID}.summonCard.status`]: status });
     if (action === "decline") return settle("declined", "Not now.");
-    const item = await fromUuid(card.itemUuid).catch(() => null);
     const token = await fromUuid(card.tokenUuid).catch(() => null);
+    // (2026-10-27, the item module: an item used up since the card was made — its name on what it makes, as the zones' are.)
+    const item = (await fromUuid(card.itemUuid).catch(() => null)) ?? (token?.actor ? { name: card.itemName, uuid: null, actor: token.actor } : null);
     if (!item || !token) throw new Error("Its maker isn't there any more.");
     const plan = card.plan;
     let creatures = plan.creatures ?? [];
@@ -382,9 +384,9 @@ async function makeConjured({ item, plan, token, context = {}, picked = null }) 
             // (A war horse "with elite adjustments": PF2e's own.)
             if (creature.adjust && typeof actor.applyAdjustment === "function") await actor.applyAdjustment(creature.adjust);
             const tokenDocument = await actor.getTokenDocument({ disposition: token.disposition, hidden: token.hidden });
-            const squares = Math.max(1, Number(tokenDocument.width) || 1);
+            const squares = { width: Math.max(1, Number(tokenDocument.width) || 1), height: Math.max(1, Number(tokenDocument.height) || 1) };
             const spot = plan.at === "maker" || merged.length ? { x: token.x, y: token.y } : placements({ token: { x: token.x, y: token.y, width: token.width, height: token.height }, grid, count: 1, squares, occupied, bounds })[0] ?? { x: token.x, y: token.y };
-            occupied.push({ x: spot.x, y: spot.y, width: squares, height: squares });
+            occupied.push({ x: spot.x, y: spot.y, width: squares.width, height: squares.height });
             const tokenData = foundry.utils.mergeObject(tokenDocument.toObject(), { x: spot.x, y: spot.y });
             const [placed] = await scene.createEmbeddedDocuments("Token", [tokenData]);
             made.push({ actor, token: placed, initiative: creature.initiative ?? null });

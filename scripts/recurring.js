@@ -91,7 +91,9 @@ async function rolled(message) {
     }
     if (result.kind === "set" && held) {
         await game.pf2e.ConditionManager.updateConditionValue(held.id, actor, result.value);
-        return done(`${said}: ${held.name.replace(/\s*\d+$/, "")} ${result.value}.`);
+        // (2026-10-27, Dreaming Round: the condition its value brings, escalate.atValue.)
+        if (result.then && !actor.hasCondition?.(result.then)) await actor.increaseCondition?.(result.then);
+        return done(`${said}: ${held.name.replace(/\s*\d+$/, "")} ${result.value}${result.then ? `, and it's ${result.then}` : ""}.`);
     }
     if (result.kind === "reduce") {
         const left = (Number(effect.system?.duration?.value) || 0) - 1;

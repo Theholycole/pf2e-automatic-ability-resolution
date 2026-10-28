@@ -42,3 +42,12 @@ test("its words, on the card and the Effect; the card's gate and roll buttons", 
     assert.match(recurringCardHTML({ ...state, status: "open" }), /data-aar-recurring="roll">Roll the Fortitude save</);
     assert.doesNotMatch(recurringCardHTML({ ...state, status: "done", result: "Kyra: success: it ends." }), /<button/);
 });
+
+test("2026-10-27: an escalating condition that brings another at a value (Dreaming Round's unconscious at 3)", () => {
+    const flag = recurringSpec({ save: "will", dc: 20, mode: "escalate", escalate: { failure: 1, criticalFailure: 2, success: -1, atValue: { 3: "unconscious" } } });
+    assert.deepEqual(degreeResult(flag, "failure", 1), { kind: "set", value: 2 });
+    assert.deepEqual(degreeResult(flag, "failure", 2), { kind: "set", value: 3, then: "unconscious" });
+    assert.deepEqual(degreeResult(flag, "criticalFailure", 2), { kind: "set", value: 4, then: "unconscious" });
+    assert.deepEqual(degreeResult(flag, "failure", 3), { kind: "set", value: 4 }, "once only, as it gets there");
+    assert.match(recurringWords(flag), /; at 3, unconscious \(DC 20\)/);
+});

@@ -51,7 +51,10 @@ export function degreeResult(flag, degree, now = 0) {
         if (step === "end") return { kind: "end" };
         const value = Math.max(0, Math.min(Number.isFinite(flag.max) ? flag.max : Infinity, (Number(now) || 0) + (Number(step) || 0)));
         if (value <= 0) return { kind: "end" };
-        return value === Number(now) ? { kind: "none" } : { kind: "set", value };
+        // (2026-10-27, the item module's Dreaming Round: escalate.atValue { 3: "unconscious" } — a condition it brings once its value gets there.)
+        const at = flag.escalate?.atValue ?? {};
+        const reached = Object.keys(at).map(Number).filter((mark) => Number.isFinite(mark) && mark <= value && mark > (Number(now) || 0) && typeof at[mark] === "string").sort((a, b) => a - b).at(-1);
+        return value === Number(now) ? { kind: "none" } : { kind: "set", value, ...(reached !== undefined ? { then: at[reached] } : {}) };
     }
     if (flag.mode === "reduce") return degree === "criticalSuccess" ? { kind: "end" } : degree === "success" ? { kind: "reduce" } : { kind: "none" };
     if (degree === "success" || degree === "criticalSuccess") return { kind: "end" };
@@ -68,7 +71,8 @@ export function recurringWords(flag) {
     if (flag.mode === "reduce") return `${save}${gate}: a success takes a round off it, a critical success ends it (${dc})${limit}`;
     if (flag.mode === "escalate") {
         const steps = DEGREES.filter((degree) => flag.escalate?.[degree] !== undefined).map((degree) => `${degree.replace(/([A-Z])/g, " $1").toLowerCase()} ${flag.escalate[degree] === "end" ? "ends it" : `${Number(flag.escalate[degree]) > 0 ? "+" : ""}${flag.escalate[degree]}`}`);
-        return `${save}${gate}: ${steps.join(", ")}${Number.isFinite(flag.max) ? ` (at most ${flag.max})` : ""} (${dc})${limit}`;
+        const marks = Object.entries(flag.escalate?.atValue ?? {}).filter(([, slug]) => typeof slug === "string").map(([mark, slug]) => `at ${mark}, ${slug}`);
+        return `${save}${gate}: ${steps.join(", ")}${Number.isFinite(flag.max) ? ` (at most ${flag.max})` : ""}${marks.length ? `; ${marks.join(", ")}` : ""} (${dc})${limit}`;
     }
     return `${save}${gate} ends it (${dc})${limit}`;
 }

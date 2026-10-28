@@ -87,3 +87,10 @@ test("summons live (batch 297): the maker's numbers, a pick's levels and creatur
     assert.deepEqual(beyondMax([{ id: "new", x: 0, y: 0, made: 3 }, { id: "old", x: 0, y: 0, made: 1 }, { id: "mid", x: 900, y: 0, made: 2 }], { max: 4, adding: 2, from: { x: 0, y: 0 }, oldest: true }), ["old"]);
 });
 
+
+test("2026-10-27: a token that isn't square (a 1-by-2 Rowboat) is placed clear of its maker", () => {
+    const [spot] = placements({ token: { x: 1200, y: 800, width: 1, height: 1 }, grid: { size: 100 }, count: 1, squares: { width: 1, height: 2 } });
+    const covers = (at) => at.x < 1300 && at.x + 100 > 1200 && at.y < 900 && at.y + 200 > 800;
+    assert.equal(covers(spot), false, JSON.stringify(spot));
+    assert.deepEqual(spot, { x: 1100, y: 600 });
+});

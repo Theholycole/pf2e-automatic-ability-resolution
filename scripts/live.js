@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
 import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
@@ -99,7 +99,8 @@ function targetEntry(token, check) {
     const actor = token.actor;
     const entry = { actorUuid: actor.uuid, tokenUuid: token.document?.uuid ?? token.uuid ?? null, name: token.name ?? actor.name };
     // (Batch 290, Feather Strike: an attack at its own bonus against AC — the armor class itself.)
-    if (check?.kind === "check") entry.dc = actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
+    // (2026-10-27, Mindsponge: a fixed DC, the same for every target.)
+    if (check?.kind === "check") entry.dc = !check.against && Number.isFinite(check.dc) ? check.dc : actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
     return entry;
 }
 
@@ -114,7 +115,7 @@ export const immunityFlags = (actor) => (actor?.itemTypes?.effect ?? []).filter(
 
 // (2026-10-25, for the item module: moveFrom — a token uuid its pushes and pulls are measured from instead of the source's: Dispersing
 // Bullet's from the creature its Strike hit.)
-export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null, moveFrom = null }) {
+export async function postCard({ plan, item, sourceActor, sourceToken, tokens, rider = null, cause = null, aura = null, warning = null, moveFrom = null, zone = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     // (2026-10-20: a temporary immunity — trigger.immunity —: the creatures already immune left out, and the card says so; none left, a
@@ -144,7 +145,8 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
         cause,
         aura,
         warning,
-        moveFrom
+        moveFrom,
+        zone
     });
     return ChatMessage.create({
         content: cardHTML(state),
@@ -1009,14 +1011,18 @@ async function rollTarget(message, target) {
     const source = await fromUuid(state.source.actorUuid);
     const item = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
     const identifier = rollIdentifier(message.id, target.id);
+    // (2026-10-27, Essence Prism: a secret check, as PF2e rolls one with the secret trait — the GM's alone, blind when a player rolls it.)
+    const secret = state.check.secret ? { messageMode: game.user.isGM ? "gm" : "blind" } : {};
     if (state.check.kind === "save") {
         const statistic = actor?.getStatistic?.(state.check.statistic);
+        // (2026-10-27: a Lore it hasn't — untrained, its Intelligence modifier.)
+        if (!statistic && isLore(state.check.statistic)) return untrainedLore(actor, state, identifier, item, { value: state.check.dc, label: `${state.ability.name} DC` }, secret);
         if (!statistic) throw new Error(`${target.name} has no ${statisticLabel(state.check.statistic)}${["fortitude", "reflex", "will"].includes(state.check.statistic) ? " save" : ""}.`);
         // (Batch 286: its own bonus or penalty on the save, and a save rolled twice keeping the worse — PF2e's rollTwice.)
         const saveBonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
         // (2026-10-27: an incapacitation effect — PF2e improves the save of a creature above the effect's level: the item's, a spell's twice its
         // rank, otherwise the source's.)
-        return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}), ...(state.check.incapacitation ? { extraRollOptions: ["item:trait:incapacitation"] } : {}) });
+        return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}), ...(state.check.incapacitation ? { extraRollOptions: ["item:trait:incapacitation"] } : {}), ...secret });
     }
     // (Batch 288: a check at a set modifier, Envelop's +16 or a spell attack modifier in place of Athletics: PF2e's check with that as its base.)
     if (Number.isFinite(state.check.modifier)) {
@@ -1028,11 +1034,26 @@ async function rollTarget(message, target) {
         return Check.roll(check, { actor: source, type: "skill-check", identifier, item, dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)} DC` }, options: new Set(), domains: [], traits: [], skipDialog: true });
     }
     const statistic = source?.getStatistic?.(state.check.statistic);
+    const dcLabel = state.check.against ? `${target.name}'s ${statisticLabel(state.check.against)} DC` : `${state.ability.name} DC`;
+    if (!statistic && isLore(state.check.statistic) && Number.isFinite(target.dc)) return untrainedLore(source, state, identifier, item, { value: target.dc, label: dcLabel }, secret);
     if (!statistic) throw new Error(`${state.source.name} has no ${statisticLabel(state.check.statistic)}.`);
     if (!Number.isFinite(target.dc)) throw new Error(`${target.name}'s ${statisticLabel(state.check.against)} DC is unknown.`);
     // (Its own bonus, batch 36: "They gain a +4 status bonus to the Athletics check".)
     const bonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
-    return statistic.roll({ dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)} DC` }, identifier, skipDialog: true, item, ...(bonus.length ? { modifiers: bonus } : {}) });
+    return statistic.roll({ dc: { value: target.dc, label: dcLabel }, identifier, skipDialog: true, item, ...(bonus.length ? { modifiers: bonus } : {}), ...secret });
+}
+
+const isLore = (slug) => /-lore$/.test(String(slug ?? "")) || slug === "lore";
+
+// A Lore the roller hasn't (or "a Lore", any of its own): its best Lore, otherwise untrained — PF2e's check at its Intelligence modifier.
+async function untrainedLore(actor, state, identifier, item, dc, secret) {
+    const lores = Object.values(actor?.skills ?? {}).filter((skill) => skill?.lore);
+    const best = state.check.statistic === "lore" ? lores.sort((a, b) => (b.mod ?? 0) - (a.mod ?? 0))[0] : null;
+    if (best) return best.roll({ dc, identifier, skipDialog: true, item, ...secret });
+    const { Check, CheckModifier, Modifier } = game.pf2e ?? {};
+    if (!Check?.roll || !CheckModifier || !Modifier) throw new Error("PF2e's check roller isn't available.");
+    const check = new CheckModifier(`${statisticLabel(state.check.statistic)} (untrained)`, { modifiers: [] }, [new Modifier({ slug: "int", label: "Intelligence", modifier: Number(actor?.abilities?.int?.mod) || 0, type: "ability" })]);
+    return Check.roll(check, { actor, type: "skill-check", identifier, item, dc, options: new Set(), domains: [], traits: [], skipDialog: true, ...secret });
 }
 
 // A roll tagged with a card's identifier: its result, onto the card (active GM only).
@@ -1058,6 +1079,8 @@ function mayRoll(state, target) {
 function wireCard(message, html) {
     const state = stateOf(message);
     if (!state) return;
+    // (A secret check's result: the GM's alone.)
+    for (const element of html.querySelectorAll(game.user.isGM ? "[data-aar-player-text]" : "[data-aar-gm-text]")) element.remove();
     for (const button of html.querySelectorAll("[data-aar-action]")) {
         if (button.dataset.aarWired) continue;
         button.dataset.aarWired = "true";
@@ -1173,7 +1196,7 @@ async function chooseMode(message, state, index) {
     const targets = [];
     for (const target of state.targets) {
         const actor = await fromUuid(target.actorUuid).catch(() => null);
-        targets.push({ ...target, dc: check?.kind === "check" ? actor?.getStatistic?.(check.against)?.dc?.value ?? null : null });
+        targets.push({ ...target, dc: check?.kind === "check" ? (!check.against && Number.isFinite(check.dc) ? check.dc : actor?.getStatistic?.(check.against)?.dc?.value ?? null) : null });
     }
     const next = createCard({ plan: mode.plan, ability: { name, uuid: state.ability.uuid }, source: state.source, targets, warning: state.warning });
     return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
@@ -1397,7 +1420,9 @@ export async function applyChange(change, state) {
             const roll = await new DamageRoll(parts.length === 1 ? parts[0] : `{${parts.join(",")}}`).evaluate();
             const item = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
             const before = hitPointsOf(actor);
-            await actor.applyDamage({ damage: roll, token: token ?? undefined, item: item ?? undefined });
+            // (2026-10-27: its roll options and the resistance and immunities it ignores, src/live/card.js damageExtras.)
+            const { rollOptions, ...ignores } = damageExtras(state.plan);
+            await actor.applyDamage({ damage: roll, token: token ?? undefined, item: item ?? undefined, ...(rollOptions ? { rollOptions: new Set(rollOptions) } : {}), ...ignores });
             const taken = Math.max(0, before - hitPointsOf(actor));
             if (!TAKEN.has(state)) TAKEN.set(state, new Map());
             TAKEN.get(state).set(change.target, (TAKEN.get(state).get(change.target) ?? 0) + taken);
@@ -1697,7 +1722,15 @@ async function noteEffect(actor, note, state) {
     if (lasting && !takesPersistent(actor, lasting)) return `${actor.name} takes no persistent ${lasting} damage, so it doesn't get "${note.label ?? "the note"}"`;
     const found = note.saveEnds ? recurringSpec(note.saveEnds, planDC(state)) : null;
     const recurring = found ? { ...found, ...(found.mode === "escalate" ? { mode: "end" } : {}) } : null;
-    const duration = note.duration?.mode === "fixed" ? { value: note.duration.anchor === "target-turn" ? turnRounds(note.duration, actor.uuid) : note.duration.value, unit: note.duration.unit, expiry: note.duration.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
+    // (2026-10-27, the item module's Timeflaying Blade: a time the text rolls, duration.valueRoll "1d4" — rolled here, its roll in the chat.)
+    const timeRoll = note.duration?.mode === "fixed" && typeof note.duration.valueRoll === "string" && note.duration.valueRoll.trim() ? await new Roll(note.duration.valueRoll).evaluate() : null;
+    if (timeRoll) await timeRoll.toMessage({ speaker: ChatMessage.getSpeaker({ actor }), flavor: `${state.ability.name}: ${note.label ?? "its"} time for ${actor.name} (${note.duration.valueRoll} ${note.duration.unit})` });
+    const timed = timeRoll ? { ...note.duration, value: Math.max(1, Number(timeRoll.total) || 1) } : note.duration;
+    const duration = timed?.mode === "fixed" ? { value: timed.anchor === "target-turn" ? turnRounds(timed, actor.uuid) : timed.value, unit: timed.unit, expiry: timed.expiry ?? "turn-start", sustained: false } : { value: -1, unit: "unlimited", expiry: null, sustained: false };
+    // (2026-10-27: note.escape { dc }, Halcyon Heart's — a successful Escape at that DC ends it too, scripts/escape.js; note.whileInside, a zone's
+    // save row's — gone when the creature leaves the zone it came from, scripts/zones.js.)
+    const escapeDC = Number(note.escape?.dc) > 0 ? Number(note.escape.dc) : null;
+    const inside = note.whileInside && state.zone ? state.zone : null;
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
     const created = await actor.createEmbeddedDocuments("Item", [{
         name: `${state.ability.name}: ${note.label ?? "note"}`,
@@ -1706,15 +1739,16 @@ async function noteEffect(actor, note, state) {
         // (2026-10-20: a note Effect may carry PF2e's own rules — a misfortune's RollTwice, Concealed while Invisible — then it's a real one; once:
         // for one roll, gone after it, scripts/escape.js.)
         // (2026-10-20: note.saveEnds, a new save at its turns that ends it — src/live/recurring.js, scripts/recurring.js.)
-        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}), ...(recurring ? { saveEnds: { ...recurring, what: note.label ?? "the effect" }, ability: state.ability.name } : {}), ...(lasting ? { whilePersistent: lasting } : {}) } },
+        flags: { [MODULE_ID]: { note: { source: state.source.actorUuid }, ...(note.once ? { once: true } : {}), ...(recurring ? { saveEnds: { ...recurring, what: note.label ?? "the effect" }, ability: state.ability.name } : {}), ...(lasting ? { whilePersistent: lasting } : {}), ...(escapeDC ? { escape: { dc: escapeDC } } : {}), ...(inside ? { whileInside: inside } : {}) } },
         system: {
-            description: { value: `<p>${escape(note.text)}${escape(recurringNote(recurring))}</p>${lasting && !/\bpersistent\b/i.test(note.text) ? `<p>It lasts while taking persistent ${escape(lasting)} damage.</p>` : ""}<p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
+            description: { value: `<p>${escape(note.text)}${escape(recurringNote(recurring))}</p>${lasting && !/\bpersistent\b/i.test(note.text) ? `<p>It lasts while taking persistent ${escape(lasting)} damage.</p>` : ""}${escapeDC ? `<p>${escape(escapeWords({ dc: escapeDC }).trim())}</p>` : ""}${inside ? "<p>It lasts while it stays inside the area.</p>" : ""}<p>From <strong>${escape(state.ability.name)}</strong> (${escape(state.source.name)}).</p>` },
             duration,
             start: { value: game.time.worldTime, initiative: game.combat?.started ? game.combat.combatant?.initiative ?? null : null },
             rules: (Array.isArray(note.rules) ? note.rules : []).filter((rule) => rule && typeof rule.key === "string").map((rule) => structuredClone(rule))
         }
     }]);
-    await anchorToTarget(created, actor, note.duration);
+    await anchorToTarget(created, actor, timed);
+    if (timeRoll) return `${actor.name}'s "${note.label ?? "note"}" lasts ${duration.value} ${duration.value === 1 ? String(duration.unit).replace(/s$/, "") : duration.unit} (${note.duration.valueRoll} rolled)`;
     return lasting ? `${actor.name}'s "${note.label ?? "note"}" lasts while it takes persistent ${lasting} damage` : null;
 }
 
@@ -1891,7 +1925,9 @@ async function handOffAffliction(state, target, actor, data) {
     // (Live check of batch 257: an exposure that another ability brings, Spit Venom's jungle drake venom, goes on with the affliction's own item,
     // whose stages Pseudo Afflictions reads; the ability's text has none.)
     const own = (entry) => entry !== ability && String(entry.name ?? "").toLowerCase() === String(data?.name ?? "").toLowerCase() && /Stage\s*1/i.test(entry.system?.description?.value ?? "");
-    const item = (data?.name ? source?.items?.find?.(own) : null) ?? ability;
+    // (2026-10-27, the item module's Kraken Bottle: an affliction item named by its uuid in the hand-off — a zone's save, whose item isn't it.)
+    const named = data?.uuid ? await fromUuid(data.uuid).catch(() => null) : null;
+    const item = named ?? (data?.name ? source?.items?.find?.(own) : null) ?? ability;
     if (!item) return `${target.name}: the affliction's item is gone; track it by hand.`;
     Hooks.callAll(`${AFFLICTIONS}.processMessage`, {
         actor,

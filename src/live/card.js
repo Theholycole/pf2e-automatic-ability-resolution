@@ -23,6 +23,16 @@ const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) =>
 // Has the plan the incapacitation trait (its own traits or its activation's)?
 export const incapacitates = (plan) => [...(plan?.traits ?? []), ...(plan?.activation?.traits ?? [])].includes("incapacitation");
 
+// (2026-10-27, for the item module's Hunter's Dawn and Soulspark Candle.) What a card's damage carries into PF2e's applyDamage: the plan's
+// damageOptions as its roll options (PF2e's IWR exceptions read them, "item:rune:property:ghost-touch"), and the resistance and immunities its
+// resolution ignores (the core's applyDamage patch). → { rollOptions?: [..], ignoreResistance?: [..], ignoreImmunity?: [..] }
+export function damageExtras(plan) {
+    const options = [plan?.damageOptions ?? []].flat().filter((option) => typeof option === "string" && option);
+    const resistance = [plan?.resolution?.ignoreResistance ?? []].flat().filter((entry) => entry && typeof entry === "object");
+    const immunity = [plan?.resolution?.ignoreImmunity ?? []].flat().filter((type) => typeof type === "string" && type);
+    return { ...(options.length ? { rollOptions: options } : {}), ...(resistance.length ? { ignoreResistance: resistance } : {}), ...(immunity.length ? { ignoreImmunity: immunity } : {}) };
+}
+
 // What a plan asks for: a save each target attempts against a fixed DC, or the
 // user's check against each target's DC. null when it rolls nothing a card can.
 export function cardCheck(plan) {
@@ -31,12 +41,15 @@ export function cardCheck(plan) {
     // (Batch 286: the save's own bonus or penalty, Inject Venom's −2 after a critical hit; a save rolled twice, the worse kept: misfortune.)
     // (2026-10-27, for the item module's Horn of the Aoyin: an incapacitation effect — PF2e's own save adjustment, by the item's level or the
     // source's.)
-    if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.misfortune ? { misfortune: true } : {}), ...(incapacitates(plan) ? { incapacitation: true } : {}) };
+    // (2026-10-27, the item module's Essence Prism: a secret check — PF2e's blind roll, its result on the card for the GM only.)
+    if (check.roll === "save" && check.against?.dc === "fixed") return { kind: "save", statistic: check.statistic, dc: check.against.value, basic: !!check.basic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.misfortune ? { misfortune: true } : {}), ...(incapacitates(plan) ? { incapacitation: true } : {}), ...(check.secret ? { secret: true } : {}) };
     // No roll ("The target takes 3d8 fire damage"): every target is affected (2026-10-10).
     if (check.roll === "automatic") return { kind: "automatic" };
     // (A bonus of its own, "a +4 status bonus to the Athletics check", batch 36: added to the roll.)
     // (Batch 288: a set modifier of its own — Envelop's "+16", a spell attack modifier in place of Athletics — rolled as that.)
-    if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(Number.isFinite(check.modifier) ? { modifier: check.modifier } : {}) };
+    if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(Number.isFinite(check.modifier) ? { modifier: check.modifier } : {}), ...(check.secret ? { secret: true } : {}) };
+    // (2026-10-27, the item module's Mindsponge: the user's own skill against a fixed DC, its rows on each target — "a DC 28 Medicine check".)
+    if (check.roll === "skill" && check.against?.dc === "fixed" && Number(check.against.value) > 0) return { kind: "check", statistic: [].concat(check.statistic)[0], against: null, dc: Number(check.against.value), ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.secret ? { secret: true } : {}) };
     return null;
 }
 
@@ -142,7 +155,7 @@ export function actionCounts(plan) {
     return variants && typeof variants === "object" ? Object.keys(variants).map(Number).filter(Number.isFinite).sort((a, b) => a - b) : [];
 }
 
-export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null, warning = null, moveFrom = null }) {
+export function createCard({ plan, ability, source, targets, rider = null, cause = null, aura = null, warning = null, moveFrom = null, zone = null }) {
     const check = cardCheck(plan);
     if (!check) return null;
     const counts = actionCounts(plan);
@@ -163,6 +176,8 @@ export function createCard({ plan, ability, source, targets, rider = null, cause
         warning,
         // (A token uuid its pushes and pulls are measured from instead of the source's — postCard's moveFrom.)
         ...(moveFrom ? { moveFrom } : {}),
+        // (2026-10-27: the zone's Region a zone's save card came from — its row Effects flagged whileInside go when the creature leaves it.)
+        ...(zone ? { zone } : {}),
         targets: targets.map((target, index) => ({ id: `t${index}`, actorUuid: target.actorUuid, tokenUuid: target.tokenUuid ?? null, name: target.name, dc: target.dc ?? null, total: null, natural: null, degree: check.kind === "automatic" ? "success" : null })),
         status: "open",
         results: []
@@ -192,12 +207,14 @@ export function checkLine(state) {
     const bonus = check.bonus ? ` (${signed(check.bonus.value)} ${check.bonus.type})` : "";
     // (Batch 286: its own bonus or penalty on the save, and a save rolled twice.)
     // (2026-10-16: the target's Perception against a fixed DC, rolled as a save — Mercurial Mantle's: a check, as PF2e says.)
-    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} ${["fortitude", "reflex", "will"].includes(check.statistic) ? "save" : "check"}${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}${check.incapacitation ? " (incapacitation)" : ""}`;
+    const secret = check.secret ? ", rolled in secret" : "";
+    if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} ${["fortitude", "reflex", "will"].includes(check.statistic) ? "save" : "check"}${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}${check.incapacitation ? " (incapacitation)" : ""}${secret}`;
     if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
     // (Batch 288: a set modifier of its own.)
-    return `${statisticLabel(check.statistic)}${Number.isFinite(check.modifier) ? ` ${signed(check.modifier)}` : ""}${bonus} against each target's ${statisticLabel(check.against)} DC`;
+    if (!check.against && Number.isFinite(check.dc)) return `DC ${check.dc} ${statisticLabel(check.statistic)} check${bonus}${secret}`;
+    return `${statisticLabel(check.statistic)}${Number.isFinite(check.modifier) ? ` ${signed(check.modifier)}` : ""}${bonus} against each target's ${statisticLabel(check.against)} DC${secret}`;
 }
 
 // The card's HTML. Buttons carry data-aar-action ("roll", "roll-all", "targets",
@@ -209,16 +226,18 @@ export function cardHTML(state) {
     const rows = state.targets.map((target) => {
         // A save: the target's roll; a check: the user's roll against the target's DC.
         const roll = state.check.kind === "check" ? `${statisticLabel(state.check.statistic)} ${target.total} vs ${state.check.against === "ac" ? "AC" : "DC"} ${target.dc}` : `${target.total}`;
+        // (A secret check's result: the GM's alone — wireCard keeps data-aar-gm-text for GMs, data-aar-player-text for the rest.)
+        const shown = (html) => (state.check.secret ? `<span data-aar-gm-text="true">${html}</span><span class="aar-result" data-aar-player-text="true">rolled in secret</span>` : html);
         const result = state.check.kind === "automatic" ? `<span class="aar-result">affected</span>`
             : target.degree
-            ? `<span class="aar-result aar-${escape(target.degree)}">${escape(roll)}: ${escape(DEGREE_LABELS[target.degree])}</span>`
+            ? shown(`<span class="aar-result aar-${escape(target.degree)}">${escape(roll)}: ${escape(DEGREE_LABELS[target.degree])}</span>`)
             : state.status === "open" ? `<button type="button" data-aar-action="roll" data-target-id="${escape(target.id)}">Roll ${escape(state.check.kind === "save" ? statisticLabel(state.check.statistic) : statisticLabel(state.check.statistic))}</button>` : "<span class=\"aar-result\">not rolled</span>";
         return `<li class="aar-target" data-target-id="${escape(target.id)}"><span class="aar-name">${escape(target.name)}</span>${result}</li>`;
     }).join("");
     const controls = state.status === "open"
         ? `<footer class="aar-controls"><button type="button" data-aar-action="targets" data-gm-only="true">Use my targets</button>${state.check.kind === "automatic" ? "" : `<button type="button" data-aar-action="roll-all" data-gm-only="true"${state.targets.some((target) => !target.degree) ? "" : " disabled"}>Roll the rest</button>`}<button type="button" data-aar-action="apply" data-gm-only="true"${allRolled(state) ? "" : " disabled"}>Apply</button></footer>`
         : "";
-    const results = state.results.length ? `<ul class="aar-applied">${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
+    const results = state.results.length ? `<ul class="aar-applied"${state.check.secret ? ' data-aar-gm-text="true"' : ""}>${state.results.map((line) => `<li>${escape(line)}</li>`).join("")}</ul>` : "";
     const empty = state.targets.length ? "" : `<p class="aar-hint">No targets: target the creatures, then press Use my targets.</p>`;
     const rider = state.rider ? ` <span class="aar-rider">after ${escape(state.rider.strikeName)}</span>` : state.cause ? ` <span class="aar-rider">${escape(state.cause)}</span>` : "";
     const warning = state.warning ? `<p class="aar-warning">${escape(state.warning)}</p>` : "";

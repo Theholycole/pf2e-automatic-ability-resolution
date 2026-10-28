@@ -43,8 +43,18 @@ function readStage(stage, html) {
 }
 
 // The affliction block of an item, or null when it has no stages.
+// (2026-10-27, from the item module's Unending Itch: "Stages 1–5 1d6 poison damage (1 round)" — a range of stages alike, each written out.)
+const STAGE_RANGE = /<p>\s*<strong>\s*Stages\s+(\d+)\s*[–-]\s*(\d+)\s*<\/strong>([\s\S]*?)<\/p>/i;
+export function expandStageRange(html) {
+    const found = STAGE_RANGE.exec(String(html ?? ""));
+    if (!found) return String(html ?? "");
+    const [first, last] = [Number(found[1]), Number(found[2])];
+    if (!(last > first) || last - first > 10) return String(html);
+    return String(html).replace(STAGE_RANGE, Array.from({ length: last - first + 1 }, (_, index) => `<p><strong>Stage ${first + index}</strong>${found[3]}</p>`).join(""));
+}
+
 export function readAffliction(item) {
-    const html = item?.system?.description?.value ?? "";
+    const html = expandStageRange(item?.system?.description?.value ?? "");
     let stageMarks = [...html.matchAll(/<strong>\s*Stage\s+(\d+)\s*<\/strong>/gi)];
     // A second block (the coatls' venom "against unholy" creatures): the first one only.
     const again = stageMarks.findIndex((mark, index) => index > 0 && mark[1] === "1");
@@ -74,15 +84,23 @@ export function readAffliction(item) {
     const check = raw ? readCheck(raw) : null;
     if (!check?.save || !check.dc) return null;
     const plain = htmlToPlainText(html);
-    const field = (label) => new RegExp(`\\b${label}\\s+([^\\n]+?)\\s*(?:\\n|Stage \\d|$)`, "i").exec(plain)?.[1] ?? null;
+    // (2026-10-27, from the item module's Taster's Folly: a field stops at the next one — "Onset 10 minutes Maximum Duration 6 minutes" on one
+    // line —, and the first that reads as a time is the field, not the word in a sentence before it, "The onset period begins only if…".)
+    const span = (label) => {
+        for (const found of plain.matchAll(new RegExp(`\\b${label}\\s+(.+?)\\s*(?=\\n|\\b(?:Saving Throw|Onset|Maximum Duration|Stages? \\d)\\b|$)`, "gi"))) {
+            const read = readSpan(found[1]);
+            if (read) return read;
+        }
+        return null;
+    };
     return {
         name: item.name,
         slug: item.system?.slug ?? null,
         traits: [...(item.system?.traits?.value ?? [])],
         statistic: check.statistic,
         dc: check.dc,
-        maximumDuration: readSpan(field("Maximum Duration") ?? ""),
-        onset: readSpan(field("Onset") ?? ""),
+        maximumDuration: span("Maximum Duration"),
+        onset: span("Onset"),
         stages
     };
 }
