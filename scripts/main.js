@@ -4,7 +4,7 @@
 // Live play: confirmation cards (scripts/live.js) and aura triggers (scripts/auras.js).
 
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
-import { applyChange, postCard, setUpLivePlay } from "./live.js";
+import { applyChange, postCard, reflectCard, setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpFloors } from "./floors.js";
@@ -107,5 +107,5 @@ Hooks.once("ready", async () => {
     // Points, native Effects, timed conditions, the affliction hand-off.)
     // (live.startConjure, 2026-10-18: the item module's conjure plans — Fossil Fragments, Wondrous Figurines — as playAbility makes them:
     // startConjure({ item, plan, sourceToken }), item.actor the user.)
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, startZone, startConjure, endZones, pickCreature }) });
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, startZone, startConjure, endZones, pickCreature, reflect: reflectCard }) });
 });

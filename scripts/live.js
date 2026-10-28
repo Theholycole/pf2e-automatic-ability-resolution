@@ -23,6 +23,7 @@ import { strikeBuffEffect } from "../src/live/buff.js";
 import { damageNote, golemAnswer, hitSetsOff, ownStrikeSetsOff, traitsFit } from "../src/live/reactions.js";
 import { distanceFeet } from "../../pf2e-resolution-core/src/model/grid.js";
 import { box, gridOf } from "./auras.js";
+import { latestReflectable, reflectedState, remainingRange } from "../src/live/reflect.js";
 import { applySwallow } from "./swallow.js";
 import { applyFloor, applyWhilePersistent, takesPersistent } from "./floors.js";
 import { applyAuraCondition } from "./auras.js";
@@ -155,6 +156,57 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
     });
 }
 
+// A card turned back (2026-10-27, the item module's Cayden's Tankard and Scale of Igroon; src/live/reflect.js): plan.reflect { trait?, kinds?,
+// of: "targeting-user", to: "creator" | "chosen" } — the latest open save or attack card at the user taken; the same check (its DC, rows,
+// damage, traits) posted at its source alone ("creator", the card counteracted for all its targets) or at the creatures the presser targets
+// within what's left of its range ("chosen", the user out of the card). On the active GM's client: api.live.reflect({ plan, item,
+// userToken, targets }). → { from, card, at: [names], beyond: [names] } or null when no card was found.
+export async function reflectCard({ plan, item, userToken, targets = [] }) {
+    const reflect = plan?.reflect;
+    const user = userToken?.document ?? userToken;
+    if (!reflect || !user?.actor) return null;
+    const who = { actorUuid: user.actor.uuid, tokenUuid: user.uuid, name: user.name };
+    const cards = (game.messages?.contents ?? []).map((message) => ({ id: message.id, state: message.getFlag?.(MODULE_ID, FLAG) })).filter((entry) => entry.state);
+    const found = latestReflectable(cards, reflect, who);
+    if (!found) {
+        await noteToGM(item.actor, user, [`<strong>${item.name}</strong>: no open card${reflect.trait ? ` of a ${[reflect.trait].flat().join(" or ")} effect` : ""} targets ${user.name}; resolve it by hand.`]);
+        return null;
+    }
+    const message = game.messages.get(found.id);
+    const state = found.state;
+    const sourceActor = await fromUuid(state.source.actorUuid).catch(() => null);
+    const sourceToken = state.source.tokenUuid ? await fromUuid(state.source.tokenUuid).catch(() => null) : null;
+    const scene = user.parent;
+    const grid = scene ? gridOf(scene) : null;
+    const apart = (a, b) => (grid && a && b && a.parent === b.parent ? distanceFeet(box(a, grid.size), box(b, grid.size), grid) : 0);
+    let at = [];
+    let beyond = [];
+    let remaining = null;
+    if (reflect.to === "creator") {
+        if (sourceToken) at = [sourceToken];
+    } else {
+        const chosen = [...targets].map((token) => token?.document ?? token).filter((token) => token?.actor && token.uuid !== user.uuid);
+        if (!chosen.length) throw new Error(`${item.name}: target the creatures to turn it back at.`);
+        remaining = remainingRange(state.plan, apart(sourceToken, user));
+        at = chosen.filter((token) => apart(user, token) <= remaining);
+        beyond = chosen.filter((token) => !at.includes(token));
+    }
+    const names = at.map((token) => token.name);
+    const reach = Number.isFinite(remaining) ? ` within its remaining ${remaining} feet` : "";
+    const line = reflect.to === "creator"
+        ? `Counteracted for all its targets: ${user.name}'s ${item.name} turned it back on ${state.source.name}${at.length ? "" : " (not on the scene: roll its save by hand)"}.`
+        : `${user.name}'s ${item.name} reflected it${names.length ? ` at ${names.join(", ")}` : ""}${reach}${beyond.length ? `; out of reach: ${beyond.map((token) => token.name).join(", ")}` : ""}.`;
+    let created = null;
+    if (at.length) {
+        const made = createCard({ plan: state.plan, ability: { name: `${state.ability.name} (reflected)`, uuid: state.ability.uuid }, source: state.source, targets: at.map((token) => targetEntry(token.object ?? token, state.check)), warning: `Reflected by ${user.name}'s ${item.name}: the same DC and results.` });
+        const next = { ...made, check: state.check, ...(state.actions !== undefined ? { actions: state.actions } : {}), ...(state.damageType ? { damageType: state.damageType } : {}) };
+        created = await ChatMessage.create({ content: cardHTML(next), speaker: ChatMessage.getSpeaker({ actor: sourceActor ?? undefined, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: next } } });
+    }
+    const left = reflectedState(state, { user: who, to: reflect.to, line });
+    await message.update({ content: cardHTML(left), [`flags.${MODULE_ID}.${FLAG}`]: left });
+    return { from: message.id, card: created?.id ?? null, at: names, beyond: beyond.map((token) => token.name) };
+}
+
 // A basic maneuver a reaction answers with (batch 88: Ripping Disarm's Disarm, Absorb Weapon's): PF2e's action as a card on that creature,
 // its penalty or bonus on the check.
 export async function postSkillCard({ skill, shift = 0, item, sourceActor, sourceToken, tokens }) {
@@ -230,6 +282,11 @@ async function rollsToChat(item, sourceToken, rolls, lines) {
 
 // A monster's or a hazard's ability as compiled (or the way a random table picked): its card, its effect, its note.
 async function playAbility(item, plan, sourceToken) {
+    // (2026-10-27: a card turned back, plan.reflect — reflectCard, at the user's own targets.)
+    if (plan?.reflect) {
+        await reflectCard({ plan, item, userToken: sourceToken, targets: [...(game.user.targets ?? [])] });
+        return;
+    }
     // An area that lasts (batch 256): its Region and card (scripts/zones.js).
     if (plan?.builtin === "zone") {
         await startZone({ item, plan, sourceToken });
