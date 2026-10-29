@@ -3394,6 +3394,7 @@ An aimed burst (2026-10-27, for Flame Drake Snare's "a 15-foot cone in the direc
   - Only conditions PF2e has; the rest of a stage's words are in the Effect's description.
   - Exposed again while it has the built Effect (`flags["pf2e-automatic-ability-resolution"].affliction`): a poison goes a stage on, two on a critical failure, no further than its last; a disease stays as it is ("already has").
   - The card's line: "<creature>: Affliction Effect: <name>, Onset (Pseudo Afflictions runs it from here)".
+  - A card with no item of its own (an environment's or an Effect's save) still asks Pseudo Afflictions, by the affliction's name and its DC's label, then builds the Effect when it makes nothing. Before, it said "the affliction's item is gone; track it by hand".
 
 ## An incapacitation item's level after its last dose (2026-10-29, found by the item module)
 

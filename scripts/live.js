@@ -2007,15 +2007,16 @@ function durationText(duration, source, target = null) {
 // tracks it from the affliction item, as for the spell module's afflictions.
 async function handOffAffliction(state, target, actor, data) {
     if (game.modules.get(AFFLICTIONS)?.active !== true) return `${target.name}: Pseudo Afflictions isn't active, so track ${data?.name ?? "the affliction"} by hand (stage ${data?.stage ?? 1}).`;
-    const ability = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
+    const ability = itemOnly(state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null);
     const source = await fromUuid(state.source.actorUuid);
     // (Live check of batch 257: an exposure that another ability brings, Spit Venom's jungle drake venom, goes on with the affliction's own item,
     // whose stages Pseudo Afflictions reads; the ability's text has none.)
     const own = (entry) => entry !== ability && String(entry.name ?? "").toLowerCase() === String(data?.name ?? "").toLowerCase() && /Stage\s*1/i.test(entry.system?.description?.value ?? "");
     // (2026-10-27, the item module's Kraken Bottle: an affliction item named by its uuid in the hand-off — a zone's save, whose item isn't it.)
     const named = data?.uuid ? await fromUuid(data.uuid).catch(() => null) : null;
+    // (2026-10-29: a card with no item of its own, an environment's or an Effect's save, still asks Pseudo Afflictions by the affliction's name
+    // and builds the Effect from the hand-off when it makes nothing.)
     const item = named ?? (data?.name ? source?.items?.find?.(own) : null) ?? ability;
-    if (!item) return `${target.name}: the affliction's item is gone; track it by hand.`;
     // (2026-10-27, the item module's Horn of Rust: Pseudo Afflictions finds an affliction by the item's slug, its name, or the DC's label — the
     // affliction's own name in it, "Tetanus DC", when the hand-off names one. When it makes nothing, the card says to track it by hand.)
     const name = data?.name ?? state.ability.name;
@@ -2023,10 +2024,10 @@ async function handOffAffliction(state, target, actor, data) {
     const made = pseudoAfflictionMade(actor, 2000);
     Hooks.callAll(`${AFFLICTIONS}.processMessage`, {
         actor,
-        item,
+        item: item ?? { name, slug: null },
         speaker: { actor: source?.id ?? null },
         flags: { pf2e: { context: { type: "saving-throw", outcome: target.degree, dc: { value: dc, label: `${name} DC` } } } },
-        getRollData: () => item.getRollData?.() ?? {}
+        getRollData: () => item?.getRollData?.() ?? {}
     }, {}, game.userId);
     if (await made) return null;
     const held = (actor.itemTypes?.effect ?? []).find((effect) => isPseudoAffliction(effect) && String(effect.name).toLowerCase().includes(String(name).toLowerCase()));
@@ -2039,7 +2040,7 @@ async function handOffAffliction(state, target, actor, data) {
     }
     if (held) return `${target.name} already has ${held.name}`;
     const conditions = game.pf2e?.ConditionManager;
-    const built = pseudoAfflictionSource(data, { name, dc, level: data?.level ?? item.level ?? item.system?.level?.value ?? source?.level, img: item.img ?? null, effectTraits: Object.keys(CONFIG.PF2E?.effectTraits ?? {}), isCondition: (slug) => !conditions?.getCondition || Boolean(conditions.getCondition(slug)), moduleId: MODULE_ID });
+    const built = pseudoAfflictionSource(data, { name, dc, level: data?.level ?? item?.level ?? item?.system?.level?.value ?? source?.level, img: item?.img ?? null, effectTraits: Object.keys(CONFIG.PF2E?.effectTraits ?? {}), isCondition: (slug) => !conditions?.getCondition || Boolean(conditions.getCondition(slug)), moduleId: MODULE_ID });
     if (built) {
         const [effect] = await actor.createEmbeddedDocuments("Item", [built]);
         if (effect) return `${target.name}: ${effect.name}, ${effect.system?.badge?.labels?.[(Number(effect.system?.badge?.value) || 1) - 1] ?? "stage 1"} (Pseudo Afflictions runs it from here)`;
