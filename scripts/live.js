@@ -1986,14 +1986,42 @@ async function handOffAffliction(state, target, actor, data) {
     const named = data?.uuid ? await fromUuid(data.uuid).catch(() => null) : null;
     const item = named ?? (data?.name ? source?.items?.find?.(own) : null) ?? ability;
     if (!item) return `${target.name}: the affliction's item is gone; track it by hand.`;
+    // (2026-10-27, the item module's Horn of Rust: Pseudo Afflictions finds an affliction by the item's slug, its name, or the DC's label — the
+    // affliction's own name in it, "Tetanus DC", when the hand-off names one. When it makes nothing, the card says to track it by hand.)
+    const name = data?.name ?? state.ability.name;
+    const dc = data?.dc ?? state.check.dc;
+    const made = pseudoAfflictionMade(actor, 2000);
     Hooks.callAll(`${AFFLICTIONS}.processMessage`, {
         actor,
         item,
         speaker: { actor: source?.id ?? null },
-        flags: { pf2e: { context: { type: "saving-throw", outcome: target.degree, dc: { value: data?.dc ?? state.check.dc, label: `${state.ability.name} DC` } } } },
+        flags: { pf2e: { context: { type: "saving-throw", outcome: target.degree, dc: { value: dc, label: `${name} DC` } } } },
         getRollData: () => item.getRollData?.() ?? {}
     }, {}, game.userId);
-    return null;
+    if (await made) return null;
+    const held = (actor.itemTypes?.effect ?? []).find((effect) => isPseudoAffliction(effect) && String(effect.name).toLowerCase().includes(String(name).toLowerCase()));
+    return held ? `${target.name} already has ${held.name}` : `${target.name}: Pseudo Afflictions has nothing for ${name}; track it by hand (stage ${data?.stage ?? 1}, DC ${dc}).`;
+}
+
+// A Pseudo Afflictions Effect: its own flag, or one from its compendium.
+const isPseudoAffliction = (item) => item?.type === "effect" && (!!item.flags?.[AFFLICTIONS] || String(item._stats?.compendiumSource ?? item.sourceId ?? "").startsWith(`Compendium.${AFFLICTIONS}.`));
+
+// Whether Pseudo Afflictions makes or changes an Effect on the creature within `ms` (it works on its own hook, unawaited).
+function pseudoAfflictionMade(actor, ms) {
+    return new Promise((resolve) => {
+        const mine = (item) => isPseudoAffliction(item) && (item.parent === actor || item.parent?.uuid === actor.uuid);
+        const done = (result) => {
+            Hooks.off("createItem", created);
+            Hooks.off("updateItem", updated);
+            clearTimeout(timer);
+            resolve(result);
+        };
+        const created = (item) => mine(item) && done(true);
+        const updated = (item) => mine(item) && done(true);
+        Hooks.on("createItem", created);
+        Hooks.on("updateItem", updated);
+        const timer = setTimeout(() => done(false), ms);
+    });
 }
 
 // --- Styles ---------------------------------------------------------------------
