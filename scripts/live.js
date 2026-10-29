@@ -16,6 +16,7 @@ import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js"
 import { dropImmuneParts, partImmunities, partImmunityEffect, partImmuneTo, partsEarned, partWords } from "../src/live/part-immunity.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
+import { exposedAgain, pseudoAfflictionSource } from "../src/live/afflictions.js";
 import { startZone } from "./zones.js";
 import { startConjure } from "./conjure.js";
 import { trapStrikes } from "./reactions.js";
@@ -2025,7 +2026,21 @@ async function handOffAffliction(state, target, actor, data) {
     }, {}, game.userId);
     if (await made) return null;
     const held = (actor.itemTypes?.effect ?? []).find((effect) => isPseudoAffliction(effect) && String(effect.name).toLowerCase().includes(String(name).toLowerCase()));
-    return held ? `${target.name} already has ${held.name}` : `${target.name}: Pseudo Afflictions has nothing for ${name}; track it by hand (stage ${data?.stage ?? 1}, DC ${dc}).`;
+    // (2026-10-29, the item module's Horn of Rust: one Pseudo Afflictions has no Effect for, its own built from the hand-off's stages — src/live/
+    // afflictions.js — which Pseudo Afflictions runs from there. Exposed again while it has it: a poison's stage on, as Pseudo Afflictions' own.)
+    if (held?.flags?.[MODULE_ID]?.affliction) {
+        const next = exposedAgain(held, target.degree);
+        if (next) await held.update({ "system.badge.value": next });
+        return next ? `${target.name}'s ${held.name} goes to ${held.system?.badge?.labels?.[next - 1] ?? `stage ${next}`}` : `${target.name} already has ${held.name}`;
+    }
+    if (held) return `${target.name} already has ${held.name}`;
+    const conditions = game.pf2e?.ConditionManager;
+    const built = pseudoAfflictionSource(data, { name, dc, level: data?.level ?? item.level ?? item.system?.level?.value ?? source?.level, img: item.img ?? null, effectTraits: Object.keys(CONFIG.PF2E?.effectTraits ?? {}), isCondition: (slug) => !conditions?.getCondition || Boolean(conditions.getCondition(slug)), moduleId: MODULE_ID });
+    if (built) {
+        const [effect] = await actor.createEmbeddedDocuments("Item", [built]);
+        if (effect) return `${target.name}: ${effect.name}, ${effect.system?.badge?.labels?.[(Number(effect.system?.badge?.value) || 1) - 1] ?? "stage 1"} (Pseudo Afflictions runs it from here)`;
+    }
+    return `${target.name}: Pseudo Afflictions has nothing for ${name}; track it by hand (stage ${data?.stage ?? 1}, DC ${dc}).`;
 }
 
 // A Pseudo Afflictions Effect: its own flag, or one from its compendium.

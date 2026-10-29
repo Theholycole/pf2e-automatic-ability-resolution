@@ -3380,6 +3380,17 @@ An aimed burst (2026-10-27, for Flame Drake Snare's "a 15-foot cone in the direc
 - When Pseudo Afflictions makes or changes nothing on the creature within 2 seconds, the card says so: "<creature>: Pseudo Afflictions has nothing for <name>; track it by hand (stage N, DC X)" — or "<creature> already has <Effect>" when it holds one of that name.
 - Checked live in `pftest` (2026-10-29, PFTEST SIM actors, deleted afterwards): Tetanus from an item named Horn of Rust made "Affliction Effect: Tetanus" at stage 1, DC 19; the same again said it already had it; an unknown affliction's line came after the 2 seconds.
 
+## An affliction Pseudo Afflictions has no Effect for (2026-10-29, the item module's request)
+
+- When Pseudo Afflictions makes nothing and the hand-off has stages (an item's or a monster's own affliction, Horn of Rust's "Horn of Rust Tetanus"), live play builds the Effect itself in Pseudo Afflictions' format (`src/live/afflictions.js` `pseudoAfflictionSource`), and Pseudo Afflictions runs it from there: its stage's conditions and Effects, its damage rolled to the GM, the save at the end of each stage.
+  - "Affliction Effect: <name>", the hand-off's level and its traits an Effect takes, a counter badge labelled "Onset", "Stage 1", …; a poison's maximum duration as the Effect's own, otherwise unlimited.
+  - `flags["pseudo-afflictions"]`: `save { type, value }`, `onset`, `stages { "1": { duration, conditions [{ slug, value?, linked: true }], effects? [uuids], damage? { formula } }, … }`. With an onset, stage "1" is the onset and the stages follow one on. A week is 7 days. A stage with no time of its own, or "remaining duration", has no end.
+  - A critical failure (the hand-off's stage 2) starts one stage further, as Pseudo Afflictions' own: `startStage` 3 with an onset, otherwise the badge at 2.
+  - The last "death" stage: no end, the note "Character is dead".
+  - Only conditions PF2e has; the rest of a stage's words are in the Effect's description.
+  - Exposed again while it has the built Effect (`flags["pf2e-automatic-ability-resolution"].affliction`): a poison goes a stage on, two on a critical failure, no further than its last; a disease stays as it is ("already has").
+  - The card's line: "<creature>: Affliction Effect: <name>, Onset (Pseudo Afflictions runs it from here)".
+
 ## An incapacitation item's level after its last dose (2026-10-29, found by the item module)
 
 - PF2e (and the PF2E Incapacitation Variants module) takes an incapacitation effect's level from the item the save is rolled with, and the source creature's level when there is none. The last dose of a consumable is deleted before its save card is rolled, so a level-1 user's level-10 Spirit-Sealing Fulu counted as level 1 and every higher-level foe's save was a step better: the fulu's critical failure became a failure (paralyzed 1 round, not 4), and Tusk and Fang Chain's and Gearbinder Oil's critical failures gave nothing.
