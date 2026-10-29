@@ -23,6 +23,27 @@ const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) =>
 // Has the plan the incapacitation trait (its own traits or its activation's)?
 export const incapacitates = (plan) => [...(plan?.traits ?? []), ...(plan?.activation?.traits ?? [])].includes("incapacitation");
 
+// (2026-10-29, the item module's Spirit-Sealing Fulu, Tusk and Fang Chain and Gearbinder Oil: PF2e takes an incapacitation effect's level from
+// the item the save is rolled with, else the source creature's — and the last dose of a consumable is deleted before its save is rolled.)
+// The physical item a card is for, as it stood when the card was posted: { type, level, img, traits }, or null for anything else.
+const PHYSICAL = ["armor", "backpack", "book", "consumable", "equipment", "shield", "treasure", "weapon"];
+export function itemRecord(item) {
+    const level = Number(item?.system?.level?.value ?? item?.level);
+    if (!PHYSICAL.includes(item?.type) || !Number.isFinite(level)) return null;
+    const traits = item.system?.traits?.value ?? item.traits ?? [];
+    return { type: item.type, level, img: item.img ?? null, traits: [...traits].filter((trait) => typeof trait === "string") };
+}
+
+// A stand-in for it once it's gone, for the save's roll (an unsaved item on the user): its source, or null with no record. Its id is the
+// item's, so the roll's origin is the same.
+export function standInSource(ability, plan) {
+    const record = ability?.item;
+    if (!record || !PHYSICAL.includes(record.type) || !Number.isFinite(Number(record.level))) return null;
+    const id = String(ability.uuid ?? "").split(".").at(-1);
+    const traits = [...new Set([...(record.traits ?? []), ...(plan?.traits ?? [])])];
+    return { ...(/^[A-Za-z0-9]{16}$/.test(id) ? { _id: id } : {}), name: ability.name, type: record.type, ...(record.img ? { img: record.img } : {}), system: { level: { value: Number(record.level) }, traits: { value: traits } } };
+}
+
 // (2026-10-27, for the item module's Hunter's Dawn and Soulspark Candle.) What a card's damage carries into PF2e's applyDamage: the plan's
 // damageOptions as its roll options (PF2e's IWR exceptions read them, "item:rune:property:ghost-touch"), and the resistance and immunities its
 // resolution ignores (the core's applyDamage patch). → { rollOptions?: [..], ignoreResistance?: [..], ignoreImmunity?: [..] }
@@ -166,7 +187,7 @@ export function createCard({ plan, ability, source, targets, rider = null, cause
         modes: null,
         // How many actions the monster spent, for damage by the number of actions (the GM picks; the fewest at first).
         actions: counts.length ? counts[0] : null,
-        ability: { name: ability?.name ?? plan?.source?.name ?? "Ability", uuid: ability?.uuid ?? plan?.source?.uuid ?? null, slug: abilitySlug(plan, ability?.name) },
+        ability: { name: ability?.name ?? plan?.source?.name ?? "Ability", uuid: ability?.uuid ?? plan?.source?.uuid ?? null, slug: abilitySlug(plan, ability?.name), ...(ability?.item ? { item: ability.item } : {}) },
         source,
         plan,
         check,

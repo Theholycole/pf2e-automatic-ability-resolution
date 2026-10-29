@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, damageExtras, changeLines, checkLine, createCard, createCastCard, createModeCard, incapacitates, parseIdentifier, recordRoll, rollIdentifier } from "../src/live/card.js";
+import { abilitySlug, actionCounts, allRolled, cardCheck, cardHTML, damageExtras, changeLines, checkLine, createCard, createCastCard, createModeCard, incapacitates, itemRecord, parseIdentifier, recordRoll, rollIdentifier, standInSource } from "../src/live/card.js";
 
 const breath = {
     source: { name: "Avalanche Breath", slug: "avalanche-breath" },
@@ -275,6 +275,24 @@ test("2026-10-27: an incapacitation effect's save says so, for PF2e's own adjust
     assert.deepEqual(cardCheck({ traits: ["incapacitation"], resolution }), { kind: "save", statistic: "will", dc: 25, basic: false, incapacitation: true });
     assert.deepEqual(cardCheck({ traits: [], resolution }), { kind: "save", statistic: "will", dc: 25, basic: false });
     assert.equal(checkLine({ check: cardCheck({ activation: { traits: ["incapacitation"] }, resolution }) }), "DC 25 Will save (incapacitation)");
+});
+
+test("2026-10-29: an incapacitation item PF2e deletes (the last dose) is still its own level on the card, a stand-in for the save's roll", () => {
+    const fulu = { type: "consumable", img: "fulu.webp", system: { level: { value: 10 }, traits: { value: ["consumable", "fulu", "incapacitation", "magical"] } } };
+    assert.deepEqual(itemRecord(fulu), { type: "consumable", level: 10, img: "fulu.webp", traits: ["consumable", "fulu", "incapacitation", "magical"] });
+    assert.equal(itemRecord({ type: "spell", system: { level: { value: 3 } } }), null);
+    assert.equal(itemRecord({ type: "action", system: {} }), null);
+    // (A caller's own level, postCard's item.level.)
+    assert.equal(itemRecord({ type: "consumable", level: 6 }).level, 6);
+    const resolution = { kind: "save", check: { roll: "save", statistic: "will", basic: false, against: { dc: "fixed", value: 27 } }, outcomes: {} };
+    const plan = { traits: ["incapacitation"], resolution };
+    const state = createCard({ plan, ability: { name: "Spirit-Sealing Fulu (Greater)", uuid: "Actor.abcdefghijklmnop.Item.ABCDEFGHIJKLMNOP", item: itemRecord(fulu) }, source: { actorUuid: "Actor.abcdefghijklmnop", name: "Binder" }, targets: [{ actorUuid: "Actor.b", name: "Undead" }] });
+    assert.equal(state.ability.item.level, 10);
+    assert.deepEqual(standInSource(state.ability, plan), { _id: "ABCDEFGHIJKLMNOP", name: "Spirit-Sealing Fulu (Greater)", type: "consumable", img: "fulu.webp", system: { level: { value: 10 }, traits: { value: ["consumable", "fulu", "incapacitation", "magical"] } } });
+    // (No record, or a token's item without an id of its own: none, or no id.)
+    assert.equal(standInSource({ name: "Horn", uuid: null }, plan), null);
+    assert.equal(standInSource({ name: "Oil", uuid: null, item: { type: "consumable", level: 6, traits: [] } }, plan)._id, undefined);
+    assert.equal(createCard({ plan, ability: { name: "Horn" }, source: { actorUuid: "Actor.x", name: "X" }, targets: [] }).ability.item, undefined);
 });
 
 test("2026-10-27: a secret check (Essence Prism) — PF2e's blind roll, its result on the card for the GM only; a skill or Lore rolled as a save", () => {

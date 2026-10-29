@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, itemRecord, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, standInSource, statisticLabel } from "../src/live/card.js";
 import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
@@ -55,6 +55,8 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
     basics = basicActions;
     ready = loaded;
     injectStyles();
+    // (2026-10-29) The physical items PF2e deletes (the last dose of a consumable), for a card posted after: its level for an incapacitation save.
+    Hooks.on("deleteItem", (item) => remember(item));
     Hooks.on("createChatMessage", (message) => {
         if (!isActiveGM()) return;
         recordResult(message).catch((error) => console.error(`${MODULE_ID} | recording a roll`, error));
@@ -137,9 +139,10 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
     const parts = partImmunities(plan, item?.name);
     const partly = parts.flatMap((part) => tokens.filter((token) => token?.actor && partImmuneTo(immunityFlags(token.actor), part, sourceActor.uuid)).map((token) => `${token.name} ${partWords(part, item.name)}`));
     if (partly.length) warning = [warning, `${partly.join("; ")}.`].filter(Boolean).join(" ");
+    const record = Number.isFinite(Number(item?.level)) ? itemRecord({ type: "consumable", ...item, level: Number(item.level) }) : await itemRecordOf(item?.uuid);
     const state = createCard({
         plan,
-        ability: { name: item.name, uuid: item.uuid },
+        ability: { name: item.name, uuid: item.uuid, ...(record ? { item: record } : {}) },
         source: { actorUuid: sourceActor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? sourceActor.name },
         targets: tokens.map((token) => targetEntry(token, check)),
         rider,
@@ -154,6 +157,21 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
         speaker: ChatMessage.getSpeaker({ actor: sourceActor, token: sourceToken ?? undefined }),
         flags: { [MODULE_ID]: { [FLAG]: state } }
     });
+}
+
+// (2026-10-29) The item a card is for, as a record (src/live/card.js itemRecord): the live one, else one PF2e deleted this session. postCard's
+// item may give its own level (and type, traits) instead.
+const GONE = new Map();
+function remember(item) {
+    const record = itemRecord(item);
+    if (!record || !item.uuid) return;
+    GONE.set(item.uuid, record);
+    if (GONE.size > 200) GONE.delete(GONE.keys().next().value);
+}
+async function itemRecordOf(uuid) {
+    if (!uuid) return null;
+    const live = await fromUuid(uuid).catch(() => null);
+    return itemRecord(live) ?? GONE.get(uuid) ?? null;
 }
 
 // A card turned back (2026-10-27, the item module's Cayden's Tankard and Scale of Igroon; src/live/reflect.js): plan.reflect { trait?, kinds?,
@@ -198,7 +216,7 @@ export async function reflectCard({ plan, item, userToken, targets = [] }) {
         : `${user.name}'s ${item.name} reflected it${names.length ? ` at ${names.join(", ")}` : ""}${reach}${beyond.length ? `; out of reach: ${beyond.map((token) => token.name).join(", ")}` : ""}.`;
     let created = null;
     if (at.length) {
-        const made = createCard({ plan: state.plan, ability: { name: `${state.ability.name} (reflected)`, uuid: state.ability.uuid }, source: state.source, targets: at.map((token) => targetEntry(token.object ?? token, state.check)), warning: `Reflected by ${user.name}'s ${item.name}: the same DC and results.` });
+        const made = createCard({ plan: state.plan, ability: { name: `${state.ability.name} (reflected)`, uuid: state.ability.uuid, ...(state.ability.item ? { item: state.ability.item } : {}) }, source: state.source, targets: at.map((token) => targetEntry(token.object ?? token, state.check)), warning: `Reflected by ${user.name}'s ${item.name}: the same DC and results.` });
         const next = { ...made, check: state.check, ...(state.actions !== undefined ? { actions: state.actions } : {}), ...(state.damageType ? { damageType: state.damageType } : {}) };
         created = await ChatMessage.create({ content: cardHTML(next), speaker: ChatMessage.getSpeaker({ actor: sourceActor ?? undefined, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: next } } });
     }
@@ -1062,11 +1080,18 @@ async function cardForSkillAction(message) {
 
 // --- Rolls --------------------------------------------------------------------
 
+// (2026-10-29) An unsaved copy of the card's item on its user, at the item's level, once PF2e has deleted it — or null.
+function standIn(state, source) {
+    const data = source ? standInSource(state.ability, state.plan) : null;
+    if (!data) return null;
+    try { return new CONFIG.Item.documentClass(data, { parent: source }); } catch (error) { console.warn(`${MODULE_ID} | stand-in item`, error); return null; }
+}
+
 async function rollTarget(message, target) {
     const state = stateOf(message);
     const actor = await fromUuid(target.actorUuid);
     const source = await fromUuid(state.source.actorUuid);
-    const item = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
+    const item = (state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null) ?? (state.check.incapacitation ? standIn(state, source) : null);
     const identifier = rollIdentifier(message.id, target.id);
     // (2026-10-27, Essence Prism: a secret check, as PF2e rolls one with the secret trait — the GM's alone, blind when a player rolls it.)
     const secret = state.check.secret ? { messageMode: game.user.isGM ? "gm" : "blind" } : {};
@@ -1078,7 +1103,7 @@ async function rollTarget(message, target) {
         // (Batch 286: its own bonus or penalty on the save, and a save rolled twice keeping the worse — PF2e's rollTwice.)
         const saveBonus = state.check.bonus && game.pf2e?.Modifier ? [new game.pf2e.Modifier({ label: state.ability.name, modifier: state.check.bonus.value, type: state.check.bonus.type })] : [];
         // (2026-10-27: an incapacitation effect — PF2e improves the save of a creature above the effect's level: the item's, a spell's twice its
-        // rank, otherwise the source's.)
+        // rank, otherwise the source's. 2026-10-29: an item PF2e has deleted since, the last dose, as a stand-in at its level — standIn.)
         return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}), ...(state.check.incapacitation ? { extraRollOptions: ["item:trait:incapacitation"] } : {}), ...secret });
     }
     // (Batch 288: a check at a set modifier, Envelop's +16 or a spell attack modifier in place of Athletics: PF2e's check with that as its base.)
