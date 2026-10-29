@@ -1088,11 +1088,15 @@ function standIn(state, source) {
     try { return new CONFIG.Item.documentClass(data, { parent: source }); } catch (error) { console.warn(`${MODULE_ID} | stand-in item`, error); return null; }
 }
 
+// (2026-10-29, the item module's turn auras: an ability uuid that's an Actor — PF2e's check takes an item and throws on anything else, so
+// the card's roll did nothing. Only an Item.)
+const itemOnly = (found) => (found?.documentName === "Item" ? found : null);
+
 async function rollTarget(message, target) {
     const state = stateOf(message);
     const actor = await fromUuid(target.actorUuid);
     const source = await fromUuid(state.source.actorUuid);
-    const item = (state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null) ?? (state.check.incapacitation ? standIn(state, source) : null);
+    const item = itemOnly(state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null) ?? (state.check.incapacitation ? standIn(state, source) : null);
     const identifier = rollIdentifier(message.id, target.id);
     // (2026-10-27, Essence Prism: a secret check, as PF2e rolls one with the secret trait — the GM's alone, blind when a player rolls it.)
     const secret = state.check.secret ? { messageMode: game.user.isGM ? "gm" : "blind" } : {};
@@ -1501,7 +1505,7 @@ export async function applyChange(change, state) {
             if (!parts.length) return null;
             const DamageRoll = damageRollClass();
             const roll = await new DamageRoll(parts.length === 1 ? parts[0] : `{${parts.join(",")}}`).evaluate();
-            const item = state.ability.uuid ? await fromUuid(state.ability.uuid) : null;
+            const item = itemOnly(state.ability.uuid ? await fromUuid(state.ability.uuid).catch(() => null) : null);
             const before = hitPointsOf(actor);
             // (2026-10-27: its roll options and the resistance and immunities it ignores, src/live/card.js damageExtras.)
             const { rollOptions, ...ignores } = damageExtras(state.plan);

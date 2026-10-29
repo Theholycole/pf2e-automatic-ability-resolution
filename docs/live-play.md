@@ -3380,6 +3380,10 @@ An aimed burst (2026-10-27, for Flame Drake Snare's "a 15-foot cone in the direc
 - When Pseudo Afflictions makes or changes nothing on the creature within 2 seconds, the card says so: "<creature>: Pseudo Afflictions has nothing for <name>; track it by hand (stage N, DC X)" — or "<creature> already has <Effect>" when it holds one of that name.
 - Checked live in `pftest` (2026-10-29, PFTEST SIM actors, deleted afterwards): Tetanus from an item named Horn of Rust made "Affliction Effect: Tetanus" at stage 1, DC 19; the same again said it already had it; an unknown affliction's line came after the 2 seconds.
 
+## A card whose ability link isn't an item (2026-10-29, found by the item module)
+
+- A card's `ability.uuid` that names an Actor (the item module's turn auras did, before its own fix) no longer breaks the roll: PF2e's check takes an item and throws on anything else, so the card's roll did nothing. The roll and Apply's damage pass the ability only when it's an Item (`scripts/live.js` `itemOnly`); otherwise none, as a card with no uuid.
+
 ## An affliction Pseudo Afflictions has no Effect for (2026-10-29, the item module's request)
 
 - When Pseudo Afflictions makes nothing and the hand-off has stages (an item's or a monster's own affliction, Horn of Rust's "Horn of Rust Tetanus"), live play builds the Effect itself in Pseudo Afflictions' format (`src/live/afflictions.js` `pseudoAfflictionSource`), and Pseudo Afflictions runs it from there: its stage's conditions and Effects, its damage rolled to the GM, the save at the end of each stage.
