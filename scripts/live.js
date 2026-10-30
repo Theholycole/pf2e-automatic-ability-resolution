@@ -9,7 +9,7 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, itemRecord, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, standInSource, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, levelDCOf, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, itemRecord, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, standInSource, statisticLabel } from "../src/live/card.js";
 import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
@@ -104,7 +104,8 @@ function targetEntry(token, check) {
     const entry = { actorUuid: actor.uuid, tokenUuid: token.document?.uuid ?? token.uuid ?? null, name: token.name ?? actor.name };
     // (Batch 290, Feather Strike: an attack at its own bonus against AC — the armor class itself.)
     // (2026-10-27, Mindsponge: a fixed DC, the same for every target.)
-    if (check?.kind === "check") entry.dc = !check.against && Number.isFinite(check.dc) ? check.dc : actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
+    if (check?.kind === "check" && check.levelDC) entry.dc = levelDCOf(actor.level, check.levelDC.adjustment);
+    else if (check?.kind === "check") entry.dc = !check.against && Number.isFinite(check.dc) ? check.dc : actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
     return entry;
 }
 
@@ -1296,7 +1297,7 @@ async function chooseMode(message, state, index) {
     const targets = [];
     for (const target of state.targets) {
         const actor = await fromUuid(target.actorUuid).catch(() => null);
-        targets.push({ ...target, dc: check?.kind === "check" ? (!check.against && Number.isFinite(check.dc) ? check.dc : actor?.getStatistic?.(check.against)?.dc?.value ?? null) : null });
+        targets.push({ ...target, dc: check?.kind === "check" ? (check.levelDC ? levelDCOf(actor?.level, check.levelDC.adjustment) : !check.against && Number.isFinite(check.dc) ? check.dc : actor?.getStatistic?.(check.against)?.dc?.value ?? null) : null });
     }
     const next = createCard({ plan: mode.plan, ability: { name, uuid: state.ability.uuid }, source: state.source, targets, warning: state.warning });
     return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
