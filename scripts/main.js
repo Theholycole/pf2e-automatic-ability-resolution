@@ -19,6 +19,7 @@ import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
 import { setUpBravery } from "./bravery.js";
 import { initiativeSkills } from "../src/compiler/initiative.js";
+import { fillRollData, withDescription } from "../src/compiler/roll-data.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -42,9 +43,17 @@ async function loadBasicActions() {
 }
 
 // An ability compiled with its creature, as offline (scripts/actor-data.js); without it if a reading fails on the world's data.
+// (2026-10-30: with the creature's own numbers its text names by path, an aspect's DC and rank: src/compiler/roll-data.js.)
+const withActorNumbers = (item) => {
+    const html = item?.system?.description?.value;
+    const actor = item?.actor;
+    if (!actor || typeof html !== "string") return item;
+    const filled = fillRollData(html, (path) => foundry.utils.getProperty(actor, path.replace(/^@actor\./, "")));
+    return filled === html ? item : withDescription(item, filled);
+};
 const compileWithActor = (item) => {
     try {
-        return compileAbility(item, { basicActions, actor: actorData(item?.actor) });
+        return compileAbility(withActorNumbers(item), { basicActions, actor: actorData(item?.actor) });
     } catch (error) {
         console.warn(`${MODULE_ID} | ${item?.name} didn't compile with its creature.`, error);
         return compileAbility(item, { basicActions });
