@@ -45,6 +45,8 @@ test("which Strike is the activity's, and who fits its save", () => {
     assert.equal(strikeMatches({ strike: "jaws" }, { name: "Claw" }), false);
     assert.equal(strikeMatches({ strike: null }, { name: "Claw", isRanged: false }), true);
     assert.equal(strikeMatches({ strike: null }, { name: "Javelin", isRanged: true }), false);
+    // (2026-10-30: the feat module's "Make a Strike" with no kind named — any of the character's Strikes.)
+    assert.equal(strikeMatches({ strike: null, anyStrike: true }, { name: "Javelin", isRanged: true }), true);
     // "makes a ranged Strike" (batch 97).
     assert.equal(strikeMatches({ strike: "ranged" }, { name: "Crossbow", isRanged: true }), true);
     assert.equal(strikeMatches({ strike: "ranged" }, { name: "Fist", isRanged: false }), false);

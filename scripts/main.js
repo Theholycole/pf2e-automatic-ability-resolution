@@ -4,7 +4,7 @@
 // Live play: confirmation cards (scripts/live.js) and aura triggers (scripts/auras.js).
 
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
-import { applyChange, postCard, reflectCard, setUpLivePlay } from "./live.js";
+import { applyChange, playAbility, postCard, reflectCard, setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpFloors } from "./floors.js";
@@ -19,7 +19,6 @@ import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
 import { setUpBravery } from "./bravery.js";
 import { initiativeSkills } from "../src/compiler/initiative.js";
-import { characterDCs } from "./pc-dcs.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -43,16 +42,12 @@ async function loadBasicActions() {
 }
 
 // An ability compiled with its creature, as offline (scripts/actor-data.js); without it if a reading fails on the world's data.
-// A character's feat: PF2e's own roll data for the paths in its damage ("@item.flags.system.rulesSelections.damageType").
-const withRollData = (dcs, item) => (dcs ? { ...dcs, resolve: (formula) => Roll.replaceFormulaData(formula, item?.getRollData?.() ?? {}) } : null);
-
 const compileWithActor = (item) => {
     try {
-        // (2026-10-30, docs/pc-feats.md: a character's feats get its own DCs for their saves.)
-        return compileAbility(item, { basicActions, actor: actorData(item?.actor), dcs: withRollData(characterDCs(item?.actor), item) });
+        return compileAbility(item, { basicActions, actor: actorData(item?.actor) });
     } catch (error) {
         console.warn(`${MODULE_ID} | ${item?.name} didn't compile with its creature.`, error);
-        return compileAbility(item, { basicActions, dcs: withRollData(characterDCs(item?.actor), item) });
+        return compileAbility(item, { basicActions });
     }
 };
 watchActors();
@@ -112,5 +107,7 @@ Hooks.once("ready", async () => {
     // Points, native Effects, timed conditions, the affliction hand-off.)
     // (live.startConjure, 2026-10-18: the item module's conjure plans — Fossil Fragments, Wondrous Figurines — as playAbility makes them:
     // startConjure({ item, plan, sourceToken }), item.actor the user.)
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, startZone, startConjure, endZones, pickCreature, reflect: reflectCard }) });
+    // (live.playAbility, 2026-10-30: the feat module's character feats, played as a monster's ability is: playAbility(item, plan, sourceToken,
+    // targets).)
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, playAbility, startZone, startConjure, endZones, pickCreature, reflect: reflectCard }) });
 });

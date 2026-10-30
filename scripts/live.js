@@ -56,7 +56,6 @@ export function setUpLivePlay({ compileItem, basicActions, loaded }) {
     basics = basicActions;
     ready = loaded;
     injectStyles();
-    recordTargets();
     // (2026-10-29) The physical items PF2e deletes (the last dose of a consumable), for a card posted after: its level for an incapacitation save.
     Hooks.on("deleteItem", (item) => remember(item));
     Hooks.on("createChatMessage", (message) => {
@@ -253,12 +252,9 @@ export async function postEffectCard({ plan, item, sourceActor, sourceToken, tok
 async function cardForAbility(message) {
     if (message.flags?.pf2e?.context?.type || stateOf(message)) return;
     const origin = message.flags?.pf2e?.origin;
-    if (!["action", "feat"].includes(origin?.type) || !origin.uuid) return;
+    if (origin?.type !== "action" || !origin.uuid) return;
     const item = await fromUuid(origin.uuid);
-    if (!item?.actor) return;
-    // (2026-10-30, docs/pc-feats.md: a character's feats and actions too — only those read into a card, the rest stay PF2e's.)
-    if (item.actor.type === "character") return cardForCharacterAbility(message, item);
-    if (origin.type !== "action" || !["npc", "hazard"].includes(item.actor.type)) return;
+    if (!item?.actor || !["npc", "hazard"].includes(item.actor.type)) return;
     await ready;
     const plan = compile(item);
     const sourceToken = message.token ?? item.actor.getActiveTokens(true, true)[0] ?? null;
@@ -296,36 +292,6 @@ async function cardForAbility(message) {
     return playAbility(item, plan, sourceToken);
 }
 
-// A character's feat or action (2026-10-30, docs/pc-feats.md): its card when it reads into a save, a check or healing on its targets; the
-// targets its player had, which the player's client records on the message (recordTargets). Its other readings stay PF2e's for now.
-const CHARACTER_KINDS = new Set(["save", "check", "healing"]);
-async function cardForCharacterAbility(message, item) {
-    await ready;
-    const plan = compile(item);
-    // (Slice 2: a Strike feat, its hit's results when the player's Strike hits.)
-    if (plan?.builtin === "strike-activity") return playAbility(item, plan, item.actor.getActiveTokens(true, true)[0] ?? null);
-    if (!plan?.resolution || !CHARACTER_KINDS.has(plan.resolution.kind) || (plan.trigger?.event ?? "use") !== "use") return;
-    // (Damage still naming something the feat's roll data doesn't hold: PF2e's own card, not a wrong roll.)
-    if (/"formula":"[^"]*@/.test(JSON.stringify(plan.resolution))) return;
-    const sourceToken = message.token ?? item.actor.getActiveTokens(true, true)[0] ?? null;
-    const recorded = message.getFlag?.(MODULE_ID, "targets") ?? [];
-    const targets = recorded.map((uuid) => fromUuidSync(uuid)).filter(Boolean).map((token) => token.object ?? token);
-    return playAbility(item, plan, sourceToken, new Set(targets));
-}
-
-// The player's own targets on the message of a character's feat or action, as it's posted (their client: the GM's card needs them).
-export function recordTargets() {
-    Hooks.on("preCreateChatMessage", (message, data, options, userId) => {
-        if (userId !== game.user.id) return;
-        const origin = message.flags?.pf2e?.origin;
-        if (!["action", "feat"].includes(origin?.type) || message.flags?.pf2e?.context?.type) return;
-        const actor = message.speaker?.actor ? game.actors.get(message.speaker.actor) : null;
-        if (actor?.type !== "character" && message.speakerActor?.type !== "character") return;
-        const targets = [...game.user.targets].map((token) => token.document?.uuid).filter(Boolean);
-        if (targets.length) message.updateSource({ [`flags.${MODULE_ID}.targets`]: targets });
-    });
-}
-
 // The dice a random table rolled, in chat: each roll and what it picked.
 async function rollsToChat(item, sourceToken, rolls, lines) {
     const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
@@ -334,8 +300,9 @@ async function rollsToChat(item, sourceToken, rolls, lines) {
 }
 
 // A monster's or a hazard's ability as compiled (or the way a random table picked): its card, its effect, its note.
-async function playAbility(item, plan, sourceToken, targets = null) {
-    // (2026-10-30, docs/pc-feats.md: a character's feat aims at the targets its player had when using it, recorded on its message.)
+// targets: the tokens it's aimed at, the user's own when not given (2026-10-30: the feat module's character feats, at the targets their
+// player had, which it records on the message).
+export async function playAbility(item, plan, sourceToken, targets = null) {
     const chosenTargets = targets ?? game.user.targets;
     // (2026-10-27: a card turned back, plan.reflect — reflectCard, at the user's own targets.)
     if (plan?.reflect) {
@@ -752,7 +719,8 @@ async function cardsForRiders(message) {
     if (context?.type !== "attack-roll") return;
     const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
     const actor = strike?.actor;
-    // (2026-10-30, docs/pc-feats.md: a character's Strike after one of its Strike feats; nothing else of the monsters' below.)
+    // (2026-10-30: a character's Strike after one of its Strike feats, which the feat module plays as Strike activities; nothing else of the
+    // monsters' below.)
     const character = actor?.type === "character";
     if (!actor || (!character && !["npc", "hazard"].includes(actor.type))) return;
     const hit = ["success", "criticalSuccess"].includes(context.outcome);

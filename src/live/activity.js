@@ -77,7 +77,7 @@ function doubled(formula) {
 export function strikeMatches(activity, strike) {
     const wanted = String(activity?.strike ?? "").toLowerCase();
     const name = String(strike?.name ?? "").toLowerCase();
-    // (2026-10-30, docs/pc-feats.md: a character's feat that says only "Make a Strike" — any of its Strikes.)
+    // (2026-10-30, the feat module: a character's feat that says only "Make a Strike" — any of its Strikes.)
     if (activity?.anyStrike) return true;
     if (!wanted) return !strike?.isRanged;
     // (Batch 97: "makes a ranged Strike" — any of its ranged Strikes.)
