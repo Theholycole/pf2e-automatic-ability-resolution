@@ -14,7 +14,7 @@ import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { dropImmuneParts, partImmunities, partImmunityEffect, partImmuneTo, partsEarned, partWords } from "../src/live/part-immunity.js";
-import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches, strikesFromOptions } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { exposedAgain, pseudoAfflictionSource } from "../src/live/afflictions.js";
 import { startZone } from "./zones.js";
@@ -738,7 +738,8 @@ async function cardsForRiders(message) {
     // (The activity's Strike, hit or miss, uses it up.)
     const pending = pendingActivities.get(actor.uuid);
     if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
-    else if (pending && strikeMatches(pending.plan, strike)) {
+    // (A Strike a stance grants: its message's origin is the stance's Effect, so the Strike by its roll options.)
+    else if (pending && (strikeMatches(pending.plan, strike) || (!["weapon", "melee"].includes(strike?.type) && strikesFromOptions(context.options ?? []).some((each) => strikeMatches(pending.plan, each))))) {
         // (Batch 152, Fan of Daggers: each of its Strikes, a card on a critical hit only.)
         if (pending.left > 1) pending.left--;
         else pendingActivities.delete(actor.uuid);

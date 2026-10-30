@@ -85,6 +85,14 @@ export function strikeMatches(activity, strike) {
     return name === wanted || name.startsWith(wanted) || wanted.startsWith(name) || name.includes(wanted);
 }
 
+// The Strikes an attack roll may have been made with, from its roll options (2026-10-30, Foundry test: a Strike a stance or another rule
+// element grants, Wolf Jaws, has the stance's Effect as its message's origin): [{ name, isRanged }] from "origin:item:slug:wolf-jaws" and
+// "item:slug:…".
+export function strikesFromOptions(options = []) {
+    const isRanged = options.includes("item:ranged");
+    return [...new Set(options.map((option) => /^(?:origin:)?item:slug:(.+)$/.exec(option)?.[1]).filter(Boolean))].map((slug) => ({ name: slug.replace(/-/g, " "), isRanged }));
+}
+
 // A size (PF2e's slug "sm", "med" … or the word) as its place: tiny 0 … gargantuan 5; -1 when unknown.
 export const sizeIndex = (size) => SIZES.indexOf(String(size ?? "").toLowerCase().replace(/^sm$/, "small").replace(/^med$/, "medium").replace(/^lg$/, "large").replace(/^grg$/, "gargantuan"));
 
