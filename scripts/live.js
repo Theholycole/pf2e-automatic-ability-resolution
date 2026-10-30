@@ -372,7 +372,8 @@ export async function playAbility(item, plan, sourceToken, targets = null) {
             ability: { name: item.name, uuid: item.uuid },
             source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
             targets: [...chosenTargets].map((token) => effectTarget(token, sourceToken)),
-            warning
+            // (Its notes on the card too: a feat's "Stride once first"; 2026-10-30, the feat module's Foundry test.)
+            warning: [warning, ...(plan.notes ?? [])].filter(Boolean).join(" ") || null
         });
         if (state) await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
