@@ -22,7 +22,7 @@ It's built here, on the ability module's readers and live cards, because PC feat
   - "Make a Strike" with no kind named is any of the character's Strikes (`anyStrike`), a melee or ranged one only that kind.
   - What it doesn't read goes to the GM as notes on the card (the monster readings drop an activity they can't read whole; a feat's wordings vary too much for that). Flavour sentences are left out.
 - **Live:** the player uses the feat, then rolls the Strike from the sheet; when it hits, the card offers its results (`cardsForRiders` now takes a character's Strike after one of its Strike feats, and nothing else of the monsters').
-- **Measured:** about 100 more options compile (78 of them from the index's "Strike variant or Strike rider" pattern).
+- **Measured:** 164 more options compile (138 of them from the index's "Strike variant or Strike rider" pattern, of 665).
 
 ## Decisions kept for the user
 
@@ -31,6 +31,6 @@ It's built here, on the ability module's readers and live cards, because PC feat
 | D1 | Should the feat work stay in the ability module, or move to its own module ("PF2e Automatic Feat Resolution")? A new repository has to be created by you. | Built here, in files that can move: `src/compiler/pc-dcs.js`, `scripts/pc-dcs.js`, `cardForCharacterAbility` in `scripts/live.js`. |
 | D2 | Should characters get cards for the ability readings beyond saves, checks and healing (Effects, builtins like stances and self-buffs)? | Only saves, checks and healing get a card. |
 | D3 | A feat whose damage names a value PF2e's roll data doesn't hold: post the card anyway with the GM to fix the dice, or leave it to PF2e? | Left to PF2e. |
+| D4 | The card aims at the player's targets when the feat was posted. If there were none, should it fall back to the GM's targets? | No targets: the card is posted with none. |
 | D5 | Strike feats whose text the reader only partly reads: post the card with the unread sentences as GM notes, or keep such feats PF2e's until they're read whole? | Card with GM notes. |
 | D6 | A feat that is only "Stride, then Strike" (Viper Strike, Looming Gait) has no hit results: just the GM note and the simulator's Strides, no card. Enough? | Note only. |
-| D4 | The card aims at the player's targets when the feat was posted. If there were none, should it fall back to the GM's targets? | No targets: the card is posted with none. |
