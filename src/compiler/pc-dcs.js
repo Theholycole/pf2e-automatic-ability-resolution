@@ -187,8 +187,12 @@ export function withCharacterDCs(item, dcs) {
     if (!dcs || typeof html !== "string" || !(html.includes("@Check[") || html.includes("@Damage["))) return item;
     const filled = fillCharacterNumbers(fillCharacterDCs(html, dcs), dcs, item);
     if (filled === html) return item;
-    // (As monster.js's withDescription: the item itself, its actor and parent kept, with the new text.)
-    const description = { ...item.system.description, value: filled };
+    return withText(item, filled);
+}
+
+// The item itself, its actor and parent kept, with other text (as monster.js's withDescription).
+export function withText(item, html) {
+    const description = { ...item.system.description, value: html };
     const system = new Proxy(item.system, { get: (target, key) => (key === "description" ? description : Reflect.get(target, key)) });
     return new Proxy(item, { get: (target, key) => (key === "system" ? system : Reflect.get(target, key)) });
 }

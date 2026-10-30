@@ -3,7 +3,8 @@
 
 import { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileReposition, compileSkillAction } from "./checks.js";
 import { compileMonsterAbility, glossarySlug, BUILT_IN } from "./monster.js";
-import { withCharacterDCs } from "./pc-dcs.js";
+import { withCharacterDCs, withText } from "./pc-dcs.js";
+import { characterStrike } from "./pc-strikes.js";
 
 export { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileReposition, compileSkillAction, readSkillCheck } from "./checks.js";
 export { compileMonsterAbility, glossarySlug, BUILT_IN } from "./monster.js";
@@ -38,7 +39,10 @@ export function compileAbility(item, options = {}) {
     if (item?.type === "action" && BASIC_ACTIONS.includes(item.system?.slug) && !item.actor) {
         return compileBasic(item, item.system.slug);
     }
-    return compileMonsterAbility(item, options);
+    const plan = compileMonsterAbility(item, options);
+    // (2026-10-30, docs/pc-feats.md: a character's Strike feat the monster readings don't take whole.)
+    if (plan || !options.dcs) return plan;
+    return characterStrike(item, { compileSave: (html) => compileMonsterAbility(withText(item, html), options) });
 }
 
 export { glossarySlug as abilitySlug };

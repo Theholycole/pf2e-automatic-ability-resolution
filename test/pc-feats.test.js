@@ -58,3 +58,32 @@ test("a character's save feat compiles with its own DC and dice", () => {
     assert.equal(stomp.resolution.sharedDamage.components[0].formula, "(4d6)[bludgeoning]");
     assert.ok(["failure", "criticalFailure"].every((degree) => stomp.resolution.outcomes[degree].effects.some((effect) => effect.slug === "prone")), "prone on a failure");
 });
+
+// Slice 2: a character's Strike feats as Strike activities (src/compiler/pc-strikes.js).
+import { activityRider, strikeMatches } from "../src/live/activity.js";
+import { characterStrike } from "../src/compiler/pc-strikes.js";
+
+test("a Strike feat: its Strides, attack count, bonus and its hit's results", () => {
+    const actor = { type: "character", system: { details: { level: { value: 8 } } } };
+    const frightened = "@UUID[Compendium.pf2e.conditionitems.Item.TBSHQspnbcqxsmjL]{Frightened 1}";
+    const charge = compileAbility(feat("Test Charge", "<p>You rush forward with a battle cry. Stride twice, then make a melee Strike. You gain a +1 circumstance bonus to your attack roll. If the Strike hits, the target is " + frightened + ".</p>"), { actor, dcs: DCS });
+    assert.equal(charge.builtin, "strike-activity");
+    assert.deepEqual([charge.strides, charge.attackBonus, charge.melee, charge.anyStrike], [2, 1, true, false]);
+    assert.deepEqual(charge.onHit.conditions.map((entry) => [entry.slug, entry.value]), [["frightened", 1]]);
+    assert.ok(!charge.notes.some((note) => /battle cry|circumstance bonus/.test(note)), "flavour and the bonus read aren't notes");
+    // PF2e's Spiritual Disruption: two attacks for the penalty, persistent damage on a hit; its stupefied's own end the GM's.
+    const disruption = compileAbility(feat("Spiritual Disruption", "<p>You channel disruptive power that severs a foe's spiritual connection to their magic. Make a melee Strike. This counts as two attacks when calculating your multiple attack penalty. If the attack hits, the target takes @Damage[1d6[persistent,spirit]] damage. The target is @UUID[Compendium.pf2e.conditionitems.Item.Stupefied]{Stupefied 1} until it stops taking the persistent spirit damage.</p>"), { actor, dcs: DCS });
+    assert.equal(disruption.countsAs, 2);
+    assert.deepEqual(disruption.onHit.damage, ["1d6[persistent,spirit]"]);
+    const rider = activityRider(disruption);
+    assert.equal(rider.plan.resolution.outcomes.success.damage.formulas[0].formula, "1d6[persistent,spirit]");
+    // Written-out damage: PF2e's Fatal Shot.
+    const fatal = compileAbility(feat("Fatal Shot", "<p>Make a ranged Strike. On a hit, you deal an additional 10d10 precision damage.</p>"), { actor, dcs: DCS });
+    assert.deepEqual([fatal.strike, fatal.onHit.damage], ["ranged", ["10d10[precision]"]]);
+});
+
+test("any Strike when the feat names none; not a feat about an ally's Strike", () => {
+    assert.equal(strikeMatches({ anyStrike: true }, { name: "Longbow", isRanged: true }), true);
+    assert.equal(strikeMatches({}, { name: "Longbow", isRanged: true }), false, "a monster's activity with no Strike named stays melee");
+    assert.equal(characterStrike(feat("Test Order", "<p>Your ally can make a Strike. If the Strike hits, the target is @UUID[Compendium.pf2e.conditionitems.Item.Prone].</p>")), null);
+});

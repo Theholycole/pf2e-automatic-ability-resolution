@@ -302,6 +302,8 @@ const CHARACTER_KINDS = new Set(["save", "check", "healing"]);
 async function cardForCharacterAbility(message, item) {
     await ready;
     const plan = compile(item);
+    // (Slice 2: a Strike feat, its hit's results when the player's Strike hits.)
+    if (plan?.builtin === "strike-activity") return playAbility(item, plan, item.actor.getActiveTokens(true, true)[0] ?? null);
     if (!plan?.resolution || !CHARACTER_KINDS.has(plan.resolution.kind) || (plan.trigger?.event ?? "use") !== "use") return;
     // (Damage still naming something the feat's roll data doesn't hold: PF2e's own card, not a wrong roll.)
     if (/"formula":"[^"]*@/.test(JSON.stringify(plan.resolution))) return;
@@ -750,7 +752,9 @@ async function cardsForRiders(message) {
     if (context?.type !== "attack-roll") return;
     const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
     const actor = strike?.actor;
-    if (!actor || !["npc", "hazard"].includes(actor.type)) return;
+    // (2026-10-30, docs/pc-feats.md: a character's Strike after one of its Strike feats; nothing else of the monsters' below.)
+    const character = actor?.type === "character";
+    if (!actor || (!character && !["npc", "hazard"].includes(actor.type))) return;
     const hit = ["success", "criticalSuccess"].includes(context.outcome);
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const target = targetToken?.object ?? targetToken;
@@ -774,6 +778,7 @@ async function cardsForRiders(message) {
         // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
         else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${strike.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
     }
+    if (character) return;
     // Its passives its own Strike sets off ("When the gunmarshal makes a critical hit with a firearm, …"; batch 19): on the
     // creature it hit.
     if (hit && target?.actor) {
