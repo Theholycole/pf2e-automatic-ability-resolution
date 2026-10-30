@@ -19,6 +19,7 @@ import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
 import { setUpBravery } from "./bravery.js";
 import { initiativeSkills } from "../src/compiler/initiative.js";
+import { characterDCs } from "./pc-dcs.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -42,12 +43,16 @@ async function loadBasicActions() {
 }
 
 // An ability compiled with its creature, as offline (scripts/actor-data.js); without it if a reading fails on the world's data.
+// A character's feat: PF2e's own roll data for the paths in its damage ("@item.flags.system.rulesSelections.damageType").
+const withRollData = (dcs, item) => (dcs ? { ...dcs, resolve: (formula) => Roll.replaceFormulaData(formula, item?.getRollData?.() ?? {}) } : null);
+
 const compileWithActor = (item) => {
     try {
-        return compileAbility(item, { basicActions, actor: actorData(item?.actor) });
+        // (2026-10-30, docs/pc-feats.md: a character's feats get its own DCs for their saves.)
+        return compileAbility(item, { basicActions, actor: actorData(item?.actor), dcs: withRollData(characterDCs(item?.actor), item) });
     } catch (error) {
         console.warn(`${MODULE_ID} | ${item?.name} didn't compile with its creature.`, error);
-        return compileAbility(item, { basicActions });
+        return compileAbility(item, { basicActions, dcs: withRollData(characterDCs(item?.actor), item) });
     }
 };
 watchActors();

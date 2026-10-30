@@ -3,10 +3,12 @@
 
 import { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileReposition, compileSkillAction } from "./checks.js";
 import { compileMonsterAbility, glossarySlug, BUILT_IN } from "./monster.js";
+import { withCharacterDCs } from "./pc-dcs.js";
 
 export { compileDisarm, compileDiversion, compileEscape, compileFeint, compileFirstAid, compileReposition, compileSkillAction, readSkillCheck } from "./checks.js";
 export { compileMonsterAbility, glossarySlug, BUILT_IN } from "./monster.js";
 export * as inline from "./inline.js";
+export { dcFor, fillCharacterDCs, withCharacterDCs } from "./pc-dcs.js";
 
 // The basic actions the simulator and the riders use, from PF2e's actions pack.
 export const BASIC_ACTIONS = Object.freeze(["demoralize", "trip", "grapple", "shove", "escape", "disarm", "feint", "create-a-diversion", "administer-first-aid", "reposition"]);
@@ -30,7 +32,9 @@ export function compileBasicActions(items) {
 }
 
 // One ability item → a plan, { builtin }, or null.
+// options.dcs: a character's own DCs (src/compiler/pc-dcs.js), for its feats' saves against them.
 export function compileAbility(item, options = {}) {
+    if (options.dcs) item = withCharacterDCs(item, options.dcs);
     if (item?.type === "action" && BASIC_ACTIONS.includes(item.system?.slug) && !item.actor) {
         return compileBasic(item, item.system.slug);
     }
