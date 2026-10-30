@@ -738,14 +738,18 @@ async function cardsForRiders(message) {
     // (The activity's Strike, hit or miss, uses it up.)
     const pending = pendingActivities.get(actor.uuid);
     if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
-    // (A Strike a stance grants: its message's origin is the stance's Effect, so the Strike by its roll options.)
-    else if (pending && (strikeMatches(pending.plan, strike) || (!["weapon", "melee"].includes(strike?.type) && strikesFromOptions(context.options ?? []).some((each) => strikeMatches(pending.plan, each))))) {
-        // (Batch 152, Fan of Daggers: each of its Strikes, a card on a critical hit only.)
-        if (pending.left > 1) pending.left--;
-        else pendingActivities.delete(actor.uuid);
-        if (hit && target?.actor && !(pending.critOnly && context.outcome !== "criticalSuccess")) await activityCard(message, pending, { actor, strike, target, targetToken, context });
-        // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
-        else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${strike.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
+    else if (pending) {
+        // (A Strike a stance grants: its message's origin is the stance's Effect, so the Strike by its roll options, named on the card.)
+        const granted = !["weapon", "melee"].includes(strike?.type) ? strikesFromOptions(context.options ?? []).find((each) => strikeMatches(pending.plan, each)) : null;
+        const used = granted ? { name: granted.name.replace(/\b\w/g, (letter) => letter.toUpperCase()), system: strike?.system ?? {}, actor } : strike;
+        if (granted || strikeMatches(pending.plan, strike)) {
+            // (Batch 152, Fan of Daggers: each of its Strikes, a card on a critical hit only.)
+            if (pending.left > 1) pending.left--;
+            else pendingActivities.delete(actor.uuid);
+            if (hit && target?.actor && !(pending.critOnly && context.outcome !== "criticalSuccess")) await activityCard(message, pending, { actor, strike: used, target, targetToken, context });
+            // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
+            else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${used.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
+        }
     }
     if (character) return;
     // Its passives its own Strike sets off ("When the gunmarshal makes a critical hit with a firearm, …"; batch 19): on the
