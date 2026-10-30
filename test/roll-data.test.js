@@ -24,3 +24,11 @@ test("a path it can't read, or arithmetic around it: as it was, or worked out", 
     assert.equal(withDescription(item, "b").system.description.value, "b");
     assert.equal(withDescription(item, "b").system.level.value, 3);
 });
+
+test("\"must make a … save or become Frightened 1 (Frightened 2 on a critical failure)\" (2026-10-30, Teams+ Magic's Behold!)", () => {
+    const html = "<p>The aspect reveals its true nature to all enemies within @Template[type:emanation|distance:30]{30 feet}. Creatures in the area must make a @Check[will|dc:resolve(@actor.flags.pf2e.aspectDC)] save or become @UUID[Compendium.pf2e.conditionitems.TBSHQspnbcqxsmjL]{Frightened 1} (@UUID[Compendium.pf2e.conditionitems.TBSHQspnbcqxsmjL]{Frightened 2} on a critical failure).</p>";
+    const plan = compileAbility({ name: "Behold!", type: "action", system: { actionType: { value: "action" }, actions: { value: 2 }, traits: { value: [] }, description: { value: fillRollData(html, read) } } }, {});
+    assert.equal(plan?.resolution?.check.against.value, 27);
+    assert.deepEqual(plan.resolution.outcomes.failure.effects.map((each) => [each.slug, each.value]), [["frightened", 1]]);
+    assert.deepEqual(plan.resolution.outcomes.criticalFailure.effects.map((each) => [each.slug, each.value]), [["frightened", 2]]);
+});

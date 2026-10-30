@@ -679,8 +679,9 @@ function saveOrOutcomes(html, components, { afterHit = false, riders = false, tr
         ?? /(?:succeed at|attempt) an? @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) to (?:avoid|resist) (?:becoming|being) (.+)$/i.exec(sentences[index])?.[1]
         // (Batch 81: "If the target fails a … save, it gains Clumsy 1 and Stupefied 1", "…, they are Dazzled until …".)
         ?? /^If (?:the|that) (?:target|creature|foe) fails (?:an?|its|the) @Check\[[^\]]*\](?:\{[^}]*\})? (?:save|saving throw), (?:it|they|he|she) (?:gains?|becomes?|is|are) (.+)$/i.exec(sentences[index].replace(/^\s*(?:<[^>]+>\s*)+/, ""))?.[1] ?? null;
-    // (Batch 96: "must succeed on a … save or become Stupefied 1", "must make a successful … save or become Frightened 1".)
-    let failure = legacy ?? /(?:(?:succeed(?: at| on)?|attempt) an?|make a successful) @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1]
+    // (Batch 96: "must succeed on a … save or become Stupefied 1", "must make a successful … save or become Frightened 1"; 2026-10-30, Teams+
+    // Magic's Behold!: "must make a … save or become Frightened 1".)
+    let failure = legacy ?? /(?:(?:succeed(?: at| on)?|attempt|make) an?|make a successful) @Check\[[^\]]*\](?:\{[^}]*\})? (?:saving throw|save) or (.+)$/i.exec(sentences[index])?.[1]
         // "becomes Frightened 1 unless they succeed at a @Check[will|dc:28] save (Frightened 2 on a critical failure)":
         // the brackets after the save are the failure's too.
         ?? unlessClause(sentences[index])
