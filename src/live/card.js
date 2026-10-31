@@ -70,6 +70,8 @@ export function cardCheck(plan) {
     // (Batch 288: a set modifier of its own — Envelop's "+16", a spell attack modifier in place of Athletics — rolled as that.)
     if (check.roll === "skill" && check.against?.dc === "target") return { kind: "check", statistic: [].concat(check.statistic)[0], against: check.against.statistic, ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(Number.isFinite(check.modifier) ? { modifier: check.modifier } : {}), ...(check.secret ? { secret: true } : {}) };
     // (2026-10-27, the item module's Mindsponge: the user's own skill against a fixed DC, its rows on each target — "a DC 28 Medicine check".)
+    // (2026-10-30, the feat module's Guiding Words: "against the hard DC for the target's level" — each target's own, by its level.)
+    if (check.roll === "skill" && check.against?.dc === "level") return { kind: "check", statistic: [].concat(check.statistic)[0], against: null, dc: null, levelDC: { adjustment: Number(check.against.adjustment) || 0 }, ...(check.secret ? { secret: true } : {}) };
     if (check.roll === "skill" && check.against?.dc === "fixed" && Number(check.against.value) > 0) return { kind: "check", statistic: [].concat(check.statistic)[0], against: null, dc: Number(check.against.value), ...(Number(check.bonus?.value) ? { bonus: { value: Number(check.bonus.value), type: check.bonus.type ?? "untyped" } } : {}), ...(check.secret ? { secret: true } : {}) };
     return null;
 }
@@ -219,6 +221,14 @@ export function recordRoll(state, targetId, { total, natural, degree }) {
     return { ...state, targets: state.targets.map((target) => (target.id === targetId ? { ...target, total, natural, degree } : target)) };
 }
 
+// The DC for a level (levels −1 to 25) and the words for its adjustments.
+const LEVEL_DCS = [13, 14, 15, 16, 18, 19, 20, 22, 23, 24, 26, 27, 28, 30, 31, 32, 34, 35, 36, 38, 39, 40, 42, 44, 46, 48, 50];
+const LEVEL_DC_WORDS = { [-2]: "an easy", 0: "a standard", 2: "a hard", 5: "a very hard" };
+export function levelDCOf(level, adjustment = 0) {
+    const index = Number(level) + 1;
+    return Number.isInteger(index) ? LEVEL_DCS[Math.max(0, Math.min(LEVEL_DCS.length - 1, index))] + adjustment : null;
+}
+
 export const allRolled = (state) => state.targets.length > 0 && state.targets.every((target) => target.degree);
 
 // The check line under the title: "DC 33 basic Reflex save" or "Athletics against each target's Fortitude DC".
@@ -234,6 +244,7 @@ export function checkLine(state) {
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
     if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
     // (Batch 288: a set modifier of its own.)
+    if (check.levelDC) return `${statisticLabel(check.statistic)} check against ${LEVEL_DC_WORDS[check.levelDC.adjustment] ?? "a"} DC for each target's level${secret}`;
     if (!check.against && Number.isFinite(check.dc)) return `DC ${check.dc} ${statisticLabel(check.statistic)} check${bonus}${secret}`;
     return `${statisticLabel(check.statistic)}${Number.isFinite(check.modifier) ? ` ${signed(check.modifier)}` : ""}${bonus} against each target's ${statisticLabel(check.against)} DC${secret}`;
 }

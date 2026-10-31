@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { compileMonsterAbility } from "../src/compiler/index.js";
-import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches, strikesFromOptions } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { resistEffects, selfEffectDuration, strikeBuffEffect } from "../src/live/buff.js";
 import { CORE_FAMILIES, createRegistry, validateChanges } from "../../pf2e-resolution-core/src/index.js";
@@ -45,6 +45,8 @@ test("which Strike is the activity's, and who fits its save", () => {
     assert.equal(strikeMatches({ strike: "jaws" }, { name: "Claw" }), false);
     assert.equal(strikeMatches({ strike: null }, { name: "Claw", isRanged: false }), true);
     assert.equal(strikeMatches({ strike: null }, { name: "Javelin", isRanged: true }), false);
+    // (2026-10-30: the feat module's "Make a Strike" with no kind named — any of the character's Strikes.)
+    assert.equal(strikeMatches({ strike: null, anyStrike: true }, { name: "Javelin", isRanged: true }), true);
     // "makes a ranged Strike" (batch 97).
     assert.equal(strikeMatches({ strike: "ranged" }, { name: "Crossbow", isRanged: true }), true);
     assert.equal(strikeMatches({ strike: "ranged" }, { name: "Fist", isRanged: false }), false);
@@ -274,4 +276,11 @@ test("a self-effect with fast healing: PF2e's FastHealing while it lasts (2026-1
     const effect = strikeBuffEffect(hive, { name: "Test Hive" });
     assert.deepEqual(effect.system.rules, [{ key: "FastHealing", value: 3 }]);
     assert.match(effect.system.description.value, /Fast healing 3\./);
+});
+
+test("a Strike a stance grants is found by its roll options (Wolf Jaws)", () => {
+    const strikes = strikesFromOptions(["origin:item:slug:wolf-jaws", "item:melee", "self:effect:stance-wolf-stance"]);
+    assert.deepEqual(strikes, [{ name: "wolf jaws", isRanged: false }]);
+    assert.equal(strikes.some((each) => strikeMatches({ strike: "wolf jaw" }, each)), true);
+    assert.equal(strikesFromOptions(["item:melee"]).length, 0);
 });

@@ -4,7 +4,7 @@
 // Live play: confirmation cards (scripts/live.js) and aura triggers (scripts/auras.js).
 
 import { BASIC_ACTIONS, compileAbility, compileBasicActions } from "../src/compiler/index.js";
-import { applyChange, postCard, reflectCard, setUpLivePlay } from "./live.js";
+import { applyChange, playAbility, postCard, reflectCard, setUpLivePlay } from "./live.js";
 import { setUpAuras } from "./auras.js";
 import { setUpSwallow } from "./swallow.js";
 import { setUpFloors } from "./floors.js";
@@ -19,6 +19,7 @@ import { registerReminderSetting, setUpReminders } from "./reminders.js";
 import { actorData, watchActors } from "./actor-data.js";
 import { setUpBravery } from "./bravery.js";
 import { initiativeSkills } from "../src/compiler/initiative.js";
+import { fillRollData, withDescription } from "../src/compiler/roll-data.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -42,9 +43,17 @@ async function loadBasicActions() {
 }
 
 // An ability compiled with its creature, as offline (scripts/actor-data.js); without it if a reading fails on the world's data.
+// (2026-10-30: with the creature's own numbers its text names by path, an aspect's DC and rank: src/compiler/roll-data.js.)
+const withActorNumbers = (item) => {
+    const html = item?.system?.description?.value;
+    const actor = item?.actor;
+    if (!actor || typeof html !== "string") return item;
+    const filled = fillRollData(html, (path) => foundry.utils.getProperty(actor, path.replace(/^@actor\./, "")));
+    return filled === html ? item : withDescription(item, filled);
+};
 const compileWithActor = (item) => {
     try {
-        return compileAbility(item, { basicActions, actor: actorData(item?.actor) });
+        return compileAbility(withActorNumbers(item), { basicActions, actor: actorData(item?.actor) });
     } catch (error) {
         console.warn(`${MODULE_ID} | ${item?.name} didn't compile with its creature.`, error);
         return compileAbility(item, { basicActions });
@@ -107,5 +116,7 @@ Hooks.once("ready", async () => {
     // Points, native Effects, timed conditions, the affliction hand-off.)
     // (live.startConjure, 2026-10-18: the item module's conjure plans — Fossil Fragments, Wondrous Figurines — as playAbility makes them:
     // startConjure({ item, plan, sourceToken }), item.actor the user.)
-    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, startZone, startConjure, endZones, pickCreature, reflect: reflectCard }) });
+    // (live.playAbility, 2026-10-30: the feat module's character feats, played as a monster's ability is: playAbility(item, plan, sourceToken,
+    // targets).)
+    if (module) module.api = Object.freeze({ get basicActions() { return basicActions; }, compileAbility: compileWithActor, initiativeSkills, zoneEvent, live: Object.freeze({ applyChange, postCard, playAbility, startZone, startConjure, endZones, pickCreature, reflect: reflectCard }) });
 });

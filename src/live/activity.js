@@ -77,10 +77,20 @@ function doubled(formula) {
 export function strikeMatches(activity, strike) {
     const wanted = String(activity?.strike ?? "").toLowerCase();
     const name = String(strike?.name ?? "").toLowerCase();
+    // (2026-10-30, the feat module: a character's feat that says only "Make a Strike" — any of its Strikes.)
+    if (activity?.anyStrike) return true;
     if (!wanted) return !strike?.isRanged;
     // (Batch 97: "makes a ranged Strike" — any of its ranged Strikes.)
     if (wanted === "ranged" && !name.includes("ranged")) return !!strike?.isRanged;
     return name === wanted || name.startsWith(wanted) || wanted.startsWith(name) || name.includes(wanted);
+}
+
+// The Strikes an attack roll may have been made with, from its roll options (2026-10-30, Foundry test: a Strike a stance or another rule
+// element grants, Wolf Jaws, has the stance's Effect as its message's origin): [{ name, isRanged }] from "origin:item:slug:wolf-jaws" and
+// "item:slug:…".
+export function strikesFromOptions(options = []) {
+    const isRanged = options.includes("item:ranged");
+    return [...new Set(options.map((option) => /^(?:origin:)?item:slug:(.+)$/.exec(option)?.[1]).filter(Boolean))].map((slug) => ({ name: slug.replace(/-/g, " "), isRanged }));
 }
 
 // A size (PF2e's slug "sm", "med" … or the word) as its place: tiny 0 … gargantuan 5; -1 when unknown.

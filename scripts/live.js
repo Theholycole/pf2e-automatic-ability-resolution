@@ -9,12 +9,12 @@
 //   and applies the changes: damage through PF2e (its resistances and
 //   weaknesses), conditions, swallowing, and afflictions handed to Pseudo Afflictions.
 
-import { allRolled, cardCheck, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, itemRecord, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, standInSource, statisticLabel } from "../src/live/card.js";
+import { allRolled, cardCheck, levelDCOf, cardHTML, damageExtras, endWords, immunityKey, changeLines, createCard, createCastCard, createEffectCard, createModeCard, itemRecord, modifierTarget, parseIdentifier, recordRoll, rollIdentifier, selectorLabel, standInSource, statisticLabel } from "../src/live/card.js";
 import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
 import { dropImmuneParts, partImmunities, partImmunityEffect, partImmuneTo, partsEarned, partWords } from "../src/live/part-immunity.js";
-import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches } from "../src/live/activity.js";
+import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches, strikesFromOptions } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
 import { exposedAgain, pseudoAfflictionSource } from "../src/live/afflictions.js";
 import { startZone } from "./zones.js";
@@ -104,7 +104,8 @@ function targetEntry(token, check) {
     const entry = { actorUuid: actor.uuid, tokenUuid: token.document?.uuid ?? token.uuid ?? null, name: token.name ?? actor.name };
     // (Batch 290, Feather Strike: an attack at its own bonus against AC — the armor class itself.)
     // (2026-10-27, Mindsponge: a fixed DC, the same for every target.)
-    if (check?.kind === "check") entry.dc = !check.against && Number.isFinite(check.dc) ? check.dc : actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
+    if (check?.kind === "check" && check.levelDC) entry.dc = levelDCOf(actor.level, check.levelDC.adjustment);
+    else if (check?.kind === "check") entry.dc = !check.against && Number.isFinite(check.dc) ? check.dc : actor.getStatistic?.(check.against)?.dc?.value ?? (check.against === "ac" ? actor.armorClass?.value ?? null : null);
     return entry;
 }
 
@@ -300,10 +301,13 @@ async function rollsToChat(item, sourceToken, rolls, lines) {
 }
 
 // A monster's or a hazard's ability as compiled (or the way a random table picked): its card, its effect, its note.
-async function playAbility(item, plan, sourceToken) {
+// targets: the tokens it's aimed at, the user's own when not given (2026-10-30: the feat module's character feats, at the targets their
+// player had, which it records on the message).
+export async function playAbility(item, plan, sourceToken, targets = null) {
+    const chosenTargets = targets ?? game.user.targets;
     // (2026-10-27: a card turned back, plan.reflect — reflectCard, at the user's own targets.)
     if (plan?.reflect) {
-        await reflectCard({ plan, item, userToken: sourceToken, targets: [...(game.user.targets ?? [])] });
+        await reflectCard({ plan, item, userToken: sourceToken, targets: [...(chosenTargets ?? [])] });
         return;
     }
     // An area that lasts (batch 256): its Region and card (scripts/zones.js).
@@ -356,7 +360,7 @@ async function playAbility(item, plan, sourceToken) {
         const tokens = plan.targeting?.target === "self" ? (sourceToken ? [sourceToken.object ?? sourceToken] : [])
             : area && sourceToken ? tokensAround(sourceToken, area).filter((token) => (token.document ?? token).disposition === sourceToken.disposition)
             : taking ? tokensAround(sourceToken, taking).filter((token) => (token.document ?? token).disposition !== sourceToken.disposition && (token.actor?.itemTypes?.condition ?? []).some((condition) => condition.slug === "persistent-damage" && condition.system?.persistent?.damageType === plan.targeting.taking))
-            : [...game.user.targets];
+            : [...chosenTargets];
         // (Batch 119: its notes for the GM on the card — Double Breath's second area, a lingering gas.)
         await postCard({ plan, item, sourceActor: item.actor, sourceToken, tokens, warning: [warning, ...(plan.notes ?? [])].filter(Boolean).join(" ") || null });
         return;
@@ -368,8 +372,9 @@ async function playAbility(item, plan, sourceToken) {
             plan,
             ability: { name: item.name, uuid: item.uuid },
             source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
-            targets: [...game.user.targets].map((token) => effectTarget(token, sourceToken)),
-            warning
+            targets: [...chosenTargets].map((token) => effectTarget(token, sourceToken)),
+            // (Its notes on the card too: a feat's "Stride once first"; 2026-10-30, the feat module's Foundry test.)
+            warning: [warning, ...(plan.notes ?? [])].filter(Boolean).join(" ") || null
         });
         if (state) await ChatMessage.create({ content: cardHTML(state), speaker: ChatMessage.getSpeaker({ actor: item.actor, token: sourceToken ?? undefined }), flags: { [MODULE_ID]: { [FLAG]: state } } });
         return;
@@ -383,7 +388,7 @@ async function playAbility(item, plan, sourceToken) {
             modes: plan.modes.map((mode) => (mode.plan?.builtin === "cast-spell" && mode.plan.spell?.uuid && !mode.plan.spell.name ? { ...mode, name: fromUuidSync(mode.plan.spell.uuid)?.name ?? mode.name } : mode)),
             ability: { name: item.name, uuid: item.uuid },
             source: { actorUuid: item.actor.uuid, tokenUuid: sourceToken?.uuid ?? null, name: sourceToken?.name ?? item.actor.name },
-            targets: [...game.user.targets].map((token) => targetEntry(token, null)),
+            targets: [...chosenTargets].map((token) => targetEntry(token, null)),
             // (Batch 274: every way in turn, Dragonspeech's three Words; its notes on the card.)
             warning: [warning, ...(plan.all ? plan.notes ?? [] : [])].filter(Boolean).join(" ") || null,
             all: Boolean(plan.all)
@@ -441,7 +446,7 @@ async function playAbility(item, plan, sourceToken) {
     if (plan?.builtin === "ally-advance") {
         const scene = sourceToken?.parent ?? canvas.scene;
         const grid = gridOf(scene);
-        const allies = sourceToken ? [...game.user.targets].map((token) => token.document ?? token).filter((token) => token.id !== sourceToken.id && token.actor && token.disposition === sourceToken.disposition && distanceFeet(box(sourceToken, grid.size), box(token, grid.size), grid) <= plan.within) : [];
+        const allies = sourceToken ? [...chosenTargets].map((token) => token.document ?? token).filter((token) => token.id !== sourceToken.id && token.actor && token.disposition === sourceToken.disposition && distanceFeet(box(sourceToken, grid.size), box(token, grid.size), grid) <= plan.within) : [];
         const effect = plan.uuid ? await fromUuid(plan.uuid).catch(() => null) : null;
         if (effect) for (const token of allies) await token.actor.createEmbeddedDocuments("Item", [{ ...effect.toObject(), flags: { ...(effect.toObject().flags ?? {}), [MODULE_ID]: { allyAdvance: { sourceActorUuid: item.actor.uuid } } } }]);
         const extra = (plan.extraDamage ?? []).map((formula) => formula.replace(/\[(\w+)\]/, " $1")).join(" + ");
@@ -481,7 +486,7 @@ async function playAbility(item, plan, sourceToken) {
     }
     // Hunt Prey (batch 39): its prey (the GM's target) and its edge, for the GM; PF2e can't count "the first hit each round".
     if (plan?.builtin === "hunt-prey") {
-        const prey = [...game.user.targets][0];
+        const prey = [...chosenTargets][0];
         // (Batch 153, Lawbringer: every Strike against the creature it marks; batch 164, Mark for Death: deadly on its Strikes against it.)
         // (Batch 275, Punish the Naughty: a mark with no extra damage, its benefits its notes.)
         const marked = plan.every || plan.mark || plan.edge === "deadly";
@@ -497,7 +502,7 @@ async function playAbility(item, plan, sourceToken) {
     // penalty it started with); a note when none is targeted.
     if (plan?.builtin === "skill-sweep") {
         const basic = basics()?.[plan.action];
-        const tokens = [...game.user.targets];
+        const tokens = [...chosenTargets];
         const penalty = plan.sameMap ? ", each at the multiple attack penalty it started with" : "";
         if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: `Separate checks${penalty}.` });
         else await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: it attempts to ${plan.action.replace(/^\w/, (letter) => letter.toUpperCase())} each creature within its reach (separate checks${penalty}). Target them before using it for their card.`]);
@@ -532,14 +537,14 @@ async function playAbility(item, plan, sourceToken) {
     }
     if (plan?.builtin === "multi-strike" && plan.then) {
         const basic = basics()?.[plan.then];
-        const tokens = [...game.user.targets].slice(0, 1);
+        const tokens = [...chosenTargets].slice(0, 1);
         if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: "After its Strikes." });
         else await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: after its Strikes, it attempts to ${plan.then.replace(/^\w/, (letter) => letter.toUpperCase())} that creature. Target it before using it for its card.`]);
     }
     // (Batch 156, Battering Blow: PF2e's Shove at the GM's target after the Strike, hit or miss.)
     if (plan?.builtin === "strike-activity" && plan.afterStrike) {
         const basic = basics()?.[plan.afterStrike];
-        const tokens = [...game.user.targets].slice(0, 1);
+        const tokens = [...chosenTargets].slice(0, 1);
         if (basic?.resolution && tokens.length) await postCard({ plan: basic, item, sourceActor: item.actor, sourceToken, tokens, warning: "After its Strike, hit or miss." });
     }
     if (plan?.builtin === "multi-strike" && plan.secondOffGuard) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${plan.secondOffGuard === "hit" ? "if the first Strike hits, " : ""}the target is off-guard against the second Strike (−2 AC for that roll).`]);
@@ -716,7 +721,10 @@ async function cardsForRiders(message) {
     if (context?.type !== "attack-roll") return;
     const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
     const actor = strike?.actor;
-    if (!actor || !["npc", "hazard"].includes(actor.type)) return;
+    // (2026-10-30: a character's Strike after one of its Strike feats, which the feat module plays as Strike activities; nothing else of the
+    // monsters' below.)
+    const character = actor?.type === "character";
+    if (!actor || (!character && !["npc", "hazard"].includes(actor.type))) return;
     const hit = ["success", "criticalSuccess"].includes(context.outcome);
     const targetToken = context.target?.token ? await fromUuid(context.target.token) : null;
     const target = targetToken?.object ?? targetToken;
@@ -732,14 +740,20 @@ async function cardsForRiders(message) {
     // (The activity's Strike, hit or miss, uses it up.)
     const pending = pendingActivities.get(actor.uuid);
     if (pending && Date.now() - pending.at > ACTIVITY_WAIT) pendingActivities.delete(actor.uuid);
-    else if (pending && strikeMatches(pending.plan, strike)) {
-        // (Batch 152, Fan of Daggers: each of its Strikes, a card on a critical hit only.)
-        if (pending.left > 1) pending.left--;
-        else pendingActivities.delete(actor.uuid);
-        if (hit && target?.actor && !(pending.critOnly && context.outcome !== "criticalSuccess")) await activityCard(message, pending, { actor, strike, target, targetToken, context });
-        // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
-        else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${strike.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
+    else if (pending) {
+        // (A Strike a stance grants: its message's origin is the stance's Effect, so the Strike by its roll options, named on the card.)
+        const granted = !["weapon", "melee"].includes(strike?.type) ? strikesFromOptions(context.options ?? []).find((each) => strikeMatches(pending.plan, each)) : null;
+        const used = granted ? { name: granted.name.replace(/\b\w/g, (letter) => letter.toUpperCase()), system: strike?.system ?? {}, actor } : strike;
+        if (granted || strikeMatches(pending.plan, strike)) {
+            // (Batch 152, Fan of Daggers: each of its Strikes, a card on a critical hit only.)
+            if (pending.left > 1) pending.left--;
+            else pendingActivities.delete(actor.uuid);
+            if (hit && target?.actor && !(pending.critOnly && context.outcome !== "criticalSuccess")) await activityCard(message, pending, { actor, strike: used, target, targetToken, context });
+            // (Focused Assault, batch 43: a failure, not a critical one, still deals the Strike's damage.)
+            else if (context.outcome === "failure" && pending.plan.failureDamage && target?.actor) await noteToGM(actor, message.token ?? null, [`<strong>${pending.item.name}</strong>: a failure still deals one ${used.name} Strike's damage to ${target.name}. Roll the Strike's damage from its attack card (not the extra dice).`]);
+        }
     }
+    if (character) return;
     // Its passives its own Strike sets off ("When the gunmarshal makes a critical hit with a firearm, …"; batch 19): on the
     // creature it hit.
     if (hit && target?.actor) {
@@ -1283,7 +1297,7 @@ async function chooseMode(message, state, index) {
     const targets = [];
     for (const target of state.targets) {
         const actor = await fromUuid(target.actorUuid).catch(() => null);
-        targets.push({ ...target, dc: check?.kind === "check" ? (!check.against && Number.isFinite(check.dc) ? check.dc : actor?.getStatistic?.(check.against)?.dc?.value ?? null) : null });
+        targets.push({ ...target, dc: check?.kind === "check" ? (check.levelDC ? levelDCOf(actor?.level, check.levelDC.adjustment) : !check.against && Number.isFinite(check.dc) ? check.dc : actor?.getStatistic?.(check.against)?.dc?.value ?? null) : null });
     }
     const next = createCard({ plan: mode.plan, ability: { name, uuid: state.ability.uuid }, source: state.source, targets, warning: state.warning });
     return message.update({ content: cardHTML(next), [`flags.${MODULE_ID}.${FLAG}`]: next });
@@ -1332,7 +1346,10 @@ async function applyCard(message) {
     }
     const { kept, dropped } = dropImmuneParts(resolved.changes, immune);
     const result = { ...resolved, changes: kept };
-    const lines = rolled.map((line) => `Damage rolled: ${line}`);
+    // (A heal's roll, "Ease the Burden": not "Damage rolled"; 2026-10-30 feat module Foundry test. Only when nothing else rolls damage.)
+    const resolutionText = JSON.stringify(state.plan?.resolution ?? {});
+    const healsOnly = resolutionText.includes('"kind":"heal"') && !/"mode":"(?:shared|formulas)"/.test(resolutionText);
+    const lines = rolled.map((line) => `${healsOnly ? "Healing rolled" : "Damage rolled"}: ${healsOnly ? line.replace(/ untyped(?= =)/, "") : line}`);
     // (2026-10-27: "Drained 1d4" — rolled for each creature now, so the card's lines carry the value.)
     for (const [index, change] of result.changes.entries()) {
         if (!rollsValue(change)) continue;
