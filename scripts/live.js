@@ -1361,7 +1361,10 @@ async function applyCard(message) {
     // (A heal's roll, "Ease the Burden": not "Damage rolled"; 2026-10-30 feat module Foundry test. Only when nothing else rolls damage.)
     const resolutionText = JSON.stringify(state.plan?.resolution ?? {});
     const healsOnly = resolutionText.includes('"kind":"heal"') && !/"mode":"(?:shared|formulas)"/.test(resolutionText);
-    const lines = rolled.map((line) => `${healsOnly ? "Healing rolled" : "Damage rolled"}: ${healsOnly ? line.replace(/ untyped(?= =)/, "") : line}`);
+    // (Temporary Hit Points with no damage, Competitive Eater's: "Temporary Hit Points rolled"; 2026-10-31 feat module Foundry test.)
+    const tempOnly = !healsOnly && resolutionText.includes('"kind":"temp-hp"') && !/"mode":"(?:shared|formulas)"/.test(resolutionText);
+    const label = healsOnly ? "Healing rolled" : tempOnly ? "Temporary Hit Points rolled" : "Damage rolled";
+    const lines = rolled.map((line) => `${label}: ${healsOnly || tempOnly ? line.replace(/ untyped(?= =)/, "") : line}`);
     // (2026-10-27: "Drained 1d4" — rolled for each creature now, so the card's lines carry the value.)
     for (const [index, change] of result.changes.entries()) {
         if (!rollsValue(change)) continue;
