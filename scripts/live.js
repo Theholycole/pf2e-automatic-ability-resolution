@@ -1125,6 +1125,16 @@ async function rollTarget(message, target) {
         // rank, otherwise the source's. 2026-10-29: an item PF2e has deleted since, the last dose, as a stand-in at its level — standIn.)
         return statistic.roll({ dc: { value: state.check.dc, label: `${state.ability.name} DC` }, identifier, skipDialog: true, item, origin: source, ...(saveBonus.length ? { modifiers: saveBonus } : {}), ...(state.check.misfortune ? { rollTwice: "keep-lower" } : {}), ...(state.check.incapacitation ? { extraRollOptions: ["item:trait:incapacitation"] } : {}), ...secret });
     }
+    // (2026-10-31, the feat module's spell attack cards, Rainbow Beam: PF2e's own spell attack roll from the source's best spellcasting
+    // entry — an attack roll, so target options, attack notes and reactions see it — against the target's DC; else the set modifier below.)
+    if (state.check.statistic === "spell-attack") {
+        const entries = [...(source?.spellcasting?.contents ?? source?.spellcasting ?? [])].filter((entry) => entry?.statistic?.check?.roll);
+        const best = entries.sort((a, b) => (Number(b.statistic.check.mod) || 0) - (Number(a.statistic.check.mod) || 0))[0];
+        if (best && Number.isFinite(target.dc)) {
+            const targetToken = target.tokenUuid ? await fromUuid(target.tokenUuid).catch(() => null) : null;
+            return best.statistic.check.roll({ dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)}` }, identifier, skipDialog: true, item, traits: [...(state.plan?.traits ?? [])], ...(targetToken?.object ? { target: targetToken.object } : {}), ...secret });
+        }
+    }
     // (Batch 288: a check at a set modifier, Envelop's +16 or a spell attack modifier in place of Athletics: PF2e's check with that as its base.)
     if (Number.isFinite(state.check.modifier)) {
         if (!Number.isFinite(target.dc)) throw new Error(`${target.name}'s ${statisticLabel(state.check.against)} DC is unknown.`);
