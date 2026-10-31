@@ -242,7 +242,7 @@ export function checkLine(state) {
     if (check.kind === "save") return `DC ${check.dc}${check.basic ? " basic" : ""} ${statisticLabel(check.statistic)} ${["fortitude", "reflex", "will"].includes(check.statistic) ? "save" : "check"}${bonus}${check.misfortune ? ", rolled twice (the worse kept)" : ""}${check.incapacitation ? " (incapacitation)" : ""}${secret}`;
     if (check.kind === "automatic") return "no roll";
     // (A Strike activity's results: by the Strike already rolled against the target's AC.)
-    if (check.against === "ac") return `${statisticLabel(check.statistic)} against the target's AC`;
+    if (check.against === "ac") return `${statisticLabel(check.statistic)}${Number.isFinite(check.modifier) ? ` ${signed(check.modifier)}` : ""} against the target's AC`;
     // (Batch 288: a set modifier of its own.)
     if (check.levelDC) return `${statisticLabel(check.statistic)} check against ${LEVEL_DC_WORDS[check.levelDC.adjustment] ?? "a"} DC for each target's level${secret}`;
     if (!check.against && Number.isFinite(check.dc)) return `DC ${check.dc} ${statisticLabel(check.statistic)} check${bonus}${secret}`;
