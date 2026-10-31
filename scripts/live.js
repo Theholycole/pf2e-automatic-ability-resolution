@@ -1132,7 +1132,9 @@ async function rollTarget(message, target) {
         const best = entries.sort((a, b) => (Number(b.statistic.check.mod) || 0) - (Number(a.statistic.check.mod) || 0))[0];
         if (best && Number.isFinite(target.dc)) {
             const targetToken = target.tokenUuid ? await fromUuid(target.tokenUuid).catch(() => null) : null;
-            return best.statistic.check.roll({ dc: { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)}` }, identifier, skipDialog: true, item, traits: [...(state.plan?.traits ?? [])], ...(targetToken?.object ? { target: targetToken.object } : {}), ...secret });
+            // (PF2e works out the DC and the target's roll options from the slug and the target actor; round 63 Foundry test.)
+            const targetActor = targetToken?.actor ?? actor;
+            return best.statistic.check.roll({ dc: targetActor ? { slug: state.check.against } : { value: target.dc, label: `${target.name}'s ${statisticLabel(state.check.against)}` }, identifier, skipDialog: true, item, traits: [...(state.plan?.traits ?? [])], ...(targetActor ? { target: targetActor } : {}), ...secret });
         }
     }
     // (Batch 288: a check at a set modifier, Envelop's +16 or a spell attack modifier in place of Athletics: PF2e's check with that as its base.)
