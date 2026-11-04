@@ -714,12 +714,26 @@ async function followUpCard(item, plan, sourceToken, warning) {
     return postCard({ plan: followUpAsHit(plan), item, sourceActor: item.actor, sourceToken: token, tokens: [...game.user.targets], warning: [warning, unchecked].filter(Boolean).join(" ") });
 }
 
+// PF2e's built-in unarmed attack as a Strike to match against (strikeMatches): its name, melee, the unarmed trait; or null.
+async function unarmedStrike(message, origin) {
+    if (!/\.Item\.xxPF2ExUNARMEDxx\b/.test(origin ?? "")) return null;
+    const actor = message.actor ?? (await fromUuid(origin.split(".Item.")[0]));
+    if (!actor) return null;
+    const action = (actor.system?.actions ?? []).find((entry) => entry.item?.id === "xxPF2ExUNARMEDxx" || entry.slug === "basic-unarmed");
+    const traits = [...new Set(["unarmed", ...(action?.item?.system?.traits?.value ?? [])])];
+    return { name: action?.label ?? action?.item?.name ?? "Fist", type: "melee", isRanged: false, system: { traits: { value: traits } }, actor };
+}
+
 // A monster's or a hazard's Strike that hits and lists riders (Grab, Knockdown, Push, a venom): a card for each. The Strike of
 // a Strike activity used just before: a card with the activity's results on a hit.
 async function cardsForRiders(message) {
     const context = message.flags?.pf2e?.context;
     if (context?.type !== "attack-roll") return;
-    const strike = message.flags?.pf2e?.origin?.uuid ? await fromUuid(message.flags.pf2e.origin.uuid) : null;
+    const origin = message.flags?.pf2e?.origin?.uuid ?? null;
+    // (2026-11-03, the Foundry test of Knockback Strike: PF2e's own unarmed attack has no item on the actor — its origin, "…Item.
+    // xxPF2ExUNARMEDxx", resolves to nothing — so a Strike feat's card never came for a fist Strike. That Strike, from the actor's own
+    // Strike list.)
+    const strike = (origin ? await fromUuid(origin) : null) ?? (await unarmedStrike(message, origin));
     const actor = strike?.actor;
     // (2026-10-30: a character's Strike after one of its Strike feats, which the feat module plays as Strike activities; nothing else of the
     // monsters' below.)
