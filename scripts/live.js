@@ -551,7 +551,7 @@ export async function playAbility(item, plan, sourceToken, targets = null) {
     // (Batch 108: what its Strike gains for the roll — deadly or fatal, counting as more attacks — a note for the GM.)
     // (Batch 109: only at an animal or humanoid, Flay's.)
     // (Batch 112: what its text leaves the GM — the armor it damages, the cover it ignores.)
-    if (plan?.builtin === "strike-activity" && (plan.deadly || plan.fatal || plan.countsAs > 1 || plan.targetTraits?.length || plan.attackBonus || plan.notes?.length)) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${[plan.targetTraits?.length ? `only at ${plan.targetTraits.map((trait) => (/^[aeiou]/.test(trait) ? `an ${trait}` : `a ${trait}`)).join(" or ")}` : null, plan.attackBonus ? `its Strike at ${plan.attackBonus > 0 ? "+" : "−"}${Math.abs(plan.attackBonus)} to the attack roll` : null, plan.deadly ? `its Strike gains deadly d${plan.deadly}` : null, plan.fatal ? `its Strike gains fatal d${plan.fatal}` : null, plan.countsAs > 1 ? `it counts as ${plan.countsAs} attacks for the multiple attack penalty` : null].filter(Boolean).join("; ") || "its Strike as usual"}.`, ...(plan.notes ?? [])]);
+    if (plan?.builtin === "strike-activity" && (plan.deadly || plan.fatal || plan.countsAs > 1 || plan.targetTraits?.length || plan.attackBonus || plan.notes?.length)) await noteToGM(item.actor, sourceToken, [`<strong>${item.name}</strong>: ${[plan.targetTraits?.length ? `only at ${plan.targetTraits.map((trait) => (/^[aeiou]/.test(trait) ? `an ${trait}` : `a ${trait}`)).join(" or ")}` : null, plan.attackBonus ? `its Strike at ${plan.attackBonus > 0 ? "+" : "−"}${Math.abs(plan.attackBonus)} to the attack roll` : null, plan.deadly ? `its Strike gains deadly d${plan.deadly}` : null, plan.fatal ? `its Strike gains fatal d${plan.fatal}` : null, plan.countsAs > 1 ? `it counts as ${plan.countsAs} attacks for the multiple attack penalty` : null].filter(Boolean).join("; ") || (plan.strikes?.length > 1 ? `${plan.strikes.length} Strikes as usual` : "its Strike as usual")}.`, ...(plan.notes ?? [])]);
     // A Strike activity with more on a hit (Intimidating Strike): its results wait for the creature's Strike.
     if (plan?.builtin === "strike-activity" && activityRider(plan, { targetProne: true, targetTraits: (plan.onHit?.vsTraits ?? []).flatMap((entry) => entry.traits) })) pendingActivities.set(item.actor.uuid, { item, plan, token: sourceToken, at: Date.now() });
     // It casts a spell or has its effects (Dominate, Turn to Mist): a card to cast it through PF2e, at the ability's rank and DC.
@@ -1375,7 +1375,10 @@ async function applyCard(message) {
     // (A heal's roll, "Ease the Burden": not "Damage rolled"; 2026-10-30 feat module Foundry test. Only when nothing else rolls damage.)
     const resolutionText = JSON.stringify(state.plan?.resolution ?? {});
     const healsOnly = resolutionText.includes('"kind":"heal"') && !/"mode":"(?:shared|formulas)"/.test(resolutionText);
-    const lines = rolled.map((line) => `${healsOnly ? "Healing rolled" : "Damage rolled"}: ${healsOnly ? line.replace(/ untyped(?= =)/, "") : line}`);
+    // (Temporary Hit Points with no damage, Competitive Eater's: "Temporary Hit Points rolled"; 2026-10-31 feat module Foundry test.)
+    const tempOnly = !healsOnly && resolutionText.includes('"kind":"temp-hp"') && !/"mode":"(?:shared|formulas)"/.test(resolutionText);
+    const label = healsOnly ? "Healing rolled" : tempOnly ? "Temporary Hit Points rolled" : "Damage rolled";
+    const lines = rolled.map((line) => `${label}: ${healsOnly || tempOnly ? line.replace(/ untyped(?= =)/, "") : line}`);
     // (2026-10-27: "Drained 1d4" — rolled for each creature now, so the card's lines carry the value.)
     for (const [index, change] of result.changes.entries()) {
         if (!rollsValue(change)) continue;
