@@ -18,6 +18,7 @@ import { distanceFeet, pathPositions } from "../../pf2e-resolution-core/src/mode
 import { cardCheck, immunityKey } from "../src/live/card.js";
 import { AURA_CAUSES, activeAfterUse, auraConditionEffect, auraConditionStep, auraWhen, entered, isImmune } from "../src/live/auras.js";
 import { immunityFlags, isActiveGM, postCard, stateOf } from "./live.js";
+import { noticeImmunity, TEMPORARY } from "./immunity-notice.js";
 
 const MODULE_ID = "pf2e-automatic-ability-resolution";
 
@@ -205,6 +206,8 @@ async function trigger(source, tokens, when, combat) {
     const immunity = source.plan.trigger?.immunity;
     const sourceUuid = source.actor.uuid;
     let targets = tokens.filter((token) => !(slug && isImmune(immunityFlags(token.actor), { slug, source: immunity?.against === "all" ? null : sourceUuid })));
+    // (2026-11-11: the GM told of each left out, the core's immunity notice.)
+    for (const token of tokens.filter((one) => !targets.includes(one))) noticeImmunity({ actor: token.actor, token, blocked: source.item?.name ?? "the aura", why: TEMPORARY });
     if (source.plan.trigger?.oncePerRound) {
         targets = targets.filter((token) => hits.get(`${combat.id}:${source.key}:${token.id}`) !== combat.round);
         for (const token of targets) hits.set(`${combat.id}:${source.key}:${token.id}`, combat.round);

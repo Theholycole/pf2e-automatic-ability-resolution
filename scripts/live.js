@@ -13,6 +13,7 @@ import { allRolled, cardCheck, levelDCOf, cardHTML, damageExtras, endWords, immu
 import { escapeWords } from "../src/live/escape.js";
 import { recurringNote, recurringSpec, recurringWords } from "../src/live/recurring.js";
 import { immunityApplies, immunityEffect, isImmune } from "../src/live/auras.js";
+import { noticeImmunity, TEMPORARY } from "./immunity-notice.js";
 import { dropImmuneParts, partImmunities, partImmunityEffect, partImmuneTo, partsEarned, partWords } from "../src/live/part-immunity.js";
 import { activityRider, fitsSize, followUpAsHit, followUpFits, strikeMatches, strikesFromOptions } from "../src/live/activity.js";
 import { pickWays, strikesFor, withRow } from "../src/live/random.js";
@@ -131,10 +132,9 @@ export async function postCard({ plan, item, sourceActor, sourceToken, tokens, r
     if (immune.length) {
         tokens = tokens.filter((token) => !immune.includes(token));
         const said = `${immune.map((token) => token.name).join(", ")} ${immune.length === 1 ? "is" : "are"} immune: ${item.name}.`;
-        if (!tokens.length) {
-            await noteToGM(sourceActor, sourceToken, [`<strong>${item.name}</strong>: ${said}`]);
-            return null;
-        }
+        // (2026-11-11: the GM told for each, the core's immunity notice.)
+        for (const token of immune) noticeImmunity({ actor: token.actor, token, blocked: item.name, why: TEMPORARY });
+        if (!tokens.length) return null;
         warning = [warning, said].filter(Boolean).join(" ");
     }
     // (2026-10-27: an immunity to one part of it — trigger.partImmunity, src/live/part-immunity.js —: said on the card; Apply leaves that part out.)
@@ -1383,7 +1383,12 @@ async function applyCard(message) {
         result.changes[index] = await withRolledValue(change, state, target?.name, actor);
         lines.push(`${target?.name ?? "A creature"}'s ${change.slug} rolled ${change.valueRoll}: ${result.changes[index].value}`);
     }
-    for (const { target, slug } of dropped) lines.push(`${state.targets.find((entry) => entry.id === target)?.name ?? "A creature"} ${partWords(parts.find((part) => part.condition === slug), state.ability.name)}`);
+    for (const { target, slug } of dropped) {
+        lines.push(`${state.targets.find((entry) => entry.id === target)?.name ?? "A creature"} ${partWords(parts.find((part) => part.condition === slug), state.ability.name)}`);
+        // (2026-11-11: the GM told, the core's immunity notice.)
+        const { target: entry, actor } = await targetOf(state, target);
+        noticeImmunity({ actor, target: entry?.name ?? null, blocked: slug, why: TEMPORARY, source: state.ability.name });
+    }
     for (const change of result.changes) {
         try {
             const extra = await applyChange(change, state);
